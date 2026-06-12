@@ -17,7 +17,11 @@ Rails.application.routes.draw do
 
       # Conversations (participant access)
       resources :conversations, only: [ :index, :show ] do
-        resources :messages, only: [ :index, :create ]
+        resources :messages, only: [ :index, :create ] do
+          collection do
+            put :mark_read
+          end
+        end
       end
 
       # Categories

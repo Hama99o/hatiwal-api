@@ -70,4 +70,37 @@ RSpec.describe "Api::V1::Messages", type: :request do
       expect(response).to have_http_status(:not_found)
     end
   end
+
+  describe "PUT /api/v1/conversations/:conversation_id/messages/mark_read" do
+    it "marks unread messages from the other participant as read" do
+      create(:message, conversation: conversation, user: seller, read_at: nil)
+
+      put "/api/v1/conversations/#{conversation.id}/messages/mark_read",
+          headers: headers, as: :json
+
+      expect(response).to have_http_status(:no_content)
+      expect(conversation.messages.where(user: seller).first.reload.read_at).to be_present
+    end
+
+    it "does not mark your own messages as read" do
+      own_msg = create(:message, conversation: conversation, user: buyer, read_at: nil)
+
+      put "/api/v1/conversations/#{conversation.id}/messages/mark_read",
+          headers: headers, as: :json
+
+      expect(own_msg.reload.read_at).to be_nil
+    end
+
+    it "requires authentication" do
+      put "/api/v1/conversations/#{conversation.id}/messages/mark_read", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "404s for non-participants" do
+      outsider_headers = auth_headers_for(create(:user))
+      put "/api/v1/conversations/#{conversation.id}/messages/mark_read",
+          headers: outsider_headers, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+  end
 end

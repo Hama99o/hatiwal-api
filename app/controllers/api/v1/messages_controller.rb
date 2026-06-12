@@ -23,6 +23,12 @@ class Api::V1::MessagesController < Api::V1::BaseController
     end
   end
 
+  def mark_read
+    authorize @conversation, :read_messages?
+    @conversation.messages.where(read_at: nil).where.not(user: current_user).find_each(&:mark_read!)
+    head :no_content
+  end
+
   private
 
   def set_conversation
