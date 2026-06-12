@@ -1,0 +1,86 @@
+# Kamal deployment configuration for hatiwal_api
+service: hatiwal_api
+
+image: <%= ENV.fetch("KAMAL_IMAGE", "hama99o/hatiwal_api") %>
+
+servers:
+  web:
+    hosts:
+      - <%= ENV.fetch("KAMAL_HOST") %>
+    options:
+      network: hatiwal_api-net
+
+proxy:
+  ssl: true
+  host: <%= ENV.fetch("KAMAL_PROXY_HOST") %>
+  app_port: 80
+  healthcheck:
+    path: /up
+    interval: 5
+
+ssh:
+  user: <%= ENV.fetch("SSH_USER", "kamal") %>
+  keys_only: true
+  keys:
+    - <%= ENV.fetch("SSH_KEY_PATH", "~/.ssh/id_ed25519") %>
+
+registry:
+  username: <%= ENV.fetch("KAMAL_REGISTRY_USERNAME", "hama99o") %>
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  secret:
+    - RAILS_MASTER_KEY
+    - DATABASE_PASSWORD
+    - DEVISE_JWT_SECRET_KEY
+    - APP_DOMAIN
+  clear:
+    DATABASE_HOST: hatiwal_api-db
+    DATABASE_PORT: 5432
+    DATABASE_USERNAME: hatiwal
+    REDIS_URL: redis://hatiwal_api-redis:6379/0
+    RAILS_LOG_TO_STDOUT: true
+    SOLID_QUEUE_IN_PUMA: true
+
+aliases:
+  console: app exec --interactive --reuse "bin/rails console"
+  shell: app exec --interactive --reuse "bash"
+  logs: app logs -f
+  dbc: app exec --interactive --reuse "bin/rails dbconsole"
+  migrate: app exec "bin/rails db:migrate"
+  seed: app exec "bin/rails db:seed"
+
+volumes:
+  - "hatiwal_api_storage:/rails/storage"
+
+builder:
+  dockerfile: Dockerfile
+  arch: amd64
+  driver: docker
+
+accessories:
+  db:
+    image: postgres:16
+    host: <%= ENV.fetch("KAMAL_HOST") %>
+    port: "127.0.0.1:5432:5432"
+    options:
+      network: hatiwal_api-net
+    env:
+      clear:
+        POSTGRES_USER: hatiwal
+        POSTGRES_DB: hatiwal_production
+      secret:
+        - POSTGRES_PASSWORD
+    directories:
+      - data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    host: <%= ENV.fetch("KAMAL_HOST") %>
+    port: "127.0.0.1:6379:6379"
+    options:
+      network: hatiwal_api-net
+    directories:
+      - data:/data
+    cmd: redis-server --appendonly yes

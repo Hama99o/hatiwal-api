@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# bin/kms — Kamal management shortcuts for hatiwal-api
+
+case "$1" in
+  # Deployment
+  deploy)       kamal deploy ;;
+  rollback)     kamal rollback ;;
+  status)       kamal status ;;
+  restart)      kamal app restart ;;
+
+  # Rails commands
+  console)      kamal app exec --interactive --reuse "bin/rails console" ;;
+  migrate)      kamal app exec "bin/rails db:migrate" ;;
+  rollback-db)  kamal app exec "bin/rails db:rollback" ;;
+  seed)         kamal app exec "bin/rails db:seed" ;;
+  routes)       kamal app exec "bin/rails routes" ;;
+
+  # Logs
+  logs)         kamal logs ;;
+  logs-f)       kamal logs --follow ;;
+  logs-n)       kamal logs --lines="${2:-50}" ;;
+
+  # Database
+  db-console)   kamal accessory exec db --interactive "psql -U hatiwal hatiwal_production" ;;
+
+  # App shell
+  bash)         kamal app exec --interactive --reuse "bash" ;;
+
+  # Version
+  version)      kamal app version ;;
+
+  *)
+    echo "Usage: bin/kms <command>"
+    echo ""
+    echo "  deploy, rollback, status, restart"
+    echo "  console, migrate, rollback-db, seed, routes"
+    echo "  logs, logs-f, logs-n [lines]"
+    echo "  db-console, bash, version"
+    ;;
+esac
