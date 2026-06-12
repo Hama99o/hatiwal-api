@@ -71,8 +71,9 @@ jobs:
     env:
       RAILS_ENV: test
       DATABASE_URL: postgres://hatiwal:password@localhost:5432/hatiwal_test
+      # Static key for test env — not a real secret, just needs to be a non-empty string
+      SECRET_KEY_BASE: "0000000000000000000000000000000000000000000000000000000000000001"
       RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
-      SECRET_KEY_BASE: ${{ secrets.SECRET_KEY_BASE }}
 
     steps:
       - name: Checkout code
