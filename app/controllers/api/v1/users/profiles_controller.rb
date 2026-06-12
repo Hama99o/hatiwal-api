@@ -1,5 +1,5 @@
 class Api::V1::Users::ProfilesController < Api::V1::BaseController
-  before_action :set_user, only: [:show]
+  before_action :set_user, only: [ :show ]
 
   def me
     render_blue(UserSerializer, current_user, view: :me)

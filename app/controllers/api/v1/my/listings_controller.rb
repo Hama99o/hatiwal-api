@@ -1,5 +1,5 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
-  before_action :set_listing, only: [:show, :update, :destroy, :publish, :reserve, :sold]
+  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :reserve, :sold ]
 
   def index
     listings = policy_scope(current_user.listings).ordered

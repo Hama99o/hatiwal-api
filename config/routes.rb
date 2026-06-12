@@ -7,24 +7,24 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       # Public listing browser (buyer mode)
-      resources :listings, only: [:index, :show] do
+      resources :listings, only: [ :index, :show ] do
         member do
           post   :save
           delete :unsave
         end
-        resources :conversations, only: [:create]
+        resources :conversations, only: [ :create ]
       end
 
       # Conversations (participant access)
-      resources :conversations, only: [:index, :show] do
-        resources :messages, only: [:index, :create]
+      resources :conversations, only: [ :index, :show ] do
+        resources :messages, only: [ :index, :create ]
       end
 
       # Categories
-      resources :categories, only: [:index]
+      resources :categories, only: [ :index ]
 
       # Reports
-      resources :reports, only: [:create]
+      resources :reports, only: [ :create ]
 
       # User profiles
       namespace :users do
@@ -44,7 +44,7 @@ Rails.application.routes.draw do
           end
         end
 
-        resources :saved_listings, only: [:index]
+        resources :saved_listings, only: [ :index ]
       end
     end
   end

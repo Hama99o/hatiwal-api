@@ -7,6 +7,6 @@ class CreateSavedListings < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :saved_listings, [:user_id, :listing_id], unique: true
+    add_index :saved_listings, [ :user_id, :listing_id ], unique: true
   end
 end

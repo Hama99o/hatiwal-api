@@ -1,5 +1,5 @@
 class Api::V1::ListingsController < Api::V1::BaseController
-  before_action :set_listing, only: [:show, :save, :unsave]
+  before_action :set_listing, only: [ :show, :save, :unsave ]
 
   def index
     listings = policy_scope(Listing.browsable)

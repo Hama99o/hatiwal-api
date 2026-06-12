@@ -2,4 +2,8 @@
 # CVEs that are not relevant to the application can be enumerated on the ignore list below.
 
 ignore:
-  - CVE-THAT-DOES-NOT-APPLY
+  # devise_token_auth requires devise < 5, preventing upgrade to 5.0.3+.
+  # CVE-2026-32700: affects Confirmable "change email" flow — we do not use confirmable.
+  - CVE-2026-32700
+  # CVE-2026-40295: affects Timeoutable session timeout — we do not use timeoutable.
+  - CVE-2026-40295

@@ -17,7 +17,7 @@ CATEGORIES = [
   { name_en: "Jobs",                name_ps: "دندې",               name_fa: "کار",                    slug: "jobs",        icon: "💼", position: 9  },
   { name_en: "Services",            name_ps: "خدمتونه",            name_fa: "خدمات",                 slug: "services",    icon: "🛠️", position: 10 },
   { name_en: "Animals",             name_ps: "حیوانات",            name_fa: "حیوانات",                slug: "animals",     icon: "🐄", position: 11 },
-  { name_en: "Other",               name_ps: "نور",                name_fa: "دیگر",                   slug: "other",       icon: "📦", position: 12 },
+  { name_en: "Other",               name_ps: "نور",                name_fa: "دیگر",                   slug: "other",       icon: "📦", position: 12 }
 ].freeze
 
 CATEGORIES.each do |attrs|
@@ -80,7 +80,7 @@ users = [
   make_user(email: "habiba@hatiwal.com",  firstname: "Habiba",   lastname: "Yaqoobi",   city: "Kunduz",         province: "Kunduz",     lang: "fa"),
   make_user(email: "jawad@hatiwal.com",   firstname: "Jawad",    lastname: "Siddiqui",  city: "Kabul",          province: "Kabul",      lang: "en"),
   make_user(email: "zuhra@hatiwal.com",   firstname: "Zuhra",    lastname: "Moradi",    city: "Faizabad",       province: "Badakhshan", lang: "fa"),
-  make_user(email: "demo@hatiwal.com",    firstname: "Demo",     lastname: "User",      city: "Kabul",          province: "Kabul",      lang: "en"),
+  make_user(email: "demo@hatiwal.com",    firstname: "Demo",     lastname: "User",      city: "Kabul",          province: "Kabul",      lang: "en")
 ]
 
 puts "  users: #{User.count}"
@@ -162,7 +162,7 @@ listing_data = [
   # Other
   { title: "Chicco Baby Stroller Barely Used", description: "Folds easily. Navy blue. Used 3 months. All parts working. Rain cover included.", price: 5_500, category: cat["other"], status: :active, location: "Kabul, Wazir Akbar Khan", user_idx: 6 },
   { title: "Motorized Treadmill Foldable", description: "Speed up to 12 km/h. Works well. 2 years old. Heavy item. Selling due to moving.", price: 16_000, category: cat["other"], status: :active, location: "Kabul, Karte Seh", user_idx: 18 },
-  { title: "Children Bicycle Age 5 to 8", description: "Red color. Training wheels attached. Helmet included. No rust.", price: 2_800, category: cat["other"], status: :active, location: "Mazar-i-Sharif", user_idx: 4 },
+  { title: "Children Bicycle Age 5 to 8", description: "Red color. Training wheels attached. Helmet included. No rust.", price: 2_800, category: cat["other"], status: :active, location: "Mazar-i-Sharif", user_idx: 4 }
 ]
 
 listing_data.each do |d|
@@ -191,13 +191,13 @@ puts "=== Seeding Saved Listings ==="
 active_listings = Listing.active.to_a
 
 saved_pairs = [
-  [users[0],  4],
-  [users[2],  5],
-  [users[3],  3],
-  [users[5],  3],
-  [users[8],  4],
-  [users[13], 6],
-  [users[19], 8],
+  [ users[0],  4 ],
+  [ users[2],  5 ],
+  [ users[3],  3 ],
+  [ users[5],  3 ],
+  [ users[8],  4 ],
+  [ users[13], 6 ],
+  [ users[19], 8 ]
 ]
 
 saved_pairs.each do |user, count|
@@ -220,86 +220,86 @@ puts "=== Seeding Conversations & Messages ==="
 # Each thread is an array of [message_body, kind]
 CHAT_THREADS = {
   pashto_electronics: [
-    ["السلام علیکم، آیا دا توکی لا شتون دی؟", :text],
-    ["وعلیکم السلام، هو لا شتون دی 😊", :text],
-    ["قیمت یی کمول کیدای شی؟", :text],
-    ["ورور، قیمت ثابت دی، خو که نقده راشی نو ۵۰۰ AFN کمولای شم", :text],
-    ["باشه، کله ملاقات کولای شو؟", :text],
-    ["سبا سهار ۱۰ بجه مناسب دی؟", :text],
-    ["د شهرنو مارکیټ سره نږدې ملاقات کوو؟", :text],
-    ["هو، هغه ځای مناسب دی، ډیر خلک وي", :text],
-    ["باشه موافق یم، سبا ګورو 🙏", :text],
-    ["ښه، زه به ستاسو انتظار وکم", :text],
+    [ "السلام علیکم، آیا دا توکی لا شتون دی؟", :text ],
+    [ "وعلیکم السلام، هو لا شتون دی 😊", :text ],
+    [ "قیمت یی کمول کیدای شی؟", :text ],
+    [ "ورور، قیمت ثابت دی، خو که نقده راشی نو ۵۰۰ AFN کمولای شم", :text ],
+    [ "باشه، کله ملاقات کولای شو؟", :text ],
+    [ "سبا سهار ۱۰ بجه مناسب دی؟", :text ],
+    [ "د شهرنو مارکیټ سره نږدې ملاقات کوو؟", :text ],
+    [ "هو، هغه ځای مناسب دی، ډیر خلک وي", :text ],
+    [ "باشه موافق یم، سبا ګورو 🙏", :text ],
+    [ "ښه، زه به ستاسو انتظار وکم", :text ]
   ],
   pashto_vehicle: [
-    ["سلام، د موټر حالت سم دی؟", :text],
-    ["هو ورور، خپل سترګو سره یی وګوره، مشکل نشته", :text],
-    ["ایا انجن بدل شوی؟", :text],
-    ["نه، اصلي انجن دی. ټول سروس ریکارد موجود دی", :text],
-    ["قیمت لږ ښکته کیدای شی؟ زه نقده راوړم", :text],
-    ["که ۱،۲۰۰،۰۰۰ راکوې نو معامله ده 🤝", :text],
-    ["باشه موافق یم. سبا کله ملاقات کولای شو؟", :text],
-    ["بعد له چاشت ۳ بجه کابل، دارالامان سړک", :text],
-    ["سم ده، زه به هلته وم ان شاء الله 🙏", :text],
-    ["ښه، زه به موټر پاک کوم چې وګورئ", :text],
+    [ "سلام، د موټر حالت سم دی؟", :text ],
+    [ "هو ورور، خپل سترګو سره یی وګوره، مشکل نشته", :text ],
+    [ "ایا انجن بدل شوی؟", :text ],
+    [ "نه، اصلي انجن دی. ټول سروس ریکارد موجود دی", :text ],
+    [ "قیمت لږ ښکته کیدای شی؟ زه نقده راوړم", :text ],
+    [ "که ۱،۲۰۰،۰۰۰ راکوې نو معامله ده 🤝", :text ],
+    [ "باشه موافق یم. سبا کله ملاقات کولای شو؟", :text ],
+    [ "بعد له چاشت ۳ بجه کابل، دارالامان سړک", :text ],
+    [ "سم ده، زه به هلته وم ان شاء الله 🙏", :text ],
+    [ "ښه، زه به موټر پاک کوم چې وګورئ", :text ]
   ],
   dari_general: [
-    ["سلام، آیا این کالا هنوز موجود است؟", :text],
-    ["بلی، موجود است 😊", :text],
-    ["قیمت ثابت است یا می‌توانیم صحبت کنیم؟", :text],
-    ["اگر نقد بیاید ۱۰٪ تخفیف می‌دهم", :text],
-    ["بسیار عالی! کجا می‌توانیم ملاقات کنیم؟", :text],
-    ["نزدیک میدان هوایی کابل، مکان امن و شلوغ", :text],
-    ["چه وقت برای شما مناسب است؟", :text],
-    ["فردا بعد از ظهر ساعت ۴ خوب است؟", :text],
-    ["بسیار خوب، فردا می‌بینیم 🙏", :text],
-    ["اگر نیاز به تست دارید با خود بیاورید", :text],
-    ["ممنون، حتماً می‌آیم", :text],
-    ["منتظرتان هستم", :text],
+    [ "سلام، آیا این کالا هنوز موجود است؟", :text ],
+    [ "بلی، موجود است 😊", :text ],
+    [ "قیمت ثابت است یا می‌توانیم صحبت کنیم؟", :text ],
+    [ "اگر نقد بیاید ۱۰٪ تخفیف می‌دهم", :text ],
+    [ "بسیار عالی! کجا می‌توانیم ملاقات کنیم؟", :text ],
+    [ "نزدیک میدان هوایی کابل، مکان امن و شلوغ", :text ],
+    [ "چه وقت برای شما مناسب است؟", :text ],
+    [ "فردا بعد از ظهر ساعت ۴ خوب است؟", :text ],
+    [ "بسیار خوب، فردا می‌بینیم 🙏", :text ],
+    [ "اگر نیاز به تست دارید با خود بیاورید", :text ],
+    [ "ممنون، حتماً می‌آیم", :text ],
+    [ "منتظرتان هستم", :text ]
   ],
   dari_meetup: [
-    ["سلام برادر، کالا هنوز هست؟", :text],
-    ["بلی هست، بفرمایید ببینید", :text],
-    ["عکس بیشتر دارید؟", :text],
-    ["بلی عکس‌های بیشتر می‌فرستم", :text],
-    ["خیلی خوب به نظر می‌رسد. قیمت آخرتان چقدر است؟", :text],
-    ["همان قیمت نوشته شده، قابل مذاکره است", :text],
-    ["اگر امروز بیایم می‌توانیم معامله کنیم؟", :text],
-    ["بلی، هر وقت بیایید آماده‌ام", :text],
-    ["یک ساعت دیگر می‌آیم", :text],
-    ["منتظرم، آدرس دقیق می‌فرستم", :text],
-    ["ممنون، در راهم", :text],
-    ["رسیدید؟", :text],
-    ["بلی جلوی در هستم", :text],
-    ["معامله خوب بود، ممنون 🙏", :text],
-    ["خواهش می‌کنم، موفق باشید 😊", :text],
+    [ "سلام برادر، کالا هنوز هست؟", :text ],
+    [ "بلی هست، بفرمایید ببینید", :text ],
+    [ "عکس بیشتر دارید؟", :text ],
+    [ "بلی عکس‌های بیشتر می‌فرستم", :text ],
+    [ "خیلی خوب به نظر می‌رسد. قیمت آخرتان چقدر است؟", :text ],
+    [ "همان قیمت نوشته شده، قابل مذاکره است", :text ],
+    [ "اگر امروز بیایم می‌توانیم معامله کنیم؟", :text ],
+    [ "بلی، هر وقت بیایید آماده‌ام", :text ],
+    [ "یک ساعت دیگر می‌آیم", :text ],
+    [ "منتظرم، آدرس دقیق می‌فرستم", :text ],
+    [ "ممنون، در راهم", :text ],
+    [ "رسیدید؟", :text ],
+    [ "بلی جلوی در هستم", :text ],
+    [ "معامله خوب بود، ممنون 🙏", :text ],
+    [ "خواهش می‌کنم، موفق باشید 😊", :text ]
   ],
   english_short: [
-    ["Hello, is this still available?", :text],
-    ["Yes, available! You can come see it anytime 😊", :text],
-    ["Can we meet today?", :text],
-    ["Sure, after 3pm works for me", :text],
-    ["What location is best?", :text],
-    ["Shahr-e-Naw park near the fountain — safe and busy", :text],
-    ["Perfect, I will be there at 4pm", :text],
-    ["See you then. I will be wearing a blue jacket 👍", :text],
-    ["Deal done, thank you!", :text],
-    ["Thank you too, pleasure doing business 🙏", :text],
+    [ "Hello, is this still available?", :text ],
+    [ "Yes, available! You can come see it anytime 😊", :text ],
+    [ "Can we meet today?", :text ],
+    [ "Sure, after 3pm works for me", :text ],
+    [ "What location is best?", :text ],
+    [ "Shahr-e-Naw park near the fountain — safe and busy", :text ],
+    [ "Perfect, I will be there at 4pm", :text ],
+    [ "See you then. I will be wearing a blue jacket 👍", :text ],
+    [ "Deal done, thank you!", :text ],
+    [ "Thank you too, pleasure doing business 🙏", :text ]
   ],
   english_negotiation: [
-    ["Hi, I am interested in this item. Is it still for sale?", :text],
-    ["Yes it is! Feel free to come check it out", :text],
-    ["What is the lowest price you can do?", :text],
-    ["I can do a small discount if you pay cash today", :text],
-    ["How about 10% less?", :text],
-    ["That works for me. When can we meet?", :text],
-    ["Tomorrow morning between 9 and 12 is best for me", :text],
-    ["Works for me. Where should we meet?", :text],
-    ["Near Kabul University gate, easy to find", :text],
-    ["Great, see you tomorrow at 10am", :text],
-    ["Perfect. I will bring the cash 💰", :text],
-    ["Excellent! See you then 🙏", :text],
-  ],
+    [ "Hi, I am interested in this item. Is it still for sale?", :text ],
+    [ "Yes it is! Feel free to come check it out", :text ],
+    [ "What is the lowest price you can do?", :text ],
+    [ "I can do a small discount if you pay cash today", :text ],
+    [ "How about 10% less?", :text ],
+    [ "That works for me. When can we meet?", :text ],
+    [ "Tomorrow morning between 9 and 12 is best for me", :text ],
+    [ "Works for me. Where should we meet?", :text ],
+    [ "Near Kabul University gate, easy to find", :text ],
+    [ "Great, see you tomorrow at 10am", :text ],
+    [ "Perfect. I will bring the cash 💰", :text ],
+    [ "Excellent! See you then 🙏", :text ]
+  ]
 }.freeze
 
 def seed_conversation(buyer, listing, thread_key)
@@ -340,31 +340,31 @@ end
 
 # Seeded conversations — varied languages and categories
 [
-  [users[0],  "Samsung Galaxy S24 Ultra",           :pashto_electronics],
-  [users[3],  "iPhone 13 128GB",                    :english_negotiation],
-  [users[13], "Toyota Corolla 2015",                :english_negotiation],
-  [users[19], "Apple MacBook Air M1",               :english_short],
-  [users[5],  "PlayStation 5 Disc Edition",         :pashto_electronics],
-  [users[8],  "Persian Hand-Woven Carpet",          :dari_general],
-  [users[2],  "MMA Welding Machine",                :dari_general],
-  [users[6],  "Toyota Land Cruiser",                :pashto_vehicle],
-  [users[10], "King Size Bed Frame",                :dari_meetup],
-  [users[14], "Canon EOS 200D DSLR",               :english_short],
-  [users[7],  "Honda CG 125 Motorbike",             :pashto_vehicle],
-  [users[18], "8-Seat Wooden Dining Table",         :dari_general],
-  [users[9],  "JBL Xtreme 3 Bluetooth",             :pashto_electronics],
-  [users[15], "Organic Saffron from Herat",         :dari_meetup],
-  [users[11], "Fresh Pomegranates from Kandahar",   :pashto_electronics],
-  [users[17], "LG Fully Automatic Washing Machine", :dari_general],
-  [users[12], "Gas Cooking Range 4 Burners",        :dari_meetup],
-  [users[16], "Carpenter Tool Box",                 :pashto_electronics],
-  [users[6],  "Kuchi Shepherd Dog",                 :dari_general],
-  [users[9],  "Chicco Baby Stroller",               :english_negotiation],
-  [users[3],  "Motorized Treadmill",                :english_short],
-  [users[19], "3 Dairy Cows Holstein",              :dari_general],
-  [users[0],  "Electric Bicycle 48V",               :pashto_electronics],
-  [users[13], "Quran with Dari Translation",        :dari_general],
-  [users[5],  "Medical Anatomy Atlas",              :english_negotiation],
+  [ users[0],  "Samsung Galaxy S24 Ultra",           :pashto_electronics ],
+  [ users[3],  "iPhone 13 128GB",                    :english_negotiation ],
+  [ users[13], "Toyota Corolla 2015",                :english_negotiation ],
+  [ users[19], "Apple MacBook Air M1",               :english_short ],
+  [ users[5],  "PlayStation 5 Disc Edition",         :pashto_electronics ],
+  [ users[8],  "Persian Hand-Woven Carpet",          :dari_general ],
+  [ users[2],  "MMA Welding Machine",                :dari_general ],
+  [ users[6],  "Toyota Land Cruiser",                :pashto_vehicle ],
+  [ users[10], "King Size Bed Frame",                :dari_meetup ],
+  [ users[14], "Canon EOS 200D DSLR",               :english_short ],
+  [ users[7],  "Honda CG 125 Motorbike",             :pashto_vehicle ],
+  [ users[18], "8-Seat Wooden Dining Table",         :dari_general ],
+  [ users[9],  "JBL Xtreme 3 Bluetooth",             :pashto_electronics ],
+  [ users[15], "Organic Saffron from Herat",         :dari_meetup ],
+  [ users[11], "Fresh Pomegranates from Kandahar",   :pashto_electronics ],
+  [ users[17], "LG Fully Automatic Washing Machine", :dari_general ],
+  [ users[12], "Gas Cooking Range 4 Burners",        :dari_meetup ],
+  [ users[16], "Carpenter Tool Box",                 :pashto_electronics ],
+  [ users[6],  "Kuchi Shepherd Dog",                 :dari_general ],
+  [ users[9],  "Chicco Baby Stroller",               :english_negotiation ],
+  [ users[3],  "Motorized Treadmill",                :english_short ],
+  [ users[19], "3 Dairy Cows Holstein",              :dari_general ],
+  [ users[0],  "Electric Bicycle 48V",               :pashto_electronics ],
+  [ users[13], "Quran with Dari Translation",        :dari_general ],
+  [ users[5],  "Medical Anatomy Atlas",              :english_negotiation ]
 ].each do |buyer, fragment, thread|
   listing = Listing.where("title ILIKE ?", "%#{fragment}%").first
   seed_conversation(buyer, listing, thread)
@@ -384,7 +384,7 @@ report_targets = Listing.active.limit(6).to_a
   { reporter: users[13], target: report_targets[2], reason: :wrong_category,   description: "This is a service listing but posted under electronics." },
   { reporter: users[5],  target: users[1],          reason: :fraud,            description: "This user is a scammer — asked for money upfront and disappeared." },
   { reporter: users[8],  target: report_targets[3], reason: :inappropriate,    description: "Description contains offensive language." },
-  { reporter: users[2],  target: report_targets[4], reason: :prohibited_item,  description: "This item is not allowed in the marketplace per community rules." },
+  { reporter: users[2],  target: report_targets[4], reason: :prohibited_item,  description: "This item is not allowed in the marketplace per community rules." }
 ].each do |r|
   next if r[:target].nil?
   next if Report.exists?(reporter: r[:reporter], reportable: r[:target])
@@ -394,7 +394,7 @@ report_targets = Listing.active.limit(6).to_a
     reportable:  r[:target],
     reason:      r[:reason],
     description: r[:description],
-    status:      [:pending, :reviewed, :dismissed].sample
+    status:      [ :pending, :reviewed, :dismissed ].sample
   )
 rescue ActiveRecord::RecordInvalid
   next

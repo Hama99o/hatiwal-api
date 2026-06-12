@@ -83,6 +83,29 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
     end
   end
 
+  describe "POST /api/v1/my/listings with images (multipart)" do
+    it "accepts image uploads via FormData and attaches them" do
+      image = fixture_file_upload(
+        Rails.root.join("spec/fixtures/files/test_image.jpg"),
+        "image/jpeg"
+      )
+
+      expect do
+        post "/api/v1/my/listings",
+             params: {
+               "listing[title]"       => "Phone with photo",
+               "listing[price]"       => "20000",
+               "listing[currency]"    => "AFN",
+               "listing[category_id]" => category.id.to_s,
+               "listing[images][]"    => image
+             },
+             headers: headers
+      end.to change(user.listings, :count).by(1)
+
+      expect(response).to have_http_status(:created)
+    end
+  end
+
   describe "PUT /api/v1/my/listings/:id" do
     it "updates the owner's listing" do
       listing = create(:listing, user: user, title: "Old title")
