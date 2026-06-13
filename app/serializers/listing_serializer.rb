@@ -6,7 +6,8 @@ class ListingSerializer < ApplicationSerializer
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
     field(:seller) do |l|
-      { id: l.user_id, name: l.user.full_name, city: l.user.city }
+      u = l.user
+      { id: l.user_id, name: u.full_name, city: u.city, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
     end
     field(:category) do |l|
       { id: l.category_id, name_en: l.category.name_en, name_ps: l.category.name_ps, name_fa: l.category.name_fa, slug: l.category.slug }
@@ -30,7 +31,8 @@ class ListingSerializer < ApplicationSerializer
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:is_saved) { |l, opts| opts[:current_user]&.saved_listings&.exists?(listing_id: l.id) || false }
     field(:seller) do |l|
-      { id: l.user_id, name: l.user.full_name, city: l.user.city, phone: l.user.phone }
+      u = l.user
+      { id: l.user_id, name: u.full_name, city: u.city, phone: u.phone, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
     end
     field(:category) do |l|
       { id: l.category_id, name_en: l.category.name_en, name_ps: l.category.name_ps, name_fa: l.category.name_fa, slug: l.category.slug }
