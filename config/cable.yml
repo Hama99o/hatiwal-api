@@ -1,6 +1,6 @@
 development:
   adapter: redis
-  url: <%= ENV.fetch("REDIS_URL", "redis://localhost:6379/0") %>
+  url: <%= ENV.fetch("REDIS_URL") { "redis://localhost:6307/0" } %>
   channel_prefix: hatiwal_development
 
 test:

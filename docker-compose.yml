@@ -39,7 +39,7 @@ services:
     ports:
       - "5407:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hatiwal"]
+      test: ["CMD-SHELL", "pg_isready -U hatiwal -d hatiwal_development"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -63,13 +63,29 @@ services:
     environment:
       - "RAILS_ENV=development"
       - "DATABASE_URL=postgres://hatiwal:password@postgres:5432/hatiwal_development"
-      # Redis used for ActionCable pub/sub (hatiwal_development prefix keeps channels isolated)
       - "REDIS_URL=redis://redis:6379/0"
-      # ActionCable WebSocket endpoint — mobile connects to ws://<host>:3007/hatiwal-cable
-      - "ACTION_CABLE_URL=ws://localhost:3007/hatiwal-cable"
+      - "ACTION_CABLE_URL=ws://localhost:3098/hatiwal-cable"
     ports:
       - "0.0.0.0:3007:3007"
     command: bash -c "rm -f tmp/pids/server.pid && bundle install && bundle exec rails db:prepare && bundle exec rails s -b 0.0.0.0 -p 3007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Dedicated ActionCable server — decouples WebSocket from HTTP handling.
+  # Mobile app connects to ws://host:3098/hatiwal-cable
+  cable:
+    <<: *dev-app
+    environment:
+      - "RAILS_ENV=development"
+      - "DATABASE_URL=postgres://hatiwal:password@postgres:5432/hatiwal_development"
+      - "REDIS_URL=redis://redis:6379/0"
+      - "ACTION_CABLE_URL=ws://localhost:3098/hatiwal-cable"
+    ports:
+      - "0.0.0.0:3098:3098"
+    command: bash -c "bundle install && bundle exec puma -p 3098 cable/config.ru"
     depends_on:
       postgres:
         condition: service_healthy

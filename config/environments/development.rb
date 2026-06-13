@@ -62,7 +62,9 @@ Rails.application.configure do
   # Annotate rendered view with file names.
   config.action_view.annotate_rendered_view_with_filenames = true
 
-  # Allow Action Cable connections from the mobile app (no browser origin header).
+  # Separate cable process — mobile connects here directly.
+  config.action_cable.mount_path = nil
+  config.action_cable.url = ENV.fetch("ACTION_CABLE_URL", "ws://localhost:3098/hatiwal-cable")
   config.action_cable.disable_request_forgery_protection = true
 
   # Raise error when a before_action's only/except options reference missing actions.

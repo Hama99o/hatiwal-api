@@ -15,7 +15,7 @@ module ApplicationCable
 
       return reject_unauthorized_connection unless token.present? && client_id.present? && uid.present?
 
-      user = User.find_by(email: uid)
+      user = User.find_by(uid: uid)
       return reject_unauthorized_connection unless user&.valid_token?(token, client_id)
 
       user
