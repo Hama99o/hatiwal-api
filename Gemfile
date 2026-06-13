@@ -32,6 +32,7 @@ gem "aws-sdk-s3", require: false
 gem "solid_cache"
 gem "solid_queue"
 gem "solid_cable"
+gem "redis", "~> 5.0"
 
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"

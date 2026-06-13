@@ -1,4 +1,7 @@
 Rails.application.routes.draw do
+  # Unique cable path so it doesn't collide with other Rails apps on the same Redis
+  mount ActionCable.server => "/hatiwal-cable"
+
   mount Rswag::Ui::Engine  => "/api-docs"
   mount Rswag::Api::Engine => "/api-docs"
 

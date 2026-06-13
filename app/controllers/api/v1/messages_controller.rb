@@ -15,6 +15,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
     @message.attachment = params[:attachment] if params[:attachment].present?
 
     if @message.save
+      BroadcastMessageJob.perform_later(@message.id)
       render_blue(MessageSerializer, @message, view: :default, status: :created)
     else
       render_unprocessable_entity(@message)

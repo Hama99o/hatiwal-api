@@ -63,7 +63,10 @@ services:
     environment:
       - "RAILS_ENV=development"
       - "DATABASE_URL=postgres://hatiwal:password@postgres:5432/hatiwal_development"
+      # Redis used for ActionCable pub/sub (hatiwal_development prefix keeps channels isolated)
       - "REDIS_URL=redis://redis:6379/0"
+      # ActionCable WebSocket endpoint — mobile connects to ws://<host>:3007/hatiwal-cable
+      - "ACTION_CABLE_URL=ws://localhost:3007/hatiwal-cable"
     ports:
       - "0.0.0.0:3007:3007"
     command: bash -c "rm -f tmp/pids/server.pid && bundle install && bundle exec rails db:prepare && bundle exec rails s -b 0.0.0.0 -p 3007"
