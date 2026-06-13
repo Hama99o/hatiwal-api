@@ -1,5 +1,5 @@
 class ListingSerializer < ApplicationSerializer
-  fields :id, :title, :price, :currency, :status, :location, :created_at
+  fields :id, :title, :price, :currency, :status, :location, :address, :created_at
 
   view :list do
     fields :category_id, :views_count

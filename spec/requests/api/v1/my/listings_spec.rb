@@ -118,6 +118,16 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       expect(listing.reload.title).to eq("New title")
     end
 
+    it "updates the address field" do
+      listing = create(:listing, user: user)
+      put "/api/v1/my/listings/#{listing.id}",
+          params: { listing: { address: "Near Blue Mosque, Shar-e-Naw" } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(listing.reload.address).to eq("Near Blue Mosque, Shar-e-Naw")
+      expect(JSON.parse(response.body)["listing"]).to have_key("address")
+    end
+
     it "422s on invalid update" do
       listing = create(:listing, user: user)
       put "/api/v1/my/listings/#{listing.id}",

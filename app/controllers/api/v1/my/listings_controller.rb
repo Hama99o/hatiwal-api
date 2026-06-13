@@ -70,7 +70,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   def listing_params
     params.require(:listing).permit(
       :title, :description, :price, :currency,
-      :category_id, :location, :latitude, :longitude,
+      :category_id, :location, :address, :latitude, :longitude,
       images: []
     )
   end
