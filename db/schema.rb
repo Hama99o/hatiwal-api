@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_12_150904) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_13_143806) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -42,6 +42,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_12_150904) do
     t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
   end
 
+  create_table "blocks", force: :cascade do |t|
+    t.bigint "blocked_id", null: false
+    t.bigint "blocker_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["blocked_id"], name: "index_blocks_on_blocked_id"
+    t.index ["blocker_id", "blocked_id"], name: "index_blocks_on_blocker_id_and_blocked_id", unique: true
+    t.index ["blocker_id"], name: "index_blocks_on_blocker_id"
+  end
+
   create_table "categories", force: :cascade do |t|
     t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
@@ -49,10 +59,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_12_150904) do
     t.string "name_en", null: false
     t.string "name_fa", null: false
     t.string "name_ps", null: false
+    t.bigint "parent_id"
     t.integer "position", default: 0
     t.string "slug", null: false
     t.datetime "updated_at", null: false
     t.index ["active"], name: "index_categories_on_active"
+    t.index ["parent_id"], name: "index_categories_on_parent_id"
     t.index ["position"], name: "index_categories_on_position"
     t.index ["slug"], name: "index_categories_on_slug", unique: true
   end
@@ -74,6 +86,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_12_150904) do
   end
 
   create_table "listings", force: :cascade do |t|
+    t.string "address"
     t.bigint "category_id", null: false
     t.datetime "created_at", null: false
     t.string "currency", default: "AFN", null: false
@@ -158,11 +171,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_12_150904) do
     t.string "nickname"
     t.string "phone"
     t.string "preferred_language", default: "ps"
+    t.string "preferred_theme", default: "system"
     t.string "provider", default: "email", null: false
     t.string "province"
     t.datetime "remember_created_at"
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
+    t.boolean "seller_mode", default: false, null: false
     t.integer "status", default: 0, null: false
     t.json "tokens"
     t.string "uid", default: "", null: false
@@ -180,6 +195,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_12_150904) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "blocks", "users", column: "blocked_id"
+  add_foreign_key "blocks", "users", column: "blocker_id"
+  add_foreign_key "categories", "categories", column: "parent_id", on_delete: :restrict
   add_foreign_key "conversations", "listings"
   add_foreign_key "conversations", "users", column: "buyer_id"
   add_foreign_key "conversations", "users", column: "seller_id"

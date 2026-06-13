@@ -13,7 +13,7 @@ RSpec.describe "Api::V1::Messages", type: :request do
       expect(response).to have_http_status(:unauthorized)
     end
 
-    it "returns messages ordered oldest first for a participant" do
+    it "returns messages ordered newest first for a participant" do
       first  = create(:message, conversation: conversation, user: buyer, created_at: 2.hours.ago)
       second = create(:message, conversation: conversation, user: seller, created_at: 1.hour.ago)
 
@@ -21,7 +21,7 @@ RSpec.describe "Api::V1::Messages", type: :request do
 
       expect(response).to have_http_status(:ok)
       ids = JSON.parse(response.body)["messages"].map { |m| m["id"] }
-      expect(ids).to eq([ first.id, second.id ])
+      expect(ids).to eq([ second.id, first.id ])
     end
 
     it "404s for a non-participant (scoped out)" do

@@ -3,7 +3,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
   def index
     authorize @conversation, :read_messages?
-    messages = @conversation.messages.ordered
+    messages = @conversation.messages.order(created_at: :desc)
     paginate_blue(MessageSerializer, messages, extra: { view: :default })
   end
 
