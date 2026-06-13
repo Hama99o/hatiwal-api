@@ -3,6 +3,8 @@ require "rails_helper"
 RSpec.describe Category, type: :model do
   describe "associations" do
     it { should have_many(:listings).dependent(:restrict_with_error) }
+    it { should belong_to(:parent).optional }
+    it { should have_many(:subcategories).with_foreign_key(:parent_id).dependent(:destroy) }
   end
 
   describe "validations" do
@@ -34,7 +36,7 @@ RSpec.describe Category, type: :model do
   describe "scopes" do
     describe ".active" do
       it "returns only active categories" do
-        active   = create(:category, active: true)
+        active = create(:category, active: true)
         create(:category, active: false)
         expect(Category.active).to contain_exactly(active)
       end
@@ -46,6 +48,28 @@ RSpec.describe Category, type: :model do
         first  = create(:category, position: 1)
         second = create(:category, position: 2)
         expect(Category.ordered.to_a).to eq([ first, second, third ])
+      end
+    end
+
+    describe ".top_level" do
+      it "returns only categories with no parent" do
+        parent = create(:category)
+        create(:category, parent: parent)
+
+        expect(Category.top_level).to contain_exactly(parent)
+      end
+    end
+
+    describe ".children_of" do
+      it "returns subcategories of the given parent id" do
+        parent  = create(:category)
+        child1  = create(:category, parent: parent)
+        child2  = create(:category, parent: parent)
+        other   = create(:category)
+
+        result = Category.children_of(parent.id)
+        expect(result).to contain_exactly(child1, child2)
+        expect(result).not_to include(other)
       end
     end
   end
@@ -69,6 +93,24 @@ RSpec.describe Category, type: :model do
     it "falls back to English for unknown locale" do
       expect(category.name_for("xx")).to eq("Electronics")
       expect(category.name_for(nil)).to eq("Electronics")
+    end
+  end
+
+  describe "hierarchy" do
+    it "can have subcategories" do
+      parent = create(:category, name_en: "Electronics")
+      child  = create(:category, name_en: "Phones", parent: parent)
+
+      expect(parent.subcategories).to include(child)
+      expect(child.parent).to eq(parent)
+    end
+
+    it "destroying a parent destroys its subcategories" do
+      parent = create(:category)
+      child  = create(:category, parent: parent)
+
+      parent.destroy
+      expect(Category.exists?(child.id)).to be false
     end
   end
 end

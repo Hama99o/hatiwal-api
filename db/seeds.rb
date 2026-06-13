@@ -5,28 +5,130 @@
 
 puts "=== Seeding Categories ==="
 
-CATEGORIES = [
-  { name_en: "Electronics",        name_ps: "برقی وسایل",        name_fa: "وسایل برقی",           slug: "electronics", icon: "📱", position: 1  },
-  { name_en: "Clothes & Fashion",   name_ps: "کالي او فیشن",      name_fa: "لباس و مد",             slug: "clothes",     icon: "👗", position: 2  },
-  { name_en: "Vehicles",            name_ps: "موټرونه",            name_fa: "وسایل نقلیه",           slug: "vehicles",    icon: "🚗", position: 3  },
-  { name_en: "Home & Furniture",    name_ps: "کور او فرنیچر",     name_fa: "خانه و مبلمان",          slug: "home",        icon: "🏠", position: 4  },
-  { name_en: "Books & Education",   name_ps: "کتابونه",            name_fa: "کتاب و آموزش",          slug: "books",       icon: "📚", position: 5  },
-  { name_en: "Food & Agriculture",  name_ps: "خواړه او کرنه",     name_fa: "مواد غذایی و کشاورزی",  slug: "food",        icon: "🌾", position: 6  },
-  { name_en: "Tools & Equipment",   name_ps: "وسایل او تجهیزات",  name_fa: "ابزار و تجهیزات",       slug: "tools",       icon: "🔧", position: 7  },
-  { name_en: "Property",            name_ps: "ملکیت",              name_fa: "ملک",                    slug: "property",    icon: "🏗️", position: 8  },
-  { name_en: "Jobs",                name_ps: "دندې",               name_fa: "کار",                    slug: "jobs",        icon: "💼", position: 9  },
-  { name_en: "Services",            name_ps: "خدمتونه",            name_fa: "خدمات",                 slug: "services",    icon: "🛠️", position: 10 },
-  { name_en: "Animals",             name_ps: "حیوانات",            name_fa: "حیوانات",                slug: "animals",     icon: "🐄", position: 11 },
-  { name_en: "Other",               name_ps: "نور",                name_fa: "دیگر",                   slug: "other",       icon: "📦", position: 12 }
+TOP_LEVEL_CATEGORIES = [
+  { name_en: "Electronics",        name_ps: "برقی وسایل",        name_fa: "وسایل برقی",                slug: "electronics", icon: "📱", position: 1  },
+  { name_en: "Clothes & Fashion",   name_ps: "کالي او فیشن",      name_fa: "لباس و مد",                 slug: "clothes",     icon: "👗", position: 2  },
+  { name_en: "Vehicles",            name_ps: "موټرونه",            name_fa: "وسایل نقلیه",               slug: "vehicles",    icon: "🚗", position: 3  },
+  { name_en: "Home & Furniture",    name_ps: "کور او فرنیچر",     name_fa: "خانه و مبلمان",              slug: "home",        icon: "🏠", position: 4  },
+  { name_en: "Books & Education",   name_ps: "کتابونه",            name_fa: "کتاب و آموزش",              slug: "books",       icon: "📚", position: 5  },
+  { name_en: "Food & Agriculture",  name_ps: "خواړه او کرنه",     name_fa: "مواد غذایی و کشاورزی",      slug: "food",        icon: "🌾", position: 6  },
+  { name_en: "Tools & Equipment",   name_ps: "وسایل او تجهیزات",  name_fa: "ابزار و تجهیزات",           slug: "tools",       icon: "🔧", position: 7  },
+  { name_en: "Sports & Outdoors",   name_ps: "سپورت او بهرني",   name_fa: "ورزش و فضای باز",            slug: "sports",      icon: "⚽", position: 8  },
+  { name_en: "Beauty & Health",     name_ps: "ښایست او روغتیا",  name_fa: "زیبایی و بهداشت",            slug: "beauty",      icon: "💄", position: 9  },
+  { name_en: "Bags & Accessories",  name_ps: "بیگونه او اکسیسوریز", name_fa: "کیف و لوازم",             slug: "bags",        icon: "👜", position: 10 },
+  { name_en: "Kids & Toys",         name_ps: "د ماشومانو توکي",  name_fa: "کودک و اسباب‌بازی",          slug: "kids",        icon: "🧸", position: 11 },
+  { name_en: "Property",            name_ps: "ملکیت",              name_fa: "ملک",                        slug: "property",    icon: "🏗️", position: 12 },
+  { name_en: "Jobs",                name_ps: "دندې",               name_fa: "کار",                        slug: "jobs",        icon: "💼", position: 13 },
+  { name_en: "Services",            name_ps: "خدمتونه",            name_fa: "خدمات",                     slug: "services",    icon: "🛠️", position: 14 },
+  { name_en: "Other",               name_ps: "نور",                name_fa: "دیگر",                       slug: "other",       icon: "📦", position: 15 }
 ].freeze
 
-CATEGORIES.each do |attrs|
-  Category.find_or_create_by!(slug: attrs[:slug]) do |cat|
-    cat.assign_attributes(attrs)
+# Remove the old "Animals" top-level if it exists (it becomes a subcategory of Food)
+animals_top_level = Category.find_by(slug: "animals", parent_id: nil)
+if animals_top_level
+  # Reassign any listings that belong to the top-level animals category
+  # They will stay under animals_top_level for now; we re-parent them after creating the livestock subcat
+  puts "  Found top-level 'animals' category — will convert to subcategory of 'food'"
+end
+
+TOP_LEVEL_CATEGORIES.each do |attrs|
+  cat = Category.find_or_initialize_by(slug: attrs[:slug])
+  cat.assign_attributes(attrs.merge(parent_id: nil))
+  cat.active = true unless cat.persisted?
+  cat.save!
+end
+
+puts "  Top-level categories seeded"
+
+# =============================================================================
+# Subcategories
+# =============================================================================
+
+SUBCATEGORIES = [
+  # Electronics
+  { parent_slug: "electronics", name_en: "Phones & Tablets",      name_ps: "موبایلونه او تبلیټونه", name_fa: "گوشی و تبلت",        slug: "phones",             icon: "📱", position: 1 },
+  { parent_slug: "electronics", name_en: "Computers & Laptops",   name_ps: "کمپیوترونه",            name_fa: "کامپیوتر و لپ‌تاپ", slug: "computers",          icon: "💻", position: 2 },
+  { parent_slug: "electronics", name_en: "TVs & Audio",           name_ps: "ټلویزیونونه او سوند",  name_fa: "تلویزیون و صدا",     slug: "tv-audio",           icon: "📺", position: 3 },
+  { parent_slug: "electronics", name_en: "Cameras",               name_ps: "کیمرې",                 name_fa: "دوربین",              slug: "cameras",            icon: "📷", position: 4 },
+  { parent_slug: "electronics", name_en: "Accessories",           name_ps: "اکسیسوریز",             name_fa: "لوازم جانبی",        slug: "tech-accessories",   icon: "🎧", position: 5 },
+
+  # Clothes & Fashion
+  { parent_slug: "clothes", name_en: "Men's Clothing",        name_ps: "مردانه کالي",       name_fa: "لباس مردانه",      slug: "mens-clothing",      icon: "👔", position: 1 },
+  { parent_slug: "clothes", name_en: "Women's Clothing",      name_ps: "زنانه کالي",        name_fa: "لباس زنانه",       slug: "womens-clothing",    icon: "👗", position: 2 },
+  { parent_slug: "clothes", name_en: "Children's Clothing",   name_ps: "د اطفالو کالي",    name_fa: "لباس اطفال",       slug: "kids-clothing",      icon: "👶", position: 3 },
+  { parent_slug: "clothes", name_en: "Traditional Clothing",  name_ps: "دودیز کالي",        name_fa: "لباس سنتی",        slug: "traditional-clothing", icon: "🧕", position: 4 },
+  { parent_slug: "clothes", name_en: "Shoes",                 name_ps: "بوټان",              name_fa: "کفش",              slug: "shoes",              icon: "👟", position: 5 },
+
+  # Vehicles
+  { parent_slug: "vehicles", name_en: "Cars",          name_ps: "موټرونه",        name_fa: "خودرو",         slug: "cars",           icon: "🚗", position: 1 },
+  { parent_slug: "vehicles", name_en: "Motorcycles",   name_ps: "موټرسایکلونه",  name_fa: "موتورسیکلت",   slug: "motorcycles",    icon: "🏍️", position: 2 },
+  { parent_slug: "vehicles", name_en: "Bicycles",      name_ps: "سایکلونه",       name_fa: "دوچرخه",        slug: "bicycles",       icon: "🚲", position: 3 },
+  { parent_slug: "vehicles", name_en: "Spare Parts",   name_ps: "پرزې",           name_fa: "قطعات",         slug: "vehicle-parts",  icon: "⚙️", position: 4 },
+
+  # Home & Furniture
+  { parent_slug: "home", name_en: "Furniture",             name_ps: "فرنیچر",              name_fa: "مبلمان",               slug: "furniture",  icon: "🛋️", position: 1 },
+  { parent_slug: "home", name_en: "Kitchen & Appliances",  name_ps: "آشپزخانه او وسایل",  name_fa: "آشپزخانه و وسایل",    slug: "kitchen",    icon: "🍳", position: 2 },
+  { parent_slug: "home", name_en: "Bedding & Curtains",    name_ps: "بستر او پردې",        name_fa: "رختخواب و پرده",       slug: "bedding",    icon: "🛏️", position: 3 },
+  { parent_slug: "home", name_en: "Garden & Tools",        name_ps: "باغ او وسایل",        name_fa: "باغ و ابزار",          slug: "garden",     icon: "🌿", position: 4 },
+
+  # Books & Education
+  { parent_slug: "books", name_en: "Books",           name_ps: "کتابونه",      name_fa: "کتاب‌ها",         slug: "books-general",   icon: "📖", position: 1 },
+  { parent_slug: "books", name_en: "School Supplies", name_ps: "مکتب وسایل",  name_fa: "لوازم تحصیلی",   slug: "school-supplies", icon: "✏️", position: 2 },
+
+  # Food & Agriculture
+  { parent_slug: "food", name_en: "Food Products",       name_ps: "خوراکي توکي", name_fa: "محصولات غذایی", slug: "food-products", icon: "🥗", position: 1 },
+  { parent_slug: "food", name_en: "Agriculture & Farming", name_ps: "کرنه",      name_fa: "کشاورزی",        slug: "agriculture",   icon: "🌾", position: 2 },
+  { parent_slug: "food", name_en: "Animals & Livestock", name_ps: "حیوانات",    name_fa: "حیوانات",        slug: "livestock",     icon: "🐄", position: 3 },
+
+  # Tools & Equipment
+  { parent_slug: "tools", name_en: "Hand Tools",          name_ps: "لاسي وسایل",       name_fa: "ابزار دستی",       slug: "hand-tools",   icon: "🔨", position: 1 },
+  { parent_slug: "tools", name_en: "Power Tools",         name_ps: "بریښنایي وسایل",   name_fa: "ابزار برقی",       slug: "power-tools",  icon: "🔌", position: 2 },
+  { parent_slug: "tools", name_en: "Industrial Equipment", name_ps: "صنعتي تجهیزات",   name_fa: "تجهیزات صنعتی",   slug: "industrial",   icon: "🏭", position: 3 },
+
+  # Sports & Outdoors
+  { parent_slug: "sports", name_en: "Fitness Equipment", name_ps: "د فټنس وسایل", name_fa: "تجهیزات ورزشی",     slug: "fitness",       icon: "🏋️", position: 1 },
+  { parent_slug: "sports", name_en: "Cycling",           name_ps: "سایکل سواري",   name_fa: "دوچرخه‌سواری",      slug: "cycling",       icon: "🚴", position: 2 },
+  { parent_slug: "sports", name_en: "Outdoor Sports",    name_ps: "بهرنی سپورت",   name_fa: "ورزش فضای باز",     slug: "outdoor-sports", icon: "🏕️", position: 3 },
+  { parent_slug: "sports", name_en: "Team Sports",       name_ps: "ټیمي سپورت",    name_fa: "ورزش تیمی",         slug: "team-sports",   icon: "⚽", position: 4 },
+
+  # Beauty & Health
+  { parent_slug: "beauty", name_en: "Skincare",        name_ps: "د مخ پاملرنه",         name_fa: "مراقبت پوست",       slug: "skincare",  icon: "🧴", position: 1 },
+  { parent_slug: "beauty", name_en: "Haircare",        name_ps: "د وریځو پاملرنه",      name_fa: "مراقبت مو",         slug: "haircare",  icon: "💇", position: 2 },
+  { parent_slug: "beauty", name_en: "Fragrances",      name_ps: "عطرونه",                name_fa: "عطریات",            slug: "fragrances", icon: "🌸", position: 3 },
+  { parent_slug: "beauty", name_en: "Health & Medical", name_ps: "روغتیا",              name_fa: "بهداشت و سلامت",   slug: "health",    icon: "💊", position: 4 },
+
+  # Bags & Accessories
+  { parent_slug: "bags", name_en: "Bags & Purses", name_ps: "بیگونه",    name_fa: "کیف و کوله",  slug: "bags-purses", icon: "👜", position: 1 },
+  { parent_slug: "bags", name_en: "Watches",       name_ps: "ساعتونه",   name_fa: "ساعت",        slug: "watches",     icon: "⌚", position: 2 },
+  { parent_slug: "bags", name_en: "Jewelry",       name_ps: "زیورات",    name_fa: "جواهرات",     slug: "jewelry",     icon: "💍", position: 3 },
+
+  # Kids & Toys
+  { parent_slug: "kids", name_en: "Toys & Games", name_ps: "لوبوونه",        name_fa: "اسباب‌بازی",   slug: "toys",  icon: "🧸", position: 1 },
+  { parent_slug: "kids", name_en: "Baby Items",   name_ps: "د ماشوم وسایل", name_fa: "لوازم نوزاد",  slug: "baby",  icon: "🍼", position: 2 }
+].freeze
+
+SUBCATEGORIES.each do |attrs|
+  parent = Category.find_by!(slug: attrs[:parent_slug])
+  subcat_attrs = attrs.except(:parent_slug).merge(parent_id: parent.id)
+  cat = Category.find_or_initialize_by(slug: subcat_attrs[:slug])
+  cat.assign_attributes(subcat_attrs)
+  cat.active = true unless cat.persisted?
+  cat.save!
+end
+
+# Handle old top-level "animals" category — deactivate it (listings stay on it, new ones use "livestock")
+if animals_top_level
+  # If it has no listings, destroy it; otherwise deactivate it so it doesn't appear in the hierarchy
+  if animals_top_level.listings.empty?
+    animals_top_level.destroy!
+    puts "  Removed old top-level 'animals' category (no listings)"
+  else
+    animals_top_level.update!(active: false)
+    puts "  Deactivated old top-level 'animals' category (had listings — manually re-assign)"
   end
 end
 
-puts "  categories: #{Category.count}"
+puts "  categories: #{Category.count} (#{Category.top_level.count} top-level, #{Category.where.not(parent_id: nil).count} subcategories)"
 
 # =============================================================================
 # Development-only deep data
@@ -150,11 +252,6 @@ listing_data = [
   { title: "2-Bedroom Apartment for Rent Kabul", description: "Modern flat, 90 sqm. 2nd floor. Backup power. Security guard. Near Kabul University.", price: 18_000, category: cat["property"], status: :active, location: "Kabul, Karte Char", user_idx: 11 },
   { title: "Shop Space for Rent in Herat Bazaar", description: "15 sqm. Ground floor. Busy street. Electricity available. Suit for clothing or electronics.", price: 12_000, category: cat["property"], status: :active, location: "Herat, Main Bazaar", user_idx: 14 },
 
-  # Animals
-  { title: "Kuchi Shepherd Dog 2 Years Trained", description: "Well trained. Very loyal guard dog. Healthy and vaccinated. Male, 2 years old.", price: 25_000, category: cat["animals"], status: :active, location: "Kandahar", user_idx: 1 },
-  { title: "3 Dairy Cows Holstein Imported Breed", description: "High-yield. Each gives 20+ liters per day. Healthy and vaccinated. Selling all three together.", price: 280_000, category: cat["animals"], status: :active, location: "Mazar-i-Sharif, Outside City", user_idx: 4 },
-  { title: "Pair of Champion Racing Pigeons", description: "Trained pair. Father is a champion bird. Fast. Comes with cage.", price: 3_500, category: cat["animals"], status: :active, location: "Kabul, Khair Khana", user_idx: 16 },
-
   # Services
   { title: "Professional Tailoring Men and Women", description: "Traditional and modern clothes. 20 years experience. Work done in 2-3 days. Bring your fabric.", price: 500, category: cat["services"], status: :active, location: "Herat, Tailors Street", user_idx: 2 },
   { title: "Home Electrician All Kabul Areas", description: "Wiring, solar panels, inverter installation. 10 years experience. Available daily.", price: 800, category: cat["services"], status: :active, location: "Kabul", user_idx: 0 },
@@ -167,6 +264,7 @@ listing_data = [
 
 listing_data.each do |d|
   seller = users[d[:user_idx]]
+  next if d[:category].nil?
   next if Listing.exists?(user: seller, title: d[:title])
 
   Listing.create!(
@@ -408,7 +506,7 @@ puts "======================================"
 puts "  SEED COMPLETE"
 puts "======================================"
 puts "  Users:         #{User.count}"
-puts "  Categories:    #{Category.count}"
+puts "  Categories:    #{Category.count} (#{Category.top_level.count} top-level)"
 puts "  Listings:      #{Listing.count}"
 puts "    active:      #{Listing.active.count}"
 puts "    draft:       #{Listing.draft.count}"

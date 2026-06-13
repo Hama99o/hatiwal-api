@@ -7,5 +7,10 @@ FactoryBot.define do
     icon { "📦" }
     position { 1 }
     active { true }
+    parent { nil }
+
+    trait :with_parent do
+      association :parent, factory: :category
+    end
   end
 end
