@@ -38,7 +38,12 @@ Rails.application.routes.draw do
         put   "/me",  to: "profiles#update_me"
         patch "/me",  to: "profiles#update_me"
         get   "/:id", to: "profiles#show",       as: :profile
+        get   "/:id/public_profile", to: "public_profiles#show", as: :public_profile
       end
+
+      # Block / unblock a user  — POST/DELETE /users/:user_id/block
+      post   "users/:user_id/block",   to: "blocks#create",  as: :user_block
+      delete "users/:user_id/block",   to: "blocks#destroy"
 
       # Seller / owner mode
       namespace :my do

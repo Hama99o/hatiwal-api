@@ -10,11 +10,9 @@ class Api::V1::MessagesController < Api::V1::BaseController
   def create
     authorize @conversation, :send_message?
 
-    @message = @conversation.messages.new(
-      user: current_user,
-      body: params[:body],
-      kind: params[:kind] || :text
-    )
+    @message = @conversation.messages.new(message_params)
+    @message.user = current_user
+    @message.attachment = params[:attachment] if params[:attachment].present?
 
     if @message.save
       render_blue(MessageSerializer, @message, view: :default, status: :created)
@@ -33,5 +31,9 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
   def set_conversation
     @conversation = policy_scope(Conversation).find(params[:conversation_id])
+  end
+
+  def message_params
+    params.permit(:body, :kind)
   end
 end

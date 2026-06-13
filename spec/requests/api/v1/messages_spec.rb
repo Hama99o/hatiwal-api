@@ -42,6 +42,23 @@ RSpec.describe "Api::V1::Messages", type: :request do
       body = JSON.parse(response.body)["message"]
       expect(body["body"]).to eq("Sounds good, where can we meet?")
       expect(body["sender"]["id"]).to eq(buyer.id)
+      expect(body).to have_key("attachment_url")
+    end
+
+    it "creates a document message with an attached file" do
+      file = fixture_file_upload(
+        Rails.root.join("spec/fixtures/files/test_image.jpg"),
+        "image/jpeg"
+      )
+
+      post "/api/v1/conversations/#{conversation.id}/messages",
+           params: { body: "Here is the photo", kind: "image_message", attachment: file },
+           headers: headers
+
+      expect(response).to have_http_status(:created)
+      body = JSON.parse(response.body)["message"]
+      expect(body["kind"]).to eq("image_message")
+      expect(body["attachment_url"]).to be_present
     end
 
     it "updates the conversation's last_message_at" do

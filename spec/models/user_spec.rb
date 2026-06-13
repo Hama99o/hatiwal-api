@@ -10,6 +10,10 @@ RSpec.describe User, type: :model do
     it { should have_many(:seller_conversations).class_name("Conversation").with_foreign_key(:seller_id).dependent(:destroy) }
     it { should have_many(:messages).dependent(:destroy) }
     it { should have_many(:filed_reports).class_name("Report").with_foreign_key(:reporter_id).dependent(:destroy) }
+    it { should have_many(:blocks_as_blocker).class_name("Block").with_foreign_key(:blocker_id).dependent(:destroy) }
+    it { should have_many(:blocks_as_blocked).class_name("Block").with_foreign_key(:blocked_id).dependent(:destroy) }
+    it { should have_many(:blocked_users).through(:blocks_as_blocker).source(:blocked) }
+    it { should have_many(:blocking_users).through(:blocks_as_blocked).source(:blocker) }
   end
 
   describe "validations" do
@@ -68,6 +72,30 @@ RSpec.describe User, type: :model do
       create(:conversation) # unrelated
 
       expect(user.conversations).to contain_exactly(as_buyer, as_seller)
+    end
+  end
+
+  describe "#blocked?" do
+    it "returns true when the user has blocked the other user" do
+      blocker = create(:user)
+      blocked = create(:user)
+      create(:block, blocker: blocker, blocked: blocked)
+      expect(blocker.blocked?(blocked)).to be true
+    end
+
+    it "returns false when no block exists" do
+      user_a = create(:user)
+      user_b = create(:user)
+      expect(user_a.blocked?(user_b)).to be false
+    end
+  end
+
+  describe "#blocked_by?" do
+    it "returns true when the other user has blocked this user" do
+      blocker = create(:user)
+      target = create(:user)
+      create(:block, blocker: blocker, blocked: target)
+      expect(target.blocked_by?(blocker)).to be true
     end
   end
 

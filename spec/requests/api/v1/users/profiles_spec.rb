@@ -101,9 +101,10 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
   end
 
   describe "GET /api/v1/users/:id" do
-    it "returns another user's public profile" do
+    it "returns another user's public profile with trust fields" do
       other = create(:user, firstname: "Fatima", lastname: "Noori")
       create(:listing, :active, user: other)
+      create(:listing, :sold, user: other)
 
       get "/api/v1/users/#{other.id}", headers: headers, as: :json
 
@@ -111,6 +112,8 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       body = JSON.parse(response.body)["user"]
       expect(body["full_name"]).to eq("Fatima Noori")
       expect(body["listings_count"]).to eq(1)
+      expect(body["sold_count"]).to eq(1)
+      expect(body["member_since"]).to be_present
       expect(body).not_to have_key("phone")
       expect(body).to have_key("avatar_url")
     end
