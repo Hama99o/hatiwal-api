@@ -1,5 +1,6 @@
 class ConversationPolicy < ApplicationPolicy
   def show?          = participant?
+  def destroy?       = participant?
   def read_messages? = participant?
   def send_message?  = participant? && record.open?
 

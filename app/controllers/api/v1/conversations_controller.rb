@@ -1,6 +1,7 @@
 class Api::V1::ConversationsController < Api::V1::BaseController
   before_action :set_listing, only: [ :create ]
   before_action :set_conversation, only: [ :show ]
+  before_action :set_conversation_for_mutation, only: [ :destroy ]
 
   def index
     conversations = policy_scope(Conversation.for_user(current_user.id).ordered)
@@ -9,6 +10,12 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def show
     render_blue(ConversationSerializer, @conversation, view: :detailed)
+  end
+
+  def destroy
+    authorize @conversation
+    @conversation.destroy!
+    head :no_content
   end
 
   def create
@@ -34,5 +41,9 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def set_conversation
     @conversation = policy_scope(Conversation).find(params[:id])
+  end
+
+  def set_conversation_for_mutation
+    @conversation = Conversation.find(params[:id])
   end
 end

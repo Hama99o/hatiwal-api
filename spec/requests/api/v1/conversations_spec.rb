@@ -41,6 +41,42 @@ RSpec.describe "Api::V1::Conversations", type: :request do
     end
   end
 
+  describe "DELETE /api/v1/conversations/:id" do
+    let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
+
+    it "allows the buyer to delete the conversation" do
+      conversation # ensure record exists before measuring count
+
+      expect do
+        delete "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+      end.to change(Conversation, :count).by(-1)
+
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "allows the seller to delete the conversation" do
+      seller_headers = auth_headers_for(seller)
+      conversation # ensure record exists before measuring count
+
+      expect do
+        delete "/api/v1/conversations/#{conversation.id}", headers: seller_headers, as: :json
+      end.to change(Conversation, :count).by(-1)
+
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "forbids a non-participant from deleting the conversation" do
+      outsider_headers = auth_headers_for(create(:user))
+      delete "/api/v1/conversations/#{conversation.id}", headers: outsider_headers, as: :json
+      expect(response).to have_http_status(:forbidden)
+    end
+
+    it "requires authentication" do
+      delete "/api/v1/conversations/#{conversation.id}", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
   describe "POST /api/v1/listings/:listing_id/conversations" do
     it "starts a conversation with a first message" do
       expect do
