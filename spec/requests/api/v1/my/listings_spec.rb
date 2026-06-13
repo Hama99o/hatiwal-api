@@ -18,8 +18,10 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       get "/api/v1/my/listings", headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
-      ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
-      expect(ids).to eq([ mine.id ])
+      listings = JSON.parse(response.body)["listings"]
+      expect(listings.map { |l| l["id"] }).to eq([ mine.id ])
+      expect(listings.first).to have_key("image_urls")
+      expect(listings.first["image_urls"]).to be_an(Array)
     end
 
     it "filters by status" do

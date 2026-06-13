@@ -4,6 +4,7 @@ class ListingSerializer < ApplicationSerializer
   view :list do
     fields :category_id, :views_count
     field(:thumbnail_url) { |l| l.thumbnail_url }
+    field(:image_urls) { |l| l.image_urls }
     field(:seller) do |l|
       { id: l.user_id, name: l.user.full_name, city: l.user.city }
     end
@@ -15,6 +16,7 @@ class ListingSerializer < ApplicationSerializer
   view :seller_list do
     fields :category_id, :views_count, :published_at, :reserved_at, :sold_at
     field(:thumbnail_url) { |l| l.thumbnail_url }
+    field(:image_urls) { |l| l.image_urls }
     field(:conversations_count) { |l| l.conversations.count }
     field(:category) do |l|
       { id: l.category_id, name_en: l.category.name_en, name_ps: l.category.name_ps, name_fa: l.category.name_fa }

@@ -37,6 +37,8 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
           data = JSON.parse(response.body)
           expect(data["listings"]).to be_an(Array)
           expect(data["meta"]["pagination"]).to have_key("total_count")
+          expect(data["listings"].first).to have_key("image_urls")
+          expect(data["listings"].first["image_urls"]).to be_an(Array)
         end
 
         after do |example|
