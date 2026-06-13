@@ -14,7 +14,7 @@ RSpec.describe Listing, type: :model do
     it { should validate_presence_of(:price) }
     it { should validate_numericality_of(:price).is_greater_than(0) }
     it { should validate_presence_of(:currency) }
-    it { should validate_inclusion_of(:currency).in_array(%w[AFN USD]) }
+    it { should validate_inclusion_of(:currency).in_array(%w[AFN USD EUR]) }
     it { should validate_presence_of(:category) }
   end
 
@@ -110,6 +110,44 @@ RSpec.describe Listing, type: :model do
       it "returns an empty array when no images attached" do
         expect(listing.image_urls).to eq([])
       end
+    end
+  end
+
+  describe "CURRENCIES constant" do
+    it "includes AFN, USD, and EUR" do
+      expect(Listing::CURRENCIES).to contain_exactly("AFN", "USD", "EUR")
+    end
+  end
+
+  describe "#thumbnail_url" do
+    context "when no images are attached" do
+      it "returns nil" do
+        listing = create(:listing)
+        expect(listing.thumbnail_url).to be_nil
+      end
+    end
+
+    context "when images are attached" do
+      it "returns an absolute URL starting with http" do
+        ActiveStorage::Current.url_options = { host: "localhost", port: 3007, protocol: "http://" }
+        listing = create(:listing, :with_image)
+        expect(listing.thumbnail_url).to be_a(String)
+        expect(listing.thumbnail_url).to start_with("http://")
+      end
+    end
+  end
+
+  describe "#image_urls" do
+    it "returns empty array when no images" do
+      listing = create(:listing)
+      expect(listing.image_urls).to eq([])
+    end
+
+    it "returns array of absolute URLs when images attached" do
+      ActiveStorage::Current.url_options = { host: "localhost", port: 3007, protocol: "http://" }
+      listing = create(:listing, :with_image)
+      expect(listing.image_urls).to be_an(Array)
+      expect(listing.image_urls.first).to start_with("http://")
     end
   end
 

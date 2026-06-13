@@ -6,7 +6,17 @@ class ApplicationController < ActionController::API
   rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
 
+  before_action :set_active_storage_url_options
+
   private
+
+  def set_active_storage_url_options
+    ActiveStorage::Current.url_options = {
+      host:     request.host,
+      port:     request.port,
+      protocol: request.protocol
+    }
+  end
 
   def render_blue(serializer, record, view: :default, status: :ok, options: {})
     render json: { serializer.model_name.singular => serializer.render_as_hash(record, view: view, **options) }, status: status

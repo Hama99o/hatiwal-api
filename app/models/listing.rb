@@ -10,7 +10,8 @@ class Listing < ApplicationRecord
 
   validates :title, presence: true, length: { maximum: 150 }
   validates :price, presence: true, numericality: { greater_than: 0 }
-  validates :currency, presence: true, inclusion: { in: %w[AFN USD] }
+  CURRENCIES = %w[AFN USD EUR].freeze
+  validates :currency, presence: true, inclusion: { in: CURRENCIES }
   validates :category, presence: true
 
   scope :active,      -> { where(status: :active) }

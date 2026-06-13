@@ -13,5 +13,15 @@ FactoryBot.define do
     trait :active   do status { :active } end
     trait :reserved do status { :reserved } end
     trait :sold     do status { :sold } end
+
+    trait :with_image do
+      after(:create) do |listing|
+        listing.images.attach(
+          io:           StringIO.new("fake image data"),
+          filename:     "photo.jpg",
+          content_type: "image/jpeg"
+        )
+      end
+    end
   end
 end
