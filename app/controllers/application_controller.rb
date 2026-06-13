@@ -8,8 +8,8 @@ class ApplicationController < ActionController::API
 
   private
 
-  def render_blue(serializer, record, view: :default, status: :ok)
-    render json: { serializer.model_name.singular => serializer.render_as_hash(record, view: view) }, status: status
+  def render_blue(serializer, record, view: :default, status: :ok, options: {})
+    render json: { serializer.model_name.singular => serializer.render_as_hash(record, view: view, **options) }, status: status
   end
 
   def paginate_blue(serializer, collection, extra: {})

@@ -11,7 +11,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
 
   def show
     @listing.increment!(:views_count)
-    render_blue(ListingSerializer, @listing, view: :detailed)
+    render_blue(ListingSerializer, @listing, view: :detailed, options: { current_user: current_user })
   end
 
   def save

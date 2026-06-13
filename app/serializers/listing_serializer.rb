@@ -26,6 +26,7 @@ class ListingSerializer < ApplicationSerializer
            :views_count, :published_at, :reserved_at, :sold_at, :updated_at
     field(:images) { |l| l.image_urls }
     field(:thumbnail_url) { |l| l.thumbnail_url }
+    field(:is_saved) { |l, opts| opts[:current_user]&.saved_listings&.exists?(listing_id: l.id) || false }
     field(:seller) do |l|
       { id: l.user_id, name: l.user.full_name, city: l.user.city, phone: l.user.phone }
     end
