@@ -9,7 +9,7 @@ class UserSerializer < ApplicationSerializer
   end
 
   view :me do
-    fields :phone, :bio, :province, :latitude, :longitude, :status, :preferred_language
+    fields :phone, :bio, :province, :latitude, :longitude, :status, :preferred_language, :seller_mode
     field(:full_name) { |u| u.full_name }
     field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
   end

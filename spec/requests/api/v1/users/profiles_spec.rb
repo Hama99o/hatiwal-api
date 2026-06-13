@@ -19,6 +19,7 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(body["full_name"]).to eq("Ahmad Shah")
       expect(body).to have_key("phone")
       expect(body).to have_key("avatar_url")
+      expect(body).to have_key("seller_mode")
     end
   end
 
@@ -32,6 +33,24 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(user.reload.firstname).to eq("Mohammad")
       expect(user.city).to eq("Herat")
       expect(user.preferred_language).to eq("fa")
+    end
+
+    it "toggles seller_mode on and off" do
+      put "/api/v1/users/me",
+          params: { user: { seller_mode: true } },
+          headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["user"]
+      expect(body["seller_mode"]).to eq(true)
+      expect(user.reload.seller_mode).to eq(true)
+
+      put "/api/v1/users/me",
+          params: { user: { seller_mode: false } },
+          headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(user.reload.seller_mode).to eq(false)
     end
 
     it "accepts an avatar file upload and returns avatar_url" do
