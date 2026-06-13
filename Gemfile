@@ -20,7 +20,7 @@ gem "pundit"
 gem "blueprinter"
 
 # Pagination
-gem "pagy", "~> 8.0"
+gem "pagy", "~> 43.5"
 
 # CORS
 gem "rack-cors"
