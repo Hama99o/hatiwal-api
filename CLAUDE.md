@@ -1,14 +1,30 @@
 # hatiwal-api — Claude Instructions
 
-## Testing Convention
+## Testing Convention — MANDATORY
 
 **"test" always means backend RSpec** — never frontend.
 
-When asked to write or check tests, always write:
-- `spec/requests/` — RSwag request specs for controllers
-- `spec/models/` — RSpec model specs
-- `spec/policies/` — Pundit policy specs
-- `spec/services/` — Service object specs
+### ⛔ NEVER commit backend code without all three steps passing:
+
+1. **Write / update tests** for every changed file:
+   - `spec/requests/` — RSwag request specs for every controller action
+   - `spec/models/` — RSpec model specs for every model change
+   - `spec/policies/` — Pundit policy specs when a policy changes
+   - `spec/services/` — Service object specs when a service changes
+   - `spec/serializers/` — Serializer specs when a serializer view changes
+
+2. **Run the full suite** and confirm zero failures:
+   ```bash
+   bundle exec rspec
+   ```
+   If any spec fails, fix it before proceeding. Never skip or comment out a failing spec.
+
+3. **Run RuboCop** and confirm no offenses:
+   ```bash
+   bundle exec rubocop
+   ```
+
+Only after all three pass should you `git add` and `git commit`.
 
 The mobile app has no automated tests. Never look for or create frontend/mobile test files unless explicitly asked.
 

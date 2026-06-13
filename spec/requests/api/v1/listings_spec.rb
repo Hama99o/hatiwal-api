@@ -81,6 +81,10 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
         run_test! do |response|
           data = JSON.parse(response.body)
           expect(data["listing"]["id"]).to eq(listing.id)
+          expect(data["listing"]).to have_key("description")
+          expect(data["listing"]).to have_key("images")
+          expect(data["listing"]).to have_key("seller")
+          expect(data["listing"]).to have_key("category")
         end
 
         after do |example|
@@ -89,6 +93,44 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
               example: JSON.parse(response.body, symbolize_names: true)
             }
           }
+        end
+      end
+    end
+  end
+
+  path "/api/v1/listings/{id}" do
+    parameter name: :id, in: :path, type: :integer
+
+    get "is_saved reflects whether the current user has saved the listing" do
+      tags "Listings"
+      produces "application/json"
+      security [ { bearer: [] } ]
+
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+
+      let(:user)    { create(:user) }
+      let(:headers) { auth_headers_for(user) }
+      let(:"access-token") { headers["access-token"] }
+      let(:client)  { headers["client"] }
+      let(:uid)     { headers["uid"] }
+      let(:listing) { create(:listing, :active) }
+      let(:id)      { listing.id }
+
+      response "200", "is_saved is false when listing not saved" do
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]["is_saved"]).to eq(false)
+        end
+      end
+
+      response "200", "is_saved is true when listing is saved by current user" do
+        before { create(:saved_listing, user: user, listing: listing) }
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]["is_saved"]).to eq(true)
         end
       end
     end

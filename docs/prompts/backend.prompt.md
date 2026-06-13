@@ -390,6 +390,38 @@ end
 
 12. For list queries, **always use `policy_scope`**:
 
+---
+
+## ⛔ Pre-Commit Checklist (MANDATORY — never skip)
+
+**Before every `git commit` on the backend, all three must pass:**
+
+```bash
+# 1. All specs green — zero failures
+bundle exec rspec
+
+# 2. No RuboCop offenses
+bundle exec rubocop
+
+# 3. Swagger docs regenerated if request specs changed
+bundle exec rake rswag:specs:swaggerize
+```
+
+**What tests to write / update:**
+
+| What you changed | Tests required |
+|---|---|
+| New model | `spec/models/<model>_spec.rb` — validations, associations, scopes, methods |
+| New controller action | `spec/requests/api/v1/<controller>_spec.rb` — happy path + auth + error cases |
+| Changed policy | `spec/policies/<model>_policy_spec.rb` |
+| Changed service | `spec/services/<service>_spec.rb` |
+| Changed serializer | Add or update the relevant request spec to assert the new fields in the JSON response |
+
+**Never:**
+- Commit with a failing spec
+- Comment out or skip a failing spec without fixing the root cause
+- Commit without running `bundle exec rspec` first
+
     ```ruby
     listings = policy_scope(Listing.active)
     ```
