@@ -23,7 +23,12 @@ class ApplicationController < ActionController::API
   end
 
   def paginate_blue(serializer, collection, extra: {})
-    pagy, records = pagy(collection)
+    # params[:page] can arrive as a nested hash (e.g. page[size]=10 from some
+    # JSON:API clients) — extract the integer page number safely.
+    raw_page = params[:page]
+    page_num = raw_page.is_a?(ActionController::Parameters) ? raw_page[:number].to_i : raw_page.to_i
+    page_num = 1 if page_num < 1
+    pagy, records = pagy(collection, page: page_num)
     render json: {
       serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default),
       meta: {
