@@ -22,6 +22,18 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
       expect(ids).to eq([ mine.id ])
     end
+
+    it "filters by listing_id when provided" do
+      other_listing = create(:listing, :active, user: seller)
+      conv_for_listing = create(:conversation, buyer: buyer, listing: listing)
+      _conv_other      = create(:conversation, buyer: buyer, listing: other_listing)
+
+      get "/api/v1/conversations?listing_id=#{listing.id}", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to eq([ conv_for_listing.id ])
+    end
   end
 
   describe "GET /api/v1/conversations/:id" do

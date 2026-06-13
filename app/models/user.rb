@@ -19,6 +19,7 @@ class User < ApplicationRecord
   validates :firstname, presence: true
   validates :lastname, presence: true
   validates :preferred_language, inclusion: { in: %w[en ps fa] }, allow_blank: true
+  validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
 
   def full_name
     "#{firstname} #{lastname}".strip

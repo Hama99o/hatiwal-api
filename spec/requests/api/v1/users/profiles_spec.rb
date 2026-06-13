@@ -20,6 +20,7 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(body).to have_key("phone")
       expect(body).to have_key("avatar_url")
       expect(body).to have_key("seller_mode")
+      expect(body).to have_key("preferred_theme")
     end
   end
 
@@ -72,6 +73,26 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
     it "422s on an invalid preferred_language" do
       put "/api/v1/users/me",
           params: { user: { preferred_language: "ru" } },
+          headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["errors"]).to be_present
+    end
+
+    it "updates preferred_theme" do
+      put "/api/v1/users/me",
+          params: { user: { preferred_theme: "dark" } },
+          headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["user"]
+      expect(body["preferred_theme"]).to eq("dark")
+      expect(user.reload.preferred_theme).to eq("dark")
+    end
+
+    it "422s on an invalid preferred_theme" do
+      put "/api/v1/users/me",
+          params: { user: { preferred_theme: "blue" } },
           headers: headers, as: :json
 
       expect(response).to have_http_status(:unprocessable_content)

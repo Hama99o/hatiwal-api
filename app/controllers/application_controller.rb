@@ -30,7 +30,7 @@ class ApplicationController < ActionController::API
     page_num = 1 if page_num < 1
     pagy, records = pagy(collection, page: page_num)
     render json: {
-      serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default),
+      serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default, **extra.except(:view)),
       meta: {
         pagination: {
           current_page: pagy.page,

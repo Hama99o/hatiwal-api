@@ -29,6 +29,20 @@ RSpec.describe User, type: :model do
         expect(build(:user, preferred_language: locale)).to be_valid
       end
     end
+
+    it "allows blank preferred_theme" do
+      expect(build(:user, preferred_theme: "")).to be_valid
+    end
+
+    it "rejects an unsupported preferred_theme" do
+      expect(build(:user, preferred_theme: "blue")).not_to be_valid
+    end
+
+    %w[light dark system].each do |theme|
+      it "accepts preferred_theme #{theme}" do
+        expect(build(:user, preferred_theme: theme)).to be_valid
+      end
+    end
   end
 
   describe "enums" do

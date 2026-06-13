@@ -2,7 +2,7 @@ class Message < ApplicationRecord
   belongs_to :conversation
   belongs_to :user
 
-  enum :kind, { text: 0, meetup_proposal: 1, system: 2 }
+  enum :kind, { text: 0, meetup_proposal: 1, system: 2, offer: 3 }
 
   validates :body, presence: true, length: { maximum: 1000 }
 

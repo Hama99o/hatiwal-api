@@ -5,7 +5,8 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def index
     conversations = policy_scope(Conversation.for_user(current_user.id).ordered)
-    paginate_blue(ConversationSerializer, conversations, extra: { view: :list })
+    conversations = conversations.where(listing_id: params[:listing_id]) if params[:listing_id].present?
+    paginate_blue(ConversationSerializer, conversations, extra: { view: :list, current_user: current_user })
   end
 
   def show
