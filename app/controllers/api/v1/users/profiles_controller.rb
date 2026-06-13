@@ -27,7 +27,7 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
     params.require(:user).permit(
       :firstname, :lastname, :phone, :bio,
       :city, :province, :latitude, :longitude,
-      :preferred_language
+      :preferred_language, :avatar
     )
   end
 end

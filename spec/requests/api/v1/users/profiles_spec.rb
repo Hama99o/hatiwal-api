@@ -18,6 +18,7 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(body["id"]).to eq(user.id)
       expect(body["full_name"]).to eq("Ahmad Shah")
       expect(body).to have_key("phone")
+      expect(body).to have_key("avatar_url")
     end
   end
 
@@ -31,6 +32,22 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(user.reload.firstname).to eq("Mohammad")
       expect(user.city).to eq("Herat")
       expect(user.preferred_language).to eq("fa")
+    end
+
+    it "accepts an avatar file upload and returns avatar_url" do
+      avatar = fixture_file_upload(
+        Rails.root.join("spec/fixtures/files/test_image.jpg"),
+        "image/jpeg"
+      )
+
+      put "/api/v1/users/me",
+          params: { user: { avatar: avatar } },
+          headers: headers
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["user"]
+      expect(body["avatar_url"]).to be_present
+      expect(user.reload.avatar).to be_attached
     end
 
     it "422s on an invalid preferred_language" do
@@ -55,6 +72,7 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(body["full_name"]).to eq("Fatima Noori")
       expect(body["listings_count"]).to eq(1)
       expect(body).not_to have_key("phone")
+      expect(body).to have_key("avatar_url")
     end
   end
 end

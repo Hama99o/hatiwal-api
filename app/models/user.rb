@@ -4,6 +4,8 @@ class User < ApplicationRecord
 
   include DeviseTokenAuth::Concerns::User
 
+  has_one_attached :avatar
+
   enum :status, { active: 0, suspended: 1, banned: 2 }
 
   has_many :listings, dependent: :destroy

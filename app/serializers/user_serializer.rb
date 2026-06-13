@@ -5,11 +5,13 @@ class UserSerializer < ApplicationSerializer
     fields :bio, :province
     field(:full_name) { |u| u.full_name }
     field(:listings_count) { |u| u.listings.active.count }
+    field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
   end
 
   view :me do
     fields :phone, :bio, :province, :latitude, :longitude, :status, :preferred_language
     field(:full_name) { |u| u.full_name }
+    field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
   end
 
   view :minimal do

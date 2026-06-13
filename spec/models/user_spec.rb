@@ -2,6 +2,7 @@ require "rails_helper"
 
 RSpec.describe User, type: :model do
   describe "associations" do
+    it { should have_one_attached(:avatar) }
     it { should have_many(:listings).dependent(:destroy) }
     it { should have_many(:saved_listings).dependent(:destroy) }
     it { should have_many(:saved_listing_items).through(:saved_listings).source(:listing) }
