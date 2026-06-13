@@ -8,7 +8,5 @@ FactoryBot.define do
     city      { "Kabul" }
     preferred_language { "ps" }
     status    { :active }
-
-    after(:build) { |u| u.skip_confirmation! }
   end
 end
