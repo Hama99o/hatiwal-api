@@ -61,6 +61,41 @@ RSpec.describe "Api::V1::Messages", type: :request do
       expect(body["attachment_url"]).to be_present
     end
 
+    it "creates a meetup proposal message" do
+      post "/api/v1/conversations/#{conversation.id}/messages",
+           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_proposal" }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(JSON.parse(response.body)["message"]["kind"]).to eq("meetup_proposal")
+    end
+
+    it "creates a meetup accepted response" do
+      post "/api/v1/conversations/#{conversation.id}/messages",
+           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_accepted" }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(JSON.parse(response.body)["message"]["kind"]).to eq("meetup_accepted")
+    end
+
+    it "links an accept/decline response to the specific proposal" do
+      proposal = conversation.messages.create!(user: buyer, kind: :meetup_proposal, body: "Cafe Aria | 3pm")
+
+      post "/api/v1/conversations/#{conversation.id}/messages",
+           params: { body: "Cafe Aria | 3pm", kind: "meetup_declined", responds_to_id: proposal.id },
+           headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(JSON.parse(response.body)["message"]["responds_to_id"]).to eq(proposal.id)
+    end
+
+    it "creates a meetup declined response" do
+      post "/api/v1/conversations/#{conversation.id}/messages",
+           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_declined" }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(JSON.parse(response.body)["message"]["kind"]).to eq("meetup_declined")
+    end
+
     it "updates the conversation's last_message_at" do
       post "/api/v1/conversations/#{conversation.id}/messages",
            params: { body: "ping" }, headers: headers, as: :json

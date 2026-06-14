@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_14_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_14_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -128,11 +128,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_130000) do
     t.datetime "created_at", null: false
     t.integer "kind", default: 0, null: false
     t.datetime "read_at"
+    t.bigint "responds_to_id"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["conversation_id"], name: "index_messages_on_conversation_id"
     t.index ["created_at"], name: "index_messages_on_created_at"
     t.index ["read_at"], name: "index_messages_on_read_at"
+    t.index ["responds_to_id"], name: "index_messages_on_responds_to_id"
     t.index ["user_id"], name: "index_messages_on_user_id"
   end
 
@@ -233,6 +235,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_130000) do
   add_foreign_key "listings", "categories"
   add_foreign_key "listings", "users"
   add_foreign_key "messages", "conversations"
+  add_foreign_key "messages", "messages", column: "responds_to_id"
   add_foreign_key "messages", "users"
   add_foreign_key "reports", "users", column: "reporter_id"
   add_foreign_key "saved_listings", "listings"

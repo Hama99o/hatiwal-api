@@ -35,6 +35,6 @@ class Api::V1::MessagesController < Api::V1::BaseController
   end
 
   def message_params
-    params.permit(:body, :kind)
+    params.permit(:body, :kind, :responds_to_id)
   end
 end
