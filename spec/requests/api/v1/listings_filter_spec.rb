@@ -26,6 +26,45 @@ RSpec.describe "Api::V1::Listings filtering", type: :request do
     end
   end
 
+  describe "guest access (no auth token)" do
+    it "lets a guest browse the feed" do
+      create(:listing, :active)
+      get "/api/v1/listings"
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["listings"]).to be_an(Array)
+    end
+
+    it "lets a guest view a listing" do
+      listing = create(:listing, :active)
+      get "/api/v1/listings/#{listing.id}"
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "still requires auth to save a listing" do
+      listing = create(:listing, :active)
+      post "/api/v1/listings/#{listing.id}/save"
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "guest browse omits per-user flags (is_saved false)" do
+      create(:listing, :active, title: "Guest")
+      get "/api/v1/listings"
+      row = JSON.parse(response.body)["listings"].first
+      expect(row["is_viewed"]).to be(false)
+    end
+  end
+
+  describe "condition filtering" do
+    it "filters by item condition" do
+      create(:listing, :active, title: "NewOne", condition: :brand_new)
+      create(:listing, :active, title: "UsedOne", condition: :fair)
+
+      get "/api/v1/listings", params: { condition: "brand_new" }, headers: headers
+
+      expect(titles).to contain_exactly("NewOne")
+    end
+  end
+
   describe "price filtering" do
     before do
       create(:listing, :active, title: "Cheap", price: 500)

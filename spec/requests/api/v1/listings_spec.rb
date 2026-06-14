@@ -20,13 +20,15 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
       let(:client) { headers["client"] }
       let(:uid)    { headers["uid"] }
 
-      response "401", "unauthorized" do
+      response "200", "guest can browse without auth" do
         let(:"access-token") { nil }
         let(:client) { nil }
         let(:uid)    { nil }
+        before { create_list(:listing, 2, :active) }
 
         run_test! do |response|
-          expect(response).to have_http_status(:unauthorized)
+          expect(response).to have_http_status(:ok)
+          expect(JSON.parse(response.body)["listings"]).to be_an(Array)
         end
       end
 

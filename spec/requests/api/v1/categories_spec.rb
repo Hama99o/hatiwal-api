@@ -5,9 +5,10 @@ RSpec.describe "Api::V1::Categories", type: :request do
   let(:headers) { auth_headers_for(user) }
 
   describe "GET /api/v1/categories" do
-    it "requires authentication" do
+    it "is public — guests can load categories without auth" do
+      create(:category, position: 1, active: true)
       get "/api/v1/categories", as: :json
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:ok)
     end
 
     it "returns only top-level active categories ordered by position" do

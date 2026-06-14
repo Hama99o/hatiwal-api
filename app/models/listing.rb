@@ -8,6 +8,9 @@ class Listing < ApplicationRecord
   has_many :reports, as: :reportable, dependent: :destroy
 
   enum :status, { draft: 0, active: 1, reserved: 2, sold: 3 }
+  # Optional item condition. Keys avoid the reserved word `new` (would clash
+  # with Listing.new); the mobile app maps them to "New / Like new / Good / Fair".
+  enum :condition, { brand_new: 0, like_new: 1, good: 2, fair: 3 }, prefix: :condition
 
   validates :title, presence: true, length: { maximum: 150 }
   validates :price, presence: true, numericality: { greater_than: 0 }
@@ -30,6 +33,7 @@ class Listing < ApplicationRecord
   scope :price_at_least, ->(min) { where("price >= ?", min) }
   scope :price_at_most,  ->(max) { where("price <= ?", max) }
   scope :in_location,    ->(text) { where("LOWER(location) LIKE ?", "%#{text.to_s.downcase.strip}%") }
+  scope :by_condition,   ->(c) { where(condition: c) }
 
   # Listings whose coordinates fall within `km` kilometers of (lat, lng),
   # using the Haversine formula. LEAST/GREATEST clamp the acos argument to

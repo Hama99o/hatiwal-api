@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_14_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_14_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -99,6 +99,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_160000) do
   create_table "listings", force: :cascade do |t|
     t.string "address"
     t.bigint "category_id", null: false
+    t.integer "condition"
     t.datetime "created_at", null: false
     t.string "currency", default: "AFN", null: false
     t.text "description"
@@ -116,6 +117,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_160000) do
     t.bigint "user_id", null: false
     t.integer "views_count", default: 0, null: false
     t.index ["category_id"], name: "index_listings_on_category_id"
+    t.index ["condition"], name: "index_listings_on_condition"
     t.index ["created_at"], name: "index_listings_on_created_at"
     t.index ["expires_at"], name: "index_listings_on_expires_at"
     t.index ["price"], name: "index_listings_on_price"

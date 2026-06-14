@@ -20,6 +20,11 @@ RSpec.describe Listing, type: :model do
 
   describe "enums" do
     it { should define_enum_for(:status).with_values(draft: 0, active: 1, reserved: 2, sold: 3) }
+    it {
+      should define_enum_for(:condition)
+        .with_values(brand_new: 0, like_new: 1, good: 2, fair: 3)
+        .with_prefix(:condition)
+    }
   end
 
   describe "scopes" do

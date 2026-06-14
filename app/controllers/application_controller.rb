@@ -10,6 +10,14 @@ class ApplicationController < ActionController::API
 
   private
 
+  # Optional auth for public (guest-browsable) endpoints: resolves current_user
+  # when a valid token is present, but never returns 401 for signed-out guests.
+  def authenticate_optional!
+    set_user_by_token
+  rescue StandardError
+    nil
+  end
+
   def set_active_storage_url_options
     ActiveStorage::Current.url_options = {
       host:     request.host,

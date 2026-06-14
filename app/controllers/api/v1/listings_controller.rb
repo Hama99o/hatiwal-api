@@ -1,4 +1,9 @@
 class Api::V1::ListingsController < Api::V1::BaseController
+  # Guests can browse the feed and view a listing without logging in. Auth is
+  # optional here (resolves current_user if a token is present); save/unsave
+  # still require authentication via BaseController.
+  skip_before_action :authenticate_user!, only: [ :index, :show ]
+  before_action :authenticate_optional!, only: [ :index, :show ]
   before_action :set_listing, only: [ :show, :save, :unsave ]
 
   def index
@@ -6,6 +11,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
     listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
     listings = listings.search(params[:search]) if params[:search].present?
     listings = listings.by_category(params[:category_id]) if params[:category_id].present?
+    listings = listings.by_condition(params[:condition]) if params[:condition].present?
     listings = listings.price_at_least(params[:price_min]) if params[:price_min].present?
     listings = listings.price_at_most(params[:price_max]) if params[:price_max].present?
 
