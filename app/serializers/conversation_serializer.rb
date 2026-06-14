@@ -8,7 +8,7 @@ class ConversationSerializer < ApplicationSerializer
     field(:other_participant) do |c, opts|
       current_user = opts[:current_user]
       other = current_user ? c.other_participant(current_user) : c.buyer
-      { id: other.id, name: other.full_name, city: other.city, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
+      { id: other.id, name: other.full_name, city: other.city, verified: other.verified, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
     end
     field(:last_message_body) { |c| c.last_message&.body }
     field(:last_message_kind) { |c| c.last_message&.kind }

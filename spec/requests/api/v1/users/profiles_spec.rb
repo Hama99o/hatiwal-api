@@ -22,6 +22,21 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(body).to have_key("seller_mode")
       expect(body).to have_key("preferred_theme")
     end
+
+    it "includes dashboard counts (no money total)" do
+      create(:listing, :active, user: user)
+      create(:listing, :active, user: user)
+      create(:listing, :sold, user: user)
+
+      get "/api/v1/users/me", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body["items_active_count"]).to eq(2)
+      expect(body["items_sold_count"]).to eq(1)
+      expect(body).to have_key("saved_items_count")
+      expect(body).to have_key("unread_message_count")
+      expect(body).not_to have_key("total_sales") # money never summed across currencies
+    end
   end
 
   describe "PUT /api/v1/users/me" do

@@ -65,6 +65,7 @@ Rails.application.routes.draw do
             put :reserve
             put :activate
             put :sold
+            put :renew
           end
         end
 

@@ -10,6 +10,7 @@ class ListingPolicy < ApplicationPolicy
   def unpublish? = owner? && record.active?
   def reserve?   = owner? && record.active?
   def activate?  = owner? && record.reserved?
+  def renew?     = owner? && record.active?
   # Sellable from active or reserved; sold is terminal (never from draft/sold).
   def sold?      = owner? && (record.active? || record.reserved?)
 

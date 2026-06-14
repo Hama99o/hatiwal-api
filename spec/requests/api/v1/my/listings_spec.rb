@@ -249,5 +249,33 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(response).to have_http_status(:forbidden)
       end
     end
+
+    describe "PUT publish sets the expiry clock" do
+      it "stamps expires_at when a draft is published" do
+        draft = create(:listing, :draft, user: user)
+        put "/api/v1/my/listings/#{draft.id}/publish", headers: headers, as: :json
+        expect(draft.reload.expires_at).to be_present
+        expect(draft.expires_at).to be > Time.current
+      end
+    end
+
+    describe "PUT renew" do
+      it "restarts the expiry clock on an expired active listing" do
+        listing = create(:listing, :active, user: user, expires_at: 2.days.ago)
+        expect(listing.reload).to be_expired
+
+        put "/api/v1/my/listings/#{listing.id}/renew", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(listing.reload.expires_at).to be > Time.current
+        expect(listing).not_to be_expired
+      end
+
+      it "forbids renewing a non-active listing" do
+        draft = create(:listing, :draft, user: user)
+        put "/api/v1/my/listings/#{draft.id}/renew", headers: headers, as: :json
+        expect(response).to have_http_status(:forbidden)
+      end
+    end
   end
 end

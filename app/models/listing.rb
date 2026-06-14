@@ -16,12 +16,17 @@ class Listing < ApplicationRecord
   validates :category, presence: true
 
   EARTH_RADIUS_KM = 6371
+  # How long a published listing stays in the buyer feed before it expires.
+  LISTING_LIFESPAN = 30.days
 
   scope :active,      -> { where(status: :active) }
   scope :ordered,     -> { order(created_at: :desc) }
   scope :by_category, ->(id) { where(category_id: id) }
   scope :by_seller,   ->(id) { where(user_id: id) }
-  scope :browsable,   -> { active.ordered }
+  scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
+  scope :expired_active, -> { active.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
+  # Buyer feed: active AND not past its expiry.
+  scope :browsable,   -> { active.not_expired.ordered }
   scope :price_at_least, ->(min) { where("price >= ?", min) }
   scope :price_at_most,  ->(max) { where("price <= ?", max) }
   scope :in_location,    ->(text) { where("LOWER(location) LIKE ?", "%#{text.to_s.downcase.strip}%") }
@@ -43,6 +48,17 @@ class Listing < ApplicationRecord
   before_save :set_published_at, if: -> { active? && published_at.nil? }
   before_save :set_reserved_at,  if: -> { reserved? && reserved_at.nil? }
   before_save :set_sold_at,      if: -> { sold? && sold_at.nil? }
+
+  # An active listing whose expiry has passed — hidden from the buyer feed,
+  # shown to the seller with a "Renew" action.
+  def expired?
+    active? && expires_at.present? && expires_at.past?
+  end
+
+  # (Re)start the expiry clock — used on publish and on seller renew.
+  def renew!
+    update!(expires_at: LISTING_LIFESPAN.from_now)
+  end
 
   def self.search(query)
     return all if query.blank?

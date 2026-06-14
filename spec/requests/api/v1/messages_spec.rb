@@ -88,6 +88,30 @@ RSpec.describe "Api::V1::Messages", type: :request do
       expect(JSON.parse(response.body)["message"]["responds_to_id"]).to eq(proposal.id)
     end
 
+    it "accepts an offer (linked to the offer message)" do
+      offer = conversation.messages.create!(user: buyer, kind: :offer, body: "7|AFN|11")
+
+      post "/api/v1/conversations/#{conversation.id}/messages",
+           params: { body: "7|AFN|11", kind: "offer_accepted", responds_to_id: offer.id },
+           headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      body = JSON.parse(response.body)["message"]
+      expect(body["kind"]).to eq("offer_accepted")
+      expect(body["responds_to_id"]).to eq(offer.id)
+    end
+
+    it "declines an offer" do
+      offer = conversation.messages.create!(user: buyer, kind: :offer, body: "7|AFN|11")
+
+      post "/api/v1/conversations/#{conversation.id}/messages",
+           params: { body: "7|AFN|11", kind: "offer_declined", responds_to_id: offer.id },
+           headers: headers, as: :json
+
+      expect(response).to have_http_status(:created)
+      expect(JSON.parse(response.body)["message"]["kind"]).to eq("offer_declined")
+    end
+
     it "creates a meetup declined response" do
       post "/api/v1/conversations/#{conversation.id}/messages",
            params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_declined" }, headers: headers, as: :json

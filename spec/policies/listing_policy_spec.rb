@@ -119,6 +119,21 @@ RSpec.describe ListingPolicy do
     end
   end
 
+  describe "#renew?" do
+    it "is true for the owner of an active listing" do
+      expect(described_class.new(owner, listing).renew?).to be true
+    end
+
+    it "is false when not active" do
+      draft = create(:listing, :draft, user: owner)
+      expect(described_class.new(owner, draft).renew?).to be false
+    end
+
+    it "is false for a non-owner" do
+      expect(described_class.new(other, listing).renew?).to be false
+    end
+  end
+
   describe "#start_conversation?" do
     it "is true for a non-owner on an active listing" do
       expect(described_class.new(other, listing).start_conversation?).to be true

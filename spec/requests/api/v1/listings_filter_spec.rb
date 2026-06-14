@@ -14,6 +14,18 @@ RSpec.describe "Api::V1::Listings filtering", type: :request do
     JSON.parse(response.body)["listings"].map { |l| l["title"] }
   end
 
+  describe "expiry" do
+    it "hides expired listings from the buyer feed" do
+      create(:listing, :active, title: "Fresh", expires_at: 5.days.from_now)
+      create(:listing, :active, title: "Stale", expires_at: 1.day.ago)
+      create(:listing, :active, title: "NoExpiry", expires_at: nil)
+
+      get "/api/v1/listings", headers: headers
+
+      expect(titles).to contain_exactly("Fresh", "NoExpiry")
+    end
+  end
+
   describe "price filtering" do
     before do
       create(:listing, :active, title: "Cheap", price: 500)

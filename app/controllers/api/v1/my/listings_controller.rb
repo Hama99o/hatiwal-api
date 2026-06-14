@@ -1,5 +1,5 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
-  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold ]
+  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew ]
 
   def index
     listings = policy_scope(current_user.listings).ordered
@@ -46,6 +46,14 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   def publish
     authorize @listing, :publish?
     @listing.active!
+    @listing.renew! # start the expiry clock
+    render_blue(ListingSerializer, @listing, view: :detailed)
+  end
+
+  # Restart the expiry clock on an active (possibly expired) listing.
+  def renew
+    authorize @listing, :renew?
+    @listing.renew!
     render_blue(ListingSerializer, @listing, view: :detailed)
   end
 

@@ -8,5 +8,9 @@ FactoryBot.define do
     city      { "Kabul" }
     preferred_language { "ps" }
     status    { :active }
+
+    trait :verified do
+      verified { true }
+    end
   end
 end

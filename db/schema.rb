@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_14_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_14_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -102,6 +102,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_140000) do
     t.datetime "created_at", null: false
     t.string "currency", default: "AFN", null: false
     t.text "description"
+    t.datetime "expires_at"
     t.decimal "latitude", precision: 10, scale: 6
     t.string "location"
     t.decimal "longitude", precision: 10, scale: 6
@@ -116,6 +117,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_140000) do
     t.integer "views_count", default: 0, null: false
     t.index ["category_id"], name: "index_listings_on_category_id"
     t.index ["created_at"], name: "index_listings_on_created_at"
+    t.index ["expires_at"], name: "index_listings_on_expires_at"
     t.index ["price"], name: "index_listings_on_price"
     t.index ["status", "created_at"], name: "index_listings_on_status_and_created_at"
     t.index ["status"], name: "index_listings_on_status"
@@ -213,6 +215,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_140000) do
     t.string "unconfirmed_email"
     t.string "unlock_token"
     t.datetime "updated_at", null: false
+    t.boolean "verified", default: false, null: false
     t.index ["city"], name: "index_users_on_city"
     t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
     t.index ["email"], name: "index_users_on_email", unique: true

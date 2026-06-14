@@ -15,7 +15,7 @@ RSpec.describe Message, type: :model do
     it {
       should define_enum_for(:kind).with_values(
         text: 0, meetup_proposal: 1, system: 2, offer: 3, document: 4, image_message: 5,
-        meetup_accepted: 6, meetup_declined: 7
+        meetup_accepted: 6, meetup_declined: 7, offer_accepted: 8, offer_declined: 9
       )
     }
   end
