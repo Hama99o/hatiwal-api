@@ -69,8 +69,53 @@ RSpec.describe ListingPolicy do
       expect(described_class.new(owner, reserved).sold?).to be true
     end
 
+    it "is true for the owner of an active listing (sell directly)" do
+      expect(described_class.new(owner, listing).sold?).to be true
+    end
+
+    it "is false for a draft (must publish first)" do
+      draft = create(:listing, :draft, user: owner)
+      expect(described_class.new(owner, draft).sold?).to be false
+    end
+
+    it "is false once already sold (terminal — never reopen)" do
+      sold = create(:listing, :sold, user: owner)
+      expect(described_class.new(owner, sold).sold?).to be false
+    end
+
+    it "is false for a non-owner" do
+      expect(described_class.new(other, listing).sold?).to be false
+    end
+  end
+
+  describe "#unpublish?" do
+    it "is true for the owner of an active listing" do
+      expect(described_class.new(owner, listing).unpublish?).to be true
+    end
+
+    it "is false when not active" do
+      draft = create(:listing, :draft, user: owner)
+      expect(described_class.new(owner, draft).unpublish?).to be false
+    end
+
+    it "is false for a non-owner" do
+      expect(described_class.new(other, listing).unpublish?).to be false
+    end
+  end
+
+  describe "#activate?" do
+    it "is true for the owner of a reserved listing (undo reserve)" do
+      reserved = create(:listing, :reserved, user: owner)
+      expect(described_class.new(owner, reserved).activate?).to be true
+    end
+
     it "is false when not reserved" do
-      expect(described_class.new(owner, listing).sold?).to be false
+      expect(described_class.new(owner, listing).activate?).to be false
+    end
+
+    it "is false for a non-owner" do
+      reserved = create(:listing, :reserved, user: owner)
+      expect(described_class.new(other, reserved).activate?).to be false
     end
   end
 

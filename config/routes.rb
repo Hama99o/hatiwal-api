@@ -61,7 +61,9 @@ Rails.application.routes.draw do
         resources :listings do
           member do
             put :publish
+            put :unpublish
             put :reserve
+            put :activate
             put :sold
           end
         end

@@ -198,9 +198,54 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(reserved.reload).to be_sold
       end
 
-      it "forbids marking an active listing sold" do
+      it "marks an active listing as sold (sell directly)" do
         active = create(:listing, :active, user: user)
         put "/api/v1/my/listings/#{active.id}/sold", headers: headers, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(active.reload).to be_sold
+      end
+
+      it "forbids selling a draft" do
+        draft = create(:listing, :draft, user: user)
+        put "/api/v1/my/listings/#{draft.id}/sold", headers: headers, as: :json
+        expect(response).to have_http_status(:forbidden)
+      end
+
+      it "cannot reopen a sold listing (terminal)" do
+        sold = create(:listing, :sold, user: user)
+        put "/api/v1/my/listings/#{sold.id}/activate", headers: headers, as: :json
+        expect(response).to have_http_status(:forbidden)
+        put "/api/v1/my/listings/#{sold.id}/publish", headers: headers, as: :json
+        expect(response).to have_http_status(:forbidden)
+      end
+    end
+
+    describe "PUT unpublish" do
+      it "takes an active listing back to draft" do
+        active = create(:listing, :active, user: user)
+        put "/api/v1/my/listings/#{active.id}/unpublish", headers: headers, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(active.reload).to be_draft
+      end
+
+      it "forbids unpublishing a non-active listing" do
+        draft = create(:listing, :draft, user: user)
+        put "/api/v1/my/listings/#{draft.id}/unpublish", headers: headers, as: :json
+        expect(response).to have_http_status(:forbidden)
+      end
+    end
+
+    describe "PUT activate" do
+      it "undoes a reservation (reserved → active)" do
+        reserved = create(:listing, :reserved, user: user)
+        put "/api/v1/my/listings/#{reserved.id}/activate", headers: headers, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(reserved.reload).to be_active
+      end
+
+      it "forbids activating a non-reserved listing" do
+        active = create(:listing, :active, user: user)
+        put "/api/v1/my/listings/#{active.id}/activate", headers: headers, as: :json
         expect(response).to have_http_status(:forbidden)
       end
     end

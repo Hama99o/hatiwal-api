@@ -1,5 +1,5 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
-  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :reserve, :sold ]
+  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold ]
 
   def index
     listings = policy_scope(current_user.listings).ordered
@@ -49,9 +49,23 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     render_blue(ListingSerializer, @listing, view: :detailed)
   end
 
+  # active → draft (take a published listing offline)
+  def unpublish
+    authorize @listing, :unpublish?
+    @listing.draft!
+    render_blue(ListingSerializer, @listing, view: :detailed)
+  end
+
   def reserve
     authorize @listing, :reserve?
     @listing.reserved!
+    render_blue(ListingSerializer, @listing, view: :detailed)
+  end
+
+  # reserved → active (undo a reservation when a deal falls through)
+  def activate
+    authorize @listing, :activate?
+    @listing.active!
     render_blue(ListingSerializer, @listing, view: :detailed)
   end
 
