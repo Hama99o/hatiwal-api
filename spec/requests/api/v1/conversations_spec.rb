@@ -23,6 +23,17 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       expect(ids).to eq([ mine.id ])
     end
 
+    it "includes the last message body and kind for the preview" do
+      conv = create(:conversation, buyer: buyer, listing: listing)
+      conv.messages.create!(user: buyer, kind: :meetup_proposal, body: "Cafe | 3pm")
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conv.id }
+      expect(row["last_message_body"]).to eq("Cafe | 3pm")
+      expect(row["last_message_kind"]).to eq("meetup_proposal")
+    end
+
     it "filters by listing_id when provided" do
       other_listing = create(:listing, :active, user: seller)
       conv_for_listing = create(:conversation, buyer: buyer, listing: listing)

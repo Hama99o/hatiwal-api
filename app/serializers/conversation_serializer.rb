@@ -10,9 +10,8 @@ class ConversationSerializer < ApplicationSerializer
       other = current_user ? c.other_participant(current_user) : c.buyer
       { id: other.id, name: other.full_name, city: other.city, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
     end
-    field(:last_message_body) do |c|
-      c.messages.ordered.last&.body
-    end
+    field(:last_message_body) { |c| c.last_message&.body }
+    field(:last_message_kind) { |c| c.last_message&.kind }
     field(:unread_count) do |c, opts|
       current_user = opts[:current_user]
       next 0 unless current_user

@@ -22,6 +22,11 @@ class Conversation < ApplicationRecord
     buyer_id == user.id ? seller : buyer
   end
 
+  # The newest message — memoized so list serialization reads body + kind in one query.
+  def last_message
+    @last_message ||= messages.ordered.last
+  end
+
   private
 
   def buyer_is_not_seller
