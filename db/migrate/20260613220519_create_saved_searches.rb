@@ -10,6 +10,6 @@ class CreateSavedSearches < ActiveRecord::Migration[8.1]
       t.timestamps
     end
 
-    add_index :saved_searches, [:user_id, :created_at], name: "index_saved_searches_user_recent"
+    add_index :saved_searches, [ :user_id, :created_at ], name: "index_saved_searches_user_recent"
   end
 end

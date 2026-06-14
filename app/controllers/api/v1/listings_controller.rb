@@ -16,12 +16,21 @@ class Api::V1::ListingsController < Api::V1::BaseController
       listings = listings.in_location(params[:location])
     end
 
-    paginate_blue(ListingSerializer, listings, extra: { view: :list })
+    paginate_blue(
+      ListingSerializer,
+      listings,
+      extra: { view: :list, viewed_ids: viewed_listing_ids(listings) }
+    )
   end
 
   def show
     @listing.increment!(:views_count)
-    render_blue(ListingSerializer, @listing, view: :detailed, options: { current_user: current_user })
+    viewed = current_user ? ListingView.record!(current_user, @listing).present? : false
+    render_blue(
+      ListingSerializer, @listing,
+      view: :detailed,
+      options: { current_user: current_user, is_viewed: viewed }
+    )
   end
 
   def save
@@ -39,6 +48,18 @@ class Api::V1::ListingsController < Api::V1::BaseController
   end
 
   private
+
+  # IDs of listings the current user has already opened, scoped to the current
+  # result set — one indexed query, used by the serializer to flag each card as
+  # "seen". Empty when not signed in.
+  def viewed_listing_ids(scope)
+    return Set.new if current_user.nil?
+
+    current_user.listing_views
+                .where(listing_id: scope.reorder(nil).select(:id))
+                .pluck(:listing_id)
+                .to_set
+  end
 
   def geo_filter?
     params[:latitude].present? && params[:longitude].present? && params[:radius].present?

@@ -3,6 +3,7 @@ class Listing < ApplicationRecord
   belongs_to :category
   has_many_attached :images
   has_many :saved_listings, dependent: :destroy
+  has_many :listing_views, dependent: :destroy
   has_many :conversations, dependent: :destroy
   has_many :reports, as: :reportable, dependent: :destroy
 

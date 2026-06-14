@@ -5,6 +5,7 @@ class ListingSerializer < ApplicationSerializer
     fields :category_id, :views_count
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
+    field(:is_viewed) { |l, opts| opts[:viewed_ids]&.include?(l.id) || false }
     field(:seller) do |l|
       u = l.user
       { id: l.user_id, name: u.full_name, city: u.city, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
@@ -30,6 +31,11 @@ class ListingSerializer < ApplicationSerializer
     field(:images) { |l| l.image_urls }
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:is_saved) { |l, opts| opts[:current_user]&.saved_listings&.exists?(listing_id: l.id) || false }
+    field(:is_viewed) do |l, opts|
+      next opts[:is_viewed] unless opts[:is_viewed].nil?
+
+      opts[:current_user]&.listing_views&.exists?(listing_id: l.id) || false
+    end
     field(:seller) do |l|
       u = l.user
       { id: l.user_id, name: u.full_name, city: u.city, phone: u.phone, avatar_url: u.avatar.attached? ? u.avatar.url : nil }

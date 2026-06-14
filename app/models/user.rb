@@ -20,6 +20,8 @@ class User < ApplicationRecord
   has_many :blocked_users, through: :blocks_as_blocker, source: :blocked
   has_many :blocking_users, through: :blocks_as_blocked, source: :blocker
   has_many :saved_searches, dependent: :destroy
+  has_many :listing_views, dependent: :destroy
+  has_many :viewed_listings, through: :listing_views, source: :listing
 
   validates :firstname, presence: true
   validates :lastname, presence: true
