@@ -3,6 +3,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
 
   def index
     listings = policy_scope(Listing.browsable)
+    listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
     listings = listings.search(params[:search]) if params[:search].present?
     listings = listings.by_category(params[:category_id]) if params[:category_id].present?
     listings = listings.price_at_least(params[:price_min]) if params[:price_min].present?
