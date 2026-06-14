@@ -33,6 +33,27 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
       expect(ids).to eq([ active.id ])
     end
+
+    it "status=active excludes expired listings (clean partition with the Expired tab)" do
+      live    = create(:listing, :active, user: user, expires_at: 10.days.from_now)
+      create(:listing, :active, user: user, expires_at: 2.days.ago) # expired
+
+      get "/api/v1/my/listings?status=active", headers: headers, as: :json
+
+      ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+      expect(ids).to eq([ live.id ])
+    end
+
+    it "status=expired returns only active listings past their expiry" do
+      expired = create(:listing, :active, user: user, expires_at: 2.days.ago)
+      create(:listing, :active, user: user, expires_at: 10.days.from_now) # live
+      create(:listing, :draft, user: user) # drafts never expire
+
+      get "/api/v1/my/listings?status=expired", headers: headers, as: :json
+
+      ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+      expect(ids).to eq([ expired.id ])
+    end
   end
 
   describe "GET /api/v1/my/listings/:id" do
@@ -251,6 +272,16 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
     end
 
     describe "PUT publish sets the expiry clock" do
+      it "a created draft has no expiry — the clock starts at publish, not at draft creation" do
+        post "/api/v1/my/listings",
+             params: { listing: { title: "T", price: 100, currency: "AFN", category_id: create(:category).id } },
+             headers: headers, as: :json
+        expect(response).to have_http_status(:created)
+        listing = user.listings.order(:created_at).last
+        expect(listing.status).to eq("draft")
+        expect(listing.expires_at).to be_nil
+      end
+
       it "stamps expires_at when a draft is published" do
         draft = create(:listing, :draft, user: user)
         put "/api/v1/my/listings/#{draft.id}/publish", headers: headers, as: :json

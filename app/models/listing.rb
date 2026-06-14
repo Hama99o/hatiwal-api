@@ -28,6 +28,18 @@ class Listing < ApplicationRecord
   scope :by_seller,   ->(id) { where(user_id: id) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :expired_active, -> { active.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
+
+  # Seller "My Listings" tab filter. "expired" and "active" are refined so the
+  # tabs cleanly partition: Active = live (not past expiry), Expired = active
+  # but past its 30-day clock (the Renew bucket). Other values map to the enum.
+  STATUS_FILTER_EXPIRED = "expired"
+  scope :for_status_filter, lambda { |status|
+    case status.to_s
+    when STATUS_FILTER_EXPIRED then expired_active
+    when "active"              then active.not_expired
+    else where(status: status)
+    end
+  }
   # Buyer feed: active AND not past its expiry.
   scope :browsable,   -> { active.not_expired.ordered }
   scope :price_at_least, ->(min) { where("price >= ?", min) }

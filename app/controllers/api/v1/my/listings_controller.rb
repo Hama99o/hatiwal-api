@@ -3,7 +3,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   def index
     listings = policy_scope(current_user.listings).ordered
-    listings = listings.where(status: params[:status]) if params[:status].present?
+    listings = listings.for_status_filter(params[:status]) if params[:status].present?
 
     paginate_blue(ListingSerializer, listings, extra: { view: :seller_list })
   end
