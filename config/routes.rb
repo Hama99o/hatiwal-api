@@ -40,8 +40,16 @@ Rails.application.routes.draw do
         get   "/me",  to: "profiles#me",        as: :me
         put   "/me",  to: "profiles#update_me"
         patch "/me",  to: "profiles#update_me"
-        get   "/:id", to: "profiles#show",       as: :profile
+
+        # Saved searches — MUST be declared before the "/:id" wildcard below,
+        # otherwise GET /users/saved_searches is captured as profiles#show
+        # with id="saved_searches" and 404s with RecordNotFound.
+        get    "/saved_searches",     to: "saved_searches#index",   as: :saved_searches
+        post   "/saved_searches",     to: "saved_searches#create"
+        delete "/saved_searches/:id", to: "saved_searches#destroy", as: :saved_search
+
         get   "/:id/public_profile", to: "public_profiles#show", as: :public_profile
+        get   "/:id", to: "profiles#show",       as: :profile
       end
 
       # Block / unblock a user  — POST/DELETE /users/:user_id/block

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_13_143806) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_14_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -150,6 +150,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_13_143806) do
     t.index ["user_id"], name: "index_saved_listings_on_user_id"
   end
 
+  create_table "saved_searches", force: :cascade do |t|
+    t.bigint "category_id"
+    t.datetime "created_at", null: false
+    t.float "latitude"
+    t.string "location"
+    t.float "longitude"
+    t.integer "price_max"
+    t.integer "price_min"
+    t.integer "radius"
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["category_id"], name: "index_saved_searches_on_category_id"
+    t.index ["user_id", "created_at"], name: "index_saved_searches_user_recent"
+    t.index ["user_id"], name: "index_saved_searches_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.boolean "allow_password_change", default: false
     t.string "bio"
@@ -208,4 +224,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_13_143806) do
   add_foreign_key "reports", "users", column: "reporter_id"
   add_foreign_key "saved_listings", "listings"
   add_foreign_key "saved_listings", "users"
+  add_foreign_key "saved_searches", "categories"
+  add_foreign_key "saved_searches", "users"
 end

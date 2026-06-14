@@ -22,6 +22,13 @@ class ApplicationController < ActionController::API
     render json: { serializer.model_name.singular => serializer.render_as_hash(record, view: view, **options) }, status: status
   end
 
+  # Render a non-paginated collection under the serializer's plural key.
+  # Use for small, fixed-size lists (e.g. "the 5 most recent") where Pagy
+  # pagination is unnecessary and would override an explicit `.limit`.
+  def render_blue_collection(serializer, collection, view: :default, status: :ok, options: {})
+    render json: { serializer.model_name.plural => serializer.render_as_hash(collection, view: view, **options) }, status: status
+  end
+
   def paginate_blue(serializer, collection, extra: {})
     # params[:page] can arrive as a nested hash (e.g. page[size]=10 from some
     # JSON:API clients) — extract the integer page number safely.

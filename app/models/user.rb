@@ -19,6 +19,7 @@ class User < ApplicationRecord
   has_many :blocks_as_blocked, class_name: Block.name, foreign_key: :blocked_id, dependent: :destroy, inverse_of: :blocked
   has_many :blocked_users, through: :blocks_as_blocker, source: :blocked
   has_many :blocking_users, through: :blocks_as_blocked, source: :blocker
+  has_many :saved_searches, dependent: :destroy
 
   validates :firstname, presence: true
   validates :lastname, presence: true
