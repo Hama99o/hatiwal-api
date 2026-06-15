@@ -2,7 +2,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew ]
 
   def index
-    listings = policy_scope(current_user.listings).ordered
+    listings = policy_scope(
+      current_user.listings
+                  .includes(:category, :conversations, :price_histories, images_attachments: :blob)
+    ).ordered
     listings = listings.for_status_filter(params[:status]) if params[:status].present?
 
     paginate_blue(ListingSerializer, listings, extra: { view: :seller_list })
@@ -26,7 +29,13 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   def update
     authorize @listing
 
-    if @listing.update(listing_params)
+    # Images are handled separately (append + purge) so an edit never wipes the
+    # gallery: assigning `images` directly would replace ALL attachments
+    # (Rails replace_on_assign_to_many), destroying photos the client didn't
+    # re-upload. See attach_new_images / purge_removed_images.
+    if @listing.update(listing_params.except(:images))
+      attach_new_images
+      purge_removed_images
       render_blue(ListingSerializer, @listing, view: :detailed)
     else
       render_unprocessable_entity(@listing)
@@ -95,5 +104,25 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
       :category_id, :location, :address, :latitude, :longitude, :condition,
       images: []
     )
+  end
+
+  # Append newly-uploaded photos to the existing gallery (does NOT replace).
+  def attach_new_images
+    new_images = params.dig(:listing, :images)
+    @listing.images.attach(new_images) if new_images.present?
+  end
+
+  # Remove only the photos the client explicitly dropped, identified by the
+  # blob's signed_id (echoed back from the serializer's image_attachments).
+  def purge_removed_images
+    signed_ids = params.dig(:listing, :removed_image_ids)
+    return if signed_ids.blank?
+
+    Array(signed_ids).each do |signed_id|
+      blob = ActiveStorage::Blob.find_signed(signed_id)
+      next if blob.nil?
+
+      @listing.images.find_by(blob_id: blob.id)&.purge
+    end
   end
 end

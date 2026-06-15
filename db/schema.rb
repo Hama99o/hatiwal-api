@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_14_170000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_18_005535) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -83,6 +83,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_170000) do
     t.index ["listing_id"], name: "index_conversations_on_listing_id"
     t.index ["seller_id"], name: "index_conversations_on_seller_id"
     t.index ["status"], name: "index_conversations_on_status"
+  end
+
+  create_table "listing_price_histories", force: :cascade do |t|
+    t.datetime "changed_at", null: false
+    t.datetime "created_at", null: false
+    t.string "currency", default: "AFN", null: false
+    t.bigint "listing_id", null: false
+    t.decimal "new_price", precision: 12, scale: 2, null: false
+    t.decimal "old_price", precision: 12, scale: 2, null: false
+    t.datetime "updated_at", null: false
+    t.index ["changed_at"], name: "index_listing_price_histories_on_changed_at"
+    t.index ["listing_id"], name: "index_listing_price_histories_on_listing_id"
   end
 
   create_table "listing_views", force: :cascade do |t|
@@ -207,6 +219,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_170000) do
     t.string "preferred_theme", default: "system"
     t.string "provider", default: "email", null: false
     t.string "province"
+    t.string "push_token"
     t.datetime "remember_created_at"
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
@@ -235,6 +248,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_14_170000) do
   add_foreign_key "conversations", "listings"
   add_foreign_key "conversations", "users", column: "buyer_id"
   add_foreign_key "conversations", "users", column: "seller_id"
+  add_foreign_key "listing_price_histories", "listings"
   add_foreign_key "listing_views", "listings"
   add_foreign_key "listing_views", "users"
   add_foreign_key "listings", "categories"

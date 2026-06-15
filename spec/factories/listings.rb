@@ -13,6 +13,11 @@ FactoryBot.define do
     trait :active   do status { :active } end
     trait :reserved do status { :reserved } end
     trait :sold     do status { :sold } end
+    # Active but past its expiry window — hidden from the buyer feed.
+    trait :expired do
+      status     { :active }
+      expires_at { 1.day.ago }
+    end
 
     trait :with_image do
       after(:create) do |listing|

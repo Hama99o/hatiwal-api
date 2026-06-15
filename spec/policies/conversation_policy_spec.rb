@@ -21,8 +21,9 @@ RSpec.describe ConversationPolicy do
   end
 
   describe "#send_message?" do
-    it "is true for a participant on an open conversation" do
+    it "is true for a participant on an open conversation with no block" do
       expect(described_class.new(buyer, conversation).send_message?).to be true
+      expect(described_class.new(seller, conversation).send_message?).to be true
     end
 
     it "is false for a non-participant" do
@@ -33,6 +34,43 @@ RSpec.describe ConversationPolicy do
       closed = create(:conversation, status: :closed)
       expect(described_class.new(closed.buyer, closed).send_message?).to be false
     end
+
+    # ── TASK-K739: block guard ───────────────────────────────────────────────
+
+    context "when buyer has blocked the seller" do
+      before { create(:block, blocker: buyer, blocked: seller) }
+
+      it "is false for the seller (blocked user cannot send)" do
+        expect(described_class.new(seller, conversation).send_message?).to be false
+      end
+
+      it "is false for the buyer (blocker also cannot send)" do
+        expect(described_class.new(buyer, conversation).send_message?).to be false
+      end
+    end
+
+    context "when seller has blocked the buyer" do
+      before { create(:block, blocker: seller, blocked: buyer) }
+
+      it "is false for the buyer (blocked user cannot send)" do
+        expect(described_class.new(buyer, conversation).send_message?).to be false
+      end
+
+      it "is false for the seller (blocker also cannot send)" do
+        expect(described_class.new(seller, conversation).send_message?).to be false
+      end
+    end
+
+    context "when the conversation is closed and a block exists" do
+      before { create(:block, blocker: buyer, blocked: seller) }
+
+      it "is false regardless of block state" do
+        closed = create(:conversation, status: :closed)
+        expect(described_class.new(closed.buyer, closed).send_message?).to be false
+      end
+    end
+
+    # ── end TASK-K739 ────────────────────────────────────────────────────────
   end
 
   describe "Scope" do

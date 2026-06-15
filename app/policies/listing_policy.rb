@@ -14,12 +14,18 @@ class ListingPolicy < ApplicationPolicy
   # Sellable from active or reserved; sold is terminal (never from draft/sold).
   def sold?      = owner? && (record.active? || record.reserved?)
 
+  def analytics? = owner?
+
   def start_conversation?
-    record.active? && !owner?
+    record.active?
   end
 
   class Scope < ApplicationPolicy::Scope
-    def resolve = scope.all
+    def resolve
+      return scope.all if user.nil?
+
+      scope.excluding_blocked_pairs(user)
+    end
   end
 
   private

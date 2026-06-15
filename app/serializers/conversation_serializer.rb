@@ -16,7 +16,28 @@ class ConversationSerializer < ApplicationSerializer
       current_user = opts[:current_user]
       next 0 unless current_user
 
-      c.messages.where(read_at: nil).where.not(user_id: current_user.id).count
+      # Use the precomputed hash when the controller passes it (avoids one
+      # COUNT query per row on the index).  Fall back to the model method for
+      # callers that don't provide it (e.g. serializer unit tests).
+      if opts[:unread_counts]
+        opts[:unread_counts].fetch(c.id, 0)
+      else
+        c.unread_count_for(current_user)
+      end
+    end
+    field(:blocked_with_participant) do |c, opts|
+      current_user = opts[:current_user]
+      next false unless current_user
+
+      other = c.other_participant(current_user)
+      # On the list the controller preloads the viewer's block id-sets so this
+      # resolves in memory (no per-row block-existence queries). Fall back to a
+      # direct query when the sets aren't provided (single-record callers).
+      if opts[:blocked_ids]
+        opts[:blocked_ids].include?(other.id) || opts[:blocker_ids].include?(other.id)
+      else
+        current_user.blocked?(other) || other.blocked?(current_user)
+      end
     end
   end
 
@@ -27,5 +48,12 @@ class ConversationSerializer < ApplicationSerializer
     end
     field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
     field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }
+    field(:blocked_with_participant) do |c, opts|
+      current_user = opts[:current_user]
+      next false unless current_user
+
+      other = c.other_participant(current_user)
+      current_user.blocked?(other) || other.blocked?(current_user)
+    end
   end
 end

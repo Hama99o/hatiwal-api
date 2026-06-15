@@ -54,6 +54,78 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
       expect(ids).to eq([ expired.id ])
     end
+
+    it "executes a constant number of queries regardless of listing count (no N+1)" do
+      image_fixture = Rails.root.join("spec/fixtures/files/test_image.jpg")
+
+      attach_image = lambda do |listing|
+        listing.images.attach(
+          io:           File.open(image_fixture),
+          filename:     "photo.jpg",
+          content_type: "image/jpeg"
+        )
+      end
+
+      # Helper to count only data-plane queries — excludes DeviseTokenAuth
+      # token-refresh write queries (SAVEPOINT / UPDATE users SET tokens /
+      # RELEASE SAVEPOINT) which fire non-deterministically and would otherwise
+      # cause spurious failures when the token refresh happens to land inside
+      # one measurement window but not the other.
+      data_query_counter = lambda do |counter_ref, &block|
+        ActiveSupport::Notifications.subscribed(
+          lambda { |*, payload|
+            sql = payload[:sql].to_s
+            next if sql.start_with?("SAVEPOINT", "RELEASE SAVEPOINT")
+            next if sql =~ /\AUPDATE "users" SET "tokens"/
+
+            counter_ref[0] += 1
+          },
+          "sql.active_record",
+          &block
+        )
+      end
+
+      # Warm up: prime the Rails connection pool, schema cache, and auth token
+      # caches so the baseline does not include any one-time setup queries.
+      get "/api/v1/my/listings", headers: headers, as: :json
+
+      # ---- baseline: 1 listing with an image --------------------------------
+      listing_1 = create(:listing, user: user)
+      attach_image.call(listing_1)
+
+      count_1 = [ 0 ]
+      data_query_counter.call(count_1) do
+        get "/api/v1/my/listings", headers: headers, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["listings"].length).to eq(1)
+
+      # ---- scale up: 3 distinct listings each with their own image ----------
+      # Titles are made unique so the Rails query cache cannot mask a missing
+      # eager-load by returning a previously cached result for the same query.
+      listing_2 = create(:listing, user: user, title: "N+1 Guard Listing Two")
+      listing_3 = create(:listing, user: user, title: "N+1 Guard Listing Three")
+      attach_image.call(listing_2)
+      attach_image.call(listing_3)
+      listing_1.update_columns(title: "N+1 Guard Listing One")
+
+      count_3 = [ 0 ]
+      data_query_counter.call(count_3) do
+        get "/api/v1/my/listings", headers: headers, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["listings"].length).to eq(3)
+
+      # Adding 2 more listings (distinct images, categories, conversations) must not
+      # grow the query count. Allow up to 3 queries tolerance for per-request
+      # overhead (token-refresh, minor schema warmup) that may vary between
+      # measurements but must never scale O(N) with listing count.
+      expect(count_3[0]).to be <= count_1[0] + 3,
+        "Expected query count to be constant (no N+1): " \
+        "got #{count_1[0]} with 1 listing and #{count_3[0]} with 3 listings"
+    end
   end
 
   describe "GET /api/v1/my/listings/:id" do
@@ -68,6 +140,27 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       listing = create(:listing)
       get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
       expect(response).to have_http_status(:not_found)
+    end
+
+    it "includes views_count and conversations_count in the :detailed response" do
+      listing = create(:listing, user: user)
+      get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["listing"]
+      expect(body).to have_key("views_count")
+      expect(body["views_count"]).to be_a(Integer)
+      expect(body).to have_key("conversations_count")
+      expect(body["conversations_count"]).to be_a(Integer)
+    end
+
+    it "conversations_count reflects actual conversation records" do
+      listing = create(:listing, :active, user: user)
+      buyer   = create(:user)
+      create(:conversation, listing: listing, buyer: buyer, seller: user)
+      get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["listing"]
+      expect(body["conversations_count"]).to eq(1)
     end
   end
 
@@ -126,6 +219,54 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       end.to change(user.listings, :count).by(1)
 
       expect(response).to have_http_status(:created)
+    end
+  end
+
+  describe "PUT /api/v1/my/listings/:id image handling (no data loss)" do
+    let(:listing) { create(:listing, user: user) }
+
+    before do
+      listing.images.attach(io: StringIO.new("first"), filename: "first.jpg", content_type: "image/jpeg")
+    end
+
+    it "appends new photos without destroying existing ones" do
+      new_image = fixture_file_upload(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg")
+      expect(listing.images.count).to eq(1)
+
+      put "/api/v1/my/listings/#{listing.id}",
+          params: { "listing[title]" => "Updated", "listing[images][]" => new_image },
+          headers: headers
+
+      expect(response).to have_http_status(:ok)
+      expect(listing.reload.images.count).to eq(2)
+    end
+
+    it "purges only the photos named in removed_image_ids" do
+      listing.images.attach(io: StringIO.new("second"), filename: "second.jpg", content_type: "image/jpeg")
+      expect(listing.images.count).to eq(2)
+      removed = listing.images.first.blob.signed_id
+
+      put "/api/v1/my/listings/#{listing.id}",
+          params: { "listing[title]" => "Updated", "listing[removed_image_ids][]" => removed },
+          headers: headers
+
+      expect(response).to have_http_status(:ok)
+      expect(listing.reload.images.count).to eq(1)
+    end
+
+    it "a text-only edit leaves every photo intact" do
+      put "/api/v1/my/listings/#{listing.id}",
+          params: { listing: { title: "Just text" } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(listing.reload.images.count).to eq(1)
+    end
+
+    it "exposes image_attachments with stable ids in the detailed view" do
+      get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+      atts = JSON.parse(response.body)["listing"]["image_attachments"]
+      expect(atts).to be_an(Array)
+      expect(atts.first).to include("id", "url")
     end
   end
 

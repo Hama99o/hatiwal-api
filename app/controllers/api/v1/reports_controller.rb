@@ -4,10 +4,13 @@ class Api::V1::ReportsController < Api::V1::BaseController
     authorize @report
 
     if @report.save
-      render json: { message: "Report submitted" }, status: :created
+      render_ok({ message: "Report submitted" }, status: :created)
     else
       render_unprocessable_entity(@report)
     end
+  rescue ActiveRecord::RecordNotUnique
+    @report.errors.add(:reportable_id, :already_reported)
+    render_unprocessable_entity(@report)
   end
 
   private

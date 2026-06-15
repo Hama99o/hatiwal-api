@@ -139,8 +139,12 @@ RSpec.describe ListingPolicy do
       expect(described_class.new(other, listing).start_conversation?).to be true
     end
 
-    it "is false for the owner" do
-      expect(described_class.new(owner, listing).start_conversation?).to be false
+    # The owner check is intentionally absent from the policy — the service
+    # layer (Conversations::StartService) raises a 422 error when the listing
+    # owner tries to start a conversation on their own listing.  The policy
+    # only gates on listing status (active/inactive).
+    it "is true for the owner on an active listing (service layer enforces the 422 guard)" do
+      expect(described_class.new(owner, listing).start_conversation?).to be true
     end
 
     it "is false when the listing is not active" do
@@ -150,10 +154,40 @@ RSpec.describe ListingPolicy do
   end
 
   describe "Scope" do
-    it "resolves all listings" do
+    it "resolves all listings for a guest (nil user)" do
+      create_list(:listing, 3)
+      scope = ListingPolicy::Scope.new(nil, Listing).resolve
+      expect(scope).to match_array(Listing.all)
+    end
+
+    it "resolves all listings when there are no block relationships" do
       create_list(:listing, 3)
       scope = ListingPolicy::Scope.new(other, Listing).resolve
       expect(scope).to match_array(Listing.all)
+    end
+
+    it "excludes listings from users the viewer has blocked" do
+      blocked_seller  = create(:user)
+      allowed_seller  = create(:user)
+      hidden_listing  = create(:listing, user: blocked_seller)
+      visible_listing = create(:listing, user: allowed_seller)
+      create(:block, blocker: other, blocked: blocked_seller)
+
+      scope = ListingPolicy::Scope.new(other, Listing).resolve
+      expect(scope).to include(visible_listing)
+      expect(scope).not_to include(hidden_listing)
+    end
+
+    it "excludes listings from users who have blocked the viewer" do
+      blocking_seller = create(:user)
+      allowed_seller  = create(:user)
+      hidden_listing  = create(:listing, user: blocking_seller)
+      visible_listing = create(:listing, user: allowed_seller)
+      create(:block, blocker: blocking_seller, blocked: other)
+
+      scope = ListingPolicy::Scope.new(other, Listing).resolve
+      expect(scope).to include(visible_listing)
+      expect(scope).not_to include(hidden_listing)
     end
   end
 end

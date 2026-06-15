@@ -6,6 +6,7 @@ class Listing < ApplicationRecord
   has_many :listing_views, dependent: :destroy
   has_many :conversations, dependent: :destroy
   has_many :reports, as: :reportable, dependent: :destroy
+  has_many :price_histories, class_name: ListingPriceHistory.name, dependent: :destroy
 
   enum :status, { draft: 0, active: 1, reserved: 2, sold: 3 }
   # Optional item condition. Keys avoid the reserved word `new` (would clash
@@ -22,12 +23,27 @@ class Listing < ApplicationRecord
   # How long a published listing stays in the buyer feed before it expires.
   LISTING_LIFESPAN = 30.days
 
+  # Valid sort keys accepted by the API.
+  SORT_KEYS = %w[newest oldest price_asc price_desc].freeze
+
   scope :active,      -> { where(status: :active) }
   scope :ordered,     -> { order(created_at: :desc) }
   scope :by_category, ->(id) { where(category_id: id) }
   scope :by_seller,   ->(id) { where(user_id: id) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :expired_active, -> { active.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
+
+  # Sort the result set by the supplied key. Falls back to newest (created_at
+  # desc) for any absent or unrecognised value — the SORT_KEYS whitelist prevents
+  # injection and keeps sort semantics clearly defined in one place.
+  scope :sorted, lambda { |key|
+    case key.to_s
+    when "price_asc"  then reorder(price: :asc)
+    when "price_desc" then reorder(price: :desc)
+    when "oldest"     then reorder(created_at: :asc)
+    else                   reorder(created_at: :desc)
+    end
+  }
 
   # Seller "My Listings" tab filter. "expired" and "active" are refined so the
   # tabs cleanly partition: Active = live (not past expiry), Expired = active
@@ -42,6 +58,15 @@ class Listing < ApplicationRecord
   }
   # Buyer feed: active AND not past its expiry.
   scope :browsable,   -> { active.not_expired.ordered }
+
+  # Exclude listings whose seller (a) has been blocked by +viewer+ or
+  # (b) has blocked +viewer+.  Used by ListingPolicy::Scope so the filter
+  # is applied to every list path without duplicating SQL.
+  scope :excluding_blocked_pairs, lambda { |viewer|
+    blocked_ids  = viewer.blocked_users.select(:id)
+    blocking_ids = viewer.blocking_users.select(:id)
+    where.not(user_id: blocked_ids).where.not(user_id: blocking_ids)
+  }
   scope :price_at_least, ->(min) { where("price >= ?", min) }
   scope :price_at_most,  ->(max) { where("price <= ?", max) }
   scope :in_location,    ->(text) { where("LOWER(location) LIKE ?", "%#{text.to_s.downcase.strip}%") }
@@ -65,6 +90,11 @@ class Listing < ApplicationRecord
   before_save :set_reserved_at,  if: -> { reserved? && reserved_at.nil? }
   before_save :set_sold_at,      if: -> { sold? && sold_at.nil? }
 
+  # After a successful price update, record the change in listing_price_histories.
+  # We use after_update (not before_save) so we only fire when the record is
+  # already persisted and the write succeeded.
+  after_update :record_price_history, if: :saved_change_to_price?
+
   # An active listing whose expiry has passed — hidden from the buyer feed,
   # shown to the seller with a "Renew" action.
   def expired?
@@ -76,21 +106,94 @@ class Listing < ApplicationRecord
     update!(expires_at: LISTING_LIFESPAN.from_now)
   end
 
+  # Maximum number of words taken from a search query. Words beyond this cap
+  # are silently discarded to prevent unbounded WHERE-chain construction.
+  MAX_SEARCH_WORDS = 10
+
   def self.search(query)
     return all if query.blank?
 
-    words = query.to_s.strip.split(/\s+/)
+    words = query.to_s.strip.split(/\s+/).first(MAX_SEARCH_WORDS)
     result = all
 
     words.each do |word|
-      term = "%#{word.downcase}%"
-      result = result.where(
-        "LOWER(title) LIKE ? OR LOWER(description) LIKE ?",
+      # Escape LIKE metacharacters so that literal "%" and "_" in a buyer's
+      # query (e.g. "50%" or "model_x") are treated as plain characters, not
+      # SQL wildcards.  We use backslash as the ESCAPE character (a single
+      # backslash literal in SQL, written as '\' in the ESCAPE clause).
+      escaped = word.downcase.gsub(/[\\%_]/) { |c| "\\#{c}" }
+      term    = "%#{escaped}%"
+      result  = result.where(
+        "LOWER(title) LIKE ? ESCAPE '\\' OR LOWER(description) LIKE ? ESCAPE '\\'",
         term, term
       )
     end
 
     result
+  end
+
+  # Register a view for a listing, updating views_count according to these rules:
+  #
+  # 1. Owner viewing their own listing — never increment (seller analytics stay
+  #    clean; the seller opening their own detail repeatedly won't bloat the
+  #    count that buyers use as a trust signal).
+  # 2. Signed-in non-owner — increment only on the FIRST ever view by that user
+  #    (deduped via the unique index on listing_views). Repeat opens are a no-op.
+  # 3. Guest (viewer nil) — increment once per request, but owner is always
+  #    excluded (no per-guest identity exists yet, so we cannot deduplicate
+  #    across requests; per-request single-increment is preserved).
+  #
+  # Returns true when views_count was incremented, false otherwise.
+  def register_view!(viewer)
+    return false if viewer && viewer.id == user_id
+
+    if viewer
+      _view, newly_created = ListingView.record!(viewer, self)
+      increment!(:views_count) if newly_created
+      newly_created
+    else
+      increment!(:views_count)
+      true
+    end
+  end
+
+  # ── Price-drop helpers (used by the serializer :list, :seller_list, :detailed views) ──
+  PRICE_DROP_WINDOW = 14.days
+
+  # The most recent price reduction within the last 14 days, or nil.
+  #
+  # When price_histories is already eager-loaded (e.g. from a list controller
+  # that uses includes(:price_histories)), we filter in Ruby to avoid N+1
+  # queries. When the association is not yet loaded we fall back to a targeted
+  # SQL query.
+  def recent_price_drop
+    cutoff = PRICE_DROP_WINDOW.ago
+
+    if price_histories.loaded?
+      price_histories
+        .select { |h| h.new_price < h.old_price && h.changed_at >= cutoff }
+        .max_by(&:changed_at)
+    else
+      price_histories
+        .reductions
+        .recent(14)
+        .newest_first
+        .first
+    end
+  end
+
+  # ISO-8601 timestamp of the most recent price reduction, or nil.
+  def price_dropped_at
+    recent_price_drop&.changed_at&.iso8601
+  end
+
+  # Integer percent the price was reduced (e.g. 15 for 15% off), or nil.
+  def price_drop_percent
+    drop = recent_price_drop
+    return nil unless drop
+
+    pct = drop.drop_percent
+    pct > 0 ? pct : nil
   end
 
   def thumbnail_url
@@ -109,7 +212,29 @@ class Listing < ApplicationRecord
     []
   end
 
+  # Images as {id, url} pairs. `id` is the blob's stable signed_id, which the
+  # edit form echoes back in `removed_image_ids` to delete specific photos —
+  # so editing keeps the rest of the gallery instead of replacing it.
+  def image_attachments
+    return [] unless images.attached?
+
+    images.map { |a| { id: a.blob.signed_id, url: a.url } }
+  rescue StandardError
+    []
+  end
+
   private
+
+  def record_price_history
+    old_price, new_price = previous_changes[:price]
+    return if old_price.nil? || new_price.nil?
+
+    ListingPriceHistory.record_change!(
+      listing:   self,
+      old_price: old_price,
+      new_price: new_price
+    )
+  end
 
   def set_published_at
     self.published_at = Time.current

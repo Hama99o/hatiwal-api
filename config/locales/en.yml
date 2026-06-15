@@ -29,3 +29,10 @@
 
 en:
   hello: "Hello world"
+  activerecord:
+    errors:
+      models:
+        report:
+          attributes:
+            reportable_id:
+              already_reported: "has already been reported by you"

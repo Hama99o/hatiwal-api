@@ -3,14 +3,17 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
   def index
     authorize @conversation, :read_messages?
-    messages = @conversation.messages.order(created_at: :desc)
+    messages = @conversation.messages
+                           .includes(user: { avatar_attachment: :blob },
+                                     attachment_attachment: :blob)
+                           .ordered
     paginate_blue(MessageSerializer, messages, extra: { view: :default })
   end
 
   def create
     authorize @conversation, :send_message?
 
-    @message = @conversation.messages.new(message_params)
+    @message = @conversation.messages.new(safe_message_params)
     @message.user = current_user
     @message.attachment = params[:attachment] if params[:attachment].present?
 
@@ -24,7 +27,10 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
   def mark_read
     authorize @conversation, :read_messages?
-    @conversation.messages.where(read_at: nil).where.not(user: current_user).find_each(&:mark_read!)
+    @conversation.messages
+                 .where(read_at: nil)
+                 .where.not(user: current_user)
+                 .update_all(read_at: Time.current)
     head :no_content
   end
 
@@ -34,7 +40,27 @@ class Api::V1::MessagesController < Api::V1::BaseController
     @conversation = policy_scope(Conversation).find(params[:conversation_id])
   end
 
-  def message_params
-    params.permit(:body, :kind, :responds_to_id)
+  # Builds permitted params and enforces the kind whitelist.
+  #
+  # - No :kind supplied             → defaults to :text
+  # - Kind in USER_SENDABLE_KINDS   → accepted as-is
+  # - Any other value (incl. "system") → coerced to :system so the model
+  #   validation `kind_must_not_be_system_when_user_authored` fires and the
+  #   caller receives a 422.  This avoids raising an ArgumentError on an
+  #   unrecognised enum string while still rejecting the request cleanly.
+  def safe_message_params
+    permitted = params.permit(:body, :responds_to_id)
+    raw_kind  = params[:kind].presence
+
+    permitted[:kind] = resolved_kind(raw_kind)
+    permitted
+  end
+
+  def resolved_kind(raw_kind)
+    return :text if raw_kind.nil?
+    return raw_kind.to_sym if Message::USER_SENDABLE_KINDS.include?(raw_kind.to_s)
+
+    # Coerce to :system — the model validation blocks this and returns 422.
+    :system
   end
 end

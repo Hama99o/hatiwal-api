@@ -14,7 +14,7 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
   end
 
   def show
-    render_blue(UserSerializer, @user, view: :public)
+    render_blue(UserSerializer, @user, view: :public, options: { current_user: current_user })
   end
 
   private
@@ -27,7 +27,8 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
     params.require(:user).permit(
       :firstname, :lastname, :phone, :bio,
       :city, :province, :latitude, :longitude,
-      :preferred_language, :seller_mode, :preferred_theme, :avatar
+      :preferred_language, :seller_mode, :preferred_theme, :avatar,
+      :push_token
     )
   end
 end

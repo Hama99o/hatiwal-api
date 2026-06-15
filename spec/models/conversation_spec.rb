@@ -6,6 +6,7 @@ RSpec.describe Conversation, type: :model do
     it { should belong_to(:buyer).class_name("User") }
     it { should belong_to(:seller).class_name("User") }
     it { should have_many(:messages).dependent(:destroy) }
+    it { should have_one(:latest_message).class_name("Message") }
   end
 
   describe "validations" do
@@ -74,6 +75,124 @@ RSpec.describe Conversation, type: :model do
     it "returns the buyer when asked from the seller's perspective" do
       conv = create(:conversation)
       expect(conv.other_participant(conv.seller)).to eq(conv.buyer)
+    end
+  end
+
+  describe "#last_message" do
+    it "returns the most recent message via SQL when neither association is loaded" do
+      conv = create(:conversation)
+      _first_msg = conv.messages.create!(user: conv.buyer, body: "first",  kind: :text)
+      second_msg = conv.messages.create!(user: conv.buyer, body: "second", kind: :text)
+      expect(conv.last_message).to eq(second_msg)
+    end
+
+    it "returns nil when there are no messages" do
+      conv = create(:conversation)
+      expect(conv.last_message).to be_nil
+    end
+
+    it "reads from includes(:latest_message) without firing extra SQL" do
+      conv = create(:conversation)
+      conv.messages.create!(user: conv.buyer, body: "first",  kind: :text)
+      second_msg = conv.messages.create!(user: conv.buyer, body: "second", kind: :text)
+
+      # Reload with the same eager-load the index action uses.
+      loaded_conv = Conversation.includes(:latest_message).find(conv.id)
+
+      query_count = 0
+      ActiveSupport::Notifications.subscribed(
+        ->(*) { query_count += 1 },
+        "sql.active_record"
+      ) do
+        result = loaded_conv.last_message
+        expect(result).to eq(second_msg)
+      end
+
+      expect(query_count).to eq(0),
+        "Expected last_message to read from the preloaded latest_message association " \
+        "without issuing SQL, but #{query_count} queries were fired"
+    end
+
+    it "reads from the in-memory messages collection when includes(:messages) is used" do
+      conv = create(:conversation)
+      conv.messages.create!(user: conv.buyer, body: "first",  kind: :text)
+      second_msg = conv.messages.create!(user: conv.buyer, body: "second", kind: :text)
+
+      loaded_conv = Conversation.includes(:messages).find(conv.id)
+
+      query_count = 0
+      ActiveSupport::Notifications.subscribed(
+        ->(*) { query_count += 1 },
+        "sql.active_record"
+      ) do
+        result = loaded_conv.last_message
+        expect(result).to eq(second_msg)
+      end
+
+      expect(query_count).to eq(0),
+        "Expected last_message to read from the preloaded messages collection " \
+        "without issuing SQL, but #{query_count} queries were fired"
+    end
+  end
+
+  describe "#unread_count_for" do
+    let(:conv)   { create(:conversation) }
+    let(:buyer)  { conv.buyer }
+    let(:seller) { conv.seller }
+
+    it "counts messages with no read_at that were not sent by the given user" do
+      conv.messages.create!(user: buyer,  body: "hi",    kind: :text)
+      conv.messages.create!(user: seller, body: "hello", kind: :text)
+
+      # Seller has 1 unread message (the one from buyer)
+      expect(conv.unread_count_for(seller)).to eq(1)
+      # Buyer has 1 unread message (the one from seller)
+      expect(conv.unread_count_for(buyer)).to eq(1)
+    end
+
+    it "excludes messages that have already been read" do
+      msg = conv.messages.create!(user: buyer, body: "read me", kind: :text)
+      msg.update_column(:read_at, Time.current)
+
+      expect(conv.unread_count_for(seller)).to eq(0)
+    end
+
+    it "returns 0 when all messages were sent by the given user" do
+      conv.messages.create!(user: seller, body: "mine", kind: :text)
+
+      expect(conv.unread_count_for(seller)).to eq(0)
+    end
+
+    it "uses the in-memory collection when messages are already loaded" do
+      conv.messages.create!(user: buyer, body: "msg", kind: :text)
+      conv.messages.load # force eager load into memory
+
+      query_count = 0
+      ActiveSupport::Notifications.subscribed(
+        ->(*) { query_count += 1 },
+        "sql.active_record"
+      ) do
+        conv.unread_count_for(seller)
+      end
+
+      expect(query_count).to eq(0)
+    end
+
+    it "falls back to a SQL query when messages are not preloaded" do
+      fresh_conv = Conversation.find(conv.id) # no includes
+      fresh_conv.messages.create!(user: buyer, body: "msg", kind: :text)
+      # Re-fetch so the messages association is not loaded
+      fresh_conv = Conversation.find(conv.id)
+
+      query_count = 0
+      ActiveSupport::Notifications.subscribed(
+        ->(*) { query_count += 1 },
+        "sql.active_record"
+      ) do
+        fresh_conv.unread_count_for(seller)
+      end
+
+      expect(query_count).to be >= 1
     end
   end
 end

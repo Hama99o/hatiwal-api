@@ -5,6 +5,11 @@ class ApplicationController < ActionController::API
 
   rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
+  # Malformed params (e.g. a non-multipart body parsed as url-encoded, or a
+  # nested-key type conflict) must be a clean 400 — not a 500. Rails only maps
+  # the base ParseError to :bad_request by exact class name, so its ParamBuilder
+  # subclasses (ParameterTypeError/InvalidParameterError) would otherwise 500.
+  rescue_from ActionDispatch::ParamError, with: :render_bad_request
 
   before_action :set_active_storage_url_options
 
@@ -58,8 +63,15 @@ class ApplicationController < ActionController::API
     }
   end
 
-  def render_unprocessable_entity(record)
-    render json: { errors: record.errors.full_messages }, status: :unprocessable_entity
+  # Accepts either an ActiveRecord model (renders its validation errors array)
+  # or a plain String/Exception (renders a single error message).
+  def render_unprocessable_entity(record_or_message)
+    body = if record_or_message.respond_to?(:errors)
+             { errors: record_or_message.errors.full_messages }
+    else
+             { error: record_or_message.to_s }
+    end
+    render json: body, status: :unprocessable_entity
   end
 
   def render_not_found
@@ -68,5 +80,15 @@ class ApplicationController < ActionController::API
 
   def render_forbidden
     render json: { error: "Forbidden" }, status: :forbidden
+  end
+
+  def render_bad_request
+    render json: { error: "Bad request" }, status: :bad_request
+  end
+
+  # General-purpose success helper for actions that return a small bespoke
+  # payload that does not map to a serializer resource (e.g. { saved: true }).
+  def render_ok(payload, status: :ok)
+    render json: payload, status: status
   end
 end

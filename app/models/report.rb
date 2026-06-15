@@ -14,6 +14,11 @@ class Report < ApplicationRecord
   enum :status, { pending: 0, reviewed: 1, resolved: 2, dismissed: 3 }
 
   validates :reason, presence: true
+  validates :description, length: { maximum: 1000 }, allow_blank: true
+  validates :reportable_id, uniqueness: {
+    scope:   %i[reporter_id reportable_type],
+    message: :already_reported
+  }
   validate :not_reporting_own_content
 
   private

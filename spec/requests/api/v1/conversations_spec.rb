@@ -45,6 +45,124 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
       expect(ids).to eq([ conv_for_listing.id ])
     end
+
+    it "does not fire extra queries per additional conversation row (no N+1)" do
+      conv0 = create(:conversation, buyer: buyer, listing: listing)
+      conv0.messages.create!(user: buyer, body: "hey 0", kind: :text)
+
+      # Warm up Rails stack (schema introspection, token auth, etc.)
+      get "/api/v1/conversations", headers: headers, as: :json
+      expect(response).to have_http_status(:ok)
+
+      queries_with_1 = 0
+      ActiveSupport::Notifications.subscribed(
+        ->(*) { queries_with_1 += 1 },
+        "sql.active_record"
+      ) do
+        get "/api/v1/conversations", headers: headers, as: :json
+      end
+
+      5.times do |i|
+        s = create(:user)
+        l = create(:listing, :active, user: s)
+        c = create(:conversation, buyer: buyer, listing: l)
+        c.messages.create!(user: buyer, body: "hey #{i}", kind: :text)
+      end
+
+      queries_with_6 = 0
+      ActiveSupport::Notifications.subscribed(
+        ->(*) { queries_with_6 += 1 },
+        "sql.active_record"
+      ) do
+        get "/api/v1/conversations", headers: headers, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+
+      # Adding 5 more rows (with distinct sellers/listings/messages) must not
+      # grow the query count proportionally. All relationships are eager-loaded
+      # (messages, listing, buyer/seller avatars) and block id-sets are preloaded
+      # as Ruby Sets, so every load is a single batch IN-clause query regardless
+      # of N. We allow a tolerance of +1 for DeviseTokenAuth token rotation, which
+      # fires a single UPDATE on the first request after a token TTL boundary —
+      # that overhead is O(1), not O(N). Any delta larger than 1 indicates a real
+      # per-row regression.
+      expect(queries_with_6).to be <= queries_with_1 + 1,
+        "Expected constant query count (no N+1), " \
+        "but got #{queries_with_1} queries with 1 conversation and " \
+        "#{queries_with_6} with 6 conversations (delta #{queries_with_6 - queries_with_1})"
+    end
+
+    it "fires a constant number of block-table queries regardless of inbox size" do
+      # Seed a conversation with a block so block rows actually exist
+      create(:block, blocker: buyer, blocked: seller)
+      conv0 = create(:conversation, buyer: buyer, listing: listing)
+      conv0.messages.create!(user: buyer, body: "hey 0", kind: :text)
+
+      # Warm up Rails stack
+      get "/api/v1/conversations", headers: headers, as: :json
+      expect(response).to have_http_status(:ok)
+
+      block_queries_with_1 = 0
+      subscriber = ->(*, payload) { block_queries_with_1 += 1 if payload[:sql].to_s.match?(/blocks/i) }
+      ActiveSupport::Notifications.subscribed(subscriber, "sql.active_record") do
+        get "/api/v1/conversations", headers: headers, as: :json
+      end
+
+      5.times do |i|
+        s = create(:user)
+        l = create(:listing, :active, user: s)
+        c = create(:conversation, buyer: buyer, listing: l)
+        c.messages.create!(user: buyer, body: "hey #{i}", kind: :text)
+      end
+
+      block_queries_with_6 = 0
+      subscriber6 = ->(*, payload) { block_queries_with_6 += 1 if payload[:sql].to_s.match?(/blocks/i) }
+      ActiveSupport::Notifications.subscribed(subscriber6, "sql.active_record") do
+        get "/api/v1/conversations", headers: headers, as: :json
+      end
+      expect(response).to have_http_status(:ok)
+
+      # Block-table queries must be constant (2: one SELECT for blocked_ids,
+      # one SELECT for blocker_ids) regardless of how many conversations are in the
+      # inbox.  Any growth here means the serializer fell back to per-row exists?
+      # calls instead of the preloaded id-sets.
+      expect(block_queries_with_6).to eq(block_queries_with_1),
+        "Expected block-table query count to be constant (#{block_queries_with_1}) " \
+        "but got #{block_queries_with_6} with 6 conversations"
+    end
+  end
+
+  describe "blocked_with_participant flag — GET /api/v1/conversations (list)" do
+    let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
+
+    it "is false when neither party has blocked the other" do
+      conversation
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conversation.id }
+      expect(row["blocked_with_participant"]).to be false
+    end
+
+    it "is true when current_user (buyer) has blocked the other participant (seller)" do
+      create(:block, blocker: buyer, blocked: seller)
+      conversation
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conversation.id }
+      expect(row["blocked_with_participant"]).to be true
+    end
+
+    it "is true when the other participant (seller) has blocked current_user (buyer)" do
+      create(:block, blocker: seller, blocked: buyer)
+      conversation
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conversation.id }
+      expect(row["blocked_with_participant"]).to be true
+    end
   end
 
   describe "GET /api/v1/conversations/:id" do
@@ -61,6 +179,34 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       outsider_headers = auth_headers_for(create(:user))
       get "/api/v1/conversations/#{conversation.id}", headers: outsider_headers, as: :json
       expect(response).to have_http_status(:not_found)
+    end
+
+    it "includes blocked_with_participant false when neither party has blocked the other" do
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      data = JSON.parse(response.body)["conversation"]
+      expect(data["blocked_with_participant"]).to be false
+    end
+
+    it "includes blocked_with_participant true when current_user (buyer) blocked the seller" do
+      create(:block, blocker: buyer, blocked: seller)
+
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      data = JSON.parse(response.body)["conversation"]
+      expect(data["blocked_with_participant"]).to be true
+    end
+
+    it "includes blocked_with_participant true when the seller blocked current_user (buyer)" do
+      create(:block, blocker: seller, blocked: buyer)
+
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      data = JSON.parse(response.body)["conversation"]
+      expect(data["blocked_with_participant"]).to be true
     end
   end
 
@@ -111,11 +257,14 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       expect(JSON.parse(response.body)["conversation"]["id"]).to be_present
     end
 
-    it "forbids starting a conversation on your own listing" do
+    it "returns 422 and creates no Conversation when the listing owner tries to start a conversation on their own listing" do
       own = create(:listing, :active, user: buyer)
-      post "/api/v1/listings/#{own.id}/conversations",
-           params: { message: "hi" }, headers: headers, as: :json
-      expect(response).to have_http_status(:forbidden)
+      expect do
+        post "/api/v1/listings/#{own.id}/conversations",
+             params: { message: "hi" }, headers: headers, as: :json
+      end.not_to change(Conversation, :count)
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["error"]).to be_present
     end
 
     it "forbids starting a conversation on a non-active listing" do
@@ -125,13 +274,14 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       expect(response).to have_http_status(:forbidden)
     end
 
-    it "returns the existing conversation instead of duplicating" do
-      create(:conversation, buyer: buyer, listing: listing)
+    it "returns the existing conversation (same id, no new record) instead of duplicating" do
+      existing = create(:conversation, buyer: buyer, listing: listing)
       expect do
         post "/api/v1/listings/#{listing.id}/conversations",
              params: { message: "hello again" }, headers: headers, as: :json
       end.not_to change(Conversation, :count)
       expect(response).to have_http_status(:created)
+      expect(JSON.parse(response.body)["conversation"]["id"]).to eq(existing.id)
     end
 
     it "422s when the message body is blank" do
@@ -139,6 +289,48 @@ RSpec.describe "Api::V1::Conversations", type: :request do
            params: { message: "" }, headers: headers, as: :json
       expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)["error"]).to be_present
+    end
+
+    context "when the buyer has blocked the seller" do
+      before { create(:block, blocker: buyer, blocked: seller) }
+
+      it "returns 422 and creates no Conversation rows" do
+        expect do
+          post "/api/v1/listings/#{listing.id}/conversations",
+               params: { message: "Still available?" }, headers: headers, as: :json
+        end.not_to change(Conversation, :count)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(JSON.parse(response.body)["error"]).to be_present
+      end
+
+      it "returns 422 and creates no Message rows" do
+        expect do
+          post "/api/v1/listings/#{listing.id}/conversations",
+               params: { message: "Still available?" }, headers: headers, as: :json
+        end.not_to change(Message, :count)
+      end
+    end
+
+    context "when the buyer has been blocked by the seller" do
+      before { create(:block, blocker: seller, blocked: buyer) }
+
+      it "returns 422 and creates no Conversation rows" do
+        expect do
+          post "/api/v1/listings/#{listing.id}/conversations",
+               params: { message: "Still available?" }, headers: headers, as: :json
+        end.not_to change(Conversation, :count)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(JSON.parse(response.body)["error"]).to be_present
+      end
+
+      it "returns 422 and creates no Message rows" do
+        expect do
+          post "/api/v1/listings/#{listing.id}/conversations",
+               params: { message: "Still available?" }, headers: headers, as: :json
+        end.not_to change(Message, :count)
+      end
     end
   end
 end

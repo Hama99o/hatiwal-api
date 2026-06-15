@@ -23,6 +23,11 @@ class Api::V1::ListingsController < Api::V1::BaseController
       listings = listings.in_location(params[:location])
     end
 
+    # Apply sort last so it overrides the :browsable default order.
+    # Any absent or unrecognised value silently falls back to newest.
+    listings = listings.sorted(params[:sort])
+                       .includes(:price_histories)
+
     paginate_blue(
       ListingSerializer,
       listings,
@@ -31,8 +36,10 @@ class Api::V1::ListingsController < Api::V1::BaseController
   end
 
   def show
-    @listing.increment!(:views_count)
-    viewed = current_user ? ListingView.record!(current_user, @listing).present? : false
+    return render_not_found if blocked_pair_show?
+
+    @listing.register_view!(current_user)
+    viewed = current_user ? ListingView.exists?(user_id: current_user.id, listing_id: @listing.id) : false
     render_blue(
       ListingSerializer, @listing,
       view: :detailed,
@@ -43,7 +50,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
   def save
     authorize @listing, :save?
     saved = current_user.saved_listings.find_or_create_by!(listing: @listing)
-    render json: { saved: true, id: saved.id }, status: :ok
+    render_ok({ saved: true, id: saved.id })
   rescue ActiveRecord::RecordInvalid => e
     render_unprocessable_entity(e.record)
   end
@@ -51,7 +58,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
   def unsave
     authorize @listing, :save?
     current_user.saved_listings.find_by(listing: @listing)&.destroy
-    render json: { saved: false }, status: :ok
+    render_ok({ saved: false })
   end
 
   private
@@ -70,6 +77,16 @@ class Api::V1::ListingsController < Api::V1::BaseController
 
   def geo_filter?
     params[:latitude].present? && params[:longitude].present? && params[:radius].present?
+  end
+
+  # Returns true when a logged-in, non-owner viewer is in a mutual block
+  # relationship with the listing's seller. Guests and the listing owner
+  # are always allowed through.
+  def blocked_pair_show?
+    return false if current_user.nil?
+    return false if @listing.user_id == current_user.id
+
+    current_user.blocked?(@listing.user) || current_user.blocked_by?(@listing.user)
   end
 
   def set_listing

@@ -53,6 +53,8 @@ Rails.application.routes.draw do
       end
 
       # Block / unblock a user  — POST/DELETE /users/:user_id/block
+      # List the users the current user has blocked — GET /blocks
+      get    "blocks",                 to: "blocks#index",   as: :blocks
       post   "users/:user_id/block",   to: "blocks#create",  as: :user_block
       delete "users/:user_id/block",   to: "blocks#destroy"
 
@@ -67,6 +69,8 @@ Rails.application.routes.draw do
             put :sold
             put :renew
           end
+          # GET /my/listings/:listing_id/analytics
+          resource :analytics, only: [ :show ], controller: "listing_analytics"
         end
 
         resources :saved_listings, only: [ :index ]

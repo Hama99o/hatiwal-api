@@ -13,6 +13,8 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
       parameter name: :uid,            in: :header, type: :string, required: true
       parameter name: :search,         in: :query,  type: :string,  required: false
       parameter name: :category_id,    in: :query,  type: :integer, required: false
+      parameter name: :sort,           in: :query,  type: :string,  required: false,
+                description: "Sort order. Allowed values: newest (default), oldest, price_asc, price_desc. Unknown values fall back to newest."
 
       let(:user)  { create(:user) }
       let(:headers) { auth_headers_for(user) }
@@ -51,6 +53,82 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
           }
         end
       end
+
+      response "200", "sort=newest returns listings ordered by created_at desc" do
+        let(:sort) { "newest" }
+
+        before do
+          create(:listing, :active, created_at: 3.days.ago)
+          create(:listing, :active, created_at: 1.day.ago)
+          create(:listing, :active, created_at: 1.hour.ago)
+        end
+
+        run_test! do |response|
+          created_ats = JSON.parse(response.body)["listings"].map { |l| l["created_at"] }
+          expect(created_ats).to eq(created_ats.sort.reverse)
+        end
+      end
+
+      response "200", "sort=oldest returns listings ordered by created_at asc" do
+        let(:sort) { "oldest" }
+
+        before do
+          create(:listing, :active, created_at: 3.days.ago)
+          create(:listing, :active, created_at: 1.day.ago)
+          create(:listing, :active, created_at: 1.hour.ago)
+        end
+
+        run_test! do |response|
+          created_ats = JSON.parse(response.body)["listings"].map { |l| l["created_at"] }
+          expect(created_ats).to eq(created_ats.sort)
+        end
+      end
+
+      response "200", "sort=price_asc returns listings ordered by ascending price" do
+        let(:sort) { "price_asc" }
+
+        before do
+          create(:listing, :active, price: 500)
+          create(:listing, :active, price: 100)
+          create(:listing, :active, price: 300)
+        end
+
+        run_test! do |response|
+          prices = JSON.parse(response.body)["listings"].map { |l| l["price"].to_f }
+          expect(prices).to eq(prices.sort)
+        end
+      end
+
+      response "200", "sort=price_desc returns listings ordered by descending price" do
+        let(:sort) { "price_desc" }
+
+        before do
+          create(:listing, :active, price: 500)
+          create(:listing, :active, price: 100)
+          create(:listing, :active, price: 300)
+        end
+
+        run_test! do |response|
+          prices = JSON.parse(response.body)["listings"].map { |l| l["price"].to_f }
+          expect(prices).to eq(prices.sort.reverse)
+        end
+      end
+
+      response "200", "absent or invalid sort falls back to newest (created_at desc)" do
+        let(:sort) { "invalid_sort_key" }
+
+        before do
+          create(:listing, :active)
+          create(:listing, :active)
+          create(:listing, :active)
+        end
+
+        run_test! do |response|
+          listings = JSON.parse(response.body)["listings"]
+          created_ats = listings.map { |l| l["created_at"] }
+          expect(created_ats).to eq(created_ats.sort.reverse)
+        end
+      end
     end
   end
 
@@ -81,7 +159,7 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
         end
       end
 
-      response "200", "successful" do
+      response "200", "successful — authenticated non-owner sees seller phone" do
         run_test! do |response|
           data = JSON.parse(response.body)
           expect(data["listing"]["id"]).to eq(listing.id)
@@ -89,6 +167,8 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
           expect(data["listing"]).to have_key("images")
           expect(data["listing"]).to have_key("seller")
           expect(data["listing"]).to have_key("category")
+          # Authenticated user who does NOT own the listing must see the phone
+          expect(data["listing"]["seller"]["phone"]).to eq(listing.user.phone)
         end
 
         after do |example|
@@ -97,6 +177,116 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
               example: JSON.parse(response.body, symbolize_names: true)
             }
           }
+        end
+      end
+
+      response "200", "guest (no auth) does NOT see seller phone" do
+        let(:"access-token") { nil }
+        let(:client) { nil }
+        let(:uid)    { nil }
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]["seller"]["phone"]).to be_nil
+        end
+      end
+
+      response "200", "listing owner viewing their own listing does NOT see phone in seller hash" do
+        # The authenticated user IS the listing owner — phone should also be nil
+        let(:listing) { create(:listing, :active, user: user) }
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]["seller"]["phone"]).to be_nil
+        end
+      end
+    end
+  end
+
+  path "/api/v1/listings/{id}" do
+    parameter name: :id, in: :path, type: :integer
+
+    get "views_count — owner view never increments" do
+      tags "Listings"
+      produces "application/json"
+      security [ { bearer: [] } ]
+
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+
+      let(:owner)   { create(:user) }
+      let(:headers) { auth_headers_for(owner) }
+      let(:"access-token") { headers["access-token"] }
+      let(:client)  { headers["client"] }
+      let(:uid)     { headers["uid"] }
+      let(:listing) { create(:listing, :active, user: owner, views_count: 0) }
+      let(:id)      { listing.id }
+
+      response "200", "owner GET leaves views_count unchanged" do
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          expect(listing.reload.views_count).to eq(0)
+        end
+      end
+    end
+  end
+
+  path "/api/v1/listings/{id}" do
+    parameter name: :id, in: :path, type: :integer
+
+    get "views_count — non-owner first GET increments, second GET does not" do
+      tags "Listings"
+      produces "application/json"
+      security [ { bearer: [] } ]
+
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+
+      let(:viewer)  { create(:user) }
+      let(:headers) { auth_headers_for(viewer) }
+      let(:"access-token") { headers["access-token"] }
+      let(:client)  { headers["client"] }
+      let(:uid)     { headers["uid"] }
+      let(:listing) { create(:listing, :active, views_count: 0) }
+      let(:id)      { listing.id }
+
+      response "200", "first GET by non-owner increments views_count to 1" do
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          expect(listing.reload.views_count).to eq(1)
+        end
+      end
+
+      response "200", "second GET by same non-owner does not increment views_count" do
+        before do
+          ListingView.record!(viewer, listing)
+          listing.update_column(:views_count, 1)
+        end
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          expect(listing.reload.views_count).to eq(1)
+        end
+      end
+    end
+  end
+
+  path "/api/v1/listings/{id}" do
+    parameter name: :id, in: :path, type: :integer
+
+    get "views_count — guest GET increments" do
+      tags "Listings"
+      produces "application/json"
+
+      let(:listing) { create(:listing, :active, views_count: 0) }
+      let(:id)      { listing.id }
+
+      response "200", "guest GET increments views_count" do
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          expect(listing.reload.views_count).to eq(1)
         end
       end
     end
@@ -135,6 +325,126 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
         run_test! do |response|
           data = JSON.parse(response.body)
           expect(data["listing"]["is_saved"]).to eq(true)
+        end
+      end
+    end
+  end
+
+  path "/api/v1/listings/{id}/save" do
+    parameter name: :id, in: :path, type: :integer
+
+    post "save a listing (bookmark)" do
+      tags "Listings"
+      produces "application/json"
+      security [ { bearer: [] } ]
+
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+
+      let(:user)    { create(:user) }
+      let(:headers) { auth_headers_for(user) }
+      let(:"access-token") { headers["access-token"] }
+      let(:client)  { headers["client"] }
+      let(:uid)     { headers["uid"] }
+      let(:listing) { create(:listing, :active) }
+      let(:id)      { listing.id }
+
+      response "200", "saves a listing and returns saved:true with the SavedListing id" do
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          data = JSON.parse(response.body)
+          expect(data["saved"]).to eq(true)
+          expect(data["id"]).to be_a(Integer)
+          expect(SavedListing.exists?(user: user, listing: listing)).to eq(true)
+        end
+
+        after do |example|
+          example.metadata[:response][:content] = {
+            "application/json" => {
+              example: JSON.parse(response.body, symbolize_names: true)
+            }
+          }
+        end
+      end
+
+      response "200", "save is idempotent — saving twice still returns 200 and persists one record" do
+        before { create(:saved_listing, user: user, listing: listing) }
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          data = JSON.parse(response.body)
+          expect(data["saved"]).to eq(true)
+          expect(SavedListing.where(user: user, listing: listing).count).to eq(1)
+        end
+      end
+
+      response "401", "unauthenticated user cannot save" do
+        let(:"access-token") { nil }
+        let(:client) { nil }
+        let(:uid)    { nil }
+
+        run_test! do |response|
+          expect(response).to have_http_status(:unauthorized)
+        end
+      end
+    end
+  end
+
+  path "/api/v1/listings/{id}/unsave" do
+    parameter name: :id, in: :path, type: :integer
+
+    delete "unsave a listing (remove bookmark)" do
+      tags "Listings"
+      produces "application/json"
+      security [ { bearer: [] } ]
+
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+
+      let(:user)    { create(:user) }
+      let(:headers) { auth_headers_for(user) }
+      let(:"access-token") { headers["access-token"] }
+      let(:client)  { headers["client"] }
+      let(:uid)     { headers["uid"] }
+      let(:listing) { create(:listing, :active) }
+      let(:id)      { listing.id }
+
+      response "200", "unsaves a listing and returns saved:false" do
+        before { create(:saved_listing, user: user, listing: listing) }
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          data = JSON.parse(response.body)
+          expect(data["saved"]).to eq(false)
+          expect(SavedListing.exists?(user: user, listing: listing)).to eq(false)
+        end
+
+        after do |example|
+          example.metadata[:response][:content] = {
+            "application/json" => {
+              example: JSON.parse(response.body, symbolize_names: true)
+            }
+          }
+        end
+      end
+
+      response "200", "unsave is idempotent — calling when not saved still returns 200" do
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          data = JSON.parse(response.body)
+          expect(data["saved"]).to eq(false)
+        end
+      end
+
+      response "401", "unauthenticated user cannot unsave" do
+        let(:"access-token") { nil }
+        let(:client) { nil }
+        let(:uid)    { nil }
+
+        run_test! do |response|
+          expect(response).to have_http_status(:unauthorized)
         end
       end
     end

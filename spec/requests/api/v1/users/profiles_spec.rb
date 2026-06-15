@@ -21,6 +21,8 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(body).to have_key("avatar_url")
       expect(body).to have_key("seller_mode")
       expect(body).to have_key("preferred_theme")
+      # The :me view must include the owner's own email
+      expect(body["email"]).to eq(user.email)
     end
 
     it "includes dashboard counts (no money total)" do
@@ -113,6 +115,52 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)["errors"]).to be_present
     end
+
+    context "push_token" do
+      let(:valid_token) { "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]" }
+
+      it "saves a push_token on first registration" do
+        put "/api/v1/users/me",
+            params: { user: { push_token: valid_token } },
+            headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(user.reload.push_token).to eq(valid_token)
+      end
+
+      it "updates an existing push_token" do
+        user.update!(push_token: "ExponentPushToken[old_token_value_here]")
+
+        new_token = "ExponentPushToken[new_token_value_here_xx]"
+        put "/api/v1/users/me",
+            params: { user: { push_token: new_token } },
+            headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(user.reload.push_token).to eq(new_token)
+      end
+
+      it "422s when push_token exceeds 200 characters" do
+        long_token = "a" * 201
+        put "/api/v1/users/me",
+            params: { user: { push_token: long_token } },
+            headers: headers, as: :json
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(JSON.parse(response.body)["errors"]).to be_present
+      end
+
+      it "allows clearing push_token with an empty string" do
+        user.update!(push_token: valid_token)
+
+        put "/api/v1/users/me",
+            params: { user: { push_token: "" } },
+            headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(user.reload.push_token).to be_blank
+      end
+    end
   end
 
   describe "GET /api/v1/users/:id" do
@@ -129,8 +177,45 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(body["listings_count"]).to eq(1)
       expect(body["sold_count"]).to eq(1)
       expect(body["member_since"]).to be_present
-      expect(body).not_to have_key("phone")
       expect(body).to have_key("avatar_url")
+      # PII must not appear in the :public view
+      expect(body).not_to have_key("email")
+      expect(body).not_to have_key("phone")
+      expect(body).not_to have_key("latitude")
+      expect(body).not_to have_key("longitude")
+      expect(body).not_to have_key("preferred_language")
+    end
+
+    context "blocked field" do
+      let(:other) { create(:user) }
+
+      it "returns blocked: false when the viewer has not blocked the other user" do
+        get "/api/v1/users/#{other.id}", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body).to have_key("blocked")
+        expect(body["blocked"]).to be(false)
+      end
+
+      it "returns blocked: true when the viewer has previously blocked the other user" do
+        create(:block, blocker: user, blocked: other)
+
+        get "/api/v1/users/#{other.id}", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body).to have_key("blocked")
+        expect(body["blocked"]).to be(true)
+      end
+
+      it "does not include blocked in the :me view" do
+        get "/api/v1/users/me", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body).not_to have_key("blocked")
+      end
     end
   end
 end

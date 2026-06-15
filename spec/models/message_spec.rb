@@ -9,6 +9,38 @@ RSpec.describe Message, type: :model do
   describe "validations" do
     it { should validate_presence_of(:body) }
     it { should validate_length_of(:body).is_at_most(1000) }
+
+    describe "responds_to_must_be_in_same_conversation" do
+      let(:conversation)       { create(:conversation) }
+      let(:other_conversation) { create(:conversation) }
+
+      it "is valid when responds_to belongs to the same conversation" do
+        proposal = create(:message, conversation: conversation, kind: :meetup_proposal)
+        reply    = build(:message, conversation: conversation, kind: :meetup_accepted,
+                                   responds_to: proposal)
+        expect(reply).to be_valid
+      end
+
+      it "is invalid when responds_to belongs to a different conversation" do
+        foreign_proposal = create(:message, conversation: other_conversation, kind: :meetup_proposal)
+        reply = build(:message, conversation: conversation, kind: :meetup_accepted,
+                                responds_to_id: foreign_proposal.id)
+        expect(reply).not_to be_valid
+        expect(reply.errors[:responds_to_id]).not_to be_empty
+      end
+
+      it "is invalid when responds_to_id references a non-existent message" do
+        reply = build(:message, conversation: conversation, kind: :meetup_accepted,
+                                responds_to_id: 0)
+        expect(reply).not_to be_valid
+        expect(reply.errors[:responds_to_id]).not_to be_empty
+      end
+
+      it "skips the check when responds_to_id is nil" do
+        msg = build(:message, conversation: conversation, responds_to_id: nil)
+        expect(msg).to be_valid
+      end
+    end
   end
 
   describe "enums" do
@@ -23,6 +55,34 @@ RSpec.describe Message, type: :model do
   describe "attachment" do
     it { should have_one_attached(:attachment) }
   end
+
+  # ── TASK-K071 kind-whitelist tests ───────────────────────────────────────
+  describe "USER_SENDABLE_KINDS" do
+    it "does not include 'system'" do
+      expect(Message::USER_SENDABLE_KINDS).not_to include("system")
+    end
+
+    it "includes all expected user-sendable kinds" do
+      expected = %w[text meetup_proposal meetup_accepted meetup_declined
+                    offer offer_accepted offer_declined document image_message]
+      expect(Message::USER_SENDABLE_KINDS).to match_array(expected)
+    end
+  end
+
+  describe "kind_must_not_be_system_when_user_authored" do
+    it "is invalid when kind is :system" do
+      msg = build(:message, kind: :system)
+      expect(msg).not_to be_valid
+      expect(msg.errors[:kind]).to be_present
+    end
+
+    Message::USER_SENDABLE_KINDS.each do |allowed_kind|
+      it "is valid when kind is :#{allowed_kind}" do
+        expect(build(:message, kind: allowed_kind.to_sym)).to be_valid
+      end
+    end
+  end
+  # ── end TASK-K071 ────────────────────────────────────────────────────────
 
   describe "scopes" do
     describe ".ordered" do
