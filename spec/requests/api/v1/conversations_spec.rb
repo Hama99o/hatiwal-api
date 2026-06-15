@@ -140,5 +140,47 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
       expect(JSON.parse(response.body)["error"]).to be_present
     end
+
+    context "when the buyer has blocked the seller" do
+      before { create(:block, blocker: buyer, blocked: seller) }
+
+      it "returns 422 and creates no Conversation rows" do
+        expect do
+          post "/api/v1/listings/#{listing.id}/conversations",
+               params: { message: "Still available?" }, headers: headers, as: :json
+        end.not_to change(Conversation, :count)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(JSON.parse(response.body)["error"]).to be_present
+      end
+
+      it "returns 422 and creates no Message rows" do
+        expect do
+          post "/api/v1/listings/#{listing.id}/conversations",
+               params: { message: "Still available?" }, headers: headers, as: :json
+        end.not_to change(Message, :count)
+      end
+    end
+
+    context "when the buyer has been blocked by the seller" do
+      before { create(:block, blocker: seller, blocked: buyer) }
+
+      it "returns 422 and creates no Conversation rows" do
+        expect do
+          post "/api/v1/listings/#{listing.id}/conversations",
+               params: { message: "Still available?" }, headers: headers, as: :json
+        end.not_to change(Conversation, :count)
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(JSON.parse(response.body)["error"]).to be_present
+      end
+
+      it "returns 422 and creates no Message rows" do
+        expect do
+          post "/api/v1/listings/#{listing.id}/conversations",
+               params: { message: "Still available?" }, headers: headers, as: :json
+        end.not_to change(Message, :count)
+      end
+    end
   end
 end

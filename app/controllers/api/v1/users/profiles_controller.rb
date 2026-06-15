@@ -14,7 +14,7 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
   end
 
   def show
-    render_blue(UserSerializer, @user, view: :public)
+    render_blue(UserSerializer, @user, view: :public, options: { current_user: current_user })
   end
 
   private

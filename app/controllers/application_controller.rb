@@ -5,6 +5,11 @@ class ApplicationController < ActionController::API
 
   rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
+  # Malformed params (e.g. a non-multipart body parsed as url-encoded, or a
+  # nested-key type conflict) must be a clean 400 — not a 500. Rails only maps
+  # the base ParseError to :bad_request by exact class name, so its ParamBuilder
+  # subclasses (ParameterTypeError/InvalidParameterError) would otherwise 500.
+  rescue_from ActionDispatch::ParamError, with: :render_bad_request
 
   before_action :set_active_storage_url_options
 
@@ -68,5 +73,9 @@ class ApplicationController < ActionController::API
 
   def render_forbidden
     render json: { error: "Forbidden" }, status: :forbidden
+  end
+
+  def render_bad_request
+    render json: { error: "Bad request" }, status: :bad_request
   end
 end

@@ -30,17 +30,23 @@ class ListingSerializer < ApplicationSerializer
     fields :description, :category_id, :location, :latitude, :longitude,
            :views_count, :published_at, :reserved_at, :sold_at, :updated_at, :expires_at
     field(:images) { |l| l.image_urls }
+    field(:image_attachments) { |l| l.image_attachments }
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:expired) { |l| l.expired? }
+    field(:conversations_count) { |l| l.conversations.count }
     field(:is_saved) { |l, opts| opts[:current_user]&.saved_listings&.exists?(listing_id: l.id) || false }
     field(:is_viewed) do |l, opts|
       next opts[:is_viewed] unless opts[:is_viewed].nil?
 
       opts[:current_user]&.listing_views&.exists?(listing_id: l.id) || false
     end
-    field(:seller) do |l|
+    field(:seller) do |l, opts|
       u = l.user
-      { id: l.user_id, name: u.full_name, city: u.city, phone: u.phone, verified: u.verified, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
+      viewer = opts[:current_user]
+      # Expose phone only to an authenticated user who is not the listing owner.
+      # Guests (viewer nil) and the owner viewing their own listing both receive nil.
+      phone = viewer.present? && viewer.id != l.user_id ? u.phone : nil
+      { id: l.user_id, name: u.full_name, city: u.city, phone: phone, verified: u.verified, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
     end
     field(:category) do |l|
       { id: l.category_id, name_en: l.category.name_en, name_ps: l.category.name_ps, name_fa: l.category.name_fa, slug: l.category.slug }

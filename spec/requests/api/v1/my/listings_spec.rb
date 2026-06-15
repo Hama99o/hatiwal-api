@@ -69,6 +69,27 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
       expect(response).to have_http_status(:not_found)
     end
+
+    it "includes views_count and conversations_count in the :detailed response" do
+      listing = create(:listing, user: user)
+      get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["listing"]
+      expect(body).to have_key("views_count")
+      expect(body["views_count"]).to be_a(Integer)
+      expect(body).to have_key("conversations_count")
+      expect(body["conversations_count"]).to be_a(Integer)
+    end
+
+    it "conversations_count reflects actual conversation records" do
+      listing = create(:listing, :active, user: user)
+      buyer   = create(:user)
+      create(:conversation, listing: listing, buyer: buyer, seller: user)
+      get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["listing"]
+      expect(body["conversations_count"]).to eq(1)
+    end
   end
 
   describe "POST /api/v1/my/listings" do
@@ -126,6 +147,54 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       end.to change(user.listings, :count).by(1)
 
       expect(response).to have_http_status(:created)
+    end
+  end
+
+  describe "PUT /api/v1/my/listings/:id image handling (no data loss)" do
+    let(:listing) { create(:listing, user: user) }
+
+    before do
+      listing.images.attach(io: StringIO.new("first"), filename: "first.jpg", content_type: "image/jpeg")
+    end
+
+    it "appends new photos without destroying existing ones" do
+      new_image = fixture_file_upload(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg")
+      expect(listing.images.count).to eq(1)
+
+      put "/api/v1/my/listings/#{listing.id}",
+          params: { "listing[title]" => "Updated", "listing[images][]" => new_image },
+          headers: headers
+
+      expect(response).to have_http_status(:ok)
+      expect(listing.reload.images.count).to eq(2)
+    end
+
+    it "purges only the photos named in removed_image_ids" do
+      listing.images.attach(io: StringIO.new("second"), filename: "second.jpg", content_type: "image/jpeg")
+      expect(listing.images.count).to eq(2)
+      removed = listing.images.first.blob.signed_id
+
+      put "/api/v1/my/listings/#{listing.id}",
+          params: { "listing[title]" => "Updated", "listing[removed_image_ids][]" => removed },
+          headers: headers
+
+      expect(response).to have_http_status(:ok)
+      expect(listing.reload.images.count).to eq(1)
+    end
+
+    it "a text-only edit leaves every photo intact" do
+      put "/api/v1/my/listings/#{listing.id}",
+          params: { listing: { title: "Just text" } }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(listing.reload.images.count).to eq(1)
+    end
+
+    it "exposes image_attachments with stable ids in the detailed view" do
+      get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+      atts = JSON.parse(response.body)["listing"]["image_attachments"]
+      expect(atts).to be_an(Array)
+      expect(atts.first).to include("id", "url")
     end
   end
 

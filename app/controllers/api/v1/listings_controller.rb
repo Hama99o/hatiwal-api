@@ -23,6 +23,10 @@ class Api::V1::ListingsController < Api::V1::BaseController
       listings = listings.in_location(params[:location])
     end
 
+    # Apply sort last so it overrides the :browsable default order.
+    # Any absent or unrecognised value silently falls back to newest.
+    listings = listings.sorted(params[:sort])
+
     paginate_blue(
       ListingSerializer,
       listings,

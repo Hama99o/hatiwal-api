@@ -45,4 +45,64 @@ RSpec.describe Conversations::StartService do
     svc = described_class.new(buyer: buyer, listing: listing, message_body: "")
     expect { svc.call }.to raise_error(Conversations::StartService::Error)
   end
+
+  describe "block checks" do
+    context "when the buyer has blocked the seller" do
+      before { create(:block, blocker: buyer, blocked: seller) }
+
+      it "raises Error with an appropriate message" do
+        expect { service.call }
+          .to raise_error(Conversations::StartService::Error, "you have blocked this user")
+      end
+
+      it "creates no Conversation rows" do
+        expect { service.call rescue nil }.not_to change(Conversation, :count)
+      end
+
+      it "creates no Message rows" do
+        expect { service.call rescue nil }.not_to change(Message, :count)
+      end
+    end
+
+    context "when the buyer has been blocked by the seller" do
+      before { create(:block, blocker: seller, blocked: buyer) }
+
+      it "raises Error with an appropriate message" do
+        expect { service.call }
+          .to raise_error(Conversations::StartService::Error, "you have been blocked by this user")
+      end
+
+      it "creates no Conversation rows" do
+        expect { service.call rescue nil }.not_to change(Conversation, :count)
+      end
+
+      it "creates no Message rows" do
+        expect { service.call rescue nil }.not_to change(Message, :count)
+      end
+    end
+
+    context "when neither party has blocked the other" do
+      it "succeeds and creates a conversation" do
+        expect { service.call }.to change(Conversation, :count).by(1)
+      end
+    end
+
+    context "when an existing conversation already exists and one party later blocks the other" do
+      let!(:existing) { create(:conversation, listing: listing, buyer: buyer, seller: seller) }
+
+      before { create(:block, blocker: buyer, blocked: seller) }
+
+      it "still returns the existing conversation without creating new Conversation rows" do
+        expect { service.call }.not_to change(Conversation, :count)
+      end
+
+      it "still returns the existing conversation without creating new Message rows" do
+        expect { service.call }.not_to change(Message, :count)
+      end
+
+      it "returns a Conversation record" do
+        expect(service.call).to be_a(Conversation)
+      end
+    end
+  end
 end

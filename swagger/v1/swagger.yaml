@@ -1,0 +1,99 @@
+---
+openapi: 3.0.1
+info:
+  title: Hatiwal API v1
+  version: v1
+  description: Local marketplace API for Afghanistan — no online payment, meetup-based
+    transactions
+paths:
+  "/api/v1/listings":
+    get:
+      summary: browse active listings
+      tags:
+      - Listings
+      description: Returns paginated active listings for buyers
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: search
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: category_id
+        in: query
+        required: false
+        schema:
+          type: integer
+      - name: sort
+        in: query
+        required: false
+        description: 'Sort order. Allowed values: newest (default), oldest, price_asc,
+          price_desc. Unknown values fall back to newest.'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: absent or invalid sort falls back to newest (created_at desc)
+  "/api/v1/listings/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: is_saved reflects whether the current user has saved the listing
+      tags:
+      - Listings
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '404':
+          description: not found
+        '200':
+          description: is_saved is true when listing is saved by current user
+servers:
+- url: https://{defaultHost}
+  variables:
+    defaultHost:
+      default: api.hatiwal.com
+- url: http://localhost:3007
+  description: Local development
+components:
+  securitySchemes:
+    bearer:
+      type: apiKey
+      name: access-token
+      in: header

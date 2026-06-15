@@ -72,6 +72,45 @@ RSpec.describe Listing, type: :model do
         expect(Listing.browsable.to_a).to eq([ new_active, old_active ])
       end
     end
+
+    describe ".sorted" do
+      let!(:cheap) { create(:listing, :active, price: 100, created_at: 2.days.ago) }
+      let!(:expensive) { create(:listing, :active, price: 9000, created_at: 1.hour.ago) }
+
+      it "sorts by price ascending for price_asc" do
+        result = Listing.sorted("price_asc")
+        expect(result.first).to eq(cheap)
+        expect(result.last).to eq(expensive)
+      end
+
+      it "sorts by price descending for price_desc" do
+        result = Listing.sorted("price_desc")
+        expect(result.first).to eq(expensive)
+        expect(result.last).to eq(cheap)
+      end
+
+      it "sorts newest first for newest" do
+        result = Listing.sorted("newest")
+        expect(result.first).to eq(expensive)
+        expect(result.last).to eq(cheap)
+      end
+
+      it "sorts oldest first for oldest" do
+        result = Listing.sorted("oldest")
+        expect(result.first).to eq(cheap)
+        expect(result.last).to eq(expensive)
+      end
+
+      it "falls back to newest for nil" do
+        result = Listing.sorted(nil)
+        expect(result.first).to eq(expensive)
+      end
+
+      it "falls back to newest for an unknown key" do
+        result = Listing.sorted("unknown_sort")
+        expect(result.first).to eq(expensive)
+      end
+    end
   end
 
   describe "timestamp callbacks" do

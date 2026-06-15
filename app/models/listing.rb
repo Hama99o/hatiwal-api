@@ -22,12 +22,27 @@ class Listing < ApplicationRecord
   # How long a published listing stays in the buyer feed before it expires.
   LISTING_LIFESPAN = 30.days
 
+  # Valid sort keys accepted by the API.
+  SORT_KEYS = %w[newest oldest price_asc price_desc].freeze
+
   scope :active,      -> { where(status: :active) }
   scope :ordered,     -> { order(created_at: :desc) }
   scope :by_category, ->(id) { where(category_id: id) }
   scope :by_seller,   ->(id) { where(user_id: id) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :expired_active, -> { active.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
+
+  # Sort the result set by the supplied key. Falls back to newest (created_at
+  # desc) for any absent or unrecognised value — the SORT_KEYS whitelist prevents
+  # injection and keeps sort semantics clearly defined in one place.
+  scope :sorted, lambda { |key|
+    case key.to_s
+    when "price_asc"  then reorder(price: :asc)
+    when "price_desc" then reorder(price: :desc)
+    when "oldest"     then reorder(created_at: :asc)
+    else                   reorder(created_at: :desc)
+    end
+  }
 
   # Seller "My Listings" tab filter. "expired" and "active" are refined so the
   # tabs cleanly partition: Active = live (not past expiry), Expired = active
@@ -105,6 +120,17 @@ class Listing < ApplicationRecord
     return [] unless images.attached?
 
     images.map(&:url)
+  rescue StandardError
+    []
+  end
+
+  # Images as {id, url} pairs. `id` is the blob's stable signed_id, which the
+  # edit form echoes back in `removed_image_ids` to delete specific photos —
+  # so editing keeps the rest of the gallery instead of replacing it.
+  def image_attachments
+    return [] unless images.attached?
+
+    images.map { |a| { id: a.blob.signed_id, url: a.url } }
   rescue StandardError
     []
   end
