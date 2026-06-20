@@ -41,6 +41,39 @@ class User < ApplicationRecord
     blocking_users.exists?(other_user.id)
   end
 
+  # ── Account moderation (admin block) ─────────────────────────────────────────
+  #
+  # NOTE: `blocked?(other_user)` above is user-to-user blocking. The methods here
+  # are about an ADMIN suspending/banning the whole account. A blocked account
+  # cannot log in (active_for_authentication?) and is rejected on authenticated
+  # requests (Api::V1::Base#reject_blocked_user!), always with a clear message.
+
+  def account_blocked?
+    suspended? || banned?
+  end
+
+  # Devise/devise_token_auth call this during sign-in; returning false blocks the
+  # login and surfaces `inactive_message` to the client.
+  def active_for_authentication?
+    super && !account_blocked?
+  end
+
+  def inactive_message
+    account_blocked? ? :"account_#{status}" : super
+  end
+
+  # Human-readable "you are blocked" message. Always states they are blocked;
+  # when the admin gave a reason, it is appended ("… Reason: <reason>"). The bare
+  # reason is also returned separately for clients that want it structured.
+  def account_block_message
+    return unless account_blocked?
+
+    base = I18n.t("accounts.blocked.#{status}", default: I18n.t("accounts.blocked.default"))
+    return base if block_reason.blank?
+
+    "#{base} #{I18n.t('accounts.blocked.reason', reason: block_reason)}"
+  end
+
   def conversations
     Conversation.where("buyer_id = ? OR seller_id = ?", id, id)
   end
@@ -129,9 +162,12 @@ class User < ApplicationRecord
 
     rate_percent = (replied_count.to_f / window_convos.size * 100).round
 
+    # A seller who never replied to any buyer's first message must NOT show a
+    # reassuring "responds within…" badge — that would be a false trust signal.
+    # Return nil so the mobile screens hide the badge entirely for such sellers.
     time_label =
       if response_times.empty?
-        :within_a_few_days
+        nil
       else
         sorted = response_times.sort
         median = sorted[sorted.size / 2]

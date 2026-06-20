@@ -208,6 +208,27 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       data = JSON.parse(response.body)["conversation"]
       expect(data["blocked_with_participant"]).to be true
     end
+
+    # The thread screen relies on other_participant for the nav title, the
+    # tap-to-seller-profile link, and the block toggle. The buyer viewing the
+    # thread must see the seller as the other participant.
+    it "includes other_participant (the seller, from the buyer's perspective)" do
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      other = JSON.parse(response.body)["conversation"]["other_participant"]
+      expect(other).to be_present
+      expect(other["id"]).to eq(seller.id)
+      expect(other["name"]).to eq(seller.full_name)
+    end
+
+    it "resolves other_participant relative to the viewer (seller sees the buyer)" do
+      get "/api/v1/conversations/#{conversation.id}", headers: auth_headers_for(seller), as: :json
+
+      expect(response).to have_http_status(:ok)
+      other = JSON.parse(response.body)["conversation"]["other_participant"]
+      expect(other["id"]).to eq(buyer.id)
+    end
   end
 
   describe "DELETE /api/v1/conversations/:id" do

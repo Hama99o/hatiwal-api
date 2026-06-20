@@ -3,6 +3,23 @@
 # Run: rails db:seed  (idempotent — safe to re-run)
 # =============================================================================
 
+# ── Admin account ────────────────────────────────────────────────────────────
+# Staff login for the /admin dashboard. Credentials come from ENV so production
+# never ships a known password; in development it falls back to a default.
+# CHANGE THE PASSWORD IN PRODUCTION via ADMIN_EMAIL / ADMIN_PASSWORD env vars.
+puts "=== Seeding Admin user ==="
+admin_email    = ENV.fetch("ADMIN_EMAIL", "admin@hatiwal.com")
+admin_password = ENV.fetch("ADMIN_PASSWORD", "changeme123!")
+admin = AdminUser.find_or_initialize_by(email: admin_email)
+if admin.new_record?
+  admin.name     = ENV.fetch("ADMIN_NAME", "Hatiwal Admin")
+  admin.password = admin_password
+  admin.save!
+  puts "  created admin: #{admin_email}"
+else
+  puts "  admin already exists: #{admin_email}"
+end
+
 puts "=== Seeding Categories ==="
 
 TOP_LEVEL_CATEGORIES = [

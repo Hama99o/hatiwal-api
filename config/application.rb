@@ -48,5 +48,24 @@ module HatiwalApi
     config.session_store :cookie_store, key: "_hatiwal_api_session"
     config.middleware.use ActionDispatch::Cookies
     config.middleware.use config.session_store, config.session_options
+
+    # The server-rendered admin dashboard (Administrate, mounted at /admin) needs
+    # flash messages on top of the cookies/session middleware added above. The
+    # JSON API never uses flash, so this only affects the admin web views.
+    config.middleware.use ActionDispatch::Flash
+
+    # Administrate's edit/update/destroy and the logout button submit HTML forms
+    # that tunnel PATCH/PUT/DELETE through POST + a `_method` param. API-only
+    # mode omits Rack::MethodOverride, so those verbs never reach the router —
+    # add it back. The JSON API uses real HTTP verbs and is unaffected.
+    config.middleware.use Rack::MethodOverride
+
+    # Devise inserts Warden::Manager early in the (api-only) stack — ahead of the
+    # session middleware we re-added above. Normal requests survive this because
+    # the session is populated by the time a controller calls `set_user`, but
+    # Warden's test `login_as` sets the user on the way in, before the session
+    # exists, breaking :timeoutable. Move Warden after the session + flash so it
+    # always has a session to read.
+    config.middleware.move_after ActionDispatch::Flash, Warden::Manager
   end
 end

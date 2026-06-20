@@ -1,0 +1,11 @@
+<%= form_for(@admin_user, as: :admin_user, url: admin_user_session_path) do |f| %>
+  <%= label_tag "admin_user_email", "Email" %>
+  <%= email_field_tag "admin_user[email]", @admin_user.email,
+        id: "admin_user_email", autocomplete: "username", autofocus: true, required: true %>
+
+  <%= label_tag "admin_user_password", "Password" %>
+  <%= password_field_tag "admin_user[password]", nil,
+        id: "admin_user_password", autocomplete: "current-password", required: true %>
+
+  <%= submit_tag "Sign in" %>
+<% end %>

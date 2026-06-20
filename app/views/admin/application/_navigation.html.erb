@@ -1,0 +1,29 @@
+<%#
+# Navigation
+
+Explicit links (rather than Administrate's route auto-discovery, which would try
+to build a Dashboard class for the non-resource `dashboard`/`sessions`
+controllers). Lists the stats dashboard, the four managed resources, the
+signed-in admin, and a logout button.
+%>
+
+<nav class="navigation">
+  <%= link_to "Dashboard", admin_root_path,
+        class: "navigation__link navigation__link--#{current_page?(admin_root_path) ? 'active' : 'inactive'}" %>
+  <%= link_to "Users", admin_users_path,
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/users') ? 'active' : 'inactive'}" %>
+  <%= link_to "Listings", admin_listings_path,
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/listings') ? 'active' : 'inactive'}" %>
+  <%= link_to "Reports", admin_reports_path,
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/reports') ? 'active' : 'inactive'}" %>
+  <%= link_to "Categories", admin_categories_path,
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/categories') ? 'active' : 'inactive'}" %>
+
+  <% if respond_to?(:current_admin_user) && current_admin_user %>
+    <div class="navigation__account" style="margin-top:auto;padding-top:1rem;">
+      <p style="font-size:0.75rem;opacity:0.7;margin:0 0 0.25rem;"><%= current_admin_user.email %></p>
+      <%= button_to "Log out", destroy_admin_user_session_path, method: :delete,
+            class: "button button--alt button--nav" %>
+    </div>
+  <% end %>
+</nav>

@@ -48,6 +48,14 @@ class ConversationSerializer < ApplicationSerializer
     end
     field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
     field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }
+    # The thread screen shows the *other* person (name, avatar, tap-to-profile,
+    # block toggle). Mirror the :list view so the detailed payload exposes it too
+    # — without this the mobile Conversation screen silently hides those controls.
+    field(:other_participant) do |c, opts|
+      current_user = opts[:current_user]
+      other = current_user ? c.other_participant(current_user) : c.buyer
+      { id: other.id, name: other.full_name, city: other.city, verified: other.verified, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
+    end
     field(:blocked_with_participant) do |c, opts|
       current_user = opts[:current_user]
       next false unless current_user

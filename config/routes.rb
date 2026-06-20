@@ -1,4 +1,43 @@
 Rails.application.routes.draw do
+  # ── Admin dashboard (server-rendered web, NOT the JSON API) ──────────────────
+  # Staff log in at /admin/login. Auth is fully separate from the mobile token
+  # auth: a dedicated AdminUser model + session/cookie login. There is no public
+  # registration and no password-reset route — admins are provisioned via seeds
+  # or `rails console`.
+  devise_for :admin_users,
+             path: "admin",
+             path_names: { sign_in: "login", sign_out: "logout" },
+             controllers: { sessions: "admin/sessions" },
+             skip: [ :registrations, :passwords ]
+
+  # `config.api_only = true` makes `resources` skip the :new and :edit form
+  # routes (APIs don't render forms), but Administrate's New/Edit pages need
+  # them with the conventional helper names (new_admin_user_path,
+  # edit_admin_listing_path, ...). `namespace` would prefix the `:as` as
+  # `admin_new_user`, so we use `scope` (path + module, no `:as` prefix) to get
+  # the exact names. Declared BEFORE the resources so `/admin/users/new` is not
+  # swallowed by the `/admin/users/:id` show route.
+  scope path: "admin", module: "admin" do
+    %i[categories listings reports users].each do |res|
+      singular = res.to_s.singularize
+      get "#{res}/new",      to: "#{res}#new",  as: "new_admin_#{singular}"
+      get "#{res}/:id/edit", to: "#{res}#edit", as: "edit_admin_#{singular}"
+    end
+  end
+
+  namespace :admin do
+    resources :categories
+    resources :listings
+    resources :reports
+    resources :users do
+      member do
+        patch :block
+        patch :unblock
+      end
+    end
+
+    root to: "dashboard#index"
+  end
   # Unique cable path so it doesn't collide with other Rails apps on the same Redis
   mount ActionCable.server => "/hatiwal-cable"
 
@@ -6,7 +45,8 @@ Rails.application.routes.draw do
   mount Rswag::Api::Engine => "/api-docs"
 
   mount_devise_token_auth_for "User", at: "api/v1/auth", controllers: {
-    registrations: "api/v1/auth/registrations"
+    registrations: "api/v1/auth/registrations",
+    sessions: "api/v1/auth/sessions"
   }
 
   namespace :api do

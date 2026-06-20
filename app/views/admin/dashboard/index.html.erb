@@ -1,0 +1,61 @@
+<% content_for(:title) { "Dashboard" } %>
+
+<%# Chartkick needs a charting backend. This API app has no JS bundler, so we
+    load Chart.js + Chartkick from a CDN (acceptable for an internal admin tool).
+    Must come BEFORE the chart helpers below so the Chartkick global exists. %>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartkick@5/dist/chartkick.min.js"></script>
+
+<style>
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1rem 0 2rem; }
+  .dash-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.1rem 1.25rem; }
+  .dash-card .num { font-size: 1.9rem; font-weight: 700; line-height: 1.1; }
+  .dash-card .label { font-size: .8rem; color: #64748b; margin-top: .25rem; }
+  .dash-section { margin-bottom: 2.5rem; }
+  .dash-section h2 { font-size: 1rem; color: #334155; margin: 0 0 .75rem; }
+  .dash-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  @media (max-width: 900px) { .dash-charts { grid-template-columns: 1fr; } }
+</style>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Dashboard</h1>
+</header>
+
+<section class="dash-section">
+  <h2>Users</h2>
+  <div class="dash-grid">
+    <div class="dash-card"><div class="num"><%= @stats[:users_total] %></div><div class="label">Total users</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:users_sellers] %></div><div class="label">Sellers</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:users_verified] %></div><div class="label">Verified</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:users_active] %></div><div class="label">Active</div></div>
+  </div>
+</section>
+
+<section class="dash-section">
+  <h2>Listings &amp; reports</h2>
+  <div class="dash-grid">
+    <div class="dash-card"><div class="num"><%= @stats[:listings_total] %></div><div class="label">Total listings</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:listings_active] %></div><div class="label">Active</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:listings_reserved] %></div><div class="label">Reserved</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:listings_sold] %></div><div class="label">Sold</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:listings_draft] %></div><div class="label">Drafts</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:reports_pending] %></div><div class="label">Pending reports</div></div>
+    <div class="dash-card"><div class="num"><%= @stats[:categories_total] %></div><div class="label">Categories</div></div>
+  </div>
+</section>
+
+<section class="dash-section">
+  <h2>Growth (last 12 weeks)</h2>
+  <div class="dash-charts">
+    <div><%= line_chart @users_per_week, height: "260px", colors: ["#6366f1"], download: true %></div>
+    <div><%= line_chart @listings_per_week, height: "260px", colors: ["#10b981"], download: true %></div>
+  </div>
+</section>
+
+<section class="dash-section">
+  <h2>Composition</h2>
+  <div class="dash-charts">
+    <div><%= pie_chart @listings_by_status, height: "260px" %></div>
+    <div><%= column_chart @top_categories, height: "260px", colors: ["#f59e0b"] %></div>
+  </div>
+</section>

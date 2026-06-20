@@ -212,9 +212,9 @@ RSpec.describe User, type: :model do
       expect(seller.response_time_label).to eq(:within_a_few_days)
     end
 
-    it "returns :within_a_few_days when seller never replied" do
+    it "returns nil when the seller never replied (no false trust badge)" do
       5.times { create_conv_with_reply(buyer: create(:user), reply_after_seconds: nil) }
-      expect(seller.response_time_label).to eq(:within_a_few_days)
+      expect(seller.response_time_label).to be_nil
     end
   end
 

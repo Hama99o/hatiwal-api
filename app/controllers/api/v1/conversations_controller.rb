@@ -65,7 +65,8 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     )
 
     conversation = service.call
-    render_blue(ConversationSerializer, conversation, view: :detailed, status: :created)
+    render_blue(ConversationSerializer, conversation, view: :detailed, status: :created,
+                                                      options: { current_user: current_user })
   rescue Conversations::StartService::Error => e
     render_unprocessable_entity(e)
   end

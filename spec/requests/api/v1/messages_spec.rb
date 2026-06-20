@@ -397,9 +397,11 @@ RSpec.describe "Api::V1::Messages", type: :request do
     # TASK-M703: mark_read must issue exactly ONE UPDATE query regardless of
     # how many unread messages exist in the conversation.
     #
-    # Strategy: count only UPDATE statements (to avoid coupling to the exact
-    # number of SELECT/auth queries which may vary by Rails version), then
-    # assert that count == 1 for both 10 and 15 unread messages.
+    # Strategy: count only UPDATE statements against the messages table. We must
+    # NOT count every UPDATE — devise-token-auth intermittently rotates the
+    # auth token, firing an UPDATE on "users" mid-request, which made this spec
+    # flaky (~1 in 3 runs saw 2 UPDATEs). Scoping to `UPDATE "messages"` isolates
+    # the mark_read write under test from unrelated auth-token writes.
     it "issues exactly one UPDATE query regardless of unread message count (no N+1)" do
       # Seed 12 unread messages from seller (other participant).
       12.times { create(:message, conversation: conversation, user: seller, read_at: nil) }
@@ -415,7 +417,7 @@ RSpec.describe "Api::V1::Messages", type: :request do
       # Count UPDATE statements for 12 unread messages.
       update_count_12 = 0
       update_counter  = lambda do |_name, _start, _finish, _id, payload|
-        update_count_12 += 1 if payload[:sql].to_s.upcase.start_with?("UPDATE")
+        update_count_12 += 1 if payload[:sql].to_s.match?(/\AUPDATE "messages"/i)
       end
       ActiveSupport::Notifications.subscribed(update_counter, "sql.active_record") do
         put "/api/v1/conversations/#{conversation.id}/messages/mark_read",
@@ -428,7 +430,7 @@ RSpec.describe "Api::V1::Messages", type: :request do
 
       update_count_15 = 0
       update_counter2 = lambda do |_name, _start, _finish, _id, payload|
-        update_count_15 += 1 if payload[:sql].to_s.upcase.start_with?("UPDATE")
+        update_count_15 += 1 if payload[:sql].to_s.match?(/\AUPDATE "messages"/i)
       end
       ActiveSupport::Notifications.subscribed(update_counter2, "sql.active_record") do
         put "/api/v1/conversations/#{conversation.id}/messages/mark_read",

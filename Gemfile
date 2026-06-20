@@ -16,6 +16,12 @@ gem "devise"
 # Authorization
 gem "pundit"
 
+# Admin dashboard (server-rendered web, separate from the JSON API)
+gem "administrate"
+gem "propshaft"
+gem "chartkick"
+gem "groupdate"
+
 # Serialization
 gem "blueprinter"
 

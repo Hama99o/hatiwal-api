@@ -82,6 +82,21 @@ class ApplicationController < ActionController::API
     render json: { error: "Forbidden" }, status: :forbidden
   end
 
+  # Rejects a suspended/banned user on authenticated requests with a clear,
+  # localized message + the admin's reason, so the app can tell them why they
+  # are blocked. No-op for guests (current_user nil) and active users. New
+  # logins are separately blocked by User#active_for_authentication?.
+  def reject_blocked_user!
+    return unless current_user&.account_blocked?
+
+    render json: {
+      error:   "account_#{current_user.status}",
+      status:  current_user.status,
+      message: current_user.account_block_message,
+      reason:  current_user.block_reason
+    }, status: :forbidden
+  end
+
   def render_bad_request
     render json: { error: "Bad request" }, status: :bad_request
   end
