@@ -22,6 +22,7 @@ By default, it renders:
     <%= content_for(:title) %> - <%= application_title %>
   </title>
   <%= render "stylesheet" %>
+  <%= render "theme" %>
   <%= csrf_meta_tags %>
   <%= csp_meta_tag if defined?(csp_meta_tag) %>
   <%= render "javascript" %>

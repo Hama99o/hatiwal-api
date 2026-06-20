@@ -1,0 +1,126 @@
+<%# Hatiwal admin theme — layered on top of Administrate's default stylesheet to
+    give the dashboard a modern, branded look (indigo accent, card panels,
+    cleaner tables/buttons). Rendered after `_stylesheet` so it wins the cascade. %>
+<style>
+  :root {
+    --ad-bg: #f1f5f9;
+    --ad-surface: #ffffff;
+    --ad-border: #e2e8f0;
+    --ad-text: #0f172a;
+    --ad-muted: #64748b;
+    --ad-primary: #6366f1;
+    --ad-primary-dark: #4f46e5;
+    --ad-danger: #dc2626;
+  }
+
+  body {
+    background: var(--ad-bg);
+    color: var(--ad-text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Layout: sidebar + content ─────────────────────────────────────────── */
+  .app-container {
+    gap: 1.25rem;
+    padding: 1.25rem;
+    max-width: 110rem;
+  }
+
+  /* Sidebar as a sticky card */
+  .navigation {
+    flex: 0 0 15rem;
+    align-self: flex-start;
+    position: sticky;
+    top: 1.25rem;
+    background: var(--ad-surface);
+    border: 1px solid var(--ad-border);
+    border-radius: 14px;
+    padding: 1rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  .navigation__link {
+    border-radius: 9px;
+    color: var(--ad-muted);
+    font-weight: 500;
+    padding: 0.6rem 0.8rem;
+    margin: 0 0 2px;
+    line-height: 1.2;
+  }
+  .navigation__link:hover {
+    background: #f1f5f9;
+    color: var(--ad-text);
+    border-radius: 9px;
+  }
+  .navigation__link--active {
+    background: var(--ad-primary);
+    color: #ffffff;
+    font-weight: 600;
+  }
+  .navigation__account p { color: var(--ad-muted); }
+
+  /* Main content as a card */
+  .main-content {
+    background: var(--ad-surface);
+    border: 1px solid var(--ad-border);
+    border-radius: 14px;
+    padding: 1.5rem 1.75rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  }
+  .main-content__page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--ad-text);
+  }
+
+  /* ── Tables ────────────────────────────────────────────────────────────── */
+  table { border-collapse: separate; border-spacing: 0; width: 100%; }
+  thead th {
+    background: #f8fafc;
+    color: var(--ad-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.7rem 0.8rem;
+    border-bottom: 1px solid var(--ad-border);
+    text-align: start;
+  }
+  tbody td {
+    padding: 0.7rem 0.8rem;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.9rem;
+    color: var(--ad-text);
+  }
+  tbody tr:hover { background: #f8fafc; }
+
+  /* ── Buttons ───────────────────────────────────────────────────────────── */
+  .button,
+  .button_to button,
+  button.button,
+  a.button {
+    background: var(--ad-primary);
+    color: #ffffff;
+    border: none;
+    border-radius: 9px;
+    padding: 0.55rem 0.9rem;
+    font-weight: 600;
+    transition: background 0.15s ease-in-out;
+  }
+  .button:hover, a.button:hover, button.button:hover { background: var(--ad-primary-dark); }
+  .button--danger, button.button--danger { background: var(--ad-danger); }
+  .button--danger:hover, button.button--danger:hover { background: #b91c1c; }
+  .button--alt, .button--nav,
+  a.button--alt, a.button--nav {
+    background: #f1f5f9;
+    color: var(--ad-text);
+  }
+  .button--alt:hover, .button--nav:hover { background: #e2e8f0; }
+
+  /* ── Misc ──────────────────────────────────────────────────────────────── */
+  a { color: var(--ad-primary); }
+  .search__input {
+    border: 1px solid var(--ad-border);
+    border-radius: 9px;
+    padding: 0.55rem 0.8rem;
+  }
+  .flash { border-radius: 10px; }
+</style>
