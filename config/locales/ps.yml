@@ -1,0 +1,8 @@
+ps:
+  # Push-notification body labels for non-text messages, in Pashto.
+  push:
+    message:
+      offer: "وړاندیز یې واستاوه"
+      meetup: "د لیدنې وړاندیز یې وکړ"
+      image: "انځور یې واستاوه"
+      document: "سند یې واستاوه"

@@ -44,6 +44,10 @@ class UserSerializer < ApplicationSerializer
       conversation_ids = Conversation.for_user(u.id).select(:id)
       Message.where(conversation_id: conversation_ids, read_at: nil).where.not(user_id: u.id).count
     end
+    # Strike status so the app can show a "X of N warnings" banner from the
+    # /users/me payload without an extra request.
+    field(:active_warnings_count) { |u| u.active_warnings_count }
+    field(:warning_threshold) { |_u| User::WARNING_BLOCK_THRESHOLD }
   end
 
   view :minimal do

@@ -1,6 +1,67 @@
-<%# A prominent "Account moderation" panel on top of the default Administrate
-    user show page. Blocking bans the account (rejected by the API) with a reason
-    that is shown to the user; unblocking restores it. %>
+<%# Moderation controls on top of the default Administrate user show page:
+    1) a warnings/strike panel (issue a warning, see history)
+    2) a block/unblock panel (severe, immediate)
+    Then the default show. %>
+
+<%
+  warnings = page.resource.warnings.recent
+  active_count = page.resource.active_warnings_count
+  threshold = User::WARNING_BLOCK_THRESHOLD
+%>
+
+<section style="margin:0 0 1.25rem;padding:1.25rem 1.5rem;border:1px solid #fcd34d;border-radius:12px;background:#fffbeb;">
+  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#92400e;">
+    ⚠️ Warnings — <%= active_count %> of <%= threshold %> active
+  </h2>
+  <p style="margin:0 0 .9rem;color:#92400e;font-size:.85rem;">
+    Each warning is active for <%= UserWarning::ACTIVE_PERIOD.inspect %> then decays.
+    Reaching <%= threshold %> active warnings auto-suspends the user (lifts automatically as warnings expire).
+  </p>
+
+  <% unless page.resource.account_blocked? %>
+    <%= form_with url: warn_admin_user_path(page.resource), method: :post,
+          data: { turbo: false },
+          style: "display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;" do |f| %>
+      <%= f.select :category, UserWarning.categories.keys.map { |c| [ c.humanize, c ] },
+            {}, style: "padding:.5rem;border:1px solid #cbd5e1;border-radius:6px;" %>
+      <%= f.text_field :reason, placeholder: "Reason (shown to the user)",
+            style: "flex:1;min-width:240px;padding:.55rem .7rem;border:1px solid #cbd5e1;border-radius:6px;" %>
+      <%= f.submit "Issue warning", class: "button",
+            data: { confirm: "Issue a warning to #{page.resource.full_name}?" } %>
+    <% end %>
+  <% end %>
+
+  <% if warnings.any? %>
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead>
+        <tr style="text-align:left;color:#92400e;">
+          <th style="padding:.35rem .5rem;">Category</th>
+          <th style="padding:.35rem .5rem;">Reason</th>
+          <th style="padding:.35rem .5rem;">Issued</th>
+          <th style="padding:.35rem .5rem;">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% warnings.each do |w| %>
+          <tr style="border-top:1px solid #fde68a;">
+            <td style="padding:.35rem .5rem;"><%= w.category.to_s.humanize %></td>
+            <td style="padding:.35rem .5rem;"><%= w.reason %></td>
+            <td style="padding:.35rem .5rem;"><%= w.created_at.strftime("%Y-%m-%d") %></td>
+            <td style="padding:.35rem .5rem;">
+              <% if w.active? %>
+                <span style="color:#b45309;font-weight:600;">active → expires <%= w.expires_at.strftime("%Y-%m-%d") %></span>
+              <% else %>
+                <span style="color:#9ca3af;">expired</span>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% else %>
+    <p style="margin:0;color:#92400e;font-size:.85rem;">No warnings yet.</p>
+  <% end %>
+</section>
 
 <section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;">
   <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#991b1b;">🚫 Account moderation</h2>
@@ -17,8 +78,8 @@
           method: :patch, data: { turbo: false }, class: "button" %>
   <% else %>
     <p style="margin:0 0 .9rem;color:#7f1d1d;">
-      Blocking bans this user from the whole app. They’ll be unable to log in and
-      will see the reason you enter below.
+      Blocking bans this user from the whole app immediately (use for severe cases —
+      warnings are the gradual path). They’ll see the reason you enter below.
     </p>
     <%= form_with url: block_admin_user_path(page.resource), method: :patch,
           data: { turbo: false },
@@ -29,6 +90,78 @@
             data: { confirm: "Block #{page.resource.full_name}? They will be signed out and told they are blocked." } %>
     <% end %>
   <% end %>
+</section>
+
+<% reports = page.resource.reports_against %>
+<section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #fdba74;border-radius:12px;background:#fff7ed;">
+  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#9a3412;">📣 Reports against this user (<%= reports.size %>)</h2>
+  <% if reports.any? %>
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead>
+        <tr style="text-align:left;color:#9a3412;">
+          <th style="padding:.35rem .5rem;">Report</th>
+          <th style="padding:.35rem .5rem;">What</th>
+          <th style="padding:.35rem .5rem;">Reason</th>
+          <th style="padding:.35rem .5rem;">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% reports.each do |r| %>
+          <tr style="border-top:1px solid #fed7aa;">
+            <td style="padding:.35rem .5rem;"><%= link_to "##{r.id}", [ namespace, r ] %></td>
+            <td style="padding:.35rem .5rem;">
+              <% if r.reportable.is_a?(Listing) %>
+                Listing: <%= link_to(r.reportable.title.presence || "##{r.reportable_id}", [ namespace, r.reportable ]) %>
+              <% else %>
+                This user
+              <% end %>
+            </td>
+            <td style="padding:.35rem .5rem;"><%= r.reason.to_s.humanize %></td>
+            <td style="padding:.35rem .5rem;"><%= r.status %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% else %>
+    <p style="margin:0;color:#9a3412;font-size:.85rem;">No reports against this user.</p>
+  <% end %>
+</section>
+
+<%
+  blocked = page.resource.blocked_users
+  blocked_by = page.resource.blocking_users
+%>
+<section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc;">
+  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#334155;">🚷 Block relationships</h2>
+  <p style="margin:0 0 .75rem;color:#64748b;font-size:.85rem;">
+    User-to-user blocks (a privacy tool between members — separate from an admin ban).
+  </p>
+  <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+    <div>
+      <strong style="color:#334155;">Has blocked (<%= blocked.size %>)</strong>
+      <% if blocked.any? %>
+        <ul style="margin:.35rem 0 0;padding-inline-start:1.1rem;color:#475569;font-size:.85rem;">
+          <% blocked.each do |u| %>
+            <li><%= link_to(u.full_name.presence || "User ##{u.id}", [ namespace, u ]) %></li>
+          <% end %>
+        </ul>
+      <% else %>
+        <p style="margin:.35rem 0 0;color:#94a3b8;font-size:.85rem;">None</p>
+      <% end %>
+    </div>
+    <div>
+      <strong style="color:#334155;">Blocked by (<%= blocked_by.size %>)</strong>
+      <% if blocked_by.any? %>
+        <ul style="margin:.35rem 0 0;padding-inline-start:1.1rem;color:#475569;font-size:.85rem;">
+          <% blocked_by.each do |u| %>
+            <li><%= link_to(u.full_name.presence || "User ##{u.id}", [ namespace, u ]) %></li>
+          <% end %>
+        </ul>
+      <% else %>
+        <p style="margin:.35rem 0 0;color:#94a3b8;font-size:.85rem;">None</p>
+      <% end %>
+    </div>
+  </div>
 </section>
 
 <%= render template: "administrate/application/show", locals: { page: page } %>

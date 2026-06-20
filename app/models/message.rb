@@ -22,7 +22,8 @@ class Message < ApplicationRecord
   validate :kind_must_not_be_system_when_user_authored
   validate :responds_to_must_be_in_same_conversation, if: -> { responds_to_id.present? }
 
-  scope :ordered, -> { order(:created_at) }
+  scope :ordered,      -> { order(:created_at) }            # chronological (oldest→newest)
+  scope :newest_first, -> { order(created_at: :desc) }      # paginated chat: most recent page first
 
   after_create :update_conversation_last_message_at
 

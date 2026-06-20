@@ -37,6 +37,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
 
   def show
     return render_not_found if blocked_pair_show?
+    return render_not_found if removed_for_viewer?
 
     @listing.register_view!(current_user)
     viewed = current_user ? ListingView.exists?(user_id: current_user.id, listing_id: @listing.id) : false
@@ -87,6 +88,12 @@ class Api::V1::ListingsController < Api::V1::BaseController
     return false if @listing.user_id == current_user.id
 
     current_user.blocked?(@listing.user) || current_user.blocked_by?(@listing.user)
+  end
+
+  # A listing taken down by an admin is hidden from everyone except its owner
+  # (who can still see it — e.g. to learn it was removed).
+  def removed_for_viewer?
+    @listing.removed? && @listing.user_id != current_user&.id
   end
 
   def set_listing

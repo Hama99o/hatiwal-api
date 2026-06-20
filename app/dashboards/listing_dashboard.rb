@@ -22,6 +22,8 @@ class ListingDashboard < Administrate::BaseDashboard
     location: Field::String,
     description: Field::Text,
     views_count: Field::Number,
+    removed_at: Field::DateTime,
+    removed_reason: Field::Text,
     published_at: Field::DateTime,
     reserved_at: Field::DateTime,
     sold_at: Field::DateTime,
@@ -38,6 +40,7 @@ class ListingDashboard < Administrate::BaseDashboard
     price
     status
     created_at
+    updated_at
   ].freeze
 
   SHOW_PAGE_ATTRIBUTES = %i[
@@ -52,6 +55,8 @@ class ListingDashboard < Administrate::BaseDashboard
     location
     description
     views_count
+    removed_at
+    removed_reason
     published_at
     reserved_at
     sold_at

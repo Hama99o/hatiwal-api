@@ -14,6 +14,18 @@ module Admin
 
     before_action :authenticate_admin_user!
 
+    private
+
+    # Record a moderation action for accountability. Failures here must never
+    # break the action itself, so they are swallowed.
+    def log_admin_action(action, target: nil, details: nil)
+      AdminAuditLog.record!(admin_user: current_admin_user, action: action, target: target, details: details)
+    rescue StandardError
+      nil
+    end
+
+    public
+
     # Override this value to specify the number of elements to display at a time
     # on index pages. Defaults to 20.
     # def records_per_page

@@ -16,6 +16,12 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/listings') ? 'active' : 'inactive'}" %>
   <%= link_to "Reports", admin_reports_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/reports') ? 'active' : 'inactive'}" %>
+  <%= link_to "Warnings", admin_user_warnings_path,
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/user_warnings') ? 'active' : 'inactive'}" %>
+  <%= link_to "Blocks", admin_blocks_path,
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/blocks') ? 'active' : 'inactive'}" %>
+  <%= link_to "Audit log", admin_admin_audit_logs_path,
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/admin_audit_logs') ? 'active' : 'inactive'}" %>
   <%= link_to "Categories", admin_categories_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/categories') ? 'active' : 'inactive'}" %>
 

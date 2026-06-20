@@ -1,0 +1,33 @@
+<%# Take-down panel on top of the default Administrate listing show page.
+    Taking down hides the listing from the public feed and detail page. %>
+
+<section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;">
+  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#991b1b;">🚫 Listing moderation</h2>
+
+  <% if page.resource.removed? %>
+    <p style="margin:0 0 .9rem;color:#7f1d1d;">
+      This listing was <strong>taken down</strong> on <%= page.resource.removed_at.strftime("%Y-%m-%d") %> —
+      it is hidden from buyers.
+      <% if page.resource.removed_reason.present? %>
+        <br>Reason: <em><%= page.resource.removed_reason %></em>
+      <% end %>
+    </p>
+    <%= button_to "Restore listing", restore_admin_listing_path(page.resource),
+          method: :patch, data: { turbo: false }, class: "button" %>
+  <% else %>
+    <p style="margin:0 0 .9rem;color:#7f1d1d;">
+      Take down a spam/illegal/prohibited listing — it disappears from the buyer
+      feed and detail page immediately (the record is kept).
+    </p>
+    <%= form_with url: take_down_admin_listing_path(page.resource), method: :patch,
+          data: { turbo: false },
+          style: "display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;" do |f| %>
+      <%= f.text_field :removed_reason, placeholder: "Reason (optional)",
+            style: "flex:1;min-width:260px;padding:.55rem .7rem;border:1px solid #cbd5e1;border-radius:6px;" %>
+      <%= f.submit "Take down listing", class: "button button--danger",
+            data: { confirm: "Take down “#{page.resource.title}”?" } %>
+    <% end %>
+  <% end %>
+</section>
+
+<%= render template: "administrate/application/show", locals: { page: page } %>

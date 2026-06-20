@@ -133,6 +133,133 @@ RSpec.describe "Admin dashboard", type: :request do
       expect(user.reload.status).to eq("active")
       expect(user.block_reason).to be_nil
     end
+
+    it "issues a warning to a user via the Warn action" do
+      user = create(:user, status: :active)
+      expect {
+        post warn_admin_user_path(user), params: { reason: "Spam listings", category: "spam" }
+      }.to change { user.warnings.count }.by(1)
+      expect(user.reload.active_warnings_count).to eq(1)
+    end
+
+    it "auto-suspends a user when the third warning is issued" do
+      user = create(:user, status: :active)
+      create_list(:user_warning, 2, user: user)
+      post warn_admin_user_path(user), params: { reason: "third strike" }
+      expect(user.reload.status).to eq("suspended")
+      expect(user.auto_blocked).to be(true)
+    end
+
+    it "takes down a reported listing and resolves the report in one click" do
+      listing = create(:listing, :active)
+      report = create(:report, reportable: listing, status: :pending)
+
+      patch take_down_target_admin_report_path(report)
+
+      expect(listing.reload.removed?).to be(true)
+      expect(report.reload.status).to eq("resolved")
+    end
+
+    it "warns the seller of a reported listing and resolves" do
+      listing = create(:listing, :active)
+      report = create(:report, reportable: listing)
+
+      expect { patch warn_target_admin_report_path(report) }
+        .to change { listing.user.warnings.count }.by(1)
+      expect(report.reload.status).to eq("resolved")
+    end
+
+    it "warns a reported user and resolves" do
+      reported = create(:user)
+      report = create(:report, :against_user, reportable: reported)
+
+      patch warn_target_admin_report_path(report)
+
+      expect(reported.reload.active_warnings_count).to eq(1)
+      expect(report.reload.status).to eq("resolved")
+    end
+
+    it "resolves and dismisses a report" do
+      report = create(:report, status: :pending)
+      patch resolve_admin_report_path(report)
+      expect(report.reload.status).to eq("resolved")
+      patch dismiss_admin_report_path(report)
+      expect(report.reload.status).to eq("dismissed")
+    end
+
+    it "renders the report triage page for a listing and a user report" do
+      listing_report = create(:report, reportable: create(:listing, :active))
+      user_report = create(:report, :against_user, reportable: create(:user))
+
+      get admin_report_path(listing_report)
+      expect(response).to have_http_status(:ok)
+      get admin_report_path(user_report)
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "renders the listing take-down page" do
+      get admin_listing_path(create(:listing, :active))
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "records an audit log entry when blocking a user" do
+      user = create(:user, status: :active)
+      expect {
+        patch block_admin_user_path(user), params: { block_reason: "Scam" }
+      }.to change(AdminAuditLog, :count).by(1)
+
+      log = AdminAuditLog.last
+      expect(log.action).to eq("block_user")
+      expect(log.target).to eq(user)
+      expect(log.admin_user).to eq(admin)
+    end
+
+    it "records an audit entry when taking down a listing from a report" do
+      report = create(:report, reportable: create(:listing, :active))
+      patch take_down_target_admin_report_path(report)
+      expect(AdminAuditLog.where(action: "take_down_listing")).to exist
+    end
+
+    it "renders the audit log index and show pages" do
+      log = AdminAuditLog.record!(admin_user: admin, action: "block_user", target: create(:user))
+      get admin_admin_audit_logs_path
+      expect(response).to have_http_status(:ok)
+      get admin_admin_audit_log_path(log)
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "renders the warnings index and show pages" do
+      warning = create(:user_warning, admin_user: admin)
+      get admin_user_warnings_path
+      expect(response).to have_http_status(:ok)
+      get admin_user_warning_path(warning)
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "renders the user-to-user blocks index and show pages" do
+      block = create(:block)
+      get admin_blocks_path
+      expect(response).to have_http_status(:ok)
+      get admin_block_path(block)
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "shows a user's block relationships on their admin page" do
+      blocker = create(:user)
+      create(:block, blocker: blocker, blocked: create(:user))
+      get admin_user_path(blocker)
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "shows reports against a user (and their listings) on their admin page" do
+      seller = create(:user)
+      create(:report, reportable: create(:listing, :active, user: seller), reason: :spam)
+
+      get admin_user_path(seller)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("Reports against this user")
+    end
   end
 
   describe "account lockout (lockable)" do

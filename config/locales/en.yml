@@ -30,11 +30,20 @@
 en:
   hello: "Hello world"
   accounts:
+    auto_suspended_reason: "Automatically suspended after reaching %{count} warnings."
     blocked:
       default: "Your account has been blocked. Please contact support."
       suspended: "Your account has been suspended. Please contact support."
       banned: "Your account has been banned for violating our community rules."
       reason: "Reason: %{reason}"
+  # Push-notification body labels for non-text messages (text messages show
+  # their actual content). Rendered in the recipient's preferred_language.
+  push:
+    message:
+      offer: "Sent an offer"
+      meetup: "Proposed a meetup"
+      image: "Sent a photo"
+      document: "Sent a document"
   activerecord:
     errors:
       models:

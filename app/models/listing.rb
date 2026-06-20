@@ -31,6 +31,7 @@ class Listing < ApplicationRecord
   scope :by_category, ->(id) { where(category_id: id) }
   scope :by_seller,   ->(id) { where(user_id: id) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
+  scope :not_removed, -> { where(removed_at: nil) }
   scope :expired_active, -> { active.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
 
   # Sort the result set by the supplied key. Falls back to newest (created_at
@@ -56,8 +57,8 @@ class Listing < ApplicationRecord
     else where(status: status)
     end
   }
-  # Buyer feed: active AND not past its expiry.
-  scope :browsable,   -> { active.not_expired.ordered }
+  # Buyer feed: active, not past its expiry, and not removed by an admin.
+  scope :browsable,   -> { active.not_expired.not_removed.ordered }
 
   # Exclude listings whose seller (a) has been blocked by +viewer+ or
   # (b) has blocked +viewer+.  Used by ListingPolicy::Scope so the filter
@@ -104,6 +105,20 @@ class Listing < ApplicationRecord
   # (Re)start the expiry clock — used on publish and on seller renew.
   def renew!
     update!(expires_at: LISTING_LIFESPAN.from_now)
+  end
+
+  # ── Admin take-down (soft remove) ────────────────────────────────────────────
+  # Hides the listing from the public feed/detail page while keeping the record.
+  def removed?
+    removed_at.present?
+  end
+
+  def take_down!(reason: nil)
+    update!(removed_at: Time.current, removed_reason: reason.presence)
+  end
+
+  def restore!
+    update!(removed_at: nil, removed_reason: nil)
   end
 
   # Maximum number of words taken from a search query. Words beyond this cap

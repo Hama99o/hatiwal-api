@@ -27,14 +27,30 @@ Rails.application.routes.draw do
 
   namespace :admin do
     resources :categories
-    resources :listings
-    resources :reports
+    resources :listings do
+      member do
+        patch :take_down
+        patch :restore
+      end
+    end
+    resources :reports do
+      member do
+        patch :resolve
+        patch :dismiss
+        patch :take_down_target
+        patch :warn_target
+      end
+    end
     resources :users do
       member do
         patch :block
         patch :unblock
+        post :warn
       end
     end
+    resources :user_warnings, only: [ :index, :show ]
+    resources :blocks, only: [ :index, :show ]
+    resources :admin_audit_logs, only: [ :index, :show ]
 
     root to: "dashboard#index"
   end
@@ -87,6 +103,10 @@ Rails.application.routes.draw do
         get    "/saved_searches",     to: "saved_searches#index",   as: :saved_searches
         post   "/saved_searches",     to: "saved_searches#create"
         delete "/saved_searches/:id", to: "saved_searches#destroy", as: :saved_search
+
+        # The signed-in user's own moderation warnings (also before "/:id").
+        get "/warnings",           to: "warnings#index",     as: :warnings
+        put "/warnings/mark_seen", to: "warnings#mark_seen", as: :mark_warnings_seen
 
         get   "/:id/public_profile", to: "public_profiles#show", as: :public_profile
         get   "/:id", to: "profiles#show",       as: :profile

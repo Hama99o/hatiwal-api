@@ -3,10 +3,14 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
   def index
     authorize @conversation, :read_messages?
+    # Newest-first so page 1 is the MOST RECENT messages — correct for a chat
+    # that opens at the bottom and loads older messages as you scroll up. The
+    # mobile client reverses each page for chronological display and prepends
+    # older pages on scroll-up.
     messages = @conversation.messages
                            .includes(user: { avatar_attachment: :blob },
                                      attachment_attachment: :blob)
-                           .ordered
+                           .newest_first
     paginate_blue(MessageSerializer, messages, extra: { view: :default })
   end
 
@@ -18,7 +22,8 @@ class Api::V1::MessagesController < Api::V1::BaseController
     @message.attachment = params[:attachment] if params[:attachment].present?
 
     if @message.save
-      BroadcastMessageJob.perform_later(@message.id)
+      BroadcastMessageJob.perform_later(@message.id)   # in-app real-time (open app)
+      SendMessagePushJob.perform_later(@message.id)     # push notification (closed app)
       render_blue(MessageSerializer, @message, view: :default, status: :created)
     else
       render_unprocessable_entity(@message)

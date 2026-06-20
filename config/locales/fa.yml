@@ -1,0 +1,8 @@
+fa:
+  # Push-notification body labels for non-text messages, in Dari/Farsi.
+  push:
+    message:
+      offer: "یک پیشنهاد ارسال کرد"
+      meetup: "پیشنهاد ملاقات داد"
+      image: "یک عکس فرستاد"
+      document: "یک سند فرستاد"

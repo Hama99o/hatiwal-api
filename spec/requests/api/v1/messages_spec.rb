@@ -13,17 +13,20 @@ RSpec.describe "Api::V1::Messages", type: :request do
       expect(response).to have_http_status(:unauthorized)
     end
 
-    # TASK-K418: messages must be returned oldest-first (ascending created_at)
-    # so a chat transcript reads chronologically in the mobile client.
-    it "returns messages ordered oldest first (ascending) for a participant" do
-      first  = create(:message, conversation: conversation, user: buyer,  created_at: 2.hours.ago)
-      second = create(:message, conversation: conversation, user: seller, created_at: 1.hour.ago)
+    # Messages are paginated newest-first so page 1 holds the MOST RECENT
+    # messages — correct for a chat that opens at the bottom and loads older
+    # messages on scroll-up. The mobile client reverses each page for
+    # chronological display. (Supersedes the earlier oldest-first ordering,
+    # which made a long chat open on its oldest page.)
+    it "returns messages ordered newest first (descending) for a participant" do
+      older  = create(:message, conversation: conversation, user: buyer,  created_at: 2.hours.ago)
+      newer  = create(:message, conversation: conversation, user: seller, created_at: 1.hour.ago)
 
       get "/api/v1/conversations/#{conversation.id}/messages", headers: headers, as: :json
 
       expect(response).to have_http_status(:ok)
       ids = JSON.parse(response.body)["messages"].map { |m| m["id"] }
-      expect(ids).to eq([ first.id, second.id ])
+      expect(ids).to eq([ newer.id, older.id ])
     end
 
     # TASK-K418: eager-loading must eliminate per-message User queries.

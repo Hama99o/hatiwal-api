@@ -1,12 +1,20 @@
 module Admin
   class ListingsController < Admin::ApplicationController
-    # Overwrite any of the RESTful controller actions to implement custom behavior
-    # For example, you may want to send an email after a foo is updated.
-    #
-    # def update
-    #   super
-    #   send_foo_updated_email(requested_resource)
-    # end
+    # Take down (soft-remove) a listing — hides it from the public feed/detail
+    # page. Restore reverses it.
+    def take_down
+      listing = find_resource(params[:id])
+      listing.take_down!(reason: params[:removed_reason])
+      log_admin_action("take_down_listing", target: listing, details: listing.removed_reason)
+      redirect_to [ namespace, listing ], notice: "Listing taken down."
+    end
+
+    def restore
+      listing = find_resource(params[:id])
+      listing.restore!
+      log_admin_action("restore_listing", target: listing)
+      redirect_to [ namespace, listing ], notice: "Listing restored."
+    end
 
     # Override this method to specify custom lookup behavior.
     # This will be used to set the resource for the `show`, `edit`, and `update`

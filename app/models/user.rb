@@ -22,6 +22,7 @@ class User < ApplicationRecord
   has_many :saved_searches, dependent: :destroy
   has_many :listing_views, dependent: :destroy
   has_many :viewed_listings, through: :listing_views, source: :listing
+  has_many :warnings, class_name: "UserWarning", dependent: :destroy
 
   validates :firstname, presence: true
   validates :lastname, presence: true
@@ -74,6 +75,59 @@ class User < ApplicationRecord
     "#{base} #{I18n.t('accounts.blocked.reason', reason: block_reason)}"
   end
 
+  # ── Warning / strike system ──────────────────────────────────────────────────
+  #
+  # Warnings accumulate; once WARNING_BLOCK_THRESHOLD are active at once the user
+  # is auto-suspended. Each warning is active for Warning::ACTIVE_PERIOD then
+  # decays, so good behavior over time lowers the count and (via the daily
+  # reinstate job) lifts an auto-suspension. Severe cases are still blocked
+  # directly by an admin, bypassing warnings.
+  WARNING_BLOCK_THRESHOLD = 3
+
+  def active_warnings
+    warnings.active
+  end
+
+  def active_warnings_count
+    active_warnings.count
+  end
+
+  def warnings_remaining
+    [ WARNING_BLOCK_THRESHOLD - active_warnings_count, 0 ].max
+  end
+
+  # Issue a strike. Creates the warning and auto-suspends the user if this pushes
+  # their active warnings to the threshold. Returns the created Warning.
+  def issue_warning!(reason:, admin_user: nil, category: :other)
+    warning = warnings.create!(admin_user: admin_user, reason: reason, category: category)
+    auto_suspend_for_strikes! if active? && active_warnings_count >= WARNING_BLOCK_THRESHOLD
+    warning
+  end
+
+  # Lift an auto-suspension once warnings have decayed below the threshold. Only
+  # touches auto-blocks — manual suspensions/bans are left for an admin to undo.
+  def reinstate_if_decayed!
+    return false unless suspended? && auto_blocked?
+    return false if active_warnings_count >= WARNING_BLOCK_THRESHOLD
+
+    update!(status: :active, auto_blocked: false, block_reason: nil)
+    true
+  end
+
+  # Clean slate — expire all active warnings (used when an admin manually
+  # unblocks a user, giving them a fresh start).
+  def clear_active_warnings!
+    active_warnings.update_all(expires_at: Time.current)
+  end
+
+  # Reports filed AGAINST this user — either directly, or against one of their
+  # listings. Used on the admin user page so moderators see incoming reports.
+  def reports_against
+    Report.where(reportable: self)
+          .or(Report.where(reportable_type: Listing.name, reportable_id: listings.select(:id)))
+          .order(created_at: :desc)
+  end
+
   def conversations
     Conversation.where("buyer_id = ? OR seller_id = ?", id, id)
   end
@@ -119,6 +173,18 @@ class User < ApplicationRecord
   end
 
   private
+
+  def auto_suspend_for_strikes!
+    update!(
+      status: :suspended,
+      auto_blocked: true,
+      block_reason: I18n.t(
+        "accounts.auto_suspended_reason",
+        count: WARNING_BLOCK_THRESHOLD,
+        default: "Automatically suspended after reaching #{WARNING_BLOCK_THRESHOLD} warnings."
+      )
+    )
+  end
 
   # Loads the seller's recent conversations exactly once and derives both
   # the rate percentage and the time-label bucket in a single pass.
