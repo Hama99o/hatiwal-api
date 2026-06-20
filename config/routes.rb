@@ -93,9 +93,10 @@ Rails.application.routes.draw do
 
       # User profiles
       namespace :users do
-        get   "/me",  to: "profiles#me",        as: :me
-        put   "/me",  to: "profiles#update_me"
-        patch "/me",  to: "profiles#update_me"
+        get   "/me",          to: "profiles#me",        as: :me
+        put   "/me",          to: "profiles#update_me"
+        patch "/me",          to: "profiles#update_me"
+        post  "/me/restore",  to: "profiles#restore",   as: :restore_me
 
         # Saved searches — MUST be declared before the "/:id" wildcard below,
         # otherwise GET /users/saved_searches is captured as profiles#show

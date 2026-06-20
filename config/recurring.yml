@@ -16,3 +16,6 @@ production:
   reinstate_decayed_users:
     class: ReinstateDecayedUsersJob
     schedule: every day at 3am
+  finalize_account_deletions:
+    class: FinalizeAccountDeletionsJob
+    schedule: every day at 4am

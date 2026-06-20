@@ -31,7 +31,7 @@ class UserSerializer < ApplicationSerializer
     fields :email, :firstname, :lastname, :city,
            :phone, :bio, :province, :latitude, :longitude,
            :status, :preferred_language, :seller_mode, :preferred_theme, :verified,
-           :created_at
+           :created_at, :deletion_scheduled_at
     field(:full_name) { |u| u.full_name }
     field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
     # Dashboard stats for the user's own profile.

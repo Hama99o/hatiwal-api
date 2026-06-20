@@ -2,8 +2,11 @@
 
 <%# Chartkick needs a charting backend. This API app has no JS bundler, so we
     load Chart.js + Chartkick from a CDN (acceptable for an internal admin tool).
-    Must come BEFORE the chart helpers below so the Chartkick global exists. %>
+    Must come BEFORE the chart helpers below so the Chartkick global exists.
+    The date-fns adapter is required for the line charts' time axis (the weekly
+    growth series) — without it Chart.js errors with "no complete date adapter". %>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartkick@5/dist/chartkick.min.js"></script>
 
 <style>

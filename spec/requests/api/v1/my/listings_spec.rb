@@ -306,12 +306,35 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
   end
 
   describe "DELETE /api/v1/my/listings/:id" do
-    it "destroys the owner's listing" do
+    it "soft-removes the owner's listing (keeps the record so chats survive)" do
       listing = create(:listing, user: user)
       expect do
         delete "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
-      end.to change(Listing, :count).by(-1)
+      end.not_to change(Listing, :count)
       expect(response).to have_http_status(:no_content)
+      expect(listing.reload.removed_at).to be_present
+    end
+
+    it "keeps conversations and messages about a deleted listing" do
+      listing = create(:listing, :active, user: user)
+      buyer   = create(:user)
+      convo   = create(:conversation, buyer: buyer, listing: listing)
+      msg     = create(:message, conversation: convo, user: buyer, body: "still here?")
+
+      delete "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+
+      expect(response).to have_http_status(:no_content)
+      expect(Conversation.exists?(convo.id)).to be(true)
+      expect(Message.exists?(msg.id)).to be(true)
+    end
+
+    it "hides a soft-removed listing from My Shop" do
+      listing = create(:listing, :active, user: user)
+      delete "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+
+      get "/api/v1/my/listings", headers: headers, as: :json
+      ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+      expect(ids).not_to include(listing.id)
     end
 
     it "404s for another user's listing" do

@@ -30,6 +30,12 @@ class User < ApplicationRecord
   validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
   validates :push_token, length: { maximum: 200 }, allow_blank: true
 
+  # Self-deleted (anonymized) accounts are hidden from public profiles + search.
+  scope :not_deleted, -> { where(deleted_at: nil) }
+  # Hidden from public surfaces (profile, search) both while pending deletion
+  # and after final anonymization.
+  scope :publicly_active, -> { where(deleted_at: nil, deletion_scheduled_at: nil) }
+
   def full_name
     "#{firstname} #{lastname}".strip
   end
@@ -53,13 +59,28 @@ class User < ApplicationRecord
     suspended? || banned?
   end
 
+  # True once the user self-deletes (account anonymized + login blocked).
+  def deleted?
+    deleted_at.present?
+  end
+
+  # In the 30-day grace window: deletion requested but not yet finalized. The
+  # account is hidden from others and logged out, but the user can still log in
+  # to restore it. (active_for_authentication? deliberately does NOT block this
+  # — that is what lets them come back and cancel.)
+  def pending_deletion?
+    deletion_scheduled_at.present? && deleted_at.nil?
+  end
+
   # Devise/devise_token_auth call this during sign-in; returning false blocks the
   # login and surfaces `inactive_message` to the client.
   def active_for_authentication?
-    super && !account_blocked?
+    super && !account_blocked? && !deleted?
   end
 
   def inactive_message
+    return :account_deleted if deleted?
+
     account_blocked? ? :"account_#{status}" : super
   end
 
@@ -73,6 +94,70 @@ class User < ApplicationRecord
     return base if block_reason.blank?
 
     "#{base} #{I18n.t('accounts.blocked.reason', reason: block_reason)}"
+  end
+
+  # ── Self-deletion (anonymize, keep history) ──────────────────────────────────
+  #
+  # App Store 5.1.1(v) / Google Play require in-app account deletion. We strip all
+  # personal data and block login, but DO NOT destroy the user's messages — they
+  # are retained as "Deleted user" so the other party keeps their conversation.
+  # Their active listings are soft-removed (hidden from the feed, kept for the
+  # conversation reference). All auth tokens are cleared, ending every session.
+  # How long a self-deleted account can still be recovered before it is
+  # permanently anonymized by FinalizeAccountDeletionsJob.
+  DELETION_GRACE_PERIOD = 30.days
+
+  # Step 1 of deletion: schedule it. The account immediately becomes inaccessible
+  # to others (listings pulled from the feed) and every session is ended, but the
+  # data is left intact so logging back in within the grace period can restore it.
+  def schedule_deletion!
+    transaction do
+      listings.where(removed_at: nil)
+              .update_all(removed_at: Time.current, removed_reason: "pending_deletion", updated_at: Time.current)
+      update!(deletion_scheduled_at: Time.current, tokens: {})
+    end
+  end
+
+  # Undo a scheduled deletion (user logged back in within the grace period):
+  # restore the listings we pulled and clear the schedule.
+  def cancel_deletion!
+    return false unless pending_deletion?
+
+    transaction do
+      listings.where(removed_reason: "pending_deletion")
+              .update_all(removed_at: nil, removed_reason: nil, updated_at: Time.current)
+      update!(deletion_scheduled_at: nil)
+    end
+    true
+  end
+
+  # Step 2 of deletion (the finalizer, run by FinalizeAccountDeletionsJob once the
+  # grace period has elapsed — or directly for an immediate hard delete): strip
+  # all PII and block login permanently, while RETAINING messages as "Deleted
+  # user" so the other participant keeps their conversation history.
+  def anonymize_account!
+    transaction do
+      # Hide active listings from the public feed but keep them for chat history.
+      listings.where(removed_at: nil)
+              .update_all(removed_at: Time.current, removed_reason: "account_deleted", updated_at: Time.current)
+
+      assign_attributes(
+        firstname: "Deleted",
+        lastname: "user",
+        email: "deleted-#{id}@deleted.invalid",
+        uid: "deleted-#{id}@deleted.invalid",
+        phone: nil,
+        bio: nil,
+        city: nil,
+        province: nil,
+        push_token: nil,
+        password: SecureRandom.hex(32), # unusable; old credentials no longer work
+        deleted_at: Time.current,
+        tokens: {}                       # invalidate all existing sessions
+      )
+      avatar.purge_later if avatar.attached?
+      save!(validate: false)
+    end
   end
 
   # ── Warning / strike system ──────────────────────────────────────────────────
@@ -156,10 +241,10 @@ class User < ApplicationRecord
   end
 
   def self.search_by_name(query)
-    return all if query.blank?
+    return publicly_active if query.blank?
 
     words = query.to_s.strip.split(/\s+/)
-    result = all
+    result = publicly_active
 
     words.each do |word|
       term = "%#{word.downcase}%"

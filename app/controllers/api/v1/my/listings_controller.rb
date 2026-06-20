@@ -4,6 +4,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   def index
     listings = policy_scope(
       current_user.listings
+                  .not_removed
                   .includes(:category, :conversations, :price_histories, images_attachments: :blob)
     ).ordered
     listings = listings.for_status_filter(params[:status]) if params[:status].present?
@@ -45,7 +46,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   def destroy
     authorize @listing
 
-    if @listing.destroy
+    # Soft-remove instead of hard delete: hides the listing from the feed and
+    # My Shop but keeps its conversations/messages, so the buyer's chat history
+    # survives (the item just shows as no longer available).
+    if @listing.update(removed_at: Time.current, removed_reason: "deleted_by_seller")
       head :no_content
     else
       render_unprocessable_entity(@listing)
