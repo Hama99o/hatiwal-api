@@ -5,6 +5,8 @@
   <meta name="viewport" content="initial-scale=1">
   <meta name="ROBOTS" content="NOINDEX, NOFOLLOW">
   <title>Admin sign in — Hatiwal</title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
   <%= csrf_meta_tags %>
   <style>
     * { box-sizing: border-box; }
@@ -39,8 +41,11 @@
 </head>
 <body>
   <div class="auth-card">
-    <h1>Hatiwal Admin</h1>
-    <p class="sub">Staff access only</p>
+    <div style="display:flex;justify-content:center;margin-bottom:1rem;">
+      <%= render "admin/application/logo", size: 56 %>
+    </div>
+    <h1 style="text-align:center;">Hatiwal Admin</h1>
+    <p class="sub" style="text-align:center;">Staff access only</p>
 
     <% if flash[:alert] %><div class="flash flash--alert"><%= flash[:alert] %></div><% end %>
     <% if flash[:notice] %><div class="flash flash--notice"><%= flash[:notice] %></div><% end %>

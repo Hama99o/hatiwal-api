@@ -21,6 +21,8 @@ By default, it renders:
   <title>
     <%= content_for(:title) %> - <%= application_title %>
   </title>
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="alternate icon" href="/favicon.ico">
   <%= render "stylesheet" %>
   <%= render "theme" %>
   <%= csrf_meta_tags %>
