@@ -1,13 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Hatiwal">
-  <defs>
-    <radialGradient id="l" cx="32%" cy="24%" r="90%">
-      <stop offset="0%" stop-color="#3A63D6"/>
-      <stop offset="100%" stop-color="#102049"/>
-    </radialGradient>
-  </defs>
-  <rect width="100" height="100" rx="22" fill="url(#l)"/>
-  <g fill="none" stroke-linecap="round">
-    <path d="M33.5 27V73M66.5 27V73" stroke="#F7F4EC" stroke-width="13.5"/>
-    <path d="M33.5 49H66.5" stroke="#E8B23A" stroke-width="13.5"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Hatiwal"><defs><radialGradient id="lapx" cx="32%" cy="24%" r="90%"><stop offset="0%" stop-color="#3A63D6"/><stop offset="100%" stop-color="#102049"/></radialGradient><linearGradient id="aux" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F7D680"/><stop offset="100%" stop-color="#C49228"/></linearGradient></defs><rect width="100" height="100" rx="18" fill="url(#lapx)"/><rect x="35" y="30" width="14" height="24" rx="7" fill="none" stroke="url(#aux)" stroke-width="4.2"/><rect x="51" y="30" width="14" height="24" rx="7" fill="none" stroke="url(#aux)" stroke-width="4.2"/><polygon points="29,44 71,44 75,82 25,82" fill="url(#aux)"/><path d="M74.44 22V78H61.38V54.32H38.62V78H25.56V22H38.62V45.41H61.38V22Z" transform="translate(25 40) scale(0.5)" fill="#102049"/></svg>

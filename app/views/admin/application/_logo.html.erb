@@ -1,21 +1,24 @@
 <%#
-# Hatiwal brand mark — a lapis tile with the white "H" monogram + gold crossbar.
-# Matches the mobile app icon and the web header logo (one brand everywhere).
-# Local: `size` (px). The gradient id is suffixed with size to stay unique when
-# the mark appears more than once on a page.
+# Hatiwal brand mark (v4) — a gold shopping bag with the lapis "H". Same mark as
+# the app icon / web logo (one brand everywhere). Local: `size` (px). Gradient
+# ids are suffixed with size to stay unique when the mark repeats on a page.
 %>
-<% gid = "hatiwalLapis#{size}" %>
+<% gid = "h#{size}" %>
 <svg width="<%= size %>" height="<%= size %>" viewBox="0 0 100 100"
      role="img" aria-label="Hatiwal" style="display:block;flex:none;">
   <defs>
-    <radialGradient id="<%= gid %>" cx="32%" cy="24%" r="90%">
+    <radialGradient id="lap<%= gid %>" cx="32%" cy="24%" r="90%">
       <stop offset="0%" stop-color="#3A63D6"/>
       <stop offset="100%" stop-color="#102049"/>
     </radialGradient>
+    <linearGradient id="au<%= gid %>" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F7D680"/>
+      <stop offset="100%" stop-color="#C49228"/>
+    </linearGradient>
   </defs>
-  <rect width="100" height="100" rx="24" fill="url(#<%= gid %>)"/>
-  <g fill="none" stroke-linecap="round">
-    <path d="M33.5 27V73M66.5 27V73" stroke="#F7F4EC" stroke-width="13.5"/>
-    <path d="M33.5 49H66.5" stroke="#E8B23A" stroke-width="13.5"/>
-  </g>
+  <rect width="100" height="100" rx="18" fill="url(#lap<%= gid %>)"/>
+  <rect x="35" y="30" width="14" height="24" rx="7" fill="none" stroke="url(#au<%= gid %>)" stroke-width="4.2"/>
+  <rect x="51" y="30" width="14" height="24" rx="7" fill="none" stroke="url(#au<%= gid %>)" stroke-width="4.2"/>
+  <polygon points="29,44 71,44 75,82 25,82" fill="url(#au<%= gid %>)"/>
+  <path d="M62.22 51V79H55.69V67.16H44.31V79H37.78V51H44.31V62.71H55.69V51Z" fill="#102049"/>
 </svg>
