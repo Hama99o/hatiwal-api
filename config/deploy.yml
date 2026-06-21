@@ -1,4 +1,12 @@
 # Kamal deployment configuration for hatiwal_api
+#
+# Co-hosted on one OVH VPS (51.254.130.18) with multi_magic and edu_safi, in a
+# fully isolated Docker network (hatiwal_api-net). The shared kamal-proxy routes
+# by hostname, so there are no HTTP port conflicts. The accessory HOST ports,
+# however, must be unique per app — already taken:
+#   multi_magic → PG 5432 / Redis 6379
+#   edu_safi    → PG 5433 / Redis 6380
+#   hatiwal_api → PG 5434 / Redis 6381  ← this app
 service: hatiwal_api
 
 image: <%= ENV.fetch("KAMAL_IMAGE", "hama99o/hatiwal_api") %>
@@ -63,7 +71,9 @@ accessories:
   db:
     image: postgres:16
     host: <%= ENV.fetch("KAMAL_HOST") %>
-    port: "127.0.0.1:5432:5432"
+    # Host port 5434 avoids multi_magic (5432) and edu_safi (5433). Bound to
+    # 127.0.0.1 so Postgres is never exposed to the public internet.
+    port: "127.0.0.1:5434:5432"
     options:
       network: hatiwal_api-net
     env:
@@ -78,7 +88,8 @@ accessories:
   redis:
     image: redis:7-alpine
     host: <%= ENV.fetch("KAMAL_HOST") %>
-    port: "127.0.0.1:6379:6379"
+    # Host port 6381 avoids multi_magic (6379) and edu_safi (6380).
+    port: "127.0.0.1:6381:6379"
     options:
       network: hatiwal_api-net
     directories:

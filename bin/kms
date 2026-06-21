@@ -1,40 +1,148 @@
 #!/usr/bin/env bash
-# bin/kms — Kamal management shortcuts for hatiwal-api
+# bin/kms — Kamal Management Script for hatiwal-api
+# Thin, friendly wrapper over `kamal` for the shared OVH VPS deploy.
 
-case "$1" in
-  # Deployment
-  deploy)       kamal deploy ;;
-  rollback)     kamal rollback ;;
-  status)       kamal status ;;
-  restart)      kamal app restart ;;
+set -e
 
-  # Rails commands
-  console)      kamal app exec --interactive --reuse "bin/rails console" ;;
-  migrate)      kamal app exec "bin/rails db:migrate" ;;
-  rollback-db)  kamal app exec "bin/rails db:rollback" ;;
-  seed)         kamal app exec "bin/rails db:seed" ;;
-  routes)       kamal app exec "bin/rails routes" ;;
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
 
-  # Logs
-  logs)         kamal logs ;;
-  logs-f)       kamal logs --follow ;;
-  logs-n)       kamal logs --lines="${2:-50}" ;;
+# App identity (must match config/deploy.yml)
+SERVICE="hatiwal_api"
+DB_CONTAINER="hatiwal_api-db"
+DB_USER="hatiwal"
+DB_PROD="hatiwal_production"
+DB_DEV="hatiwal_development"      # local docker-compose database
+DC_PG_SERVICE="postgres"         # docker-compose service name
 
-  # Database
-  db-console)   kamal accessory exec db --interactive "psql -U hatiwal hatiwal_production" ;;
+# Load env (.env.production preferred, then .env)
+if [ -f .env.production ]; then set -a; source .env.production; set +a
+elif [ -f .env ]; then set -a; source .env; set +a; fi
 
-  # App shell
-  bash)         kamal app exec --interactive --reuse "bash" ;;
+SSH_TARGET="${SSH_USER:-kamal}@${KAMAL_HOST}"
 
-  # Version
-  version)      kamal app version ;;
+need_kamal() { command -v kamal >/dev/null 2>&1 || { echo -e "${RED}kamal not installed — run: gem install kamal${NC}"; exit 1; }; }
+need_host()  { [ -n "$KAMAL_HOST" ] || { echo -e "${RED}KAMAL_HOST not set (check .env.production)${NC}"; exit 1; }; }
 
-  *)
-    echo "Usage: bin/kms <command>"
-    echo ""
-    echo "  deploy, rollback, status, restart"
-    echo "  console, migrate, rollback-db, seed, routes"
-    echo "  logs, logs-f, logs-n [lines]"
-    echo "  db-console, bash, version"
-    ;;
+help() {
+cat <<EOF
+$(echo -e "${CYAN}hatiwal-api · Kamal Management Script${NC}")
+$(echo -e "${YELLOW}Usage:${NC}) bin/kms <command> [args]
+
+$(echo -e "${GREEN}Deploy${NC})
+  deploy, d           Build, push and deploy (zero-downtime)
+  redeploy            Force rebuild + deploy
+  rollback            Roll back to the previous version
+  status, s           Show deployment details
+  version             Show the running version
+  lock <args>         Manage deploy locks (e.g. lock release)
+
+$(echo -e "${GREEN}Rails${NC})
+  c, console          Rails console on production
+  migrate             bin/rails db:migrate
+  seed                bin/rails db:seed
+  routes              bin/rails routes
+  runner '<code>'     Run Ruby in the Rails context
+  exec '<cmd>'        Run a shell command in the app container
+  bash, sh            Open a shell in the app container
+
+$(echo -e "${GREEN}Logs${NC})
+  logs, l             Follow app logs
+  logs:N              Last N lines (e.g. logs:200)
+  logs:db             Follow Postgres logs
+  logs:redis          Follow Redis logs
+  logs:proxy          Follow kamal-proxy logs
+  logs:grep <pat>     Grep the last 1000 app log lines
+
+$(echo -e "${GREEN}Database / Redis${NC})
+  psql, db:console    Postgres console (production)
+  db:dump             Download prod DB → ./backups/
+  db:load [file]      Load a dump into the LOCAL docker-compose DB
+  db:restore <file>   Restore a dump to PRODUCTION (danger!)
+  redis:console       Redis CLI (production)
+  acc:boot            Boot accessories (db + redis)
+  acc:restart         Reboot all accessories
+
+$(echo -e "${GREEN}Maintenance${NC})
+  ps                  List app containers
+  restart, boot       Reboot the app
+  stop / start        Stop / start the app
+  clean               Prune old containers + images
+  audit               Kamal security audit
+EOF
+}
+
+case "${1:-help}" in
+  d|deploy)     need_kamal; kamal deploy ;;
+  redeploy)     need_kamal; kamal redeploy ;;
+  rollback)     need_kamal; kamal rollback ;;
+  s|status)     need_kamal; kamal details ;;
+  version)      need_kamal; kamal app version ;;
+  lock)         need_kamal; shift; kamal lock "$@" ;;
+
+  c|console)    need_kamal; kamal app exec -i --reuse "bin/rails console" ;;
+  migrate)      need_kamal; kamal app exec "bin/rails db:migrate" ;;
+  seed)         need_kamal; kamal app exec "bin/rails db:seed" ;;
+  routes)       need_kamal; kamal app exec "bin/rails routes" ;;
+  runner)       need_kamal; shift; kamal app exec "bin/rails runner '$*'" ;;
+  exec)         need_kamal; shift; kamal app exec "$*" ;;
+  bash|sh)      need_kamal; kamal app exec -i --reuse "bash" ;;
+
+  l|logs)       need_kamal; kamal app logs -f ;;
+  logs:[0-9]*)  need_kamal; kamal app logs -n "${1#logs:}" ;;
+  logs:db)      need_kamal; kamal accessory logs db -f ;;
+  logs:redis)   need_kamal; kamal accessory logs redis -f ;;
+  logs:proxy)   need_kamal; kamal proxy logs -f ;;
+  logs:grep)    need_kamal; shift; kamal app logs -n 1000 | grep -i "$*" ;;
+
+  psql|db:console)
+    need_kamal; kamal accessory exec db -i "psql -U $DB_USER -d $DB_PROD" ;;
+
+  db:dump|db:backup)
+    need_host
+    mkdir -p backups
+    TS=$(date +"%Y%m%d_%H%M%S"); OUT="backups/${SERVICE}_${TS}.sql"
+    echo -e "${CYAN}Dumping production DB via ${SSH_TARGET}...${NC}"
+    ssh "$SSH_TARGET" "docker exec $DB_CONTAINER pg_dump -U $DB_USER -d $DB_PROD --no-owner --no-acl" > "$OUT" 2>/dev/null
+    if [ -s "$OUT" ] && head -1 "$OUT" | grep -qE "^(--|SET|CREATE|/\*)"; then
+      echo -e "${GREEN}✓ Saved ${OUT} ($(du -h "$OUT" | cut -f1))${NC}"
+    else
+      rm -f "$OUT"; echo -e "${RED}✗ Dump failed — is $DB_CONTAINER running?${NC}"; exit 1
+    fi ;;
+
+  db:load)
+    FILE="${2:-$(ls -t backups/*.sql 2>/dev/null | head -1)}"
+    [ -n "$FILE" ] && [ -f "$FILE" ] || { echo -e "${RED}No dump file (run bin/kms db:dump)${NC}"; exit 1; }
+    DC=$(docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
+    echo -e "${CYAN}Loading ${FILE} into local ${DB_DEV}...${NC}"
+    $DC up -d "$DC_PG_SERVICE"
+    for _ in $(seq 1 15); do $DC exec -T "$DC_PG_SERVICE" pg_isready -U "$DB_USER" >/dev/null 2>&1 && break; sleep 1; done
+    $DC exec -T "$DC_PG_SERVICE" psql -U "$DB_USER" -d postgres -c "DROP DATABASE IF EXISTS $DB_DEV;" >/dev/null
+    $DC exec -T "$DC_PG_SERVICE" psql -U "$DB_USER" -d postgres -c "CREATE DATABASE $DB_DEV;" >/dev/null
+    $DC exec -T "$DC_PG_SERVICE" psql -U "$DB_USER" -d "$DB_DEV" -q < "$FILE" 2>&1 | grep -i error || true
+    echo -e "${GREEN}✓ Local DB loaded${NC}" ;;
+
+  db:restore)
+    need_host
+    FILE="${2:-}"; [ -n "$FILE" ] && [ -f "$FILE" ] || { echo -e "${RED}Usage: bin/kms db:restore <file.sql>${NC}"; exit 1; }
+    echo -e "${YELLOW}This REPLACES the production database with ${FILE}.${NC}"
+    read -p "Type 'yes' to continue: " ok; [ "$ok" = "yes" ] || { echo "cancelled"; exit 0; }
+    ssh "$SSH_TARGET" "docker exec $DB_CONTAINER psql -U $DB_USER -d postgres -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$DB_PROD' AND pid<>pg_backend_pid();\"" >/dev/null 2>&1 || true
+    ssh "$SSH_TARGET" "docker exec $DB_CONTAINER psql -U $DB_USER -d postgres -c 'DROP DATABASE IF EXISTS $DB_PROD;'"
+    ssh "$SSH_TARGET" "docker exec $DB_CONTAINER psql -U $DB_USER -d postgres -c 'CREATE DATABASE $DB_PROD OWNER $DB_USER;'"
+    cat "$FILE" | ssh "$SSH_TARGET" "docker exec -i $DB_CONTAINER psql -U $DB_USER -d $DB_PROD" && echo -e "${GREEN}✓ Restored${NC}" ;;
+
+  redis:console|redis-cli)
+    need_kamal; kamal accessory exec redis -i "redis-cli" ;;
+  acc:boot)     need_kamal; kamal accessory boot all ;;
+  acc:restart)  need_kamal; kamal accessory reboot all ;;
+
+  ps)           need_kamal; kamal app containers ;;
+  restart|boot) need_kamal; kamal app boot ;;
+  stop)         need_kamal; kamal app stop ;;
+  start)        need_kamal; kamal app start ;;
+  clean)        need_kamal; kamal prune all ;;
+  audit)        need_kamal; kamal audit ;;
+
+  -h|--help|help|"") help ;;
+  *) echo -e "${RED}Unknown command: $1${NC}"; echo "Run: bin/kms help"; exit 1 ;;
 esac
