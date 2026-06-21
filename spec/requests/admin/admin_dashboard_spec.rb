@@ -262,6 +262,47 @@ RSpec.describe "Admin dashboard", type: :request do
     end
   end
 
+  describe "managing admin accounts" do
+    before { sign_in admin, scope: :admin_user }
+
+    it "renders the admins index, new and edit pages" do
+      get admin_admin_users_path
+      expect(response).to have_http_status(:ok)
+      get new_admin_admin_user_path
+      expect(response).to have_http_status(:ok)
+      get edit_admin_admin_user_path(admin)
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "creates a new admin account" do
+      expect {
+        post admin_admin_users_path, params: {
+          admin_user: { name: "New Mod", email: "mod@hatiwal.com", password: "changeme123!" }
+        }
+      }.to change(AdminUser, :count).by(1)
+      expect(AdminUser.find_by(email: "mod@hatiwal.com")).to be_present
+    end
+
+    it "keeps the current password when the field is left blank on edit" do
+      other = create(:admin_user, password: "original123!")
+      patch admin_admin_user_path(other), params: {
+        admin_user: { name: "Renamed", email: other.email, password: "" }
+      }
+      expect(other.reload.name).to eq("Renamed")
+      expect(other.valid_password?("original123!")).to be(true)
+    end
+
+    it "won't let an admin delete their own account" do
+      create(:admin_user) # so admin isn't the last one
+      expect { delete admin_admin_user_path(admin) }.not_to change(AdminUser, :count)
+    end
+
+    it "deletes another admin account" do
+      other = create(:admin_user)
+      expect { delete admin_admin_user_path(other) }.to change(AdminUser, :count).by(-1)
+    end
+  end
+
   describe "account lockout (lockable)" do
     it "locks the account after the configured maximum failed attempts" do
       Devise.maximum_attempts.times do

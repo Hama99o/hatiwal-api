@@ -18,7 +18,7 @@ Rails.application.routes.draw do
   # the exact names. Declared BEFORE the resources so `/admin/users/new` is not
   # swallowed by the `/admin/users/:id` show route.
   scope path: "admin", module: "admin" do
-    %i[categories listings reports users].each do |res|
+    %i[categories listings reports users admin_users].each do |res|
       singular = res.to_s.singularize
       get "#{res}/new",      to: "#{res}#new",  as: "new_admin_#{singular}"
       get "#{res}/:id/edit", to: "#{res}#edit", as: "edit_admin_#{singular}"
@@ -51,6 +51,7 @@ Rails.application.routes.draw do
     resources :user_warnings, only: [ :index, :show ]
     resources :blocks, only: [ :index, :show ]
     resources :admin_audit_logs, only: [ :index, :show ]
+    resources :admin_users
 
     root to: "dashboard#index"
   end

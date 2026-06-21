@@ -24,6 +24,8 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/admin_audit_logs') ? 'active' : 'inactive'}" %>
   <%= link_to "Categories", admin_categories_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/categories') ? 'active' : 'inactive'}" %>
+  <%= link_to "Admins", admin_admin_users_path,
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/admin_users') ? 'active' : 'inactive'}" %>
 
   <% if respond_to?(:current_admin_user) && current_admin_user %>
     <div class="navigation__account" style="margin-top:auto;padding-top:1rem;">
