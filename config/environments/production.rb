@@ -90,5 +90,8 @@ Rails.application.configure do
   # or ActionCable rejects the connection. Override via CABLE_ALLOWED_ORIGINS
   # (comma-separated) when the domain changes.
   config.action_cable.allowed_request_origins =
-    ENV.fetch("CABLE_ALLOWED_ORIGINS", "https://hatiwal.51.254.130.18.nip.io").split(",")
+    ENV.fetch(
+      "CABLE_ALLOWED_ORIGINS",
+      "https://hatiwal.multimagics.com,https://hatiwal.51.254.130.18.nip.io"
+    ).split(",")
 end
