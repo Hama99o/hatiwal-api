@@ -51,7 +51,10 @@ COPY . .
 # -j 1 disable parallel compilation to avoid a QEMU bug: https://github.com/rails/bootsnap/issues/495
 RUN bundle exec bootsnap precompile -j 1 app/ lib/
 
-
+# Precompile assets so the Administrate admin dashboard (propshaft) has its
+# CSS/JS digested into public/assets — Thruster serves them in production.
+# SECRET_KEY_BASE_DUMMY lets this run at build time without real credentials.
+RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
 
 
 # Final stage for app image
