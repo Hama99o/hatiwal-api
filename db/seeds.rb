@@ -150,8 +150,11 @@ puts "  categories: #{Category.count} (#{Category.top_level.count} top-level, #{
 # =============================================================================
 # Development-only deep data
 # =============================================================================
-unless Rails.env.development?
-  puts "Non-development env — skipping deep seed data."
+# Demo data (20 users + 50+ listings) normally seeds only in development. Set
+# SEED_DEMO=true to opt in elsewhere — e.g. to populate a staging marketplace so
+# the web/mobile clients show real content.
+unless Rails.env.development? || ENV["SEED_DEMO"] == "true"
+  puts "Non-development env — skipping deep seed data (set SEED_DEMO=true to include it)."
   return
 end
 
