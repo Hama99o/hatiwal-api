@@ -176,7 +176,9 @@ def make_user(email:, firstname:, lastname:, city:, province:, lang:, password: 
       uid:   email,
       provider: "email"
     )
-    user.skip_confirmation!
+    # Auto-confirm only when Devise :confirmable is enabled (it isn't currently),
+    # so the seed works regardless of the User model's devise modules.
+    user.skip_confirmation! if user.respond_to?(:skip_confirmation!)
     user.save!
   end
   user
