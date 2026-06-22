@@ -84,4 +84,11 @@ Rails.application.configure do
   #
   # Skip DNS rebinding protection for the default health check endpoint.
   # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+
+  # The web client lives on a different subdomain than this API, so its
+  # ActionCable WebSocket handshake is cross-origin. Allowlist the web origin(s)
+  # or ActionCable rejects the connection. Override via CABLE_ALLOWED_ORIGINS
+  # (comma-separated) when the domain changes.
+  config.action_cable.allowed_request_origins =
+    ENV.fetch("CABLE_ALLOWED_ORIGINS", "https://hatiwal.51.254.130.18.nip.io").split(",")
 end
