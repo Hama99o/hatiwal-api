@@ -58,8 +58,12 @@ Rails.application.routes.draw do
   # Unique cable path so it doesn't collide with other Rails apps on the same Redis
   mount ActionCable.server => "/hatiwal-cable"
 
-  mount Rswag::Ui::Engine  => "/api-docs"
-  mount Rswag::Api::Engine => "/api-docs"
+  # rswag is a development/test-only gem (Swagger docs) — absent in production,
+  # so only mount its engines when it's actually loaded.
+  if defined?(Rswag::Ui::Engine) && defined?(Rswag::Api::Engine)
+    mount Rswag::Ui::Engine  => "/api-docs"
+    mount Rswag::Api::Engine => "/api-docs"
+  end
 
   mount_devise_token_auth_for "User", at: "api/v1/auth", controllers: {
     registrations: "api/v1/auth/registrations",
