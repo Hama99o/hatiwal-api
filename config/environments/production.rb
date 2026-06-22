@@ -89,9 +89,8 @@ Rails.application.configure do
   # ActionCable WebSocket handshake is cross-origin. Allowlist the web origin(s)
   # or ActionCable rejects the connection. Override via CABLE_ALLOWED_ORIGINS
   # (comma-separated) when the domain changes.
+  # Comma-separated web origins allowed to open the chat WebSocket. Set in
+  # .env.production (injected via Kamal secrets) — never hardcoded here.
   config.action_cable.allowed_request_origins =
-    ENV.fetch(
-      "CABLE_ALLOWED_ORIGINS",
-      "https://hatiwal.multimagics.com,https://hatiwal.51.254.130.18.nip.io"
-    ).split(",")
+    ENV.fetch("CABLE_ALLOWED_ORIGINS", "").split(",").map(&:strip).reject(&:empty?)
 end

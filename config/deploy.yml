@@ -1,7 +1,7 @@
 # Kamal deployment configuration for hatiwal_api
 #
-# Co-hosted on one OVH VPS (51.254.130.18) with multi_magic and edu_safi, in a
-# fully isolated Docker network (hatiwal_api-net). The shared kamal-proxy routes
+# Co-hosted on one OVH VPS (host/domains in .env.production) with multi_magic and
+# edu_safi, in a fully isolated Docker network (hatiwal_api-net). kamal-proxy routes
 # by hostname, so there are no HTTP port conflicts. The accessory HOST ports,
 # however, must be unique per app — already taken:
 #   multi_magic → PG 5432 / Redis 6379
@@ -43,6 +43,7 @@ env:
     - DATABASE_PASSWORD
     - DEVISE_JWT_SECRET_KEY
     - APP_DOMAIN
+    - CABLE_ALLOWED_ORIGINS
   clear:
     DATABASE_HOST: hatiwal_api-db
     DATABASE_PORT: 5432
