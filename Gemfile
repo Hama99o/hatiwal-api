@@ -40,6 +40,12 @@ gem "solid_queue"
 gem "solid_cable"
 gem "redis", "~> 5.0"
 
+# Swagger API docs served at /api-docs (admin-gated in routes). Available in all
+# environments so production can serve them; rswag-specs (below) stays in test
+# for regenerating swagger.yaml from the request specs.
+gem "rswag-api"
+gem "rswag-ui"
+
 group :development, :test do
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
   gem "brakeman", require: false
@@ -50,7 +56,7 @@ group :development, :test do
   gem "rspec-rails"
   gem "factory_bot_rails"
   gem "faker"
-  gem "rswag"
+  gem "rswag-specs"
 
   # Guard
   gem "guard"

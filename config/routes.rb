@@ -58,9 +58,10 @@ Rails.application.routes.draw do
   # Unique cable path so it doesn't collide with other Rails apps on the same Redis
   mount ActionCable.server => "/hatiwal-cable"
 
-  # rswag is a development/test-only gem (Swagger docs) — absent in production,
-  # so only mount its engines when it's actually loaded.
-  if defined?(Rswag::Ui::Engine) && defined?(Rswag::Api::Engine)
+  # Swagger API docs at /api-docs — gated to signed-in admins (devise_for
+  # :admin_users). Logged-out visitors are redirected to the admin login, so the
+  # docs are never publicly visible.
+  authenticate :admin_user do
     mount Rswag::Ui::Engine  => "/api-docs"
     mount Rswag::Api::Engine => "/api-docs"
   end
