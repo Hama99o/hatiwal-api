@@ -63,6 +63,34 @@ class ApplicationController < ActionController::API
     }
   end
 
+  # Like paginate_blue but applies a transform block to the paginated records
+  # before serializing. Use when you need a post-pagination filter/map (e.g.
+  # filter_map(&:listing) on a join-model relation) while keeping Pagy's
+  # pagination metadata accurate at the SQL level.
+  #
+  #   paginate_blue_with_transform(ListingSerializer, saved_relation, extra: { view: :list }) do |page|
+  #     page.filter_map(&:listing)
+  #   end
+  def paginate_blue_with_transform(serializer, collection, extra: {}, &transform)
+    raw_page = params[:page]
+    page_num = raw_page.is_a?(ActionController::Parameters) ? raw_page[:number].to_i : raw_page.to_i
+    page_num = 1 if page_num < 1
+    pagy, paged_records = pagy(collection, page: page_num)
+    records = block_given? ? transform.call(paged_records) : paged_records
+    render json: {
+      serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default, **extra.except(:view)),
+      meta: {
+        pagination: {
+          current_page: pagy.page,
+          next_page:    pagy.next,
+          prev_page:    pagy.prev,
+          total_count:  pagy.count,
+          total_pages:  pagy.pages
+        }
+      }
+    }
+  end
+
   # Accepts either an ActiveRecord model (renders its validation errors array)
   # or a plain String/Exception (renders a single error message).
   def render_unprocessable_entity(record_or_message)

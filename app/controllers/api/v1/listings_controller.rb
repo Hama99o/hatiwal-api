@@ -2,9 +2,9 @@ class Api::V1::ListingsController < Api::V1::BaseController
   # Guests can browse the feed and view a listing without logging in. Auth is
   # optional here (resolves current_user if a token is present); save/unsave
   # still require authentication via BaseController.
-  skip_before_action :authenticate_user!, only: [ :index, :show ]
-  before_action :authenticate_optional!, only: [ :index, :show ]
-  before_action :set_listing, only: [ :show, :save, :unsave ]
+  skip_before_action :authenticate_user!, only: [ :index, :show, :similar ]
+  before_action :authenticate_optional!, only: [ :index, :show, :similar ]
+  before_action :set_listing, only: [ :show, :save, :unsave, :similar ]
 
   def index
     listings = policy_scope(Listing.browsable)
@@ -22,6 +22,8 @@ class Api::V1::ListingsController < Api::V1::BaseController
       # sends a "lat, lng" string as `location` alongside coordinates).
       listings = listings.in_location(params[:location])
     end
+
+    listings = listings.seller_active_within(params[:seller_active_days]) if params[:seller_active_days].present?
 
     # Apply sort last so it overrides the :browsable default order.
     # Any absent or unrecognised value silently falls back to newest.
@@ -60,6 +62,22 @@ class Api::V1::ListingsController < Api::V1::BaseController
     authorize @listing, :save?
     current_user.saved_listings.find_by(listing: @listing)&.destroy
     render_ok({ saved: false })
+  end
+
+  def similar
+    authorize @listing, :similar?
+    listings = policy_scope(Listing.similar_to(@listing))
+                 .includes(
+                   :category,
+                   :price_histories,
+                   { user: { avatar_attachment: :blob }, images_attachments: :blob }
+                 )
+    render_blue_collection(
+      ListingSerializer,
+      listings,
+      view: :list,
+      options: { viewed_ids: viewed_listing_ids(listings) }
+    )
   end
 
   private

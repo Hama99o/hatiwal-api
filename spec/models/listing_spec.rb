@@ -111,6 +111,18 @@ RSpec.describe Listing, type: :model do
         result = Listing.sorted("unknown_sort")
         expect(result.first).to eq(expensive)
       end
+
+      it "sorts by views_count descending for most_viewed" do
+        # Use view counts distinct from the other listings' default (0) so
+        # the ordering is deterministic regardless of the cheap/expensive fixtures.
+        popular  = create(:listing, :active, views_count: 100)
+        moderate = create(:listing, :active, views_count: 50)
+        # The cheap/expensive let!s have views_count: 0; popular and moderate
+        # must appear before all zero-count listings.
+        result = Listing.sorted("most_viewed").to_a
+        expect(result.first).to eq(popular)
+        expect(result.second).to eq(moderate)
+      end
     end
   end
 

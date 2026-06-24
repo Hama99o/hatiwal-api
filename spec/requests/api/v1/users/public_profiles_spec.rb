@@ -69,6 +69,57 @@ RSpec.describe "Api::V1::Users::PublicProfiles", type: :request do
       end
     end
 
+    context "response_rate_percent and response_time_label fields" do
+      it "returns both fields as nil when seller has fewer than 5 conversations" do
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body).to have_key("response_rate_percent")
+        expect(body).to have_key("response_time_label")
+        expect(body["response_rate_percent"]).to be_nil
+        expect(body["response_time_label"]).to be_nil
+      end
+
+      it "returns non-nil fields when seller has >=5 conversations with quick replies" do
+        listing = create(:listing, :active, user: seller)
+        5.times do
+          buyer = create(:user)
+          conv = create(:conversation, listing: listing, buyer: buyer, seller: seller)
+          first_msg = create(:message, conversation: conv, user: buyer,
+                                       created_at: conv.created_at + 1.minute)
+          create(:message, conversation: conv, user: seller,
+                           created_at: first_msg.created_at + 30.minutes)
+        end
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body["response_rate_percent"]).to eq(100)
+        expect(body["response_time_label"]).to eq("within_one_hour")
+      end
+
+      it "returns response_rate_percent=0 and response_time_label=nil when seller never replied" do
+        listing = create(:listing, :active, user: seller)
+        5.times do
+          buyer = create(:user)
+          conv  = create(:conversation, listing: listing, buyer: buyer, seller: seller)
+          create(:message, conversation: conv, user: buyer,
+                           created_at: conv.created_at + 1.minute)
+          # no seller reply
+        end
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body["response_rate_percent"]).to eq(0)
+        # time_label must be nil so mobile can suppress the contradictory badge
+        expect(body["response_time_label"]).to be_nil
+      end
+    end
+
     it "reports a verified seller" do
       verified_seller = create(:user, :verified)
       get "/api/v1/users/#{verified_seller.id}/public_profile", headers: headers, as: :json
@@ -78,6 +129,69 @@ RSpec.describe "Api::V1::Users::PublicProfiles", type: :request do
     it "returns 404 for a non-existent user" do
       get "/api/v1/users/0/public_profile", headers: headers, as: :json
       expect(response).to have_http_status(:not_found)
+    end
+
+    context "last_active_label recency signal" do
+      it 'returns "today" for a seller who signed in 1 hour ago' do
+        seller.update!(last_sign_in_at: 1.hour.ago)
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body).to have_key("last_active_label")
+        expect(body["last_active_label"]).to eq("today")
+      end
+
+      it 'returns "this_week" for a seller who signed in 3 days ago' do
+        seller.update!(last_sign_in_at: 3.days.ago)
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body["last_active_label"]).to eq("this_week")
+      end
+
+      it 'returns "this_month" for a seller who signed in 20 days ago' do
+        seller.update!(last_sign_in_at: 20.days.ago)
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body["last_active_label"]).to eq("this_month")
+      end
+
+      it "returns nil for a seller who signed in 60 days ago" do
+        seller.update!(last_sign_in_at: 60.days.ago)
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body["last_active_label"]).to be_nil
+      end
+
+      it "returns nil when last_sign_in_at is nil" do
+        seller.update!(last_sign_in_at: nil)
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body["last_active_label"]).to be_nil
+      end
+
+      it "does NOT expose the raw last_sign_in_at timestamp in the public profile" do
+        seller.update!(last_sign_in_at: 1.hour.ago)
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body).not_to have_key("last_sign_in_at")
+      end
     end
 
     context "blocked field" do

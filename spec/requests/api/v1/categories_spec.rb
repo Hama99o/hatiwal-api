@@ -86,4 +86,84 @@ RSpec.describe "Api::V1::Categories", type: :request do
       expect(subcat).to include("name_en" => "Phones", "name_ps" => "موبایل", "name_fa" => "گوشی")
     end
   end
+
+  describe "GET /api/v1/categories?with_counts=true" do
+    it "exposes active_listings_count on each category" do
+      category = create(:category, active: true)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      body = JSON.parse(response.body)
+      cat  = body["categories"].find { |c| c["id"] == category.id }
+      expect(cat).to have_key("active_listings_count")
+    end
+
+    it "active_listings_count counts only browsable (active, not expired, not removed) listings" do
+      category = create(:category, active: true)
+      seller   = create(:user)
+
+      # browsable: active, not expired, not removed
+      create(:listing, category: category, user: seller, status: :active)
+      # draft — NOT counted
+      create(:listing, category: category, user: seller, status: :draft)
+      # sold — NOT counted
+      create(:listing, category: category, user: seller, status: :sold)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      body  = JSON.parse(response.body)
+      cat   = body["categories"].find { |c| c["id"] == category.id }
+      expect(cat["active_listings_count"]).to eq(1)
+    end
+
+    it "removed listings are excluded from the count" do
+      category = create(:category, active: true)
+      seller   = create(:user)
+
+      create(:listing, category: category, user: seller, status: :active)
+      create(:listing, category: category, user: seller, status: :active,
+             removed_at: 1.hour.ago)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      body = JSON.parse(response.body)
+      cat  = body["categories"].find { |c| c["id"] == category.id }
+      expect(cat["active_listings_count"]).to eq(1)
+    end
+
+    it "expired listings are excluded from the count" do
+      category = create(:category, active: true)
+      seller   = create(:user)
+
+      create(:listing, category: category, user: seller, status: :active)
+      create(:listing, category: category, user: seller, status: :active,
+             expires_at: 1.hour.ago)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      body = JSON.parse(response.body)
+      cat  = body["categories"].find { |c| c["id"] == category.id }
+      expect(cat["active_listings_count"]).to eq(1)
+    end
+
+    it "also includes subcategories array in :with_counts view" do
+      parent = create(:category, active: true)
+      create(:category, parent: parent, active: true)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      body = JSON.parse(response.body)
+      cat  = body["categories"].find { |c| c["id"] == parent.id }
+      expect(cat).to have_key("subcategories")
+      expect(cat["subcategories"]).to be_an(Array)
+    end
+
+    it "is public — guests can request counts without auth" do
+      create(:category, active: true)
+
+      get "/api/v1/categories", params: { with_counts: true }, as: :json
+
+      expect(response).to have_http_status(:ok)
+    end
+  end
 end

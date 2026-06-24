@@ -13,8 +13,10 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
       parameter name: :uid,            in: :header, type: :string, required: true
       parameter name: :search,         in: :query,  type: :string,  required: false
       parameter name: :category_id,    in: :query,  type: :integer, required: false
-      parameter name: :sort,           in: :query,  type: :string,  required: false,
-                description: "Sort order. Allowed values: newest (default), oldest, price_asc, price_desc. Unknown values fall back to newest."
+      parameter name: :sort,                in: :query,  type: :string,  required: false,
+                description: "Sort order. Allowed values: newest (default), oldest, price_asc, price_desc, most_viewed. Unknown values fall back to newest."
+      parameter name: :seller_active_days, in: :query,  type: :integer, required: false,
+                description: "When present, restricts results to listings whose seller's last_sign_in_at is within this many days. E.g. 7 returns listings from sellers active in the last week."
 
       let(:user)  { create(:user) }
       let(:headers) { auth_headers_for(user) }
@@ -127,6 +129,98 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
           listings = JSON.parse(response.body)["listings"]
           created_ats = listings.map { |l| l["created_at"] }
           expect(created_ats).to eq(created_ats.sort.reverse)
+        end
+      end
+
+      response "200", "sort=most_viewed returns listings ordered by views_count descending" do
+        let(:sort) { "most_viewed" }
+
+        let!(:low_views)    { create(:listing, :active, views_count: 0) }
+        let!(:medium_views) { create(:listing, :active, views_count: 5) }
+        let!(:high_views)   { create(:listing, :active, views_count: 10) }
+
+        run_test! do |response|
+          views = JSON.parse(response.body)["listings"].map { |l| l["views_count"] }
+          expect(views).to eq([ 10, 5, 0 ])
+        end
+
+        after do |example|
+          example.metadata[:response][:content] = {
+            "application/json" => {
+              example: JSON.parse(response.body, symbolize_names: true)
+            }
+          }
+        end
+      end
+
+      response "200", "sort=most_viewed composes with search filter (guest)" do
+        let(:"access-token") { nil }
+        let(:client)         { nil }
+        let(:uid)            { nil }
+        let(:sort)           { "most_viewed" }
+        let(:search)         { "red bicycle" }
+
+        before do
+          create(:listing, :active, title: "red bicycle", views_count: 2)
+          create(:listing, :active, title: "red bicycle", views_count: 8)
+          create(:listing, :active, title: "blue shoes",  views_count: 99)
+        end
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          # Only the two "red bicycle" listings, ordered by views_count desc
+          listings = JSON.parse(response.body)["listings"]
+          expect(listings.length).to eq(2)
+          views = listings.map { |l| l["views_count"] }
+          expect(views).to eq([ 8, 2 ])
+        end
+      end
+
+      response "200", "seller_active_days=7 includes listings from recently-active sellers and excludes stale ones" do
+        let(:seller_active_days) { 7 }
+
+        let!(:recent_seller)  { create(:user).tap { |u| u.update_column(:last_sign_in_at, 2.days.ago) } }
+        let!(:stale_seller)   { create(:user).tap { |u| u.update_column(:last_sign_in_at, 30.days.ago) } }
+        let!(:recent_listing) { create(:listing, :active, user: recent_seller) }
+        let!(:stale_listing)  { create(:listing, :active, user: stale_seller) }
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to     include(recent_listing.id)
+          expect(ids).not_to include(stale_listing.id)
+        end
+      end
+
+      response "200", "seller_active_days absent — all active listings returned regardless of seller activity" do
+        let!(:stale_seller)  { create(:user).tap { |u| u.update_column(:last_sign_in_at, 60.days.ago) } }
+        let!(:stale_listing) { create(:listing, :active, user: stale_seller) }
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to include(stale_listing.id)
+        end
+      end
+
+      response "200", "seller_active_days composes with search filter (guest)" do
+        let(:"access-token") { nil }
+        let(:client)         { nil }
+        let(:uid)            { nil }
+        let(:seller_active_days) { 7 }
+
+        let!(:active_seller)   { create(:user).tap { |u| u.update_column(:last_sign_in_at, 1.day.ago) } }
+        let!(:inactive_seller) { create(:user).tap { |u| u.update_column(:last_sign_in_at, 30.days.ago) } }
+
+        before do
+          create(:listing, :active, title: "blue bicycle", user: active_seller)
+          create(:listing, :active, title: "blue bicycle", user: inactive_seller)
+        end
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          listings = JSON.parse(response.body)["listings"]
+          # Only the listing from the active seller should appear
+          expect(listings.length).to eq(1)
+          expect(listings.first["seller"]["id"]).to eq(active_seller.id)
         end
       end
     end
@@ -445,6 +539,97 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
 
         run_test! do |response|
           expect(response).to have_http_status(:unauthorized)
+        end
+      end
+    end
+  end
+
+  path "/api/v1/listings/{id}/similar" do
+    parameter name: :id, in: :path, type: :integer
+
+    get "similar listings rail" do
+      tags "Listings"
+      description "Returns up to 8 browsable listings in the same category, excluding the source listing. Public — guests and authenticated users both have access."
+      produces "application/json"
+
+      let(:category)  { create(:category) }
+      let(:source)    { create(:listing, :active, category: category) }
+      let(:id)        { source.id }
+
+      response "200", "returns same-category browsable listings excluding the source" do
+        before do
+          create_list(:listing, 3, :active, category: category)
+        end
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listings"]).to be_an(Array)
+          expect(data["listings"].length).to eq(3)
+          expect(data["listings"].map { |l| l["id"] }).not_to include(source.id)
+        end
+
+        after do |example|
+          example.metadata[:response][:content] = {
+            "application/json" => {
+              example: JSON.parse(response.body, symbolize_names: true)
+            }
+          }
+        end
+      end
+
+      response "200", "excludes the source listing from results" do
+        before do
+          create(:listing, :active, category: category)
+        end
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).not_to include(source.id)
+        end
+      end
+
+      response "200", "excludes draft and sold listings" do
+        before do
+          create(:listing, :active, category: category)
+          create(:listing, status: :draft, category: category)
+          create(:listing, :sold, category: category)
+        end
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          # Only the active listing — draft and sold are never browsable
+          expect(data["listings"].length).to eq(1)
+          expect(data["listings"].first["status"]).to eq("active")
+        end
+      end
+
+      response "200", "works for a guest (no auth headers)" do
+        before do
+          create_list(:listing, 2, :active, category: category)
+        end
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          expect(JSON.parse(response.body)["listings"]).to be_an(Array)
+        end
+      end
+
+      response "404", "not found for non-existent listing" do
+        let(:id) { 0 }
+
+        run_test! do |response|
+          expect(response).to have_http_status(:not_found)
+        end
+      end
+
+      response "200", "capped at 8 — creating 9 same-category active listings returns exactly 8" do
+        before do
+          create_list(:listing, 9, :active, category: category)
+        end
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listings"].length).to eq(8)
         end
       end
     end

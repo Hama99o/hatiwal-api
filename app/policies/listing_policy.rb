@@ -1,8 +1,10 @@
 class ListingPolicy < ApplicationPolicy
-  def index?  = true
-  def show?   = true
-  def create? = true
-  def save?   = true
+  def index?    = true
+  def show?     = true
+  def similar?  = true
+  def sold_by?  = true  # public read — any viewer (including guests) may see a seller's sold items
+  def create?   = true
+  def save?     = true
 
   def update?    = owner?
   def destroy?   = owner?

@@ -44,6 +44,95 @@ RSpec.describe ListingSerializer, type: :serializer do
     end
   end
 
+  describe ":detailed view — seller response rate fields" do
+    let(:buyer) { create(:user) }
+
+    subject(:seller_hash) do
+      described_class.render_as_hash(listing, view: :detailed, current_user: buyer)[:seller]
+    end
+
+    it "includes response_rate_percent key (nil when below threshold)" do
+      expect(seller_hash).to have_key(:response_rate_percent)
+      expect(seller_hash[:response_rate_percent]).to be_nil
+    end
+
+    it "includes response_time_label key (nil when below threshold)" do
+      expect(seller_hash).to have_key(:response_time_label)
+      expect(seller_hash[:response_time_label]).to be_nil
+    end
+
+    context "when seller has >=5 conversations with quick replies" do
+      before do
+        5.times do
+          unique_buyer = create(:user)
+          conv = create(:conversation, listing: listing, buyer: unique_buyer, seller: seller)
+          first_msg = create(:message, conversation: conv, user: unique_buyer,
+                                       created_at: conv.created_at + 1.minute)
+          create(:message, conversation: conv, user: seller,
+                           created_at: first_msg.created_at + 30.minutes)
+        end
+        seller.instance_variable_set(:@seller_response_stats, nil)
+      end
+
+      it "returns response_rate_percent as a non-nil integer" do
+        expect(seller_hash[:response_rate_percent]).to be_an(Integer)
+        expect(seller_hash[:response_rate_percent]).to eq(100)
+      end
+
+      it "returns response_time_label as a string" do
+        expect(seller_hash[:response_time_label]).to eq("within_one_hour")
+      end
+    end
+  end
+
+  describe ":detailed view — seller last_active_label" do
+    let(:buyer) { create(:user) }
+
+    subject(:seller_hash) do
+      described_class.render_as_hash(listing, view: :detailed, current_user: buyer)[:seller]
+    end
+
+    context "when seller signed in within the last 24 hours" do
+      before { seller.update_column(:last_sign_in_at, 1.hour.ago) }
+
+      it 'returns "today"' do
+        expect(seller_hash[:last_active_label]).to eq("today")
+      end
+    end
+
+    context "when seller signed in 3 days ago" do
+      before { seller.update_column(:last_sign_in_at, 3.days.ago) }
+
+      it 'returns "this_week"' do
+        expect(seller_hash[:last_active_label]).to eq("this_week")
+      end
+    end
+
+    context "when seller signed in 20 days ago" do
+      before { seller.update_column(:last_sign_in_at, 20.days.ago) }
+
+      it 'returns "this_month"' do
+        expect(seller_hash[:last_active_label]).to eq("this_month")
+      end
+    end
+
+    context "when seller signed in 60 days ago (beyond 30-day window)" do
+      before { seller.update_column(:last_sign_in_at, 60.days.ago) }
+
+      it "returns nil" do
+        expect(seller_hash[:last_active_label]).to be_nil
+      end
+    end
+
+    context "when seller has never signed in (last_sign_in_at is nil)" do
+      before { seller.update_column(:last_sign_in_at, nil) }
+
+      it "returns nil" do
+        expect(seller_hash[:last_active_label]).to be_nil
+      end
+    end
+  end
+
   describe ":detailed view — analytics fields" do
     it "includes views_count as an integer" do
       result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)

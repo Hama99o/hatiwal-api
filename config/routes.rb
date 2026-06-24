@@ -78,6 +78,7 @@ Rails.application.routes.draw do
         member do
           post   :save
           delete :unsave
+          get    :similar
         end
         resources :conversations, only: [ :create ]
       end
@@ -115,6 +116,7 @@ Rails.application.routes.draw do
         get "/warnings",           to: "warnings#index",     as: :warnings
         put "/warnings/mark_seen", to: "warnings#mark_seen", as: :mark_warnings_seen
 
+        get   "/:user_id/sold_listings", to: "sold_listings#index", as: :user_sold_listings
         get   "/:id/public_profile", to: "public_profiles#show", as: :public_profile
         get   "/:id", to: "profiles#show",       as: :profile
       end

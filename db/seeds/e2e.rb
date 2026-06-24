@@ -198,6 +198,40 @@ e2e_listing(
 )
 
 # =============================================================================
+puts "=== E2E Seed: Price-Drop History ==="
+# =============================================================================
+# Attach a recent price-drop history to one active seller listing so that the
+# Maestro price-drop badge tests can make non-optional assertions.
+# We use the Lenovo ThinkPad (38 000 AFN → 32 300 AFN = ~15% drop).
+# Idempotent: skip if a recent reduction record already exists for this listing.
+
+price_drop_listing = Listing.find_by(user: seller, title: "Lenovo ThinkPad Laptop Core i5 8GB")
+
+if price_drop_listing
+  # True idempotency: gate on ANY reduction for this listing ever, not just the
+  # last 14 days.  Using .recent(14) would cause re-seeds after 14 days.
+  already_seeded = ListingPriceHistory
+    .where(listing: price_drop_listing)
+    .reductions
+    .exists?
+
+  unless already_seeded
+    ListingPriceHistory.create!(
+      listing:    price_drop_listing,
+      old_price:  38_000,
+      new_price:  32_300,
+      currency:   "AFN",
+      changed_at: 2.days.ago
+    )
+    puts "  price-drop history created: Lenovo ThinkPad (38 000 → 32 300 AFN, ~15%)"
+  else
+    puts "  price-drop history already present for Lenovo ThinkPad"
+  end
+else
+  puts "  WARN: Lenovo ThinkPad listing not found — price-drop seed skipped"
+end
+
+# =============================================================================
 puts "=== E2E Seed: Buyer Saved Listings ==="
 # =============================================================================
 
@@ -210,49 +244,78 @@ seller_active.first(2).each do |listing|
 end
 
 # =============================================================================
-puts "=== E2E Seed: Buyer Conversation ==="
+puts "=== E2E Seed: Buyer Conversations (response-rate badge threshold) ==="
 # =============================================================================
+# TASK-N805: The seller response-rate badge requires >= 5 conversations in the
+# last 90 days.  We seed 6 conversations so the badge is guaranteed to render
+# in all Maestro E2E tests.  Each conversation has a quick seller reply
+# (< 30 min) so the time-label comes out as :within_one_hour.
 
 target_listing = Listing.find_by(user: seller, title: "Lenovo ThinkPad Laptop Core i5 8GB")
 
-if target_listing && !Conversation.exists?(listing: target_listing, buyer: buyer)
-  convo = Conversation.create!(
-    listing: target_listing,
-    buyer:   seller,    # seller is seller, buyer is buyer
-    seller:  seller
-  )
-
-  # Rebuild with correct buyer
-  convo.destroy
-  convo = Conversation.create!(
-    listing: target_listing,
-    buyer:   buyer,
-    seller:  seller
-  )
-
-  messages = [
-    { sender: buyer,  body: "Hi, is this laptop still available?",                   time: 3.days.ago },
-    { sender: seller, body: "Yes it is! Come check it anytime.",                     time: 3.days.ago + 5.minutes },
-    { sender: buyer,  body: "Great. Can we meet tomorrow morning in Kandahar city?", time: 3.days.ago + 20.minutes },
-    { sender: seller, body: "Sure, how about 10am near the main bazaar?",            time: 3.days.ago + 35.minutes },
-    { sender: buyer,  body: "Perfect, see you then 🙏",                              time: 3.days.ago + 50.minutes }
-  ]
-
-  messages.each_with_index do |m, i|
-    msg = Message.new(
-      conversation: convo,
-      user:         m[:sender],
-      body:         m[:body],
-      kind:         :text,
-      read_at:      i < messages.length - 1 ? m[:time] + 2.minutes : nil
+# Extra synthetic buyers — idempotent via find_or_initialize_by
+e2e_extra_buyers = [
+  { email: "e2ebuyer2@hatiwal.test", firstname: "Bilal",  lastname: "Khan" },
+  { email: "e2ebuyer3@hatiwal.test", firstname: "Roya",   lastname: "Nazari" },
+  { email: "e2ebuyer4@hatiwal.test", firstname: "Yusuf",  lastname: "Haidari" },
+  { email: "e2ebuyer5@hatiwal.test", firstname: "Laila",  lastname: "Ghafari" },
+  { email: "e2ebuyer6@hatiwal.test", firstname: "Jawad",  lastname: "Siddiqui" }
+].map do |attrs|
+  u = User.find_or_initialize_by(email: attrs[:email])
+  unless u.persisted?
+    u.assign_attributes(
+      firstname: attrs[:firstname], lastname: attrs[:lastname],
+      password: "Password123!", password_confirmation: "Password123!",
+      city: "Kabul", province: "Kabul", preferred_language: "en",
+      preferred_theme: "system", uid: attrs[:email], provider: "email"
     )
-    msg.created_at = m[:time]
-    msg.updated_at = m[:time]
-    msg.save!
+    u.skip_confirmation!
+    u.save!
+    puts "  created e2e buyer: #{attrs[:email]}"
   end
+  u
+end
 
-  convo.update!(last_message_at: messages.last[:time])
-  puts "  created conversation: buyer ↔ seller (Lenovo ThinkPad)"
+# All 6 buyers: original buyer + 5 extra
+all_buyers = [ buyer ] + e2e_extra_buyers
+
+RESPONSE_BADGE_CONVOS = [
+  { buyer_msg: "Hi, is this laptop still available?",               seller_reply: "Yes it is! Come check it anytime.",            days_ago: 3 },
+  { buyer_msg: "What is the lowest price you can do?",              seller_reply: "I can do a small discount for cash today.",     days_ago: 8 },
+  { buyer_msg: "Can we meet tomorrow in Kandahar city?",            seller_reply: "Sure, how about 10am near the main bazaar?",   days_ago: 15 },
+  { buyer_msg: "Is the original charger included?",                 seller_reply: "Yes, original charger and box both included.", days_ago: 22 },
+  { buyer_msg: "How is the battery? Does it hold charge well?",     seller_reply: "Battery is great, holds full charge all day.", days_ago: 29 },
+  { buyer_msg: "Can I see more photos before I come?",              seller_reply: "Of course, sending more photos right now.",    days_ago: 36 }
+].freeze
+
+if target_listing
+  RESPONSE_BADGE_CONVOS.each_with_index do |data, idx|
+    convo_buyer = all_buyers[idx]
+    next if Conversation.exists?(listing: target_listing, buyer: convo_buyer)
+
+    base_time = data[:days_ago].days.ago
+    convo = Conversation.create!(listing: target_listing, buyer: convo_buyer, seller: seller)
+
+    # Buyer opens with a question
+    bm = Message.new(conversation: convo, user: convo_buyer, body: data[:buyer_msg], kind: :text,
+                     read_at: base_time + 2.minutes)
+    bm.created_at = base_time
+    bm.updated_at = base_time
+    bm.save!
+
+    # Seller replies within 30 minutes — qualifies as within-1-hour response
+    sr = Message.new(conversation: convo, user: seller, body: data[:seller_reply], kind: :text,
+                     read_at: base_time + 45.minutes)
+    sr.created_at = base_time + 30.minutes
+    sr.updated_at = base_time + 30.minutes
+    sr.save!
+
+    convo.update!(last_message_at: base_time + 30.minutes)
+    puts "  seeded response-badge conversation #{idx + 1}/#{RESPONSE_BADGE_CONVOS.size}"
+  end
+  puts "  seller@hatiwal.test now has >= 5 conversations — response-rate badge will render"
+else
+  puts "  WARN: Lenovo ThinkPad listing not found — response-rate seed skipped"
 end
 
 # =============================================================================
@@ -262,12 +325,13 @@ puts "  E2E SEED COMPLETE"
 puts "======================================"
 puts ""
 puts "  Test accounts (password: Password123!)"
-puts "  buyer@hatiwal.test    — buyer with 2 saved listings + 1 conversation"
+puts "  buyer@hatiwal.test    — buyer with 2 saved listings + conversations"
 puts "  seller@hatiwal.test   — seller with #{Listing.where(user: seller).count} listings"
 puts "    draft:    #{Listing.where(user: seller, status: :draft).count}"
 puts "    active:   #{Listing.where(user: seller, status: :active).count}"
 puts "    reserved: #{Listing.where(user: seller, status: :reserved).count}"
 puts "    sold:     #{Listing.where(user: seller, status: :sold).count}"
+puts "    convos:   #{Conversation.where(seller: seller).count} (response-rate badge: #{Conversation.where(seller: seller).count >= 5 ? 'YES' : 'NO — needs >=5'})"
 puts "  newbuyer@hatiwal.test — fresh account, nothing saved"
 puts ""
 puts "  Run E2E tests: maestro test hatiwal-mobile/maestro/"

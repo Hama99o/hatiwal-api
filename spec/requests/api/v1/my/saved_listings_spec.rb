@@ -32,18 +32,86 @@ RSpec.describe "Api::V1::My::SavedListings", type: :request do
       expect(body["listings"]).to eq([])
     end
 
-    it "does not include pagination meta in the response" do
+    it "includes pagination meta in the response" do
       get "/api/v1/my/saved_listings", headers: headers, as: :json
       body = JSON.parse(response.body)
-      expect(body.keys).to contain_exactly("listings")
+      expect(body).to have_key("meta")
+      expect(body["meta"]).to have_key("pagination")
+      pagination = body["meta"]["pagination"]
+      expect(pagination).to have_key("current_page")
+      expect(pagination).to have_key("total_count")
+      expect(pagination).to have_key("total_pages")
+      expect(pagination).to have_key("next_page")
+      expect(pagination).to have_key("prev_page")
     end
 
-    it "controller source contains no render json: literal" do
-      controller_path = Rails.root.join(
-        "app/controllers/api/v1/my/saved_listings_controller.rb"
-      )
-      source = File.read(controller_path)
-      expect(source).not_to include("render json:")
+    context "pagination" do
+      # Pagy default page size is 20; create 30 saved listings so page 2 exists.
+      before do
+        category = create(:category)
+        30.times do
+          listing = create(:listing, :active, category: category)
+          create(:saved_listing, user: user, listing: listing)
+        end
+      end
+
+      it "page 1 returns the default page size and meta.pagination is present" do
+        get "/api/v1/my/saved_listings?page[number]=1", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)
+        expect(body["listings"].length).to eq(20)
+        pagination = body.dig("meta", "pagination")
+        expect(pagination["current_page"]).to eq(1)
+        expect(pagination["total_count"]).to eq(30)
+        expect(pagination["total_pages"]).to eq(2)
+        expect(pagination["next_page"]).to eq(2)
+        expect(pagination["prev_page"]).to be_nil
+      end
+
+      it "page 2 returns the remainder" do
+        get "/api/v1/my/saved_listings?page[number]=2", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)
+        expect(body["listings"].length).to eq(10)
+        pagination = body.dig("meta", "pagination")
+        expect(pagination["current_page"]).to eq(2)
+        expect(pagination["next_page"]).to be_nil
+        expect(pagination["prev_page"]).to eq(1)
+      end
+
+      it "page 1 ids and page 2 ids are disjoint (no duplicates across pages)" do
+        get "/api/v1/my/saved_listings?page[number]=1", headers: headers, as: :json
+        page1_ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+
+        get "/api/v1/my/saved_listings?page[number]=2", headers: headers, as: :json
+        page2_ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+
+        expect(page1_ids & page2_ids).to be_empty
+      end
+    end
+
+    it "filter_maps out a saved record whose listing has been deleted (soft-removed)" do
+      active_listing  = create(:listing, :active)
+      deleted_listing = create(:listing, :active)
+
+      create(:saved_listing, user: user, listing: active_listing)
+      create(:saved_listing, user: user, listing: deleted_listing)
+
+      # Simulate a hard-deleted listing: destroy the record without touching SavedListing
+      deleted_listing.destroy!
+
+      # The orphaned saved record's foreign key points to nothing.
+      # The controller's filter_map(&:listing) must silently drop it.
+      expect { get "/api/v1/my/saved_listings", headers: headers, as: :json }
+        .not_to raise_error
+
+      body = JSON.parse(response.body)
+      # Only the still-active listing should appear
+      ids = body["listings"].map { |l| l["id"] }
+      expect(ids).to eq([ active_listing.id ])
+      expect(ids).not_to include(deleted_listing.id)
     end
 
     it "executes a constant number of queries regardless of saved-listing count (no N+1)" do

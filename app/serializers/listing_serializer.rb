@@ -63,7 +63,8 @@ class ListingSerializer < ApplicationSerializer
         verified: u.verified,
         avatar_url: u.avatar.attached? ? u.avatar.url : nil,
         response_rate_percent: u.response_rate_percent,
-        response_time_label: u.response_time_label&.to_s
+        response_time_label: u.response_time_label&.to_s,
+        last_active_label: u.last_active_label&.to_s
       }
     end
     field(:category) do |l|

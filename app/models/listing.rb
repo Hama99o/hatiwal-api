@@ -24,7 +24,7 @@ class Listing < ApplicationRecord
   LISTING_LIFESPAN = 30.days
 
   # Valid sort keys accepted by the API.
-  SORT_KEYS = %w[newest oldest price_asc price_desc].freeze
+  SORT_KEYS = %w[newest oldest price_asc price_desc most_viewed].freeze
 
   scope :active,      -> { where(status: :active) }
   scope :ordered,     -> { order(created_at: :desc) }
@@ -39,10 +39,11 @@ class Listing < ApplicationRecord
   # injection and keeps sort semantics clearly defined in one place.
   scope :sorted, lambda { |key|
     case key.to_s
-    when "price_asc"  then reorder(price: :asc)
-    when "price_desc" then reorder(price: :desc)
-    when "oldest"     then reorder(created_at: :asc)
-    else                   reorder(created_at: :desc)
+    when "price_asc"   then reorder(price: :asc)
+    when "price_desc"  then reorder(price: :desc)
+    when "oldest"      then reorder(created_at: :asc)
+    when "most_viewed" then reorder(views_count: :desc)
+    else                    reorder(created_at: :desc)
     end
   }
 
@@ -60,6 +61,15 @@ class Listing < ApplicationRecord
   # Buyer feed: active, not past its expiry, and not removed by an admin.
   scope :browsable,   -> { active.not_expired.not_removed.ordered }
 
+  # Similar listings rail: same category, browsable (never leaks draft/sold/expired/removed),
+  # excluding the source listing itself, ordered by recency, capped at 8.
+  scope :similar_to, lambda { |listing|
+    browsable
+      .where(category_id: listing.category_id)
+      .where.not(id: listing.id)
+      .limit(8)
+  }
+
   # Exclude listings whose seller (a) has been blocked by +viewer+ or
   # (b) has blocked +viewer+.  Used by ListingPolicy::Scope so the filter
   # is applied to every list path without duplicating SQL.
@@ -72,6 +82,12 @@ class Listing < ApplicationRecord
   scope :price_at_most,  ->(max) { where("price <= ?", max) }
   scope :in_location,    ->(text) { where("LOWER(location) LIKE ?", "%#{text.to_s.downcase.strip}%") }
   scope :by_condition,   ->(c) { where(condition: c) }
+  # Filter to listings whose seller has signed in within the last +days+ days.
+  # Uses a JOIN on users — no extra SELECT per listing since the join is inlined
+  # into the existing query chain; user/avatar eager-loading is unaffected.
+  scope :seller_active_within, lambda { |days|
+    joins(:user).where("users.last_sign_in_at >= ?", days.to_i.days.ago)
+  }
 
   # Listings whose coordinates fall within `km` kilometers of (lat, lng),
   # using the Haversine formula. LEAST/GREATEST clamp the acos argument to
@@ -181,20 +197,26 @@ class Listing < ApplicationRecord
   # that uses includes(:price_histories)), we filter in Ruby to avoid N+1
   # queries. When the association is not yet loaded we fall back to a targeted
   # SQL query.
+  #
+  # Memoized so that price_dropped_at and price_drop_percent (called
+  # independently by the serializer) share a single lookup per record.
   def recent_price_drop
+    return @recent_price_drop if defined?(@recent_price_drop)
+
     cutoff = PRICE_DROP_WINDOW.ago
 
-    if price_histories.loaded?
-      price_histories
-        .select { |h| h.new_price < h.old_price && h.changed_at >= cutoff }
-        .max_by(&:changed_at)
-    else
-      price_histories
-        .reductions
-        .recent(14)
-        .newest_first
-        .first
-    end
+    @recent_price_drop =
+      if price_histories.loaded?
+        price_histories
+          .select { |h| h.new_price < h.old_price && h.changed_at >= cutoff }
+          .max_by(&:changed_at)
+      else
+        price_histories
+          .reductions
+          .recent(14)
+          .newest_first
+          .first
+      end
   end
 
   # ISO-8601 timestamp of the most recent price reduction, or nil.

@@ -1,6 +1,6 @@
 class User < ApplicationRecord
   devise :database_authenticatable, :registerable,
-         :recoverable, :rememberable, :validatable
+         :recoverable, :rememberable, :validatable, :trackable
 
   include DeviseTokenAuth::Concerns::User
 
@@ -215,6 +215,29 @@ class User < ApplicationRecord
 
   def conversations
     Conversation.where("buyer_id = ? OR seller_id = ?", id, id)
+  end
+
+  # ── Last-active recency label ─────────────────────────────────────────────────
+  #
+  # Privacy-safe coarse bucket derived from last_sign_in_at. Never exposes the
+  # raw timestamp to public callers; the serializer receives a symbol or nil.
+  #
+  # Returns:
+  #   :today       — signed in within the last 24 hours
+  #   :this_week   — signed in within the last 7 days (but not today)
+  #   :this_month  — signed in within the last 30 days (but not this week)
+  #   nil          — no sign-in on record, or last sign-in was more than 30 days ago
+  def last_active_label
+    return nil if last_sign_in_at.nil?
+
+    elapsed = Time.current - last_sign_in_at
+    if elapsed < 24.hours
+      :today
+    elsif elapsed < 7.days
+      :this_week
+    elsif elapsed < 30.days
+      :this_month
+    end
   end
 
   # ── Response rate ────────────────────────────────────────────────────────────

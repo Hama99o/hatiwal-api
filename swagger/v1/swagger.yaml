@@ -84,6 +84,137 @@ paths:
           description: not found
         '200':
           description: is_saved is true when listing is saved by current user
+  "/api/v1/listings/{id}/save":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: save a listing (bookmark)
+      tags:
+      - Listings
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: save is idempotent — saving twice still returns 200 and persists
+            one record
+        '401':
+          description: unauthenticated user cannot save
+  "/api/v1/listings/{id}/unsave":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    delete:
+      summary: unsave a listing (remove bookmark)
+      tags:
+      - Listings
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: unsave is idempotent — calling when not saved still returns
+            200
+        '401':
+          description: unauthenticated user cannot unsave
+  "/api/v1/listings/{id}/similar":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: similar listings rail
+      tags:
+      - Listings
+      description: Returns up to 8 browsable listings in the same category, excluding
+        the source listing. Public — guests and authenticated users both have access.
+      responses:
+        '200':
+          description: capped at 8 — creating 9 same-category active listings returns
+            exactly 8
+        '404':
+          description: not found for non-existent listing
+  "/api/v1/users/{user_id}/sold_listings":
+    get:
+      summary: list a seller's sold listings (public)
+      tags:
+      - Users
+      description: |
+        Returns a paginated list of sold listings for any publicly-active seller.
+        Works for guests — authentication is optional. Returns 404 when the
+        seller account has been deleted or is pending deletion.
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        description: Seller's user ID
+        schema:
+          type: integer
+      - name: page[number]
+        in: query
+        required: false
+        description: 'Page number (default: 1)'
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: returns only that seller's sold listings (authenticated)
+        '404':
+          description: seller not found
 servers:
 - url: https://{defaultHost}
   variables:

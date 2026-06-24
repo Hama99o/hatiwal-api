@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_20_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_25_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -171,6 +171,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_20_130000) do
     t.index ["price"], name: "index_listings_on_price"
     t.index ["removed_at"], name: "index_listings_on_removed_at"
     t.index ["status", "created_at"], name: "index_listings_on_status_and_created_at"
+    t.index ["status", "views_count"], name: "index_listings_on_status_and_views_count"
     t.index ["status"], name: "index_listings_on_status"
     t.index ["user_id"], name: "index_listings_on_user_id"
   end
@@ -256,6 +257,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_20_130000) do
     t.string "confirmation_token"
     t.datetime "confirmed_at"
     t.datetime "created_at", null: false
+    t.datetime "current_sign_in_at"
+    t.string "current_sign_in_ip"
     t.datetime "deleted_at"
     t.datetime "deletion_scheduled_at"
     t.string "email"
@@ -263,6 +266,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_20_130000) do
     t.integer "failed_attempts", default: 0, null: false
     t.string "firstname", default: "", null: false
     t.string "image"
+    t.datetime "last_sign_in_at"
+    t.string "last_sign_in_ip"
     t.string "lastname", default: "", null: false
     t.decimal "latitude", precision: 10, scale: 6
     t.datetime "locked_at"
@@ -279,6 +284,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_20_130000) do
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
     t.boolean "seller_mode", default: false, null: false
+    t.integer "sign_in_count", default: 0, null: false
     t.integer "status", default: 0, null: false
     t.json "tokens"
     t.string "uid", default: "", null: false
@@ -291,6 +297,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_20_130000) do
     t.index ["deleted_at"], name: "index_users_on_deleted_at"
     t.index ["deletion_scheduled_at"], name: "index_users_on_deletion_scheduled_at"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["last_sign_in_at"], name: "index_users_on_last_sign_in_at"
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["status"], name: "index_users_on_status"
     t.index ["uid", "provider"], name: "index_users_on_uid_and_provider", unique: true

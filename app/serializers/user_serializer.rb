@@ -23,6 +23,10 @@ class UserSerializer < ApplicationSerializer
     # Response rate trust signal — nil when threshold (5 conversations) not met.
     field(:response_rate_percent) { |u| u.response_rate_percent }
     field(:response_time_label) { |u| u.response_time_label&.to_s }
+
+    # Privacy-safe recency signal — coarse bucket, never the raw timestamp.
+    # "today" | "this_week" | "this_month" | null (long-dormant or no sign-in).
+    field(:last_active_label) { |u| u.last_active_label&.to_s }
   end
 
   # :me — full private profile for the authenticated user viewing their own data.

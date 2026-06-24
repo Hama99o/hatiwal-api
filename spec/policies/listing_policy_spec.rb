@@ -12,6 +12,8 @@ RSpec.describe ListingPolicy do
 
     it { expect(policy.index?).to be true }
     it { expect(policy.show?).to be true }
+    it { expect(policy.similar?).to be true }
+    it { expect(policy.sold_by?).to be true }
     it { expect(policy.create?).to be true }
     it { expect(policy.save?).to be true }
   end

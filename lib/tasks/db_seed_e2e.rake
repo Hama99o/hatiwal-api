@@ -30,7 +30,9 @@ namespace :db do
 
       Conversation.where(buyer_id: user_ids).or(Conversation.where(seller_id: user_ids)).delete_all
 
-      Listing.where(user_id: user_ids).delete_all
+      listing_ids = Listing.where(user_id: user_ids).pluck(:id)
+      ListingPriceHistory.where(listing_id: listing_ids).delete_all
+      Listing.where(id: listing_ids).delete_all
 
       users.delete_all
 
