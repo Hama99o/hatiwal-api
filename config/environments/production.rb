@@ -50,21 +50,22 @@ Rails.application.configure do
   config.active_job.queue_adapter = :solid_queue
   config.solid_queue.connects_to = { database: { writing: :queue } }
 
-  # Ignore bad email addresses and do not raise email delivery errors.
-  # Set this to true and configure the email server for immediate delivery to raise delivery errors.
-  # config.action_mailer.raise_delivery_errors = false
+  # Raise delivery errors in production so failures surface in logs / Sentry.
+  config.action_mailer.raise_delivery_errors = true
 
   # Set host to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = { host: "example.com" }
+  # APP_DOMAIN may include a protocol prefix (e.g. "https://api.hatiwal.com") — extract just the hostname.
+  _app_host = begin
+    raw = ENV.fetch("APP_DOMAIN", "api.hatiwal.com")
+    URI.parse(raw).hostname || raw
+  rescue URI::InvalidURIError
+    ENV.fetch("APP_DOMAIN", "api.hatiwal.com")
+  end
+  config.action_mailer.default_url_options = { host: _app_host, protocol: "https" }
 
-  # Specify outgoing SMTP server. Remember to add smtp/* credentials via bin/rails credentials:edit.
-  # config.action_mailer.smtp_settings = {
-  #   user_name: Rails.application.credentials.dig(:smtp, :user_name),
-  #   password: Rails.application.credentials.dig(:smtp, :password),
-  #   address: "smtp.example.com",
-  #   port: 587,
-  #   authentication: :plain
-  # }
+  # Gmail SMTP settings are set in application.rb (from credentials).
+  # Explicitly confirm :smtp delivery here so production never falls back to :test.
+  config.action_mailer.delivery_method = :smtp
 
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation cannot be found).

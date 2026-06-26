@@ -3,6 +3,10 @@ class ConversationPolicy < ApplicationPolicy
   def destroy?       = participant?
   def read_messages? = participant?
   def send_message?  = participant? && record.open? && !blocked_pair?
+  def mark_read?     = participant?
+  def mark_unread?   = participant?
+  def archive?       = participant?
+  def unarchive?     = participant?
 
   class Scope < ApplicationPolicy::Scope
     def resolve

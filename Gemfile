@@ -31,6 +31,15 @@ gem "pagy", "~> 8.0"
 # CORS
 gem "rack-cors"
 
+# HTTP client (used for Google ID token verification)
+gem "faraday"
+
+# Google OAuth2 server-side code flow (admin login)
+gem "signet"
+
+# Email delivery
+gem "postmark-rails"
+
 # Active Storage
 gem "aws-sdk-s3", require: false
 
@@ -67,5 +76,6 @@ end
 group :test do
   gem "shoulda-matchers"
   gem "database_cleaner-active_record"
+  gem "webmock"
   gem "simplecov", require: false
 end

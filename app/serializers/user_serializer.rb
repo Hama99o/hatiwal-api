@@ -27,6 +27,17 @@ class UserSerializer < ApplicationSerializer
     # Privacy-safe recency signal — coarse bucket, never the raw timestamp.
     # "today" | "this_week" | "this_month" | null (long-dormant or no sign-in).
     field(:last_active_label) { |u| u.last_active_label&.to_s }
+
+    # Away mode — present only when the seller is CURRENTLY away (away_until is
+    # a future datetime). Never surfaces a stale past date to buyers.
+    field(:is_away) { |u| u.away? }
+    field(:away_until) { |u| u.away? ? u.away_until&.iso8601 : nil }
+
+    # Canonical share URL — https when PUBLIC_SHARE_BASE_URL env is set, else nil.
+    # Mobile falls back to a hatiwal://seller/<id> deep link when this is nil.
+    # Only exposed in :public view — never in :me or :minimal (owners share via the
+    # listing share flow; the :public view is already gated to publicly-active users).
+    field(:share_url) { |u| User.profile_share_url_for(u) }
   end
 
   # :me — full private profile for the authenticated user viewing their own data.
@@ -45,13 +56,19 @@ class UserSerializer < ApplicationSerializer
     # summing them would be meaningless. We surface counts only.
     field(:saved_items_count) { |u| u.saved_listings.count }
     field(:unread_message_count) do |u|
-      conversation_ids = Conversation.for_user(u.id).select(:id)
+      # Exclude conversations the user has archived — archiving should silence the badge.
+      conversation_ids = Conversation.for_user(u.id).not_archived_for(u).select(:id)
       Message.where(conversation_id: conversation_ids, read_at: nil).where.not(user_id: u.id).count
     end
     # Strike status so the app can show a "X of N warnings" banner from the
     # /users/me payload without an extra request.
     field(:active_warnings_count) { |u| u.active_warnings_count }
     field(:warning_threshold) { |_u| User::WARNING_BLOCK_THRESHOLD }
+    # Away mode — expose the computed away? flag and the datetime (as ISO-8601)
+    # when the seller is CURRENTLY away. Returns nil when not away so the edit
+    # toggle knows to show "off" state. Owner can set a new future date via PUT /users/me.
+    field(:is_away) { |u| u.away? }
+    field(:away_until) { |u| u.away? ? u.away_until&.iso8601 : nil }
   end
 
   view :minimal do

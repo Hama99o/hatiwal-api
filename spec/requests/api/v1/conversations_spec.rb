@@ -234,20 +234,35 @@ RSpec.describe "Api::V1::Conversations", type: :request do
   describe "DELETE /api/v1/conversations/:id" do
     let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
 
-    it "allows the buyer to delete the conversation" do
-      conversation # ensure record exists before measuring count
-
-      expect do
-        delete "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
-      end.to change(Conversation, :count).by(-1)
-
+    it "returns 204 for the buyer (one-sided soft-delete)" do
+      delete "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
       expect(response).to have_http_status(:no_content)
     end
 
-    it "allows the seller to delete the conversation" do
-      seller_headers = auth_headers_for(seller)
-      conversation # ensure record exists before measuring count
+    it "hides the conversation from the buyer after they delete it" do
+      delete "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
 
+      get "/api/v1/conversations", headers: headers, as: :json
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).not_to include(conversation.id)
+    end
+
+    it "does NOT remove the conversation from the seller's inbox after buyer-only delete" do
+      delete "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      seller_headers = auth_headers_for(seller)
+      get "/api/v1/conversations", headers: seller_headers, as: :json
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to include(conversation.id)
+    end
+
+    it "hard-deletes the record only when BOTH participants delete" do
+      conversation # ensure record exists
+
+      delete "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+      expect(Conversation.exists?(conversation.id)).to be true
+
+      seller_headers = auth_headers_for(seller)
       expect do
         delete "/api/v1/conversations/#{conversation.id}", headers: seller_headers, as: :json
       end.to change(Conversation, :count).by(-1)
@@ -352,6 +367,246 @@ RSpec.describe "Api::V1::Conversations", type: :request do
                params: { message: "Still available?" }, headers: headers, as: :json
         end.not_to change(Message, :count)
       end
+    end
+  end
+
+  describe "PUT /api/v1/conversations/:id/mark_read" do
+    let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
+
+    context "when the buyer marks the conversation as read" do
+      before do
+        # Seller sends two unread messages (buyer has not read them)
+        conversation.messages.create!(user: seller, body: "Hello", kind: :text)
+        conversation.messages.create!(user: seller, body: "Still here?", kind: :text)
+      end
+
+      it "returns 204 no_content" do
+        put "/api/v1/conversations/#{conversation.id}/mark_read", headers: headers, as: :json
+        expect(response).to have_http_status(:no_content)
+      end
+
+      it "sets read_at on the other participant's unread messages" do
+        put "/api/v1/conversations/#{conversation.id}/mark_read", headers: headers, as: :json
+        expect(conversation.messages.where(read_at: nil).where.not(user_id: buyer.id).count).to eq(0)
+      end
+
+      it "reduces unread_count_for(buyer) to 0" do
+        put "/api/v1/conversations/#{conversation.id}/mark_read", headers: headers, as: :json
+        expect(conversation.reload.unread_count_for(buyer)).to eq(0)
+      end
+
+      it "does not touch messages authored by the buyer" do
+        buyer_msg = conversation.messages.create!(user: buyer, body: "Hi", kind: :text)
+        put "/api/v1/conversations/#{conversation.id}/mark_read", headers: headers, as: :json
+        expect(buyer_msg.reload.read_at).to be_nil
+      end
+    end
+
+    it "requires authentication" do
+      put "/api/v1/conversations/#{conversation.id}/mark_read", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "returns 403 for a non-participant" do
+      outsider_headers = auth_headers_for(create(:user))
+      put "/api/v1/conversations/#{conversation.id}/mark_read", headers: outsider_headers, as: :json
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  describe "PUT /api/v1/conversations/:id/mark_unread" do
+    let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
+
+    context "when the seller marks the conversation as unread" do
+      let(:seller_headers) { auth_headers_for(seller) }
+
+      before do
+        # Buyer sends a message, seller has already read it
+        msg = conversation.messages.create!(user: buyer, body: "Is this available?", kind: :text)
+        msg.update!(read_at: Time.current)
+      end
+
+      it "returns 204 no_content" do
+        put "/api/v1/conversations/#{conversation.id}/mark_unread", headers: seller_headers, as: :json
+        expect(response).to have_http_status(:no_content)
+      end
+
+      it "restores unread_count_for(seller) to be > 0" do
+        put "/api/v1/conversations/#{conversation.id}/mark_unread", headers: seller_headers, as: :json
+        expect(conversation.reload.unread_count_for(seller)).to be > 0
+      end
+
+      it "clears read_at on the most recent inbound message only" do
+        # Add a second message already read
+        msg2 = conversation.messages.create!(user: buyer, body: "Hello?", kind: :text)
+        msg2.update!(read_at: Time.current)
+
+        put "/api/v1/conversations/#{conversation.id}/mark_unread", headers: seller_headers, as: :json
+
+        # Only the most recent inbound message should have read_at cleared
+        unread_count = conversation.messages.where(read_at: nil).where.not(user_id: seller.id).count
+        expect(unread_count).to eq(1)
+      end
+    end
+
+    it "requires authentication" do
+      put "/api/v1/conversations/#{conversation.id}/mark_unread", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "returns 403 for a non-participant" do
+      outsider_headers = auth_headers_for(create(:user))
+      put "/api/v1/conversations/#{conversation.id}/mark_unread", headers: outsider_headers, as: :json
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Archive / Unarchive
+  # ---------------------------------------------------------------------------
+
+  describe "PUT /api/v1/conversations/:id/archive" do
+    let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
+
+    it "returns 204 no_content for the buyer" do
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: headers, as: :json
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "returns 204 no_content for the seller" do
+      seller_headers = auth_headers_for(seller)
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: seller_headers, as: :json
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "sets buyer_archived_at when the buyer archives" do
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: headers, as: :json
+      expect(conversation.reload.buyer_archived_at).to be_present
+    end
+
+    it "sets seller_archived_at when the seller archives" do
+      seller_headers = auth_headers_for(seller)
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: seller_headers, as: :json
+      expect(conversation.reload.seller_archived_at).to be_present
+    end
+
+    it "does NOT set seller_archived_at when the buyer archives" do
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: headers, as: :json
+      expect(conversation.reload.seller_archived_at).to be_nil
+    end
+
+    it "hides the conversation from the buyer's default index after archiving" do
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: headers, as: :json
+      get "/api/v1/conversations", headers: headers, as: :json
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).not_to include(conversation.id)
+    end
+
+    it "shows the conversation under ?archived=true for the buyer after archiving" do
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: headers, as: :json
+      get "/api/v1/conversations?archived=true", headers: headers, as: :json
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to include(conversation.id)
+    end
+
+    it "does NOT hide the conversation from the seller's default index when only the buyer archives" do
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: headers, as: :json
+      seller_headers = auth_headers_for(seller)
+      get "/api/v1/conversations", headers: seller_headers, as: :json
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to include(conversation.id)
+    end
+
+    it "returns meta.pagination in the archived list response" do
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: headers, as: :json
+      get "/api/v1/conversations?archived=true", headers: headers, as: :json
+      data = JSON.parse(response.body)
+      expect(data["meta"]["pagination"]).to be_present
+    end
+
+    it "requires authentication" do
+      put "/api/v1/conversations/#{conversation.id}/archive", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "returns 403 for a non-participant" do
+      outsider_headers = auth_headers_for(create(:user))
+      put "/api/v1/conversations/#{conversation.id}/archive", headers: outsider_headers, as: :json
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  describe "PUT /api/v1/conversations/:id/unarchive" do
+    let(:conversation) do
+      create(:conversation, buyer: buyer, listing: listing,
+             buyer_archived_at: Time.current)
+    end
+
+    it "returns 204 no_content" do
+      put "/api/v1/conversations/#{conversation.id}/unarchive", headers: headers, as: :json
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "clears buyer_archived_at" do
+      put "/api/v1/conversations/#{conversation.id}/unarchive", headers: headers, as: :json
+      expect(conversation.reload.buyer_archived_at).to be_nil
+    end
+
+    it "restores the conversation to the buyer's default inbox" do
+      put "/api/v1/conversations/#{conversation.id}/unarchive", headers: headers, as: :json
+      get "/api/v1/conversations", headers: headers, as: :json
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to include(conversation.id)
+    end
+
+    it "removes the conversation from the buyer's ?archived=true list" do
+      put "/api/v1/conversations/#{conversation.id}/unarchive", headers: headers, as: :json
+      get "/api/v1/conversations?archived=true", headers: headers, as: :json
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).not_to include(conversation.id)
+    end
+
+    it "requires authentication" do
+      put "/api/v1/conversations/#{conversation.id}/unarchive", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "returns 403 for a non-participant" do
+      outsider_headers = auth_headers_for(create(:user))
+      put "/api/v1/conversations/#{conversation.id}/unarchive", headers: outsider_headers, as: :json
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  describe "unread_message_count excludes archived conversations" do
+    it "does not count unread messages from conversations archived by the user" do
+      conversation = create(:conversation, buyer: buyer, listing: listing)
+      conversation.messages.create!(user: seller, body: "Hello", kind: :text)
+
+      # Before archiving: unread count should be 1
+      get "/api/v1/users/me", headers: headers, as: :json
+      expect(JSON.parse(response.body)["user"]["unread_message_count"]).to eq(1)
+
+      # Archive the conversation
+      conversation.update!(buyer_archived_at: Time.current)
+
+      # After archiving: unread count should be 0 (excluded)
+      get "/api/v1/users/me", headers: headers, as: :json
+      expect(JSON.parse(response.body)["user"]["unread_message_count"]).to eq(0)
+    end
+
+    it "still counts unread messages from non-archived conversations" do
+      conv_archived = create(:conversation, buyer: buyer, listing: listing,
+                             buyer_archived_at: Time.current)
+      conv_archived.messages.create!(user: seller, body: "Archived msg", kind: :text)
+
+      other_listing = create(:listing, :active, user: seller)
+      conv_active = create(:conversation, buyer: buyer, listing: other_listing)
+      conv_active.messages.create!(user: seller, body: "Active msg", kind: :text)
+
+      get "/api/v1/users/me", headers: headers, as: :json
+      # Only the non-archived conversation's unread message is counted
+      expect(JSON.parse(response.body)["user"]["unread_message_count"]).to eq(1)
     end
   end
 end

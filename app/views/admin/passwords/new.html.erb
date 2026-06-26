@@ -1,0 +1,18 @@
+<h1 style="text-align:center;margin-bottom:4px;">Forgot password?</h1>
+<p class="sub" style="text-align:center;margin-bottom:1.5rem;">Enter your admin email and we'll send a reset link.</p>
+
+<%= form_with url: admin_user_password_path, html: { method: :post } do |f| %>
+  <div>
+    <label for="admin_user_email">Email</label>
+    <%= f.email_field :email, name: "admin_user[email]", id: "admin_user_email",
+        autofocus: true, autocomplete: "email",
+        placeholder: "admin@hatiwal.com",
+        style: "width:100%;padding:.7rem .8rem;margin-bottom:1rem;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#e2e8f0;font-size:.95rem;" %>
+  </div>
+
+  <button type="submit">Send reset instructions</button>
+<% end %>
+
+<p style="text-align:center;margin-top:1.25rem;font-size:.85rem;opacity:.65;">
+  <%= link_to "Back to sign in", new_admin_user_session_path, style: "color:#a5b4fc;text-decoration:none;" %>
+</p>

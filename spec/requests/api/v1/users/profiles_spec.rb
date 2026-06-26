@@ -163,6 +163,122 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
     end
   end
 
+  describe "away_until — PUT /api/v1/users/me" do
+    it "sets away_until to a future datetime" do
+      future = 5.days.from_now.iso8601
+
+      put "/api/v1/users/me",
+          params: { user: { away_until: future } },
+          headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["user"]
+      expect(body).to have_key("away_until")
+      # The date should be present and non-nil
+      expect(body["away_until"]).to be_present
+      expect(user.reload.away_until).to be_present
+      expect(user.away?).to be true
+    end
+
+    it "clears away_until by sending null" do
+      user.update!(away_until: 5.days.from_now)
+
+      put "/api/v1/users/me",
+          params: { user: { away_until: nil } },
+          headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      expect(user.reload.away_until).to be_nil
+      expect(user.away?).to be false
+    end
+
+    it "returns away_until in the :me response when set" do
+      future = 3.days.from_now
+      user.update!(away_until: future)
+
+      get "/api/v1/users/me", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body).to have_key("away_until")
+      expect(body["away_until"]).to be_present
+    end
+
+    it "returns away_until as nil in :me response when not set" do
+      user.update!(away_until: nil)
+
+      get "/api/v1/users/me", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body).to have_key("away_until")
+      expect(body["away_until"]).to be_nil
+    end
+
+    it "exposes away_until in public profile only when currently away" do
+      other = create(:user, away_until: 7.days.from_now)
+
+      get "/api/v1/users/#{other.id}", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body["away_until"]).to be_present
+    end
+
+    it "returns away_until as nil in public profile when past or nil" do
+      other = create(:user)
+      other.update_column(:away_until, 2.days.ago)
+
+      get "/api/v1/users/#{other.id}", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body["away_until"]).to be_nil
+    end
+
+    it "returns is_away: true in public profile when currently away" do
+      other = create(:user, away_until: 7.days.from_now)
+
+      get "/api/v1/users/#{other.id}", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body["is_away"]).to be(true)
+    end
+
+    it "returns is_away: false in public profile when not away" do
+      other = create(:user, away_until: nil)
+
+      get "/api/v1/users/#{other.id}", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body["is_away"]).to be(false)
+    end
+
+    it "returns is_away: false in :me response when not away" do
+      user.update_column(:away_until, nil)
+
+      get "/api/v1/users/me", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body).to have_key("is_away")
+      expect(body["is_away"]).to be(false)
+    end
+
+    it "returns is_away: true in :me response when currently away" do
+      user.update_column(:away_until, 3.days.from_now)
+
+      get "/api/v1/users/me", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body["is_away"]).to be(true)
+    end
+
+    it "422s when away_until is set to a past datetime" do
+      put "/api/v1/users/me",
+          params: { user: { away_until: 1.day.ago.iso8601 } },
+          headers: headers, as: :json
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["errors"]).to be_present
+    end
+  end
+
   describe "GET /api/v1/users/:id" do
     it "returns another user's public profile with trust fields" do
       other = create(:user, firstname: "Fatima", lastname: "Noori")

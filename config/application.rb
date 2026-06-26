@@ -67,5 +67,20 @@ module HatiwalApi
     # exists, breaking :timeoutable. Move Warden after the session + flash so it
     # always has a session to read.
     config.middleware.move_after ActionDispatch::Flash, Warden::Manager
+
+    # Gmail SMTP — credentials stored in config/credentials.yml.enc.
+    # Matches MultiMagic's email setup. Environment files can override
+    # delivery_method (e.g. test.rb uses :test); the smtp_settings are
+    # inherited everywhere so they only need to be defined once.
+    config.action_mailer.delivery_method = :smtp
+    config.action_mailer.smtp_settings = {
+      address:              Rails.application.credentials[:smtp_address],
+      port:                 Rails.application.credentials[:smtp_port],
+      domain:               Rails.application.credentials[:smtp_domain],
+      user_name:            Rails.application.credentials[:smtp_username],
+      password:             Rails.application.credentials[:smtp_password],
+      authentication:       :plain,
+      enable_starttls_auto: true
+    }
   end
 end

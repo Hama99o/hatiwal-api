@@ -31,6 +31,16 @@ DeviseTokenAuth.setup do |config|
   # redirect successful authentications to '/omniauth/github/callback'
   # config.omniauth_prefix = "/omniauth"
 
+  # Default password reset URL — used by our custom PasswordsController so that
+  # the mobile client does not need to supply redirect_url in every request.
+  # The web app (or deep-link handler) catches this URL and shows the new-password form.
+  config.default_password_reset_url = ENV.fetch("WEB_RESET_URL", "https://hatiwal.com/reset-password")
+
+  # The mobile client sends the reset token in params (not in auth headers) when
+  # setting a new password. This flag enables the token-based PUT /api/v1/auth/password
+  # flow: the client sends { reset_password_token:, password:, password_confirmation: }.
+  config.require_client_password_reset_token = true
+
   # By default sending current password is not needed for the password update.
   # Uncomment to enforce current_password param to be checked before all
   # attribute updates. Set it to :password if you want it to be checked only if

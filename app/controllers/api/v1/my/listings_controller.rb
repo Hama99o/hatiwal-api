@@ -106,6 +106,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     params.require(:listing).permit(
       :title, :description, :price, :currency,
       :category_id, :location, :address, :latitude, :longitude, :condition,
+      :negotiable,
       images: []
     )
   end

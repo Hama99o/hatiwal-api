@@ -17,6 +17,16 @@ class AdminUser < ApplicationRecord
          :lockable,
          :validatable
 
+  # Use our branded AdminUserMailer instead of Devise's default mailer for
+  # password-reset emails (the default would send from devise@example.com).
+  def send_devise_notification(notification, *args)
+    if notification == :reset_password_instructions
+      AdminUserMailer.reset_password_instructions(self, *args).deliver_later
+    else
+      super
+    end
+  end
+
   validates :name, presence: true
 
   def to_s

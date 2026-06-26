@@ -161,6 +161,85 @@ RSpec.describe "Api::V1::Messages", type: :request do
       expect(JSON.parse(response.body)["message"]["kind"]).to eq("offer_declined")
     end
 
+    # ── TASK-O829: offer_counter ─────────────────────────────────────────────
+    context "offer counter-offer (TASK-O829)" do
+      let(:seller_headers) { auth_headers_for(seller) }
+
+      it "allows the seller to post an offer_counter with an amount" do
+        offer = conversation.messages.create!(user: buyer, kind: :offer, body: "8000|AFN|10000")
+
+        post "/api/v1/conversations/#{conversation.id}/messages",
+             params: { body: "9000|AFN|10000", kind: "offer_counter", responds_to_id: offer.id },
+             headers: seller_headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        body = JSON.parse(response.body)["message"]
+        expect(body["kind"]).to eq("offer_counter")
+        expect(body["responds_to_id"]).to eq(offer.id)
+        expect(body["offer_amount"]).to eq(9000.0)
+        expect(body["offer_currency"]).to eq("AFN")
+      end
+
+      it "exposes offer_amount and offer_currency on offer_counter" do
+        offer = conversation.messages.create!(user: buyer, kind: :offer, body: "8000|AFN|10000")
+        counter = conversation.messages.create!(
+          user: seller, kind: :offer_counter, body: "9000|AFN|10000", responds_to: offer
+        )
+
+        get "/api/v1/conversations/#{conversation.id}/messages",
+            headers: seller_headers, as: :json
+
+        messages = JSON.parse(response.body)["messages"]
+        counter_json = messages.find { |m| m["id"] == counter.id }
+        expect(counter_json["offer_amount"]).to eq(9000.0)
+        expect(counter_json["offer_currency"]).to eq("AFN")
+      end
+
+      it "allows the buyer to accept a counter-offer" do
+        offer   = conversation.messages.create!(user: buyer,   kind: :offer,         body: "8000|AFN|10000")
+        counter = conversation.messages.create!(user: seller,  kind: :offer_counter, body: "9000|AFN|10000",
+                                                               responds_to: offer)
+
+        post "/api/v1/conversations/#{conversation.id}/messages",
+             params: { body: "9000|AFN|10000", kind: "offer_accepted", responds_to_id: counter.id },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        body = JSON.parse(response.body)["message"]
+        expect(body["kind"]).to eq("offer_accepted")
+        expect(body["responds_to_id"]).to eq(counter.id)
+      end
+
+      it "allows the buyer to decline a counter-offer" do
+        offer   = conversation.messages.create!(user: buyer,  kind: :offer,         body: "8000|AFN|10000")
+        counter = conversation.messages.create!(user: seller, kind: :offer_counter, body: "9000|AFN|10000",
+                                                              responds_to: offer)
+
+        post "/api/v1/conversations/#{conversation.id}/messages",
+             params: { body: "9000|AFN|10000", kind: "offer_declined", responds_to_id: counter.id },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        expect(JSON.parse(response.body)["message"]["kind"]).to eq("offer_declined")
+      end
+
+      it "allows the buyer to also post an offer_counter (no direction restriction)" do
+        # Direction rule: either participant may counter in Hatiwal's design —
+        # the buyer can counter the seller's counter.
+        offer   = conversation.messages.create!(user: buyer,  kind: :offer,         body: "8000|AFN|10000")
+        counter = conversation.messages.create!(user: seller, kind: :offer_counter, body: "9000|AFN|10000",
+                                                              responds_to: offer)
+
+        post "/api/v1/conversations/#{conversation.id}/messages",
+             params: { body: "8500|AFN|10000", kind: "offer_counter", responds_to_id: counter.id },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        expect(JSON.parse(response.body)["message"]["kind"]).to eq("offer_counter")
+      end
+    end
+    # ── end TASK-O829 ─────────────────────────────────────────────────────────
+
     it "creates a meetup declined response" do
       post "/api/v1/conversations/#{conversation.id}/messages",
            params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_declined" }, headers: headers, as: :json
@@ -446,4 +525,77 @@ RSpec.describe "Api::V1::Messages", type: :request do
         "Expected exactly 1 UPDATE for 15 unread messages but got #{update_count_15}"
     end
   end
+
+  # ── TASK-M913: soft-delete (retract) a message ───────────────────────────────
+  describe "DELETE /api/v1/conversations/:conversation_id/messages/:id" do
+    let(:message) { create(:message, conversation: conversation, user: buyer, body: "Can we meet?") }
+
+    context "when the author deletes their own message" do
+      it "returns 200 with deleted:true and suppresses body" do
+        delete "/api/v1/conversations/#{conversation.id}/messages/#{message.id}",
+               headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["message"]
+        expect(body["deleted"]).to eq(true)
+        expect(body["body"]).to be_nil
+        expect(body["attachment_url"]).to be_nil
+      end
+
+      it "soft-deletes the row (deleted_at is set, row still exists)" do
+        delete "/api/v1/conversations/#{conversation.id}/messages/#{message.id}",
+               headers: headers, as: :json
+
+        message.reload
+        expect(message.deleted_at).to be_present
+        expect(Message.find_by(id: message.id)).to be_present
+      end
+    end
+
+    context "when the OTHER participant tries to delete" do
+      let(:seller_headers) { auth_headers_for(seller) }
+
+      it "returns 403 forbidden" do
+        delete "/api/v1/conversations/#{conversation.id}/messages/#{message.id}",
+               headers: seller_headers, as: :json
+
+        expect(response).to have_http_status(:forbidden)
+        expect(message.reload.deleted_at).to be_nil
+      end
+    end
+
+    context "when a non-participant tries to delete" do
+      let(:outsider_headers) { auth_headers_for(create(:user)) }
+
+      it "returns 404 (conversation scoped out)" do
+        delete "/api/v1/conversations/#{conversation.id}/messages/#{message.id}",
+               headers: outsider_headers, as: :json
+
+        expect(response).to have_http_status(:not_found)
+        expect(message.reload.deleted_at).to be_nil
+      end
+    end
+
+    context "index returns the deleted message with deleted:true and no body" do
+      it "includes the tombstone in the list" do
+        message.soft_delete!
+
+        get "/api/v1/conversations/#{conversation.id}/messages",
+            headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        messages_json = JSON.parse(response.body)["messages"]
+        deleted_json  = messages_json.find { |m| m["id"] == message.id }
+        expect(deleted_json).to be_present
+        expect(deleted_json["deleted"]).to eq(true)
+        expect(deleted_json["body"]).to be_nil
+      end
+    end
+
+    it "requires authentication" do
+      delete "/api/v1/conversations/#{conversation.id}/messages/#{message.id}", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+  # ── end TASK-M913 ─────────────────────────────────────────────────────────────
 end

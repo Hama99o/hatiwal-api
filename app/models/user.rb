@@ -29,6 +29,7 @@ class User < ApplicationRecord
   validates :preferred_language, inclusion: { in: %w[en ps fa] }, allow_blank: true
   validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
   validates :push_token, length: { maximum: 200 }, allow_blank: true
+  validate :away_until_must_be_future, if: -> { away_until.present? }
 
   # Self-deleted (anonymized) accounts are hidden from public profiles + search.
   scope :not_deleted, -> { where(deleted_at: nil) }
@@ -217,6 +218,18 @@ class User < ApplicationRecord
     Conversation.where("buyer_id = ? OR seller_id = ?", id, id)
   end
 
+  # ── Away mode ────────────────────────────────────────────────────────────────
+  #
+  # Seller-set temporary status. away_until stores a future datetime; the column
+  # is never auto-cleared (a stale past date is equivalent to not away — the
+  # predicate gates display so a past date never surfaces to buyers).
+  #
+  #   away? → true only when away_until is a future datetime
+  #
+  def away?
+    away_until.present? && away_until.future?
+  end
+
   # ── Last-active recency label ─────────────────────────────────────────────────
   #
   # Privacy-safe coarse bucket derived from last_sign_in_at. Never exposes the
@@ -263,6 +276,17 @@ class User < ApplicationRecord
     seller_response_stats.time_label
   end
 
+  # ── Shareable deep-link URL ──────────────────────────────────────────────────
+  # Returns an https profile share URL when PUBLIC_SHARE_BASE_URL env var is
+  # configured, otherwise nil (the mobile app falls back to hatiwal://seller/<id>).
+  # No hardcoded host in committed code — all infra config lives in .env / secrets.
+  def self.profile_share_url_for(user)
+    base = ENV.fetch("PUBLIC_SHARE_BASE_URL", nil)
+    return nil if base.blank?
+
+    "#{base.chomp('/')}/u/#{user.id}"
+  end
+
   def self.search_by_name(query)
     return publicly_active if query.blank?
 
@@ -281,6 +305,12 @@ class User < ApplicationRecord
   end
 
   private
+
+  def away_until_must_be_future
+    return if away_until.blank?
+
+    errors.add(:away_until, :not_in_future, message: "must be in the future") unless away_until.future?
+  end
 
   def auto_suspend_for_strikes!
     update!(

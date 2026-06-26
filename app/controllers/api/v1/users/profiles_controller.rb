@@ -41,7 +41,7 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
       :firstname, :lastname, :phone, :bio,
       :city, :province, :latitude, :longitude,
       :preferred_language, :seller_mode, :preferred_theme, :avatar,
-      :push_token
+      :push_token, :away_until
     )
   end
 end

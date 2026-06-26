@@ -39,4 +39,28 @@ class SavedSearch < ApplicationRecord
   def location_based?
     latitude.present? && longitude.present? && radius.present?
   end
+
+  # Count browsable listings that match this saved search's stored filters and
+  # were created after the user last viewed this chip (or after the search was
+  # first saved when last_viewed_at is nil).
+  #
+  # Reuses the same Listing scopes used by the public Browse index so the
+  # definition of "browsable" is never duplicated.
+  #
+  # The block-pair filter mirrors ListingPolicy::Scope#resolve so that a listing
+  # from a seller the owner has blocked (or who blocked the owner) is never
+  # counted — it would inflate the badge and then vanish when the filter is
+  # actually applied through the policy-scoped browse index.
+  def new_matches_count
+    since = last_viewed_at || created_at
+
+    rel = Listing.browsable.excluding_blocked_pairs(user)
+    rel = rel.by_category(category_id)  if category_id.present?
+    rel = rel.price_at_least(price_min) if price_min.present?
+    rel = rel.price_at_most(price_max)  if price_max.present?
+    rel = rel.in_location(location)     if !location_based? && location.present?
+    rel = rel.within_radius(latitude, longitude, radius) if location_based?
+
+    rel.where("listings.created_at > ?", since).count
+  end
 end

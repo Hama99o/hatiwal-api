@@ -2,7 +2,7 @@ class ListingSerializer < ApplicationSerializer
   fields :id, :title, :price, :currency, :status, :location, :address, :condition, :created_at
 
   view :list do
-    fields :category_id, :views_count
+    fields :category_id, :views_count, :negotiable
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
     field(:is_viewed) { |l, opts| opts[:viewed_ids]&.include?(l.id) || false }
@@ -19,7 +19,7 @@ class ListingSerializer < ApplicationSerializer
   end
 
   view :seller_list do
-    fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at
+    fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at, :negotiable
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
     # Use .size (not .count) so that when conversations are eager-loaded via
@@ -37,7 +37,8 @@ class ListingSerializer < ApplicationSerializer
 
   view :detailed do
     fields :description, :category_id, :location, :latitude, :longitude,
-           :views_count, :published_at, :reserved_at, :sold_at, :updated_at, :expires_at
+           :views_count, :published_at, :reserved_at, :sold_at, :updated_at, :expires_at,
+           :negotiable
     field(:images) { |l| l.image_urls }
     field(:image_attachments) { |l| l.image_attachments }
     field(:thumbnail_url) { |l| l.thumbnail_url }
@@ -64,7 +65,11 @@ class ListingSerializer < ApplicationSerializer
         avatar_url: u.avatar.attached? ? u.avatar.url : nil,
         response_rate_percent: u.response_rate_percent,
         response_time_label: u.response_time_label&.to_s,
-        last_active_label: u.last_active_label&.to_s
+        last_active_label: u.last_active_label&.to_s,
+        # Away mode — present only when seller is CURRENTLY away (future datetime).
+        # Never surfaces a stale past date; buyers only see it when seller is away.
+        seller_is_away: u.away?,
+        seller_away_until: u.away? ? u.away_until&.iso8601 : nil
       }
     end
     field(:category) do |l|
@@ -73,5 +78,8 @@ class ListingSerializer < ApplicationSerializer
     # Price-drop badge data — both nil if no reduction in the last 14 days.
     field(:price_dropped_at)  { |l| l.price_dropped_at }
     field(:price_drop_percent) { |l| l.price_drop_percent }
+    # Canonical share URL — https when PUBLIC_SHARE_BASE_URL env is set, else nil.
+    # Mobile falls back to a hatiwal:// deep link when this is nil.
+    field(:share_url) { |l| Listing.share_url_for(l) }
   end
 end

@@ -4,7 +4,7 @@ RSpec.describe Listing, type: :model do
   describe "associations" do
     it { should belong_to(:user) }
     it { should belong_to(:category) }
-    it { should have_many(:conversations).dependent(:destroy) }
+    it { should have_many(:conversations).dependent(:nullify) }
     it { should have_many(:saved_listings).dependent(:destroy) }
     it { should have_many(:price_histories).dependent(:destroy) }
   end

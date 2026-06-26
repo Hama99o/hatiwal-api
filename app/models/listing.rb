@@ -4,7 +4,7 @@ class Listing < ApplicationRecord
   has_many_attached :images
   has_many :saved_listings, dependent: :destroy
   has_many :listing_views, dependent: :destroy
-  has_many :conversations, dependent: :destroy
+  has_many :conversations, dependent: :nullify
   has_many :reports, as: :reportable, dependent: :destroy
   has_many :price_histories, class_name: ListingPriceHistory.name, dependent: :destroy
 
@@ -258,6 +258,17 @@ class Listing < ApplicationRecord
     images.map { |a| { id: a.blob.signed_id, url: a.url } }
   rescue StandardError
     []
+  end
+
+  # ── Shareable deep-link URL ──────────────────────────────────────────────────
+  # Returns an https share URL when PUBLIC_SHARE_BASE_URL env var is configured,
+  # otherwise returns nil (the mobile app will fall back to a hatiwal:// deep link).
+  # No hardcoded host in committed code — all infra config lives in .env / secrets.
+  def self.share_url_for(listing)
+    base = ENV.fetch("PUBLIC_SHARE_BASE_URL", nil)
+    return nil if base.blank?
+
+    "#{base.chomp('/')}/l/#{listing.id}"
   end
 
   private

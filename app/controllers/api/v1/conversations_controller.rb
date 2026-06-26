@@ -1,13 +1,19 @@
 class Api::V1::ConversationsController < Api::V1::BaseController
   before_action :set_listing, only: [ :create ]
   before_action :set_conversation, only: [ :show ]
-  before_action :set_conversation_for_mutation, only: [ :destroy ]
+  before_action :set_conversation_for_mutation, only: [ :destroy, :mark_read, :mark_unread, :archive, :unarchive ]
 
   def index
+    # Default: show non-archived conversations. ?archived=true shows archived ones.
+    show_archived = ActiveModel::Type::Boolean.new.cast(params[:archived])
+
+    base_scope = show_archived \
+      ? Conversation.for_user(current_user.id).not_deleted_for(current_user).archived_for(current_user) \
+      : Conversation.for_user(current_user.id).not_deleted_for(current_user).not_archived_for(current_user)
+
     conversations = policy_scope(
-      Conversation.for_user(current_user.id)
-                  .ordered
-                  .includes(
+      base_scope.ordered
+                .includes(
                     # :latest_message loads only the newest message per conversation
                     # (has_one with ORDER BY DESC) instead of the entire messages
                     # collection — far lighter than the old includes(:messages) path.
@@ -51,7 +57,42 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def destroy
     authorize @conversation
-    @conversation.destroy!
+    @conversation.delete_for!(current_user)
+    head :no_content
+  end
+
+  def mark_read
+    authorize @conversation
+    @conversation.messages
+                 .where(read_at: nil)
+                 .where.not(user_id: current_user.id)
+                 .update_all(read_at: Time.current)
+    head :no_content
+  end
+
+  def mark_unread
+    authorize @conversation
+    # Set read_at = nil on the most recent inbound message so that
+    # unread_count_for(current_user) > 0 again.  A single targeted UPDATE
+    # avoids N+1 — we find the latest inbound message id via a subquery and
+    # update only that one row.
+    latest_inbound = @conversation.messages
+                                  .where.not(user_id: current_user.id)
+                                  .order(created_at: :desc)
+                                  .limit(1)
+    Message.where(id: latest_inbound).update_all(read_at: nil)
+    head :no_content
+  end
+
+  def archive
+    authorize @conversation
+    @conversation.archive_for!(current_user)
+    head :no_content
+  end
+
+  def unarchive
+    authorize @conversation
+    @conversation.unarchive_for!(current_user)
     head :no_content
   end
 

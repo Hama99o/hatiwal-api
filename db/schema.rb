@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_06_25_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_06_27_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -104,17 +104,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_100000) do
   end
 
   create_table "conversations", force: :cascade do |t|
+    t.datetime "buyer_archived_at"
+    t.datetime "buyer_deleted_at"
     t.bigint "buyer_id", null: false
     t.datetime "created_at", null: false
     t.datetime "last_message_at"
-    t.bigint "listing_id", null: false
+    t.bigint "listing_id"
+    t.datetime "seller_archived_at"
+    t.datetime "seller_deleted_at"
     t.bigint "seller_id", null: false
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
+    t.index ["buyer_deleted_at"], name: "index_conversations_on_buyer_deleted_at"
     t.index ["buyer_id"], name: "index_conversations_on_buyer_id"
     t.index ["last_message_at"], name: "index_conversations_on_last_message_at"
     t.index ["listing_id", "buyer_id"], name: "index_conversations_on_listing_id_and_buyer_id", unique: true
     t.index ["listing_id"], name: "index_conversations_on_listing_id"
+    t.index ["seller_deleted_at"], name: "index_conversations_on_seller_deleted_at"
     t.index ["seller_id"], name: "index_conversations_on_seller_id"
     t.index ["status"], name: "index_conversations_on_status"
   end
@@ -153,6 +159,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_100000) do
     t.decimal "latitude", precision: 10, scale: 6
     t.string "location"
     t.decimal "longitude", precision: 10, scale: 6
+    t.boolean "negotiable", default: true, null: false
     t.decimal "price", precision: 12, scale: 2, null: false
     t.datetime "published_at"
     t.datetime "removed_at"
@@ -180,6 +187,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_100000) do
     t.text "body", null: false
     t.bigint "conversation_id", null: false
     t.datetime "created_at", null: false
+    t.datetime "deleted_at"
     t.integer "kind", default: 0, null: false
     t.datetime "read_at"
     t.bigint "responds_to_id"
@@ -187,6 +195,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_100000) do
     t.bigint "user_id", null: false
     t.index ["conversation_id"], name: "index_messages_on_conversation_id"
     t.index ["created_at"], name: "index_messages_on_created_at"
+    t.index ["deleted_at"], name: "index_messages_on_deleted_at"
     t.index ["read_at"], name: "index_messages_on_read_at"
     t.index ["responds_to_id"], name: "index_messages_on_responds_to_id"
     t.index ["user_id"], name: "index_messages_on_user_id"
@@ -220,6 +229,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_100000) do
   create_table "saved_searches", force: :cascade do |t|
     t.bigint "category_id"
     t.datetime "created_at", null: false
+    t.datetime "last_viewed_at"
     t.float "latitude"
     t.string "location"
     t.float "longitude"
@@ -250,6 +260,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_25_100000) do
   create_table "users", force: :cascade do |t|
     t.boolean "allow_password_change", default: false
     t.boolean "auto_blocked", default: false, null: false
+    t.datetime "away_until"
     t.string "bio"
     t.string "block_reason"
     t.string "city"

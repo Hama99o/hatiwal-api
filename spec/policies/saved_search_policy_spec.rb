@@ -46,4 +46,21 @@ RSpec.describe SavedSearchPolicy do
       expect(policy.destroy?).to be_falsy
     end
   end
+
+  describe "#mark_seen?" do
+    it "allows the owner to mark their own search as seen" do
+      policy = SavedSearchPolicy.new(user, saved_search)
+      expect(policy.mark_seen?).to be_truthy
+    end
+
+    it "forbids a different user from marking another user's search as seen" do
+      policy = SavedSearchPolicy.new(user, other_saved_search)
+      expect(policy.mark_seen?).to be_falsy
+    end
+
+    it "denies unauthenticated users" do
+      policy = SavedSearchPolicy.new(nil, saved_search)
+      expect(policy.mark_seen?).to be_falsy
+    end
+  end
 end
