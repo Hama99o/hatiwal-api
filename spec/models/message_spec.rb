@@ -47,7 +47,8 @@ RSpec.describe Message, type: :model do
     it {
       should define_enum_for(:kind).with_values(
         text: 0, meetup_proposal: 1, system: 2, offer: 3, document: 4, image_message: 5,
-        meetup_accepted: 6, meetup_declined: 7, offer_accepted: 8, offer_declined: 9
+        meetup_accepted: 6, meetup_declined: 7, offer_accepted: 8, offer_declined: 9,
+        offer_counter: 10
       )
     }
   end
@@ -64,8 +65,28 @@ RSpec.describe Message, type: :model do
 
     it "includes all expected user-sendable kinds" do
       expected = %w[text meetup_proposal meetup_accepted meetup_declined
-                    offer offer_accepted offer_declined document image_message]
+                    offer offer_accepted offer_declined document image_message offer_counter]
       expect(Message::USER_SENDABLE_KINDS).to match_array(expected)
+    end
+
+    it "includes offer_counter" do
+      expect(Message::USER_SENDABLE_KINDS).to include("offer_counter")
+    end
+  end
+
+  describe "offer_counter kind" do
+    let(:conversation) { create(:conversation) }
+
+    it "is valid with kind :offer_counter and a pipe-encoded body" do
+      msg = build(:message, conversation: conversation, kind: :offer_counter, body: "8500|AFN|10000")
+      expect(msg).to be_valid
+    end
+
+    it "can link back to the original offer via responds_to" do
+      original_offer = create(:message, conversation: conversation, kind: :offer, body: "8000|AFN|10000")
+      counter = build(:message, conversation: conversation, kind: :offer_counter,
+                                body: "9000|AFN|10000", responds_to: original_offer)
+      expect(counter).to be_valid
     end
   end
 

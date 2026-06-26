@@ -154,6 +154,55 @@ RSpec.describe ListingSerializer, type: :serializer do
     end
   end
 
+  describe ":detailed view — share_url field" do
+    context "when PUBLIC_SHARE_BASE_URL is set" do
+      before do
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with("PUBLIC_SHARE_BASE_URL", nil).and_return("https://hatiwal.example.com")
+      end
+
+      it "returns a full https URL with the listing id" do
+        result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+        expect(result[:share_url]).to eq("https://hatiwal.example.com/l/#{listing.id}")
+      end
+
+      it "returns a String" do
+        result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+        expect(result[:share_url]).to be_a(String)
+      end
+
+      it "handles a trailing slash in the base URL gracefully" do
+        allow(ENV).to receive(:fetch).with("PUBLIC_SHARE_BASE_URL", nil).and_return("https://hatiwal.example.com/")
+        result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+        expect(result[:share_url]).to eq("https://hatiwal.example.com/l/#{listing.id}")
+      end
+    end
+
+    context "when PUBLIC_SHARE_BASE_URL is not set (nil)" do
+      before do
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with("PUBLIC_SHARE_BASE_URL", nil).and_return(nil)
+      end
+
+      it "returns nil" do
+        result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+        expect(result[:share_url]).to be_nil
+      end
+    end
+
+    context "when PUBLIC_SHARE_BASE_URL is an empty string" do
+      before do
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with("PUBLIC_SHARE_BASE_URL", nil).and_return("")
+      end
+
+      it "returns nil" do
+        result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+        expect(result[:share_url]).to be_nil
+      end
+    end
+  end
+
   describe ":list view" do
     it "does not include a phone field at all" do
       result = described_class.render_as_hash(listing, view: :list)

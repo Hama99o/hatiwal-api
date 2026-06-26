@@ -31,6 +31,16 @@ class Api::V1::Users::SavedSearchesController < Api::V1::BaseController
     end
   end
 
+  # PUT /api/v1/users/saved_searches/:id/mark_seen
+  # Resets the new-matches badge by stamping last_viewed_at = now.
+  def mark_seen
+    saved_search = SavedSearch.find(params[:id])
+    authorize saved_search, :mark_seen?
+
+    saved_search.update!(last_viewed_at: Time.current)
+    render_blue(SavedSearchSerializer, saved_search)
+  end
+
   private
 
   def saved_search_params

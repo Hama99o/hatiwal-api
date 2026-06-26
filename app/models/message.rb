@@ -8,14 +8,17 @@ class Message < ApplicationRecord
 
   enum :kind, {
     text: 0, meetup_proposal: 1, system: 2, offer: 3, document: 4, image_message: 5,
-    meetup_accepted: 6, meetup_declined: 7, offer_accepted: 8, offer_declined: 9
+    meetup_accepted: 6, meetup_declined: 7, offer_accepted: 8, offer_declined: 9,
+    offer_counter: 10
   }
 
   # Kinds that a client (request param) is allowed to set.
   # :system is intentionally excluded — only server-side code may persist system messages.
+  # :offer_counter is sendable only by the seller (recipient of the original offer);
+  # the buyer then responds using the existing offer_accepted / offer_declined kinds.
   USER_SENDABLE_KINDS = %w[
     text meetup_proposal meetup_accepted meetup_declined
-    offer offer_accepted offer_declined document image_message
+    offer offer_accepted offer_declined document image_message offer_counter
   ].freeze
 
   validates :body, presence: true, length: { maximum: 1000 }

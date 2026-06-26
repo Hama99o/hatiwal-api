@@ -85,6 +85,10 @@ Rails.application.routes.draw do
 
       # Conversations (participant access)
       resources :conversations, only: [ :index, :show, :destroy ] do
+        member do
+          put :mark_read
+          put :mark_unread
+        end
         resources :messages, only: [ :index, :create ] do
           collection do
             put :mark_read
@@ -96,7 +100,7 @@ Rails.application.routes.draw do
       resources :categories, only: [ :index ]
 
       # Reports
-      resources :reports, only: [ :create ]
+      resources :reports, only: [ :create, :index ]
 
       # User profiles
       namespace :users do
@@ -108,9 +112,10 @@ Rails.application.routes.draw do
         # Saved searches — MUST be declared before the "/:id" wildcard below,
         # otherwise GET /users/saved_searches is captured as profiles#show
         # with id="saved_searches" and 404s with RecordNotFound.
-        get    "/saved_searches",     to: "saved_searches#index",   as: :saved_searches
-        post   "/saved_searches",     to: "saved_searches#create"
-        delete "/saved_searches/:id", to: "saved_searches#destroy", as: :saved_search
+        get    "/saved_searches",              to: "saved_searches#index",     as: :saved_searches
+        post   "/saved_searches",              to: "saved_searches#create"
+        delete "/saved_searches/:id",          to: "saved_searches#destroy",   as: :saved_search
+        put    "/saved_searches/:id/mark_seen", to: "saved_searches#mark_seen", as: :mark_seen_saved_search
 
         # The signed-in user's own moderation warnings (also before "/:id").
         get "/warnings",           to: "warnings#index",     as: :warnings
@@ -143,6 +148,7 @@ Rails.application.routes.draw do
         end
 
         resources :saved_listings, only: [ :index ]
+        resources :viewed_listings, only: [ :index ]
       end
     end
   end

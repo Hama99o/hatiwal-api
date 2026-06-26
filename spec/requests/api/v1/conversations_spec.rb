@@ -354,4 +354,95 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       end
     end
   end
+
+  describe "PUT /api/v1/conversations/:id/mark_read" do
+    let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
+
+    context "when the buyer marks the conversation as read" do
+      before do
+        # Seller sends two unread messages (buyer has not read them)
+        conversation.messages.create!(user: seller, body: "Hello", kind: :text)
+        conversation.messages.create!(user: seller, body: "Still here?", kind: :text)
+      end
+
+      it "returns 204 no_content" do
+        put "/api/v1/conversations/#{conversation.id}/mark_read", headers: headers, as: :json
+        expect(response).to have_http_status(:no_content)
+      end
+
+      it "sets read_at on the other participant's unread messages" do
+        put "/api/v1/conversations/#{conversation.id}/mark_read", headers: headers, as: :json
+        expect(conversation.messages.where(read_at: nil).where.not(user_id: buyer.id).count).to eq(0)
+      end
+
+      it "reduces unread_count_for(buyer) to 0" do
+        put "/api/v1/conversations/#{conversation.id}/mark_read", headers: headers, as: :json
+        expect(conversation.reload.unread_count_for(buyer)).to eq(0)
+      end
+
+      it "does not touch messages authored by the buyer" do
+        buyer_msg = conversation.messages.create!(user: buyer, body: "Hi", kind: :text)
+        put "/api/v1/conversations/#{conversation.id}/mark_read", headers: headers, as: :json
+        expect(buyer_msg.reload.read_at).to be_nil
+      end
+    end
+
+    it "requires authentication" do
+      put "/api/v1/conversations/#{conversation.id}/mark_read", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "returns 403 for a non-participant" do
+      outsider_headers = auth_headers_for(create(:user))
+      put "/api/v1/conversations/#{conversation.id}/mark_read", headers: outsider_headers, as: :json
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  describe "PUT /api/v1/conversations/:id/mark_unread" do
+    let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
+
+    context "when the seller marks the conversation as unread" do
+      let(:seller_headers) { auth_headers_for(seller) }
+
+      before do
+        # Buyer sends a message, seller has already read it
+        msg = conversation.messages.create!(user: buyer, body: "Is this available?", kind: :text)
+        msg.update!(read_at: Time.current)
+      end
+
+      it "returns 204 no_content" do
+        put "/api/v1/conversations/#{conversation.id}/mark_unread", headers: seller_headers, as: :json
+        expect(response).to have_http_status(:no_content)
+      end
+
+      it "restores unread_count_for(seller) to be > 0" do
+        put "/api/v1/conversations/#{conversation.id}/mark_unread", headers: seller_headers, as: :json
+        expect(conversation.reload.unread_count_for(seller)).to be > 0
+      end
+
+      it "clears read_at on the most recent inbound message only" do
+        # Add a second message already read
+        msg2 = conversation.messages.create!(user: buyer, body: "Hello?", kind: :text)
+        msg2.update!(read_at: Time.current)
+
+        put "/api/v1/conversations/#{conversation.id}/mark_unread", headers: seller_headers, as: :json
+
+        # Only the most recent inbound message should have read_at cleared
+        unread_count = conversation.messages.where(read_at: nil).where.not(user_id: seller.id).count
+        expect(unread_count).to eq(1)
+      end
+    end
+
+    it "requires authentication" do
+      put "/api/v1/conversations/#{conversation.id}/mark_unread", as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+
+    it "returns 403 for a non-participant" do
+      outsider_headers = auth_headers_for(create(:user))
+      put "/api/v1/conversations/#{conversation.id}/mark_unread", headers: outsider_headers, as: :json
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
 end

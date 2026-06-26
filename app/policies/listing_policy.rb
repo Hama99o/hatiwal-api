@@ -3,6 +3,7 @@ class ListingPolicy < ApplicationPolicy
   def show?     = true
   def similar?  = true
   def sold_by?  = true  # public read — any viewer (including guests) may see a seller's sold items
+  def viewed?   = true  # authenticated read — any user may list their own view history
   def create?   = true
   def save?     = true
 

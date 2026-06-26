@@ -73,5 +73,8 @@ class ListingSerializer < ApplicationSerializer
     # Price-drop badge data — both nil if no reduction in the last 14 days.
     field(:price_dropped_at)  { |l| l.price_dropped_at }
     field(:price_drop_percent) { |l| l.price_drop_percent }
+    # Canonical share URL — https when PUBLIC_SHARE_BASE_URL env is set, else nil.
+    # Mobile falls back to a hatiwal:// deep link when this is nil.
+    field(:share_url) { |l| Listing.share_url_for(l) }
   end
 end

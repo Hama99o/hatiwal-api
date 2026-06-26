@@ -260,6 +260,17 @@ class Listing < ApplicationRecord
     []
   end
 
+  # ── Shareable deep-link URL ──────────────────────────────────────────────────
+  # Returns an https share URL when PUBLIC_SHARE_BASE_URL env var is configured,
+  # otherwise returns nil (the mobile app will fall back to a hatiwal:// deep link).
+  # No hardcoded host in committed code — all infra config lives in .env / secrets.
+  def self.share_url_for(listing)
+    base = ENV.fetch("PUBLIC_SHARE_BASE_URL", nil)
+    return nil if base.blank?
+
+    "#{base.chomp('/')}/l/#{listing.id}"
+  end
+
   private
 
   def record_price_history

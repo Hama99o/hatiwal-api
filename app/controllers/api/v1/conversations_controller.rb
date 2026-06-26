@@ -1,7 +1,7 @@
 class Api::V1::ConversationsController < Api::V1::BaseController
   before_action :set_listing, only: [ :create ]
   before_action :set_conversation, only: [ :show ]
-  before_action :set_conversation_for_mutation, only: [ :destroy ]
+  before_action :set_conversation_for_mutation, only: [ :destroy, :mark_read, :mark_unread ]
 
   def index
     conversations = policy_scope(
@@ -52,6 +52,29 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   def destroy
     authorize @conversation
     @conversation.destroy!
+    head :no_content
+  end
+
+  def mark_read
+    authorize @conversation
+    @conversation.messages
+                 .where(read_at: nil)
+                 .where.not(user_id: current_user.id)
+                 .update_all(read_at: Time.current)
+    head :no_content
+  end
+
+  def mark_unread
+    authorize @conversation
+    # Set read_at = nil on the most recent inbound message so that
+    # unread_count_for(current_user) > 0 again.  A single targeted UPDATE
+    # avoids N+1 — we find the latest inbound message id via a subquery and
+    # update only that one row.
+    latest_inbound = @conversation.messages
+                                  .where.not(user_id: current_user.id)
+                                  .order(created_at: :desc)
+                                  .limit(1)
+    Message.where(id: latest_inbound).update_all(read_at: nil)
     head :no_content
   end
 

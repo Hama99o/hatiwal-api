@@ -161,6 +161,85 @@ RSpec.describe "Api::V1::Messages", type: :request do
       expect(JSON.parse(response.body)["message"]["kind"]).to eq("offer_declined")
     end
 
+    # ── TASK-O829: offer_counter ─────────────────────────────────────────────
+    context "offer counter-offer (TASK-O829)" do
+      let(:seller_headers) { auth_headers_for(seller) }
+
+      it "allows the seller to post an offer_counter with an amount" do
+        offer = conversation.messages.create!(user: buyer, kind: :offer, body: "8000|AFN|10000")
+
+        post "/api/v1/conversations/#{conversation.id}/messages",
+             params: { body: "9000|AFN|10000", kind: "offer_counter", responds_to_id: offer.id },
+             headers: seller_headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        body = JSON.parse(response.body)["message"]
+        expect(body["kind"]).to eq("offer_counter")
+        expect(body["responds_to_id"]).to eq(offer.id)
+        expect(body["offer_amount"]).to eq(9000.0)
+        expect(body["offer_currency"]).to eq("AFN")
+      end
+
+      it "exposes offer_amount and offer_currency on offer_counter" do
+        offer = conversation.messages.create!(user: buyer, kind: :offer, body: "8000|AFN|10000")
+        counter = conversation.messages.create!(
+          user: seller, kind: :offer_counter, body: "9000|AFN|10000", responds_to: offer
+        )
+
+        get "/api/v1/conversations/#{conversation.id}/messages",
+            headers: seller_headers, as: :json
+
+        messages = JSON.parse(response.body)["messages"]
+        counter_json = messages.find { |m| m["id"] == counter.id }
+        expect(counter_json["offer_amount"]).to eq(9000.0)
+        expect(counter_json["offer_currency"]).to eq("AFN")
+      end
+
+      it "allows the buyer to accept a counter-offer" do
+        offer   = conversation.messages.create!(user: buyer,   kind: :offer,         body: "8000|AFN|10000")
+        counter = conversation.messages.create!(user: seller,  kind: :offer_counter, body: "9000|AFN|10000",
+                                                               responds_to: offer)
+
+        post "/api/v1/conversations/#{conversation.id}/messages",
+             params: { body: "9000|AFN|10000", kind: "offer_accepted", responds_to_id: counter.id },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        body = JSON.parse(response.body)["message"]
+        expect(body["kind"]).to eq("offer_accepted")
+        expect(body["responds_to_id"]).to eq(counter.id)
+      end
+
+      it "allows the buyer to decline a counter-offer" do
+        offer   = conversation.messages.create!(user: buyer,  kind: :offer,         body: "8000|AFN|10000")
+        counter = conversation.messages.create!(user: seller, kind: :offer_counter, body: "9000|AFN|10000",
+                                                              responds_to: offer)
+
+        post "/api/v1/conversations/#{conversation.id}/messages",
+             params: { body: "9000|AFN|10000", kind: "offer_declined", responds_to_id: counter.id },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        expect(JSON.parse(response.body)["message"]["kind"]).to eq("offer_declined")
+      end
+
+      it "allows the buyer to also post an offer_counter (no direction restriction)" do
+        # Direction rule: either participant may counter in Hatiwal's design —
+        # the buyer can counter the seller's counter.
+        offer   = conversation.messages.create!(user: buyer,  kind: :offer,         body: "8000|AFN|10000")
+        counter = conversation.messages.create!(user: seller, kind: :offer_counter, body: "9000|AFN|10000",
+                                                              responds_to: offer)
+
+        post "/api/v1/conversations/#{conversation.id}/messages",
+             params: { body: "8500|AFN|10000", kind: "offer_counter", responds_to_id: counter.id },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        expect(JSON.parse(response.body)["message"]["kind"]).to eq("offer_counter")
+      end
+    end
+    # ── end TASK-O829 ─────────────────────────────────────────────────────────
+
     it "creates a meetup declined response" do
       post "/api/v1/conversations/#{conversation.id}/messages",
            params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_declined" }, headers: headers, as: :json
