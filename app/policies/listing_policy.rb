@@ -1,10 +1,14 @@
 class ListingPolicy < ApplicationPolicy
-  def index?    = true
-  def show?     = true
-  def similar?  = true
-  def sold_by?  = true  # public read — any viewer (including guests) may see a seller's sold items
-  def create?   = true
-  def save?     = true
+  def index?         = true
+  def show?          = true
+  def similar?       = true
+  def sold_by?       = true  # public read — any viewer (including guests) may see a seller's sold items
+  def viewed?        = true  # authenticated read — any user may list their own view history
+  def create?        = true
+  def save?          = true
+  # Authenticated seller action — counts are scoped to current_user.listings
+  # in the controller, so any signed-in user is authorised to call this.
+  def status_counts? = true
 
   def update?    = owner?
   def destroy?   = owner?

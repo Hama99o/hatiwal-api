@@ -258,6 +258,32 @@ RSpec.describe User, type: :model do
     end
   end
 
+  describe "#away?" do
+    it "returns false when away_until is nil" do
+      user = build(:user, away_until: nil)
+      expect(user.away?).to be false
+    end
+
+    it "returns false when away_until is in the past" do
+      # Use a persisted user and update_column to bypass the 'future' validation
+      # (simulating a row that was set in the past — a normal occurrence over time).
+      user = create(:user)
+      user.update_column(:away_until, 1.day.ago)
+      expect(user.away?).to be false
+    end
+
+    it "returns true when away_until is in the future" do
+      user = build(:user, away_until: 3.days.from_now)
+      expect(user.away?).to be true
+    end
+
+    it "returns false when away_until is exactly now (not strictly future)" do
+      user = create(:user)
+      user.update_column(:away_until, Time.current)
+      expect(user.reload.away?).to be false
+    end
+  end
+
   describe ".search_by_name" do
     it "returns all when query is blank" do
       create_list(:user, 3)

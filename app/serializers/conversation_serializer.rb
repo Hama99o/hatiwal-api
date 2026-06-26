@@ -2,7 +2,9 @@ class ConversationSerializer < ApplicationSerializer
   fields :id, :status, :last_message_at, :created_at
 
   view :list do
+    field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c|
+      next nil if c.listing_deleted?
       { id: c.listing_id, title: c.listing.title, thumbnail_url: c.listing.thumbnail_url, status: c.listing.status }
     end
     field(:other_participant) do |c, opts|
@@ -42,9 +44,12 @@ class ConversationSerializer < ApplicationSerializer
   end
 
   view :detailed do
+    field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c|
+      next nil if c.listing_deleted?
       { id: c.listing_id, title: c.listing.title, price: c.listing.price, currency: c.listing.currency,
-        thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location }
+        thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location,
+        negotiable: c.listing.negotiable }
     end
     field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
     field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }

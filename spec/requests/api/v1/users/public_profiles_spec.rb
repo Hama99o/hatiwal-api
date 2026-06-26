@@ -6,9 +6,13 @@ RSpec.describe "Api::V1::Users::PublicProfiles", type: :request do
   let(:headers)   { auth_headers_for(requester) }
 
   describe "GET /api/v1/users/:id/public_profile" do
-    it "requires authentication" do
+    it "is publicly accessible without authentication (guest deep-link support)" do
       get "/api/v1/users/#{seller.id}/public_profile", as: :json
-      expect(response).to have_http_status(:unauthorized)
+      expect(response).to have_http_status(:ok)
+      body = JSON.parse(response.body)["user"]
+      expect(body["full_name"]).to eq("Ahmad Shah")
+      # blocked field defaults to false when no viewer is available
+      expect(body["blocked"]).to be(false)
     end
 
     it "returns the seller's public profile with trust fields" do
@@ -191,6 +195,39 @@ RSpec.describe "Api::V1::Users::PublicProfiles", type: :request do
         expect(response).to have_http_status(:ok)
         body = JSON.parse(response.body)["user"]
         expect(body).not_to have_key("last_sign_in_at")
+      end
+    end
+
+    context "share_url field" do
+      it "returns share_url as an https URL when PUBLIC_SHARE_BASE_URL is configured" do
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with("PUBLIC_SHARE_BASE_URL", nil).and_return("https://hatiwal.example.com")
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        body = JSON.parse(response.body)["user"]
+        expect(body["share_url"]).to eq("https://hatiwal.example.com/u/#{seller.id}")
+      end
+
+      it "returns share_url as nil when PUBLIC_SHARE_BASE_URL is not configured" do
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with("PUBLIC_SHARE_BASE_URL", nil).and_return(nil)
+
+        get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
+
+        body = JSON.parse(response.body)["user"]
+        expect(body["share_url"]).to be_nil
+      end
+
+      it "exposes share_url to unauthenticated guests" do
+        allow(ENV).to receive(:fetch).and_call_original
+        allow(ENV).to receive(:fetch).with("PUBLIC_SHARE_BASE_URL", nil).and_return("https://hatiwal.example.com")
+
+        get "/api/v1/users/#{seller.id}/public_profile", as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)["user"]
+        expect(body["share_url"]).to eq("https://hatiwal.example.com/u/#{seller.id}")
       end
     end
 

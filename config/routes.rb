@@ -1,14 +1,20 @@
 Rails.application.routes.draw do
   # ── Admin dashboard (server-rendered web, NOT the JSON API) ──────────────────
-  # Staff log in at /admin/login. Auth is fully separate from the mobile token
-  # auth: a dedicated AdminUser model + session/cookie login. There is no public
-  # registration and no password-reset route — admins are provisioned via seeds
-  # or `rails console`.
+  # Staff log in at /admin/login. Password reset is enabled: admins can visit
+  # /admin/password/new to request a reset email. There is no public
+  # registration — admins are provisioned via seeds or `rails console`.
   devise_for :admin_users,
              path: "admin",
              path_names: { sign_in: "login", sign_out: "logout" },
-             controllers: { sessions: "admin/sessions" },
-             skip: [ :registrations, :passwords ]
+             controllers: {
+               sessions: "admin/sessions",
+               passwords: "admin/passwords"
+             },
+             skip: [ :registrations ]
+
+  # Admin Google OAuth (server-side code flow)
+  get "admin/auth/google",          to: "admin/google_auth#initiate", as: :admin_google_auth_initiate
+  get "admin/auth/google/callback", to: "admin/google_auth#callback", as: :admin_google_auth_callback
 
   # `config.api_only = true` makes `resources` skip the :new and :edit form
   # routes (APIs don't render forms), but Administrate's New/Edit pages need
@@ -68,8 +74,13 @@ Rails.application.routes.draw do
 
   mount_devise_token_auth_for "User", at: "api/v1/auth", controllers: {
     registrations: "api/v1/auth/registrations",
-    sessions: "api/v1/auth/sessions"
+    sessions: "api/v1/auth/sessions",
+    passwords: "api/v1/auth/passwords"
   }
+
+  # Google OAuth for mobile — POST /api/v1/auth/google
+  # Mobile sends a Google ID token; we verify it and return devise_token_auth tokens.
+  post "api/v1/auth/google", to: "api/v1/auth/google_auth#create"
 
   namespace :api do
     namespace :v1 do
@@ -85,7 +96,13 @@ Rails.application.routes.draw do
 
       # Conversations (participant access)
       resources :conversations, only: [ :index, :show, :destroy ] do
-        resources :messages, only: [ :index, :create ] do
+        member do
+          put :mark_read
+          put :mark_unread
+          put :archive
+          put :unarchive
+        end
+        resources :messages, only: [ :index, :create, :destroy ] do
           collection do
             put :mark_read
           end
@@ -96,7 +113,7 @@ Rails.application.routes.draw do
       resources :categories, only: [ :index ]
 
       # Reports
-      resources :reports, only: [ :create ]
+      resources :reports, only: [ :create, :index ]
 
       # User profiles
       namespace :users do
@@ -108,9 +125,10 @@ Rails.application.routes.draw do
         # Saved searches — MUST be declared before the "/:id" wildcard below,
         # otherwise GET /users/saved_searches is captured as profiles#show
         # with id="saved_searches" and 404s with RecordNotFound.
-        get    "/saved_searches",     to: "saved_searches#index",   as: :saved_searches
-        post   "/saved_searches",     to: "saved_searches#create"
-        delete "/saved_searches/:id", to: "saved_searches#destroy", as: :saved_search
+        get    "/saved_searches",              to: "saved_searches#index",     as: :saved_searches
+        post   "/saved_searches",              to: "saved_searches#create"
+        delete "/saved_searches/:id",          to: "saved_searches#destroy",   as: :saved_search
+        put    "/saved_searches/:id/mark_seen", to: "saved_searches#mark_seen", as: :mark_seen_saved_search
 
         # The signed-in user's own moderation warnings (also before "/:id").
         get "/warnings",           to: "warnings#index",     as: :warnings
@@ -140,9 +158,15 @@ Rails.application.routes.draw do
           end
           # GET /my/listings/:listing_id/analytics
           resource :analytics, only: [ :show ], controller: "listing_analytics"
+          # GET /my/listings/status_counts — per-status counts for the seller.
+          # Must be a COLLECTION route so it is matched BEFORE /my/listings/:id.
+          collection do
+            get :status_counts, to: "listing_status_counts#show"
+          end
         end
 
         resources :saved_listings, only: [ :index ]
+        resources :viewed_listings, only: [ :index ]
       end
     end
   end

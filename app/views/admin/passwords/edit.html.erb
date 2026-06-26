@@ -1,0 +1,30 @@
+<h1 style="text-align:center;margin-bottom:4px;">Set new password</h1>
+<p class="sub" style="text-align:center;margin-bottom:1.5rem;">Choose a strong password for your admin account.</p>
+
+<%= form_with url: admin_user_password_path, html: { method: :put } do |f| %>
+  <%= hidden_field_tag "admin_user[reset_password_token]", params[:reset_password_token] %>
+
+  <div>
+    <label for="admin_user_password">New password</label>
+    <%= password_field_tag "admin_user[password]", nil, id: "admin_user_password",
+        autofocus: true, autocomplete: "new-password",
+        placeholder: "••••••••",
+        style: "width:100%;padding:.7rem .8rem;margin-bottom:1rem;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#e2e8f0;font-size:.95rem;" %>
+  </div>
+
+  <div>
+    <label for="admin_user_password_confirmation">Confirm new password</label>
+    <%= password_field_tag "admin_user[password_confirmation]", nil, id: "admin_user_password_confirmation",
+        autocomplete: "new-password",
+        placeholder: "••••••••",
+        style: "width:100%;padding:.7rem .8rem;margin-bottom:1.25rem;border:1px solid #334155;border-radius:8px;background:#0f172a;color:#e2e8f0;font-size:.95rem;" %>
+  </div>
+
+  <% if @resource&.errors&.any? %>
+    <div class="flash flash--alert" style="margin-bottom:1rem;">
+      <%= @resource.errors.full_messages.to_sentence %>
+    </div>
+  <% end %>
+
+  <button type="submit">Update password</button>
+<% end %>

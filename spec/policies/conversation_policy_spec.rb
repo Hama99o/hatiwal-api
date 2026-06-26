@@ -73,6 +73,37 @@ RSpec.describe ConversationPolicy do
     # ── end TASK-K739 ────────────────────────────────────────────────────────
   end
 
+  describe "#mark_read? / #mark_unread?" do
+    it "is true for participants" do
+      expect(described_class.new(buyer, conversation).mark_read?).to be true
+      expect(described_class.new(seller, conversation).mark_read?).to be true
+      expect(described_class.new(buyer, conversation).mark_unread?).to be true
+      expect(described_class.new(seller, conversation).mark_unread?).to be true
+    end
+
+    it "is false for non-participants" do
+      expect(described_class.new(outsider, conversation).mark_read?).to be false
+      expect(described_class.new(outsider, conversation).mark_unread?).to be false
+    end
+  end
+
+  describe "#archive? / #unarchive?" do
+    it "is true for the buyer" do
+      expect(described_class.new(buyer, conversation).archive?).to be true
+      expect(described_class.new(buyer, conversation).unarchive?).to be true
+    end
+
+    it "is true for the seller" do
+      expect(described_class.new(seller, conversation).archive?).to be true
+      expect(described_class.new(seller, conversation).unarchive?).to be true
+    end
+
+    it "is false for a non-participant" do
+      expect(described_class.new(outsider, conversation).archive?).to be false
+      expect(described_class.new(outsider, conversation).unarchive?).to be false
+    end
+  end
+
   describe "Scope" do
     it "resolves only conversations the user participates in" do
       mine_as_buyer = conversation

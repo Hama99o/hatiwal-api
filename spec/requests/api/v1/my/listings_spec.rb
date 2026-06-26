@@ -472,5 +472,69 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(response).to have_http_status(:forbidden)
       end
     end
+
+    # ── negotiable field ────────────────────────────────────────────────────────
+    describe "negotiable flag" do
+      it "defaults to true when negotiable param is omitted on create" do
+        post "/api/v1/my/listings",
+             params: { listing: { title: "Test", price: 500, currency: "AFN", category_id: category.id } },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        body = JSON.parse(response.body)
+        expect(body["listing"]["negotiable"]).to be(true)
+        expect(user.listings.last.negotiable).to be(true)
+      end
+
+      it "persists negotiable: false when explicitly set on create" do
+        post "/api/v1/my/listings",
+             params: { listing: { title: "Firm Price Item", price: 1000, currency: "AFN",
+                                  category_id: category.id, negotiable: false } },
+             headers: headers, as: :json
+
+        expect(response).to have_http_status(:created)
+        body = JSON.parse(response.body)
+        expect(body["listing"]["negotiable"]).to be(false)
+        expect(user.listings.last.negotiable).to be(false)
+      end
+
+      it "can toggle negotiable from false to true on update (while draft)" do
+        draft = create(:listing, :draft, user: user, negotiable: false)
+
+        put "/api/v1/my/listings/#{draft.id}",
+            params: { listing: { negotiable: true } },
+            headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)
+        expect(body["listing"]["negotiable"]).to be(true)
+        expect(draft.reload.negotiable).to be(true)
+      end
+
+      it "can toggle negotiable from true to false on update (while draft)" do
+        draft = create(:listing, :draft, user: user, negotiable: true)
+
+        put "/api/v1/my/listings/#{draft.id}",
+            params: { listing: { negotiable: false } },
+            headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)
+        expect(body["listing"]["negotiable"]).to be(false)
+        expect(draft.reload.negotiable).to be(false)
+      end
+
+      it "serializes negotiable in the :list view" do
+        create(:listing, user: user, negotiable: false)
+
+        get "/api/v1/my/listings", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        listings = JSON.parse(response.body)["listings"]
+        # The newly created listing with negotiable: false should appear
+        firm = listings.find { |l| l["negotiable"] == false }
+        expect(firm).not_to be_nil
+      end
+    end
   end
 end

@@ -5,5 +5,9 @@ FactoryBot.define do
 
     body { Faker::Lorem.sentence }
     kind { :text }
+
+    trait :deleted do
+      deleted_at { Time.current }
+    end
   end
 end

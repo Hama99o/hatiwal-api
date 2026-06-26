@@ -1,5 +1,6 @@
 class Api::V1::MessagesController < Api::V1::BaseController
   before_action :set_conversation
+  before_action :set_message, only: [ :destroy ]
 
   def index
     authorize @conversation, :read_messages?
@@ -30,6 +31,12 @@ class Api::V1::MessagesController < Api::V1::BaseController
     end
   end
 
+  def destroy
+    authorize @message
+    @message.soft_delete!
+    render_blue(MessageSerializer, @message, view: :default)
+  end
+
   def mark_read
     authorize @conversation, :read_messages?
     @conversation.messages
@@ -43,6 +50,12 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
   def set_conversation
     @conversation = policy_scope(Conversation).find(params[:conversation_id])
+  end
+
+  def set_message
+    @message = @conversation.messages.find(params[:id])
+  rescue ActiveRecord::RecordNotFound
+    render_not_found
   end
 
   # Builds permitted params and enforces the kind whitelist.
