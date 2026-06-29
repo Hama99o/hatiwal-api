@@ -63,9 +63,9 @@ Rails.application.configure do
   end
   config.action_mailer.default_url_options = { host: _app_host, protocol: "https" }
 
-  # Use Postmark for transactional email in production.
-  config.action_mailer.delivery_method = :postmark
-  config.action_mailer.postmark_settings = { api_token: Rails.application.credentials[:postmark_api_token] }
+  # Gmail SMTP settings are inherited from application.rb (credentials).
+  # Explicitly confirm :smtp delivery here so production never falls back to :test.
+  config.action_mailer.delivery_method = :smtp
 
   # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
   # the I18n.default_locale when a translation cannot be found).
