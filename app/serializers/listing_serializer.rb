@@ -44,6 +44,10 @@ class ListingSerializer < ApplicationSerializer
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:expired) { |l| l.expired? }
     field(:conversations_count) { |l| l.conversations.count }
+    # Integer total only — no user identities exposed. Use .size (not .count) so
+    # that when saved_listings is eager-loaded via includes(:saved_listings) in
+    # the controller the in-memory target is used instead of a separate query.
+    field(:saves_count) { |l| l.saved_listings.size }
     field(:is_saved) { |l, opts| opts[:current_user]&.saved_listings&.exists?(listing_id: l.id) || false }
     field(:is_viewed) do |l, opts|
       next opts[:is_viewed] unless opts[:is_viewed].nil?

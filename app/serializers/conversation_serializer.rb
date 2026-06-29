@@ -12,8 +12,12 @@ class ConversationSerializer < ApplicationSerializer
       other = current_user ? c.other_participant(current_user) : c.buyer
       { id: other.id, name: other.full_name, city: other.city, verified: other.verified, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
     end
-    field(:last_message_body) { |c| c.last_message&.body }
+    # TASK-M913: a retracted last message must not leak its content into the
+    # inbox preview — suppress body, keep kind/deleted flag so the client can
+    # render its own localized "Message deleted" preview text.
+    field(:last_message_body) { |c| lm = c.last_message; lm && !lm.deleted? ? lm.body : nil }
     field(:last_message_kind) { |c| c.last_message&.kind }
+    field(:last_message_deleted) { |c| c.last_message&.deleted? || false }
     field(:unread_count) do |c, opts|
       current_user = opts[:current_user]
       next 0 unless current_user

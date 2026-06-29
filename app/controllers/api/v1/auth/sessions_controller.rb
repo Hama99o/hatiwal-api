@@ -4,6 +4,15 @@ module Api
   module V1
     module Auth
       class SessionsController < DeviseTokenAuth::SessionsController
+        # Clear the push token on logout so this device stops receiving
+        # notifications for the departing user. Without this, a second account
+        # logging in on the same device shares the token and receives
+        # notifications intended for the logged-out account.
+        def destroy
+          current_user&.update_column(:push_token, nil)
+          super
+        end
+
         private
 
         # User#active_for_authentication? returns false for suspended/banned

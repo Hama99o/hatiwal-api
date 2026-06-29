@@ -14,7 +14,14 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
       parameter name: :search,         in: :query,  type: :string,  required: false
       parameter name: :category_id,    in: :query,  type: :integer, required: false
       parameter name: :sort,                in: :query,  type: :string,  required: false,
-                description: "Sort order. Allowed values: newest (default), oldest, price_asc, price_desc, most_viewed. Unknown values fall back to newest."
+                description: "Sort order. Allowed values: newest (default), oldest, price_asc, price_desc, most_viewed, nearest. " \
+                             "nearest requires latitude/longitude and falls back to newest when they are absent. Unknown values fall back to newest."
+      parameter name: :latitude,  in: :query, type: :number, required: false,
+                description: "Buyer's latitude. Used for radius filtering and for sort=nearest."
+      parameter name: :longitude, in: :query, type: :number, required: false,
+                description: "Buyer's longitude. Used for radius filtering and for sort=nearest."
+      parameter name: :radius,    in: :query, type: :number, required: false,
+                description: "Radius in kilometers — requires latitude and longitude."
       parameter name: :seller_active_days, in: :query,  type: :integer, required: false,
                 description: "When present, restricts results to listings whose seller's last_sign_in_at is within this many days. E.g. 7 returns listings from sellers active in the last week."
 
@@ -150,6 +157,34 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
               example: JSON.parse(response.body, symbolize_names: true)
             }
           }
+        end
+      end
+
+      response "200", "sort=nearest orders by distance when coordinates are present" do
+        let(:sort)      { "nearest" }
+        let(:latitude)  { 34.5553 }
+        let(:longitude) { 69.2075 }
+
+        let!(:near) { create(:listing, :active, latitude: 34.5800, longitude: 69.2100) }
+        let!(:far)  { create(:listing, :active, latitude: 34.3529, longitude: 62.2040) }
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to eq([ near.id, far.id ])
+        end
+      end
+
+      response "200", "sort=nearest falls back to newest when coordinates are absent" do
+        let(:sort) { "nearest" }
+
+        before do
+          create(:listing, :active, created_at: 3.days.ago)
+          create(:listing, :active, created_at: 1.hour.ago)
+        end
+
+        run_test! do |response|
+          created_ats = JSON.parse(response.body)["listings"].map { |l| l["created_at"] }
+          expect(created_ats).to eq(created_ats.sort.reverse)
         end
       end
 
@@ -419,6 +454,63 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
         run_test! do |response|
           data = JSON.parse(response.body)
           expect(data["listing"]["is_saved"]).to eq(true)
+        end
+      end
+    end
+  end
+
+  path "/api/v1/listings/{id}" do
+    parameter name: :id, in: :path, type: :integer
+
+    get "saves_count reflects the number of SavedListing records (saved-by-N social proof)" do
+      tags "Listings"
+      produces "application/json"
+
+      let(:listing) { create(:listing, :active) }
+      let(:id)      { listing.id }
+
+      response "200", "saves_count is 0 when nobody has saved the listing" do
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]["saves_count"]).to eq(0)
+        end
+      end
+
+      response "200", "saves_count matches the exact SavedListing count" do
+        before { create_list(:saved_listing, 4, listing: listing) }
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]["saves_count"]).to eq(4)
+          expect(data["listing"]["saves_count"]).to eq(SavedListing.where(listing: listing).count)
+        end
+
+        after do |example|
+          example.metadata[:response][:content] = {
+            "application/json" => {
+              example: JSON.parse(response.body, symbolize_names: true)
+            }
+          }
+        end
+      end
+
+      response "200", "saves_count is visible to a guest (no auth headers)" do
+        before { create_list(:saved_listing, 2, listing: listing) }
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          data = JSON.parse(response.body)
+          expect(data["listing"]["saves_count"]).to eq(2)
+        end
+      end
+
+      response "200", "saves_count is an integer, never a nested list of savers" do
+        before { create(:saved_listing, listing: listing) }
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]["saves_count"]).to be_a(Integer)
+          expect(data["listing"].keys).not_to include("savers", "saved_by_users")
         end
       end
     end

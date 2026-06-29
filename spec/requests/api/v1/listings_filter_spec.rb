@@ -160,4 +160,50 @@ RSpec.describe "Api::V1::Listings filtering", type: :request do
       expect(titles).to contain_exactly("Match")
     end
   end
+
+  describe "sort=nearest" do
+    before do
+      # ~3 km north of Kabul center
+      create(:listing, :active, title: "Near", latitude: 34.5800, longitude: 69.2100)
+      # Herat — ~570 km from Kabul
+      create(:listing, :active, title: "Far",  latitude: 34.3529, longitude: 62.2040)
+      # No coordinates at all — never eligible for distance sort
+      create(:listing, :active, title: "NoCoords", latitude: nil, longitude: nil)
+    end
+
+    it "orders listings closer-first when latitude/longitude are present" do
+      get "/api/v1/listings",
+          params: { sort: "nearest", latitude: kabul_lat, longitude: kabul_lng },
+          headers: headers
+
+      expect(response).to have_http_status(:ok)
+      expect(titles).to eq(%w[Near Far])
+    end
+
+    it "composes with the radius filter — radius narrows, nearest orders" do
+      get "/api/v1/listings",
+          params: { sort: "nearest", latitude: kabul_lat, longitude: kabul_lng, radius: 10 },
+          headers: headers
+
+      expect(titles).to eq(%w[Near])
+    end
+
+    it "falls back to newest when latitude/longitude are absent" do
+      old_listing = create(:listing, :active, title: "Old", created_at: 3.days.ago)
+      new_listing = create(:listing, :active, title: "New", created_at: 1.hour.ago)
+
+      get "/api/v1/listings", params: { sort: "nearest" }, headers: headers
+
+      expect(response).to have_http_status(:ok)
+      ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+      expect(ids.index(new_listing.id)).to be < ids.index(old_listing.id)
+    end
+
+    it "works for a guest (no auth)" do
+      get "/api/v1/listings", params: { sort: "nearest", latitude: kabul_lat, longitude: kabul_lng }
+
+      expect(response).to have_http_status(:ok)
+      expect(titles).to eq(%w[Near Far])
+    end
+  end
 end

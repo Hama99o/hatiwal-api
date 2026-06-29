@@ -124,6 +124,43 @@ RSpec.describe Listing, type: :model do
         expect(result.second).to eq(moderate)
       end
     end
+
+    describe ".nearest_first" do
+      # Kabul center — same reference point used by the request specs.
+      let(:kabul_lat) { 34.5553 }
+      let(:kabul_lng) { 69.2075 }
+
+      it "orders listings closer-first by Haversine distance" do
+        near = create(:listing, :active, latitude: 34.5800, longitude: 69.2100)  # ~3km
+        far  = create(:listing, :active, latitude: 34.3529, longitude: 62.2040)  # ~570km
+
+        result = Listing.nearest_first(kabul_lat, kabul_lng).to_a
+        expect(result).to eq([ near, far ])
+      end
+
+      it "excludes listings without coordinates" do
+        with_coords = create(:listing, :active, latitude: 34.5800, longitude: 69.2100)
+        create(:listing, :active, latitude: nil, longitude: nil)
+
+        expect(Listing.nearest_first(kabul_lat, kabul_lng)).to contain_exactly(with_coords)
+      end
+
+      it "composes with within_radius — radius filters, nearest_first orders" do
+        near = create(:listing, :active, latitude: 34.5800, longitude: 69.2100)
+        create(:listing, :active, latitude: 34.3529, longitude: 62.2040) # outside radius
+
+        result = Listing.within_radius(kabul_lat, kabul_lng, 10).nearest_first(kabul_lat, kabul_lng).to_a
+        expect(result).to eq([ near ])
+      end
+
+      it "falls back to the current scope (untouched) when lat/lng are blank" do
+        create(:listing, :active, latitude: 34.5800, longitude: 69.2100)
+        create(:listing, :active, latitude: nil, longitude: nil)
+
+        result = Listing.nearest_first(nil, nil)
+        expect(result.count).to eq(2)
+      end
+    end
   end
 
   describe "timestamp callbacks" do

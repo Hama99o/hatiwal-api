@@ -26,9 +26,16 @@ class Api::V1::ListingsController < Api::V1::BaseController
     listings = listings.seller_active_within(params[:seller_active_days]) if params[:seller_active_days].present?
 
     # Apply sort last so it overrides the :browsable default order.
-    # Any absent or unrecognised value silently falls back to newest.
-    listings = listings.sorted(params[:sort])
-                       .includes(:price_histories)
+    # sort=nearest requires latitude/longitude — when present it orders by
+    # Haversine distance (composing with any radius filter above). Without
+    # coordinates it falls back to the default (newest), same as any other
+    # unrecognised value.
+    listings = if nearest_sort?
+                 listings.nearest_first(params[:latitude], params[:longitude])
+    else
+                 listings.sorted(params[:sort])
+    end
+    listings = listings.includes(:price_histories)
 
     paginate_blue(
       ListingSerializer,
@@ -98,6 +105,13 @@ class Api::V1::ListingsController < Api::V1::BaseController
     params[:latitude].present? && params[:longitude].present? && params[:radius].present?
   end
 
+  # sort=nearest only makes sense with coordinates — radius is optional (the
+  # buyer may want "nearest first" across the whole feed, not just within a
+  # radius). When coordinates are absent, `sorted` falls back to newest.
+  def nearest_sort?
+    params[:sort].to_s == "nearest" && params[:latitude].present? && params[:longitude].present?
+  end
+
   # Returns true when a logged-in, non-owner viewer is in a mutual block
   # relationship with the listing's seller. Guests and the listing owner
   # are always allowed through.
@@ -115,6 +129,11 @@ class Api::V1::ListingsController < Api::V1::BaseController
   end
 
   def set_listing
-    @listing = policy_scope(Listing).find(params[:id])
+    scope = policy_scope(Listing)
+    # Eager-load saved_listings only for #show so the serializer's saves_count
+    # (l.saved_listings.size) uses the in-memory association instead of firing
+    # a separate COUNT(*) query — avoids an N+1 on the detail endpoint.
+    scope = scope.includes(:saved_listings) if action_name == "show"
+    @listing = scope.find(params[:id])
   end
 end

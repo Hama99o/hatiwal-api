@@ -154,6 +154,40 @@ RSpec.describe ListingSerializer, type: :serializer do
     end
   end
 
+  describe ":detailed view — saves_count (saved-by-N social proof)" do
+    it "includes saves_count as an integer, guest-visible (nil current_user)" do
+      result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+      expect(result).to have_key(:saves_count)
+      expect(result[:saves_count]).to be_a(Integer)
+    end
+
+    it "is 0 when nobody has saved the listing" do
+      result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+      expect(result[:saves_count]).to eq(0)
+    end
+
+    it "matches the exact number of SavedListing records for the listing" do
+      create_list(:saved_listing, 3, listing: listing)
+      result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+      expect(result[:saves_count]).to eq(3)
+      expect(result[:saves_count]).to eq(SavedListing.where(listing: listing).count)
+    end
+
+    it "does not expose any saver identity — only the integer total" do
+      create(:saved_listing, listing: listing)
+      result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+      expect(result[:saves_count]).to be_a(Integer)
+      expect(result.keys).not_to include(:savers, :saved_by, :saved_by_users)
+    end
+  end
+
+  describe ":list view — saves_count is not exposed" do
+    it "does not include saves_count in the list view" do
+      result = described_class.render_as_hash(listing, view: :list)
+      expect(result).not_to have_key(:saves_count)
+    end
+  end
+
   describe ":detailed view — share_url field" do
     context "when PUBLIC_SHARE_BASE_URL is set" do
       before do

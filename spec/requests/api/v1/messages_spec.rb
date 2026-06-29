@@ -550,6 +550,13 @@ RSpec.describe "Api::V1::Messages", type: :request do
         expect(message.deleted_at).to be_present
         expect(Message.find_by(id: message.id)).to be_present
       end
+
+      it "enqueues BroadcastMessageJob so the other participant sees the tombstone in real time" do
+        expect do
+          delete "/api/v1/conversations/#{conversation.id}/messages/#{message.id}",
+                 headers: headers, as: :json
+        end.to have_enqueued_job(BroadcastMessageJob).with(message.id)
+      end
     end
 
     context "when the OTHER participant tries to delete" do

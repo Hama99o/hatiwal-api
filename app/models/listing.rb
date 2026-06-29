@@ -23,8 +23,10 @@ class Listing < ApplicationRecord
   # How long a published listing stays in the buyer feed before it expires.
   LISTING_LIFESPAN = 30.days
 
-  # Valid sort keys accepted by the API.
-  SORT_KEYS = %w[newest oldest price_asc price_desc most_viewed].freeze
+  # Valid sort keys accepted by the API. "nearest" additionally requires
+  # latitude/longitude — the controller applies `nearest_first` for it and
+  # falls back to the default (newest) ordering when coordinates are absent.
+  SORT_KEYS = %w[newest oldest price_asc price_desc most_viewed nearest].freeze
 
   scope :active,      -> { where(status: :active) }
   scope :ordered,     -> { order(created_at: :desc) }
@@ -95,13 +97,37 @@ class Listing < ApplicationRecord
   def self.within_radius(lat, lng, km)
     return all if lat.blank? || lng.blank? || km.blank?
 
-    where.not(latitude: nil, longitude: nil).where(
-      "#{EARTH_RADIUS_KM} * acos(LEAST(1, GREATEST(-1, " \
-      "cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + " \
-      "sin(radians(?)) * sin(radians(latitude))))) <= ?",
-      lat.to_f, lng.to_f, lat.to_f, km.to_f
-    )
+    where.not(latitude: nil, longitude: nil)
+         .where("#{haversine_distance_sql} <= ?", *haversine_binds(lat, lng), km.to_f)
   end
+
+  # Orders listings by Haversine distance from (lat, lng), nearest first.
+  # Reuses the exact same distance expression as `within_radius` so the two
+  # compose cleanly (radius filter + nearest sort). Listings without
+  # coordinates are excluded — they have no defined distance. Returns the
+  # scope untouched (no reorder) when lat/lng are blank so callers can fall
+  # back to another sort.
+  def self.nearest_first(lat, lng)
+    return all if lat.blank? || lng.blank?
+
+    where.not(latitude: nil, longitude: nil)
+         .reorder(Arel.sql(sanitize_sql_array([ "#{haversine_distance_sql} ASC", *haversine_binds(lat, lng) ])))
+  end
+
+  # The Haversine great-circle distance expression, parameterized with `?`
+  # placeholders for (lat, lng, lat) — shared by `within_radius` (WHERE ... <=)
+  # and `nearest_first` (ORDER BY ... ASC) so the math lives in one place.
+  def self.haversine_distance_sql
+    "#{EARTH_RADIUS_KM} * acos(LEAST(1, GREATEST(-1, " \
+    "cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + " \
+    "sin(radians(?)) * sin(radians(latitude)))))"
+  end
+  private_class_method :haversine_distance_sql
+
+  def self.haversine_binds(lat, lng)
+    [ lat.to_f, lng.to_f, lat.to_f ]
+  end
+  private_class_method :haversine_binds
 
   before_save :set_published_at, if: -> { active? && published_at.nil? }
   before_save :set_reserved_at,  if: -> { reserved? && reserved_at.nil? }

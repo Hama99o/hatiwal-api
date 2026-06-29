@@ -34,6 +34,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
   def destroy
     authorize @message
     @message.soft_delete!
+    BroadcastMessageJob.perform_later(@message.id) # real-time tombstone flip for the other participant
     render_blue(MessageSerializer, @message, view: :default)
   end
 

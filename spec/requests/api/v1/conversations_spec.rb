@@ -34,6 +34,19 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       expect(row["last_message_kind"]).to eq("meetup_proposal")
     end
 
+    # TASK-M913: a retracted last message must not leak its content into the inbox preview.
+    it "suppresses the body and flags last_message_deleted when the last message is retracted" do
+      conv = create(:conversation, buyer: buyer, listing: listing)
+      msg = conv.messages.create!(user: buyer, kind: :text, body: "My phone number is 555-1234")
+      msg.soft_delete!
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conv.id }
+      expect(row["last_message_body"]).to be_nil
+      expect(row["last_message_deleted"]).to eq(true)
+    end
+
     it "filters by listing_id when provided" do
       other_listing = create(:listing, :active, user: seller)
       conv_for_listing = create(:conversation, buyer: buyer, listing: listing)
