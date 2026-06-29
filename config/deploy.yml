@@ -44,9 +44,8 @@ env:
     - DEVISE_JWT_SECRET_KEY
     - APP_DOMAIN
     - CABLE_ALLOWED_ORIGINS
-    - POSTMARK_API_TOKEN
     - WEB_RESET_URL
-    # Google OAuth credentials are in config/credentials.yml.enc — not env vars
+    # Sensitive tokens (Google OAuth, Postmark) are in config/credentials.yml.enc — not env vars
   clear:
     DATABASE_HOST: hatiwal_api-db
     DATABASE_PORT: 5432
