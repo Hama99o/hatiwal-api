@@ -67,13 +67,15 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
     nil
   end
 
-  # Accept any audience when google_client_id is not in credentials (dev/test).
-  # In production, require the token to be issued for our own client.
+  # Accept tokens from the web client OR the iOS client (iOS OAuth tokens have
+  # aud = iOS client ID, not the web client ID).
+  # Accept any audience when credentials are not configured (dev/test).
   def valid_audience?(aud)
-    expected = Rails.application.credentials[:google_client_id]
-    return true if expected.blank?
+    web = Rails.application.credentials[:google_client_id]
+    return true if web.blank?
 
-    aud == expected
+    ios = Rails.application.credentials[:google_ios_client_id]
+    [ web, ios ].compact.include?(aud)
   end
 
   def find_or_create_user(payload)

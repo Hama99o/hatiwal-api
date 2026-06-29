@@ -1,13 +1,15 @@
 require "rails_helper"
 
 RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
-  let(:google_email)    { "ahmad.karimi@gmail.com" }
-  let(:google_sub)      { "1234567890" }
-  let(:google_client_id) { "test-client-id.apps.googleusercontent.com" }
+  let(:google_email)      { "ahmad.karimi@gmail.com" }
+  let(:google_sub)        { "1234567890" }
+  let(:google_client_id)  { "test-client-id.apps.googleusercontent.com" }
+  let(:google_ios_client_id) { "test-ios-client-id.apps.googleusercontent.com" }
 
   before do
     allow(Rails.application.credentials).to receive(:[]).and_call_original
     allow(Rails.application.credentials).to receive(:[]).with(:google_client_id).and_return(google_client_id)
+    allow(Rails.application.credentials).to receive(:[]).with(:google_ios_client_id).and_return(google_ios_client_id)
   end
 
   # Base valid payload — mirrors what Google's tokeninfo returns
@@ -213,6 +215,51 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
         expect(response).to have_http_status(:forbidden)
         json = JSON.parse(response.body)
         expect(json["error"]).to eq("account_deleted")
+      end
+    end
+
+    # ── iOS OAuth client token (aud = iOS client ID) ────────────────────────────
+
+    context "with a valid token from the iOS OAuth client" do
+      let(:ios_payload) do
+        {
+          "sub"            => google_sub,
+          "email"          => google_email,
+          "email_verified" => "true",
+          "given_name"     => "Ahmad",
+          "family_name"    => "Karimi",
+          "aud"            => google_ios_client_id
+        }.to_json
+      end
+
+      before do
+        stub_request(:get, "https://oauth2.googleapis.com/tokeninfo")
+          .with(query: { id_token: "ios_token" })
+          .to_return(status: 200, body: ios_payload, headers: { "Content-Type" => "application/json" })
+      end
+
+      it "accepts the iOS client audience and signs in" do
+        post "/api/v1/auth/google", params: { id_token: "ios_token" }, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["uid"]).to eq(google_email)
+      end
+    end
+
+    context "with a token from an unknown audience" do
+      let(:wrong_aud_payload) do
+        { "sub" => "x", "email" => "x@gmail.com", "email_verified" => "true",
+          "aud" => "unknown-client.apps.googleusercontent.com" }.to_json
+      end
+
+      before do
+        stub_request(:get, "https://oauth2.googleapis.com/tokeninfo")
+          .with(query: { id_token: "wrong_aud_token" })
+          .to_return(status: 200, body: wrong_aud_payload, headers: { "Content-Type" => "application/json" })
+      end
+
+      it "returns 401" do
+        post "/api/v1/auth/google", params: { id_token: "wrong_aud_token" }, as: :json
+        expect(response).to have_http_status(:unauthorized)
       end
     end
 
