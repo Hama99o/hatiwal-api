@@ -1,0 +1,17 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "SQL Injection",
+      "warning_code": 0,
+      "fingerprint": "101e6dc1516a8e44a91ed8965979c2bb67fa73f6ae2489e12ec1270799057137",
+      "check_name": "SQL",
+      "message": "Possible SQL injection",
+      "file": "app/models/listing.rb",
+      "line": 121,
+      "link": "https://brakemanscanner.org/docs/warning_types/sql_injection/",
+      "code": "where.not(:latitude => nil, :longitude => nil).where(\"#{Listing.haversine_distance_sql} <= ?\", *Listing.haversine_binds(lat, lng), km.to_f)",
+      "note": "False positive. haversine_distance_sql is a hardcoded constant SQL formula containing only `?` placeholders (no interpolated input). All values are bound via haversine_binds, which coerces every element with .to_f, and km.to_f is a float. No user input reaches the SQL string. Reviewed 2026-07-04."
+    }
+  ],
+  "brakeman_version": "8.0.5"
+}
