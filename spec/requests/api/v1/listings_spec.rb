@@ -24,6 +24,8 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
                 description: "Radius in kilometers — requires latitude and longitude."
       parameter name: :seller_active_days, in: :query,  type: :integer, required: false,
                 description: "When present, restricts results to listings whose seller's last_sign_in_at is within this many days. E.g. 7 returns listings from sellers active in the last week."
+      parameter name: :price_dropped, in: :query, type: :boolean, required: false,
+                description: "When present/true, restricts results to browsable listings with a recorded price reduction (listing_price_histories) within the last Listing::PRICE_DROP_WINDOW (14 days) — the same window used for the price-drop badge — the buyer 'Deals' filter."
 
       let(:user)  { create(:user) }
       let(:headers) { auth_headers_for(user) }
@@ -256,6 +258,151 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
           # Only the listing from the active seller should appear
           expect(listings.length).to eq(1)
           expect(listings.first["seller"]["id"]).to eq(active_seller.id)
+        end
+      end
+
+      response "200", "price_dropped=true returns only listings with a recent price reduction" do
+        let(:price_dropped) { true }
+
+        let!(:discounted_listing) { create(:listing, :active, price: 1000) }
+        let!(:unchanged_listing)  { create(:listing, :active, price: 500) }
+
+        before do
+          discounted_listing.update!(price: 800)
+        end
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to     include(discounted_listing.id)
+          expect(ids).not_to include(unchanged_listing.id)
+        end
+
+        after do |example|
+          example.metadata[:response][:content] = {
+            "application/json" => {
+              example: JSON.parse(response.body, symbolize_names: true)
+            }
+          }
+        end
+      end
+
+      response "200", "price_dropped absent — listings are not filtered by price history" do
+        let!(:discounted_listing) { create(:listing, :active, price: 1000) }
+        let!(:unchanged_listing)  { create(:listing, :active, price: 500) }
+
+        before { discounted_listing.update!(price: 800) }
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to include(discounted_listing.id)
+          expect(ids).to include(unchanged_listing.id)
+        end
+      end
+
+      response "200", "price_dropped=true excludes a price increase and a non-browsable (draft) listing" do
+        let(:price_dropped) { true }
+
+        let!(:discounted_listing) { create(:listing, :active, price: 1000) }
+        let!(:increased_listing)  { create(:listing, :active, price: 100) }
+        let!(:draft_listing)      { create(:listing, price: 1000) }
+
+        before do
+          discounted_listing.update!(price: 800)
+          increased_listing.update!(price: 200)
+          draft_listing.update!(price: 500)
+        end
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to     include(discounted_listing.id)
+          expect(ids).not_to include(increased_listing.id)
+          expect(ids).not_to include(draft_listing.id)
+        end
+      end
+
+      response "200", "price_dropped=true composes with category_id and search filters" do
+        let(:price_dropped) { true }
+        let(:search)        { "bicycle" }
+
+        let!(:matching_category) { create(:category) }
+        let!(:other_category)    { create(:category) }
+
+        let!(:matching_discounted) do
+          create(:listing, :active, title: "red bicycle", price: 1000, category: matching_category)
+        end
+        let!(:matching_unchanged) do
+          create(:listing, :active, title: "red bicycle", price: 500, category: matching_category)
+        end
+        let!(:other_category_discounted) do
+          create(:listing, :active, title: "red bicycle", price: 1000, category: other_category)
+        end
+
+        before do
+          matching_discounted.update!(price: 800)
+          other_category_discounted.update!(price: 800)
+        end
+
+        let(:category_id) { matching_category.id }
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to eq([ matching_discounted.id ])
+        end
+      end
+
+      response "200", "price_dropped=true works for guests (no auth)" do
+        let(:"access-token") { nil }
+        let(:client)         { nil }
+        let(:uid)            { nil }
+        let(:price_dropped)  { true }
+
+        let!(:discounted_listing) { create(:listing, :active, price: 1000) }
+        let!(:unchanged_listing)  { create(:listing, :active, price: 500) }
+
+        before { discounted_listing.update!(price: 800) }
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to     include(discounted_listing.id)
+          expect(ids).not_to include(unchanged_listing.id)
+        end
+      end
+
+      # Regression for a Postgres crash: the old `with_recent_price_drop`
+      # implementation used `joins(:price_histories).distinct`, which produces
+      # `SELECT DISTINCT listings.*`. Composed with `sort=nearest`'s
+      # `ORDER BY acos(...)` (a computed expression not in the SELECT list),
+      # Postgres raised `PG::InvalidColumnReference`. Both filters live in the
+      # same Browse filter panel and are guest-reachable, so this 500'd real
+      # traffic. The fix (a `where(id: subquery)`) keeps the SELECT list to
+      # plain `listings.*`, so it composes with any ORDER BY.
+      response "200", "price_dropped=true composes with sort=nearest without a Postgres error" do
+        let(:price_dropped) { true }
+        let(:sort)          { "nearest" }
+        let(:latitude)      { 34.5553 }
+        let(:longitude)     { 69.2075 }
+
+        let!(:near_discounted) do
+          create(:listing, :active, price: 1000, latitude: 34.5800, longitude: 69.2100)
+        end
+        let!(:far_discounted) do
+          create(:listing, :active, price: 1000, latitude: 34.3529, longitude: 62.2040)
+        end
+        let!(:near_unchanged) do
+          create(:listing, :active, price: 500, latitude: 34.5801, longitude: 69.2101)
+        end
+
+        before do
+          near_discounted.update!(price: 800)
+          far_discounted.update!(price: 800)
+        end
+
+        run_test! do |response|
+          expect(response).to have_http_status(:ok)
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to eq([ near_discounted.id, far_discounted.id ])
+          expect(ids).not_to include(near_unchanged.id)
         end
       end
     end

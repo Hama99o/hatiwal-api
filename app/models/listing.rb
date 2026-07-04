@@ -7,6 +7,7 @@ class Listing < ApplicationRecord
   has_many :conversations, dependent: :nullify
   has_many :reports, as: :reportable, dependent: :destroy
   has_many :price_histories, class_name: ListingPriceHistory.name, dependent: :destroy
+  has_many :hidden_listings, dependent: :destroy
 
   enum :status, { draft: 0, active: 1, reserved: 2, sold: 3 }
   # Optional item condition. Keys avoid the reserved word `new` (would clash
@@ -63,6 +64,10 @@ class Listing < ApplicationRecord
   # Buyer feed: active, not past its expiry, and not removed by an admin.
   scope :browsable,   -> { active.not_expired.not_removed.ordered }
 
+  # Explicit per-user "Not interested" dismissal — excludes listings the given
+  # user has hidden from their own feed. Guests (nil user) see everything.
+  scope :not_hidden_for, ->(user) { user ? where.not(id: user.hidden_listings.select(:listing_id)) : all }
+
   # Similar listings rail: same category, browsable (never leaks draft/sold/expired/removed),
   # excluding the source listing itself, ordered by recency, capped at 8.
   scope :similar_to, lambda { |listing|
@@ -89,6 +94,21 @@ class Listing < ApplicationRecord
   # into the existing query chain; user/avatar eager-loading is unaffected.
   scope :seller_active_within, lambda { |days|
     joins(:user).where("users.last_sign_in_at >= ?", days.to_i.days.ago)
+  }
+
+  # Buyer "Deals" filter — listings that had a genuine price reduction
+  # recorded in listing_price_histories within the last `days` days.
+  # Uses a `where(id: subquery)` instead of `joins(:price_histories).distinct`
+  # so the query stays a plain `listings.*` select — a JOIN + DISTINCT breaks
+  # `ORDER BY` clauses that reference `listings` columns not in the SELECT
+  # list (e.g. the Haversine `sort=nearest` ORDER BY), which Postgres rejects
+  # with `PG::InvalidColumnReference: SELECT DISTINCT ... ORDER BY expressions
+  # must appear in select list`. The subquery composes safely with any scope
+  # or ORDER BY applied afterwards. Window defaults to PRICE_DROP_WINDOW (14
+  # days) so the "Deals" filter matches exactly the listings that render the
+  # price-drop badge.
+  scope :with_recent_price_drop, lambda { |days = PRICE_DROP_WINDOW.in_days.to_i|
+    where(id: ListingPriceHistory.reductions.recent(days).select(:listing_id))
   }
 
   # Listings whose coordinates fall within `km` kilometers of (lat, lng),

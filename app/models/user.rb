@@ -11,6 +11,8 @@ class User < ApplicationRecord
   has_many :listings, dependent: :destroy
   has_many :saved_listings, dependent: :destroy
   has_many :saved_listing_items, through: :saved_listings, source: :listing
+  has_many :hidden_listings, dependent: :destroy
+  has_many :hidden_listing_entries, through: :hidden_listings, source: :listing
   has_many :buyer_conversations, class_name: Conversation.name, foreign_key: :buyer_id, dependent: :destroy, inverse_of: :buyer
   has_many :seller_conversations, class_name: Conversation.name, foreign_key: :seller_id, dependent: :destroy, inverse_of: :seller
   has_many :messages, dependent: :destroy

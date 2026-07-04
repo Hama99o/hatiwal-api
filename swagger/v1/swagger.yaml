@@ -44,12 +44,49 @@ paths:
         in: query
         required: false
         description: 'Sort order. Allowed values: newest (default), oldest, price_asc,
-          price_desc. Unknown values fall back to newest.'
+          price_desc, most_viewed, nearest. nearest requires latitude/longitude and
+          falls back to newest when they are absent. Unknown values fall back to newest.'
         schema:
           type: string
+      - name: latitude
+        in: query
+        required: false
+        description: Buyer's latitude. Used for radius filtering and for sort=nearest.
+        schema:
+          type: number
+      - name: longitude
+        in: query
+        required: false
+        description: Buyer's longitude. Used for radius filtering and for sort=nearest.
+        schema:
+          type: number
+      - name: radius
+        in: query
+        required: false
+        description: Radius in kilometers — requires latitude and longitude.
+        schema:
+          type: number
+      - name: seller_active_days
+        in: query
+        required: false
+        description: When present, restricts results to listings whose seller's last_sign_in_at
+          is within this many days. E.g. 7 returns listings from sellers active in
+          the last week.
+        schema:
+          type: integer
+      - name: price_dropped
+        in: query
+        required: false
+        description: When present/true, restricts results to browsable listings with
+          a recorded price reduction (listing_price_histories) within the last Listing::PRICE_DROP_WINDOW
+          (14 days) — the same window used for the price-drop badge — the buyer 'Deals'
+          filter.
+        schema:
+          type: boolean
       responses:
         '200':
-          description: absent or invalid sort falls back to newest (created_at desc)
+          description: price_dropped=true composes with sort=nearest without a Postgres
+            error
   "/api/v1/listings/{id}":
     parameters:
     - name: id
@@ -58,7 +95,8 @@ paths:
       schema:
         type: integer
     get:
-      summary: is_saved reflects whether the current user has saved the listing
+      summary: saves_count reflects the number of SavedListing records (saved-by-N
+        social proof)
       tags:
       - Listings
       security:
@@ -83,7 +121,7 @@ paths:
         '404':
           description: not found
         '200':
-          description: is_saved is true when listing is saved by current user
+          description: saves_count is an integer, never a nested list of savers
   "/api/v1/listings/{id}/save":
     parameters:
     - name: id
@@ -173,6 +211,90 @@ paths:
             exactly 8
         '404':
           description: not found for non-existent listing
+  "/api/v1/reports":
+    get:
+      summary: list the current user's reports
+      tags:
+      - Reports
+      description: Returns a paginated list of reports submitted by the authenticated
+        user. Includes status, reason, and a safe reportable_label.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '401':
+          description: requires authentication
+        '200':
+          description: pagination meta is present
+    post:
+      summary: submit a report
+      tags:
+      - Reports
+      description: Submits a polymorphic report against a Listing or User.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '401':
+          description: requires authentication
+        '201':
+          description: creates a report
+        '422':
+          description: rejects reporting own listing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                report:
+                  type: object
+                  properties:
+                    reportable_type:
+                      type: string
+                      enum:
+                      - Listing
+                      - User
+                    reportable_id:
+                      type: integer
+                    reason:
+                      type: string
+                    description:
+                      type: string
+                  required:
+                  - reportable_type
+                  - reportable_id
+                  - reason
   "/api/v1/users/{user_id}/sold_listings":
     get:
       summary: list a seller's sold listings (public)

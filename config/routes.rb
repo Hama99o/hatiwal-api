@@ -89,6 +89,8 @@ Rails.application.routes.draw do
         member do
           post   :save
           delete :unsave
+          post   :hide
+          delete :unhide
           get    :similar
         end
         resources :conversations, only: [ :create ]
@@ -167,6 +169,7 @@ Rails.application.routes.draw do
 
         resources :saved_listings, only: [ :index ]
         resources :viewed_listings, only: [ :index ]
+        resources :hidden_listings, only: [ :index ]
       end
     end
   end

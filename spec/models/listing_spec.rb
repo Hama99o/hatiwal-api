@@ -74,6 +74,70 @@ RSpec.describe Listing, type: :model do
       end
     end
 
+    describe ".with_recent_price_drop" do
+      it "returns only listings with a price reduction recorded within the window, deduplicated" do
+        discounted = create(:listing, :active, price: 1000)
+        discounted.update!(price: 800)
+        discounted.update!(price: 600) # a second drop — must not duplicate the row via the join
+
+        increased = create(:listing, :active, price: 100)
+        increased.update!(price: 200)
+
+        unchanged = create(:listing, :active, price: 500)
+
+        result = Listing.with_recent_price_drop
+        expect(result).to contain_exactly(discounted)
+        expect(result.to_a.count { |l| l.id == discounted.id }).to eq(1)
+        expect(result).not_to include(increased, unchanged)
+      end
+
+      it "excludes drops older than the given window" do
+        old_drop = create(:listing, :active, price: 1000)
+        old_drop.update!(price: 500)
+        ListingPriceHistory.last.update_column(:changed_at, 40.days.ago)
+
+        expect(Listing.with_recent_price_drop(30)).not_to include(old_drop)
+      end
+
+      it "chains onto .browsable so non-browsable listings are excluded" do
+        draft = create(:listing, price: 1000)
+        draft.update!(price: 500)
+
+        expect(Listing.browsable.with_recent_price_drop).not_to include(draft)
+      end
+
+      it "defaults to the same window as the price-drop badge (PRICE_DROP_WINDOW)" do
+        borderline = create(:listing, :active, price: 1000)
+        borderline.update!(price: 500)
+        ListingPriceHistory.last.update_column(:changed_at, 20.days.ago) # inside old 30d window, outside 14d badge window
+
+        expect(Listing.with_recent_price_drop).not_to include(borderline)
+      end
+
+      # Regression: the previous implementation used
+      # `joins(:price_histories).distinct`, which forces
+      # `SELECT DISTINCT listings.*` — incompatible with an ORDER BY on a
+      # computed expression not in the SELECT list (e.g. `nearest_first`'s
+      # Haversine `ORDER BY acos(...)`), raising
+      # `PG::InvalidColumnReference` in Postgres. The `where(id: subquery)`
+      # implementation keeps the SELECT list to plain `listings.*` so it
+      # composes with any ORDER BY, including `nearest_first`.
+      it "composes with .nearest_first without raising a Postgres error" do
+        near = create(:listing, :active, price: 1000, latitude: 34.5800, longitude: 69.2100)
+        near.update!(price: 800)
+        far = create(:listing, :active, price: 1000, latitude: 34.3529, longitude: 62.2040)
+        far.update!(price: 800)
+        create(:listing, :active, price: 500, latitude: 34.5801, longitude: 69.2101) # unchanged, nearest of all
+
+        result = nil
+        expect {
+          result = Listing.browsable.with_recent_price_drop.nearest_first(34.5553, 69.2075).to_a
+        }.not_to raise_error
+
+        expect(result.map(&:id)).to eq([ near.id, far.id ])
+      end
+    end
+
     describe ".sorted" do
       let!(:cheap) { create(:listing, :active, price: 100, created_at: 2.days.ago) }
       let!(:expensive) { create(:listing, :active, price: 9000, created_at: 1.hour.ago) }

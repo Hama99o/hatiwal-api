@@ -6,6 +6,11 @@ class ListingPolicy < ApplicationPolicy
   def viewed?        = true  # authenticated read — any user may list their own view history
   def create?        = true
   def save?          = true
+  # "Not interested" — any signed-in user may hide/unhide any browsable
+  # listing from their own feed; the controller/BaseController already
+  # requires authentication, so this simply guards against a nil user.
+  def hide?          = user.present?
+  def unhide?        = user.present?
   # Authenticated seller action — counts are scoped to current_user.listings
   # in the controller, so any signed-in user is authorised to call this.
   def status_counts? = true

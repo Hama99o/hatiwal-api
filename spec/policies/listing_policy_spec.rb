@@ -16,6 +16,16 @@ RSpec.describe ListingPolicy do
     it { expect(policy.sold_by?).to be true }
     it { expect(policy.create?).to be true }
     it { expect(policy.save?).to be true }
+    it { expect(policy.hide?).to be true }
+    it { expect(policy.unhide?).to be true }
+  end
+
+  describe "#hide? / #unhide?" do
+    it "is false for a guest (nil user)" do
+      guest_policy = described_class.new(nil, listing)
+      expect(guest_policy.hide?).to be false
+      expect(guest_policy.unhide?).to be false
+    end
   end
 
   describe "#update? / #destroy?" do

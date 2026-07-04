@@ -4,10 +4,11 @@ class Api::V1::ListingsController < Api::V1::BaseController
   # still require authentication via BaseController.
   skip_before_action :authenticate_user!, only: [ :index, :show, :similar ]
   before_action :authenticate_optional!, only: [ :index, :show, :similar ]
-  before_action :set_listing, only: [ :show, :save, :unsave, :similar ]
+  before_action :set_listing, only: [ :show, :save, :unsave, :similar, :hide, :unhide ]
 
   def index
     listings = policy_scope(Listing.browsable)
+    listings = listings.not_hidden_for(current_user)
     listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
     listings = listings.search(params[:search]) if params[:search].present?
     listings = listings.by_category(params[:category_id]) if params[:category_id].present?
@@ -24,6 +25,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
     end
 
     listings = listings.seller_active_within(params[:seller_active_days]) if params[:seller_active_days].present?
+    listings = listings.with_recent_price_drop if params[:price_dropped].present?
 
     # Apply sort last so it overrides the :browsable default order.
     # sort=nearest requires latitude/longitude — when present it orders by
@@ -69,6 +71,22 @@ class Api::V1::ListingsController < Api::V1::BaseController
     authorize @listing, :save?
     current_user.saved_listings.find_by(listing: @listing)&.destroy
     render_ok({ saved: false })
+  end
+
+  # "Not interested" — hides the listing from the current user's own Browse
+  # feed only. Distinct from save/unsave and from the seen/viewed dim badge.
+  def hide
+    authorize @listing, :hide?
+    hidden = current_user.hidden_listings.find_or_create_by!(listing: @listing)
+    render_ok({ hidden: true, id: hidden.id })
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
+  end
+
+  def unhide
+    authorize @listing, :unhide?
+    current_user.hidden_listings.find_by(listing: @listing)&.destroy
+    render_ok({ hidden: false })
   end
 
   def similar
