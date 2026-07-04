@@ -69,13 +69,23 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
 
   # Accept tokens from the web client OR the iOS client (iOS OAuth tokens have
   # aud = iOS client ID, not the web client ID).
-  # Accept any audience when credentials are not configured (dev/test).
+  #
+  # FAIL CLOSED in production: if the client ids are missing from credentials,
+  # reject every token rather than accepting ANY Google-issued token — an
+  # attacker could otherwise mint a token from their own OAuth app and sign in
+  # as (or auto-create) any account matching the token's email. The permissive
+  # branch survives only for development/test convenience.
   def valid_audience?(aud)
     web = Rails.application.credentials[:google_client_id]
-    return true if web.blank?
-
     ios = Rails.application.credentials[:google_ios_client_id]
-    [ web, ios ].compact.include?(aud)
+    allowed = [ web, ios ].compact_blank
+
+    if allowed.empty?
+      Rails.logger.error("Google auth: google_client_id missing from credentials — rejecting token") if Rails.env.production?
+      return !Rails.env.production?
+    end
+
+    allowed.include?(aud)
   end
 
   def find_or_create_user(payload)

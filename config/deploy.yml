@@ -45,6 +45,8 @@ env:
     - APP_DOMAIN
     - CABLE_ALLOWED_ORIGINS
     - WEB_RESET_URL
+    - ADMIN_PASSWORD
+    - ALLOWED_ORIGINS
     # Sensitive tokens (Google OAuth, Postmark) are in config/credentials.yml.enc — not env vars
   clear:
     DATABASE_HOST: hatiwal_api-db

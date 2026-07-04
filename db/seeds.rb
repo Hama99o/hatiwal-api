@@ -5,11 +5,18 @@
 
 # ── Admin account ────────────────────────────────────────────────────────────
 # Staff login for the /admin dashboard. Credentials come from ENV so production
-# never ships a known password; in development it falls back to a default.
-# CHANGE THE PASSWORD IN PRODUCTION via ADMIN_EMAIL / ADMIN_PASSWORD env vars.
+# never ships a known password. In production ADMIN_PASSWORD is REQUIRED — the
+# seed fails loudly rather than provisioning an admin with a committed default.
+# The weak fallback exists only for development/test convenience.
 puts "=== Seeding Admin user ==="
 admin_email    = ENV.fetch("ADMIN_EMAIL", "admin@hatiwal.com")
-admin_password = ENV.fetch("ADMIN_PASSWORD", "changeme123!")
+admin_password = ENV.fetch("ADMIN_PASSWORD") do
+  if Rails.env.production?
+    raise "ADMIN_PASSWORD must be set to seed the admin user in production — refusing to create an admin with a known default password."
+  end
+
+  "changeme123!" # development/test only — never reaches production (guard above)
+end
 admin = AdminUser.find_or_initialize_by(email: admin_email)
 if admin.new_record?
   admin.name     = ENV.fetch("ADMIN_NAME", "Hatiwal Admin")
