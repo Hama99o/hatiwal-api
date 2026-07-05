@@ -214,5 +214,72 @@ RSpec.describe "Api::V1::My::SavedListings", type: :request do
       expect(item["price_drop_percent"]).to be_an(Integer)
       expect(item["price_drop_percent"]).to be > 0
     end
+
+    context "price_at_save / price_dropped / price_drop_amount (TASK-Y316)" do
+      it "reports a price drop when the seller lowers the price after the save" do
+        listing = create(:listing, :active, price: 5000)
+        create(:saved_listing, user: user, listing: listing)
+        listing.update!(price: 4000)
+
+        get "/api/v1/my/saved_listings", headers: headers, as: :json
+
+        item = JSON.parse(response.body)["listings"].find { |l| l["id"] == listing.id }
+        expect(item["price_at_save"].to_f).to eq(5000.0)
+        expect(item["price_dropped"]).to be true
+        expect(item["price_drop_amount"].to_f).to eq(1000.0)
+        expect(item["price"].to_f).to eq(4000.0)
+      end
+
+      it "reports no drop when the price is unchanged since the save" do
+        listing = create(:listing, :active, price: 5000)
+        create(:saved_listing, user: user, listing: listing)
+
+        get "/api/v1/my/saved_listings", headers: headers, as: :json
+
+        item = JSON.parse(response.body)["listings"].find { |l| l["id"] == listing.id }
+        expect(item["price_dropped"]).to be false
+        expect(item["price_drop_amount"]).to be_nil
+      end
+
+      it "reports no drop when the price increased since the save" do
+        listing = create(:listing, :active, price: 5000)
+        create(:saved_listing, user: user, listing: listing)
+        listing.update!(price: 6000)
+
+        get "/api/v1/my/saved_listings", headers: headers, as: :json
+
+        item = JSON.parse(response.body)["listings"].find { |l| l["id"] == listing.id }
+        expect(item["price_dropped"]).to be false
+        expect(item["price_drop_amount"]).to be_nil
+      end
+
+      it "reports no drop when the listing is no longer active, even if the price fell" do
+        listing = create(:listing, :active, price: 5000)
+        create(:saved_listing, user: user, listing: listing)
+        listing.update!(price: 4000, status: :sold)
+
+        get "/api/v1/my/saved_listings", headers: headers, as: :json
+
+        item = JSON.parse(response.body)["listings"].find { |l| l["id"] == listing.id }
+        expect(item["price_dropped"]).to be false
+        expect(item["price_drop_amount"]).to be_nil
+      end
+
+      it "does not leak price_at_save data across rows on the same page (no cross-contamination)" do
+        dropped_listing   = create(:listing, :active, price: 5000)
+        unchanged_listing = create(:listing, :active, price: 3000)
+        create(:saved_listing, user: user, listing: dropped_listing)
+        create(:saved_listing, user: user, listing: unchanged_listing)
+        dropped_listing.update!(price: 4000)
+
+        get "/api/v1/my/saved_listings", headers: headers, as: :json
+
+        items = JSON.parse(response.body)["listings"]
+        dropped_item   = items.find { |l| l["id"] == dropped_listing.id }
+        unchanged_item = items.find { |l| l["id"] == unchanged_listing.id }
+        expect(dropped_item["price_dropped"]).to be true
+        expect(unchanged_item["price_dropped"]).to be false
+      end
+    end
   end
 end

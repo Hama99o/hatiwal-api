@@ -170,6 +170,8 @@ Rails.application.routes.draw do
         resources :saved_listings, only: [ :index ]
         resources :viewed_listings, only: [ :index ]
         resources :hidden_listings, only: [ :index ]
+        # GET /my/transactions — the caller's own transactions, as buyer or seller (TASK-TX01).
+        resources :transactions, only: [ :index ]
       end
     end
   end

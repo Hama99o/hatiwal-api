@@ -8,6 +8,10 @@ class Listing < ApplicationRecord
   has_many :reports, as: :reportable, dependent: :destroy
   has_many :price_histories, class_name: ListingPriceHistory.name, dependent: :destroy
   has_many :hidden_listings, dependent: :destroy
+  # Named `sale_transactions` (not `transactions`) to avoid colliding with
+  # ActiveRecord::Base#transaction (the DB-transaction method every model
+  # inherits) — see TASK-TX01.
+  has_many :sale_transactions, class_name: Transaction.name, dependent: :destroy
 
   enum :status, { draft: 0, active: 1, reserved: 2, sold: 3 }
   # Optional item condition. Keys avoid the reserved word `new` (would clash
@@ -167,6 +171,60 @@ class Listing < ApplicationRecord
   # (Re)start the expiry clock — used on publish and on seller renew.
   def renew!
     update!(expires_at: LISTING_LIFESPAN.from_now)
+  end
+
+  # ── Transactions (TASK-TX01) ─────────────────────────────────────────────────
+  # The currently open (reserved, not yet sold) Transaction for this listing,
+  # or nil. A listing has at most one open transaction at a time (enforced by
+  # a partial unique DB index on transactions.listing_id).
+  def open_transaction
+    sale_transactions.reserved.order(created_at: :desc).first
+  end
+
+  # Create or advance the Transaction when the seller reserves this listing
+  # for a specific buyer. Returns nil (no-op) when buyer_id is blank — the
+  # legacy bare `PUT .../reserve` call never touches the transactions table.
+  def reserve_with_buyer!(buyer_id:, final_price: nil)
+    return nil if buyer_id.blank?
+
+    existing = open_transaction
+    if existing
+      existing.update!(buyer_id: buyer_id, final_price: final_price.presence || price)
+      existing
+    else
+      sale_transactions.create!(
+        seller_id: user_id,
+        buyer_id: buyer_id,
+        final_price: final_price.presence || price,
+        currency: currency,
+        status: :reserved
+      )
+    end
+  end
+
+  # Create or advance the Transaction to sold when the seller marks this
+  # listing as sold for a specific buyer. When a reserved Transaction already
+  # exists it is advanced (reserved → sold); otherwise a sold Transaction is
+  # created directly (selling straight from active, skipping reserve).
+  # Returns nil (no-op) when buyer_id is blank — the legacy bare
+  # `PUT .../sold` call never touches the transactions table.
+  def sold_with_buyer!(buyer_id:, final_price: nil)
+    return nil if buyer_id.blank?
+
+    existing = open_transaction
+    if existing
+      existing.mark_sold!(final_price: final_price, buyer_id: buyer_id)
+      existing
+    else
+      sale_transactions.create!(
+        seller_id: user_id,
+        buyer_id: buyer_id,
+        final_price: final_price.presence || price,
+        currency: currency,
+        status: :sold,
+        completed_at: Time.current
+      )
+    end
   end
 
   # ── Admin take-down (soft remove) ────────────────────────────────────────────

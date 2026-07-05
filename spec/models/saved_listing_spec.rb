@@ -42,4 +42,63 @@ RSpec.describe SavedListing, type: :model do
       end
     end
   end
+
+  describe "#price_at_save" do
+    it "snapshots the listing's price on create" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      expect(saved.price_at_save).to eq(5000)
+    end
+
+    it "does not change the snapshot when the listing price changes later" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      listing.update!(price: 4000)
+      expect(saved.reload.price_at_save).to eq(5000)
+    end
+  end
+
+  describe "#price_dropped?" do
+    it "is true when the current price is lower than price_at_save and the listing is active" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      listing.update!(price: 4000)
+      expect(saved.reload.price_dropped?).to be true
+    end
+
+    it "is false when the price is unchanged" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      expect(saved.price_dropped?).to be false
+    end
+
+    it "is false when the price increased" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      listing.update!(price: 6000)
+      expect(saved.reload.price_dropped?).to be false
+    end
+
+    it "is false when the listing is no longer active, even if the price dropped" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      listing.update!(price: 4000, status: :sold)
+      expect(saved.reload.price_dropped?).to be false
+    end
+  end
+
+  describe "#price_drop_amount" do
+    it "returns the positive drop amount when the price dropped" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      listing.update!(price: 4000)
+      expect(saved.reload.price_drop_amount).to eq(1000)
+    end
+
+    it "returns nil when the price did not drop" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      expect(saved.price_drop_amount).to be_nil
+    end
+  end
 end

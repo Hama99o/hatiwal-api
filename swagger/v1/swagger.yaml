@@ -211,6 +211,43 @@ paths:
             exactly 8
         '404':
           description: not found for non-existent listing
+  "/api/v1/my/transactions":
+    get:
+      summary: list the caller's transactions (as buyer and/or seller)
+      tags:
+      - Transactions
+      description: |
+        Returns the current user's transactions — both the ones where they are
+        the seller and the ones where they are the buyer. Optional `?as=buyer`
+        or `?as=seller` narrows to a single role. TASK-TX01.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: as
+        in: query
+        required: false
+        description: 'Optional role filter: ''buyer'' or ''seller'''
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: "?as=seller narrows to transactions where the caller is the
+            seller"
   "/api/v1/reports":
     get:
       summary: list the current user's reports

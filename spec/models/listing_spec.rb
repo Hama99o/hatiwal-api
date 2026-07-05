@@ -511,4 +511,67 @@ RSpec.describe Listing, type: :model do
       end
     end
   end
+
+  # ── TASK-TX01 — buyer-recorded reserve/sold ─────────────────────────────────
+  describe "#reserve_with_buyer! / #sold_with_buyer!" do
+    let(:seller)   { create(:user) }
+    let(:listing)  { create(:listing, :active, user: seller) }
+    let(:buyer)    { create(:user) }
+
+    before { create(:conversation, listing: listing, seller: seller, buyer: buyer) }
+
+    it "reserve_with_buyer! is a no-op and returns nil when buyer_id is blank (legacy path)" do
+      expect(listing.reserve_with_buyer!(buyer_id: nil)).to be_nil
+      expect(listing.sale_transactions).to be_empty
+    end
+
+    it "sold_with_buyer! is a no-op and returns nil when buyer_id is blank (legacy path)" do
+      expect(listing.sold_with_buyer!(buyer_id: nil)).to be_nil
+      expect(listing.sale_transactions).to be_empty
+    end
+
+    it "reserve_with_buyer! creates a reserved Transaction defaulting final_price to the listing price" do
+      txn = listing.reserve_with_buyer!(buyer_id: buyer.id)
+
+      expect(txn).to be_reserved
+      expect(txn.buyer_id).to eq(buyer.id)
+      expect(txn.seller_id).to eq(seller.id)
+      expect(txn.final_price.to_f).to eq(listing.price.to_f)
+      expect(listing.open_transaction).to eq(txn)
+    end
+
+    it "reserve_with_buyer! honors an explicit final_price" do
+      txn = listing.reserve_with_buyer!(buyer_id: buyer.id, final_price: 5000)
+      expect(txn.final_price.to_i).to eq(5000)
+    end
+
+    it "sold_with_buyer! advances an existing reserved Transaction to sold" do
+      reserved = listing.reserve_with_buyer!(buyer_id: buyer.id)
+
+      txn = listing.sold_with_buyer!(buyer_id: buyer.id)
+
+      expect(txn.id).to eq(reserved.id)
+      expect(txn).to be_sold
+      expect(txn.completed_at).to be_present
+    end
+
+    it "sold_with_buyer! creates a sold Transaction directly when selling straight from active" do
+      txn = listing.sold_with_buyer!(buyer_id: buyer.id)
+
+      expect(txn).to be_sold
+      expect(txn.completed_at).to be_present
+      expect(listing.sale_transactions.count).to eq(1)
+    end
+
+    it "re-reserving with a different (also-participant) buyer updates the existing open transaction instead of violating the unique index" do
+      other_buyer = create(:user)
+      create(:conversation, listing: listing, seller: seller, buyer: other_buyer)
+
+      first  = listing.reserve_with_buyer!(buyer_id: buyer.id)
+      second = listing.reserve_with_buyer!(buyer_id: other_buyer.id)
+
+      expect(second.id).to eq(first.id)
+      expect(second.reload.buyer_id).to eq(other_buyer.id)
+    end
+  end
 end

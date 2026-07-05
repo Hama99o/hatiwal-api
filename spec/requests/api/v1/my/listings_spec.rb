@@ -373,6 +373,60 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         put "/api/v1/my/listings/#{draft.id}/reserve", headers: headers, as: :json
         expect(response).to have_http_status(:forbidden)
       end
+
+      # ── TASK-TX01 ──────────────────────────────────────────────────────────
+      it "without buyer_id (legacy) never creates a Transaction" do
+        active = create(:listing, :active, user: user)
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/reserve", headers: headers, as: :json
+        end.not_to change(Transaction, :count)
+
+        body = JSON.parse(response.body)
+        expect(body).to have_key("listing")
+        expect(body).not_to have_key("transaction")
+      end
+
+      it "with a valid buyer_id creates a reserved Transaction defaulting the listing price" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/reserve",
+              params: { buyer_id: buyer.id }, headers: headers, as: :json
+        end.to change(Transaction, :count).by(1)
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)
+        expect(body["transaction"]["status"]).to eq("reserved")
+        expect(body["transaction"]["buyer"]["id"]).to eq(buyer.id)
+        expect(body["transaction"]["final_price"].to_f).to eq(active.price.to_f)
+      end
+
+      it "with buyer_id and final_price records the negotiated price" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+
+        put "/api/v1/my/listings/#{active.id}/reserve",
+            params: { buyer_id: buyer.id, final_price: 12_345 }, headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["transaction"]["final_price"].to_f).to eq(12_345.0)
+      end
+
+      it "rejects a buyer_id that never had a conversation on this listing" do
+        active   = create(:listing, :active, user: user)
+        stranger = create(:user)
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/reserve",
+              params: { buyer_id: stranger.id }, headers: headers, as: :json
+        end.not_to change(Transaction, :count)
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
     end
 
     describe "PUT sold" do
@@ -402,6 +456,49 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(response).to have_http_status(:forbidden)
         put "/api/v1/my/listings/#{sold.id}/publish", headers: headers, as: :json
         expect(response).to have_http_status(:forbidden)
+      end
+
+      # ── TASK-TX01 ──────────────────────────────────────────────────────────
+      it "without buyer_id (legacy) never creates a Transaction" do
+        active = create(:listing, :active, user: user)
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", headers: headers, as: :json
+        end.not_to change(Transaction, :count)
+
+        expect(JSON.parse(response.body)).not_to have_key("transaction")
+      end
+
+      it "advances a prior reserve-with-buyer Transaction to sold" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+        put "/api/v1/my/listings/#{active.id}/reserve", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        txn_id = JSON.parse(response.body)["transaction"]["id"]
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        end.not_to change(Transaction, :count)
+
+        expect(response).to have_http_status(:ok)
+        body = JSON.parse(response.body)
+        expect(body["transaction"]["id"]).to eq(txn_id)
+        expect(body["transaction"]["status"]).to eq("sold")
+        expect(body["transaction"]["completed_at"]).to be_present
+      end
+
+      it "creates a sold Transaction directly when selling straight from active with a buyer_id" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        end.to change(Transaction, :count).by(1)
+
+        body = JSON.parse(response.body)
+        expect(body["transaction"]["status"]).to eq("sold")
+        expect(body["transaction"]["completed_at"]).to be_present
       end
     end
 

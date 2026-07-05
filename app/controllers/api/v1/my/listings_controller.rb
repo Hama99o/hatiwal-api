@@ -77,10 +77,17 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     render_blue(ListingSerializer, @listing, view: :detailed)
   end
 
+  # TASK-TX01: optionally accepts `buyer_id` (+ `final_price`) identifying the
+  # buyer from one of the listing's conversations — when given, creates or
+  # advances the Transaction. Bare calls (no buyer_id) behave exactly as
+  # before for backward compatibility with clients already in production.
   def reserve
     authorize @listing, :reserve?
+    txn = @listing.reserve_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
     @listing.reserved!
-    render_blue(ListingSerializer, @listing, view: :detailed)
+    render_lifecycle_response(txn)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
   end
 
   # reserved → active (undo a reservation when a deal falls through)
@@ -92,14 +99,31 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   def sold
     authorize @listing, :sold?
+    txn = @listing.sold_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
     @listing.sold!
-    render_blue(ListingSerializer, @listing, view: :detailed)
+    render_lifecycle_response(txn)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
   end
 
   private
 
   def set_listing
     @listing = current_user.listings.find(params[:id])
+  end
+
+  # `buyer_id`/`final_price` are accepted flat (not nested under `listing:`)
+  # since reserve/sold are lifecycle commands, not resource updates.
+  def lifecycle_params
+    params.permit(:buyer_id, :final_price)
+  end
+
+  # Composite payload for reserve/sold — always includes the listing; the
+  # `transaction` key is present only when a buyer was identified (TASK-TX01).
+  def render_lifecycle_response(txn)
+    payload = { listing: ListingSerializer.render_as_hash(@listing, view: :detailed) }
+    payload[:transaction] = TransactionSerializer.render_as_hash(txn) if txn
+    render_ok(payload)
   end
 
   def listing_params

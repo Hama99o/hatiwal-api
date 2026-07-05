@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_03_164604) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_04_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -229,6 +229,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_03_164604) do
   create_table "saved_listings", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "listing_id", null: false
+    t.decimal "price_at_save", precision: 12, scale: 2, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["listing_id"], name: "index_saved_listings_on_listing_id"
@@ -251,6 +252,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_03_164604) do
     t.index ["category_id"], name: "index_saved_searches_on_category_id"
     t.index ["user_id", "created_at"], name: "index_saved_searches_user_recent"
     t.index ["user_id"], name: "index_saved_searches_on_user_id"
+  end
+
+  create_table "transactions", force: :cascade do |t|
+    t.bigint "buyer_id", null: false
+    t.datetime "completed_at"
+    t.datetime "created_at", null: false
+    t.string "currency", default: "AFN", null: false
+    t.decimal "final_price", precision: 12, scale: 2, null: false
+    t.bigint "listing_id", null: false
+    t.bigint "seller_id", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["buyer_id"], name: "index_transactions_on_buyer_id"
+    t.index ["listing_id"], name: "index_transactions_on_listing_id"
+    t.index ["listing_id"], name: "index_transactions_on_listing_id_while_open", unique: true, where: "(status = 0)"
+    t.index ["seller_id"], name: "index_transactions_on_seller_id"
+    t.index ["status"], name: "index_transactions_on_status"
   end
 
   create_table "user_warnings", force: :cascade do |t|
@@ -349,6 +367,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_03_164604) do
   add_foreign_key "saved_listings", "users"
   add_foreign_key "saved_searches", "categories"
   add_foreign_key "saved_searches", "users"
+  add_foreign_key "transactions", "listings"
+  add_foreign_key "transactions", "users", column: "buyer_id"
+  add_foreign_key "transactions", "users", column: "seller_id"
   add_foreign_key "user_warnings", "admin_users"
   add_foreign_key "user_warnings", "users"
 end

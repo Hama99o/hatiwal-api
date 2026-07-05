@@ -16,6 +16,18 @@ class ListingSerializer < ApplicationSerializer
     # Price-drop badge data for browse feed cards. Both nil when no recent drop.
     field(:price_drop_percent) { |l| l.price_drop_percent }
     field(:price_dropped_at)   { |l| l.price_dropped_at }
+    # Per-buyer "price dropped since you saved it" data — only present when the
+    # controller passes a `saved_by_listing_id` map (Saved screen, TASK-Y316).
+    # nil/false on every other :list surface (browse, my listings, viewed, hidden).
+    field(:price_at_save) do |l, opts|
+      opts[:saved_by_listing_id]&.[](l.id)&.price_at_save
+    end
+    field(:price_dropped) do |l, opts|
+      opts[:saved_by_listing_id]&.[](l.id)&.price_dropped? || false
+    end
+    field(:price_drop_amount) do |l, opts|
+      opts[:saved_by_listing_id]&.[](l.id)&.price_drop_amount
+    end
   end
 
   view :seller_list do
