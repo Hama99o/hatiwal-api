@@ -337,10 +337,28 @@ class Listing < ApplicationRecord
     pct > 0 ? pct : nil
   end
 
+  # Grid-card thumbnail dimensions. The Bazaar/Saved/My-Listings grids show a
+  # small 2-column card, so serving the full-size original (often several MB)
+  # made every card take many seconds to download. A resized variant keeps the
+  # payload tiny.
+  THUMBNAIL_RESIZE_LIMIT = [ 600, 600 ].freeze
+
   def thumbnail_url
     return nil unless images.attached?
 
-    images.first.url
+    image = images.first
+    # Non-image blobs (e.g. a stray PDF) aren't variable — fall back to the original.
+    return image.url unless image.blob.variable?
+
+    # Return a LAZY representation URL rather than calling `.processed.url`: the
+    # variant is generated on the client's first request to this URL (then
+    # cached), NOT synchronously during the list query. This keeps the index a
+    # constant number of queries (no N+1 from per-listing variant processing)
+    # while still delivering the small resized image to the app.
+    variant = image.variant(resize_to_limit: THUMBNAIL_RESIZE_LIMIT)
+    Rails.application.routes.url_helpers.rails_representation_url(
+      variant, **(ActiveStorage::Current.url_options || {})
+    )
   rescue StandardError
     nil
   end

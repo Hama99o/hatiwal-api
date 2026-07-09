@@ -9,7 +9,7 @@ class Api::V1::My::HiddenListingsController < Api::V1::BaseController
                                   .includes(listing: [
                                     :category,
                                     :price_histories,
-                                    { user: { avatar_attachment: :blob }, images_attachments: :blob }
+                                    { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                                   ])
 
     paginate_blue_with_transform(ListingSerializer, hidden_relation, extra: { view: :list }) do |page|

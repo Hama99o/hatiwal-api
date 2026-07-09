@@ -9,7 +9,7 @@ class Api::V1::My::TransactionsController < Api::V1::BaseController
     # thumbnail_url/avatar_url (see My::SavedListingsController, etc.).
     transactions = policy_scope(
       Transaction.ordered.includes(
-        { listing: { images_attachments: :blob } },
+        { listing: { images_attachments: { blob: { variant_records: { image_attachment: :blob } } } } },
         { buyer: { avatar_attachment: :blob } },
         { seller: { avatar_attachment: :blob } }
       )

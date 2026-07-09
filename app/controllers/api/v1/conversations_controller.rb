@@ -18,7 +18,7 @@ class Api::V1::ConversationsController < Api::V1::BaseController
                     # (has_one with ORDER BY DESC) instead of the entire messages
                     # collection — far lighter than the old includes(:messages) path.
                     :latest_message,
-                    { listing: { images_attachments: :blob },
+                    { listing: { images_attachments: { blob: { variant_records: { image_attachment: :blob } } } },
                       buyer: { avatar_attachment: :blob },
                       seller: { avatar_attachment: :blob } }
                   )

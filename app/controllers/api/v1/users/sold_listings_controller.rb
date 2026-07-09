@@ -23,7 +23,7 @@ class Api::V1::Users::SoldListingsController < Api::V1::BaseController
                  .includes(
                    :category,
                    :price_histories,
-                   { user: { avatar_attachment: :blob }, images_attachments: :blob }
+                   { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                  )
 
     paginate_blue(ListingSerializer, listings, extra: { view: :list })

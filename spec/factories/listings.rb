@@ -21,9 +21,12 @@ FactoryBot.define do
 
     trait :with_image do
       after(:create) do |listing|
+        # Attach a REAL image (not fake bytes) so Active Storage variant
+        # processing (libvips) can resize it — thumbnail_url now serves a
+        # resized variant, which cannot process arbitrary non-image data.
         listing.images.attach(
-          io:           StringIO.new("fake image data"),
-          filename:     "photo.jpg",
+          io:           File.open(Rails.root.join("spec/fixtures/files/test_image.jpg")),
+          filename:     "test_image.jpg",
           content_type: "image/jpeg"
         )
       end

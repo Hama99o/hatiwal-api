@@ -220,83 +220,128 @@ puts "  users: #{User.count}"
 puts "=== Seeding Listings (50+) ==="
 # =============================================================================
 
+require "open-uri"
+
+# Attaches real, item-appropriate photos to a listing via Active Storage.
+#
+# Photos come from loremflickr.com — a free, keyword-matched photo service that
+# needs no API key (so it works locally and on the demo server). The `lock`
+# query param makes each fetch deterministic: the same (listing, index) always
+# returns the same photo, so re-running the seed never churns images.
+#
+# Idempotent: skips listings that already have photos. Network failures are
+# non-fatal — a listing simply keeps whatever it had (or stays photo-less) and
+# the seed continues, so a flaky connection never aborts the whole run.
+def attach_seed_photos!(listing, query, count: 3)
+  return if listing.images.attached?
+
+  keyword = query.to_s.strip.downcase.gsub(/[^a-z0-9]+/, ",").gsub(/,+/, ",").gsub(/^,|,$/, "")
+  keyword = "marketplace" if keyword.blank?
+
+  attached = 0
+  count.times do |i|
+    lock = (listing.id * 10) + i # deterministic + unique per photo
+    url  = "https://loremflickr.com/800/600/#{keyword}?lock=#{lock}"
+    begin
+      io = URI.parse(url).open(open_timeout: 10, read_timeout: 20)
+      listing.images.attach(io: io, filename: "listing-#{listing.id}-#{i}.jpg", content_type: "image/jpeg")
+      attached += 1
+    rescue StandardError => e
+      warn "  ! photo fetch failed for ##{listing.id} '#{keyword}': #{e.class} #{e.message}"
+    end
+  end
+  print attached.positive? ? "📷" : "·"
+end
+
 cat = Category.all.index_by(&:slug)
 
 listing_data = [
   # Electronics
-  { title: "Samsung Galaxy S24 Ultra", description: "Bought 4 months ago, fully working, minor scratch on back. Original box and charger included. 256GB storage, 12GB RAM. Selling because upgrading.", price: 62_000, category: cat["electronics"], status: :active, location: "Kabul, Shahr-e-Naw", user_idx: 0 },
-  { title: "iPhone 13 128GB", description: "Used 1 year. Battery health 89%. No cracks. FaceID works perfectly. Selling because upgrading to 15.", price: 55_000, category: cat["electronics"], status: :active, location: "Herat, City Center", user_idx: 2 },
-  { title: "Lenovo ThinkPad Laptop Core i5", description: "11th Gen Core i5, 8GB RAM, 256GB SSD. Excellent for office and development. Charger included.", price: 38_000, category: cat["electronics"], status: :active, location: "Kabul, Wazir Akbar Khan", user_idx: 3 },
-  { title: "Sony 55 inch 4K Smart TV", description: "2022 model. Works perfectly. Selling because bought a bigger screen. Original remote and stand included.", price: 48_000, category: cat["electronics"], status: :active, location: "Mazar-i-Sharif, Downtown", user_idx: 4 },
-  { title: "Canon EOS 200D DSLR Camera", description: "18-55mm kit lens included. 300 shutter count only. Great for beginners. Camera bag and extra battery included.", price: 35_000, category: cat["electronics"], status: :reserved, location: "Kabul, Macroyan", user_idx: 6 },
-  { title: "JBL Xtreme 3 Bluetooth Speaker", description: "Loud sound, 15-hour battery, waterproof. Used only 5 times. Like new.", price: 9_500, category: cat["electronics"], status: :active, location: "Jalalabad", user_idx: 5 },
-  { title: "Apple MacBook Air M1", description: "8GB RAM, 256GB SSD. Very fast and silent. All-day battery. Small scratch on lid. Original charger.", price: 72_000, category: cat["electronics"], status: :active, location: "Kabul, Qala-e-Fatullah", user_idx: 7 },
-  { title: "Xiaomi Redmi Note 12 128GB", description: "6GB RAM. 50MP camera. Like new, all accessories and box included.", price: 14_500, category: cat["electronics"], status: :draft, location: "Kandahar City", user_idx: 1 },
-  { title: "PlayStation 5 Disc Edition + 2 Controllers", description: "Comes with 2 games. Very good condition. Selling urgently due to travel.", price: 55_000, category: cat["electronics"], status: :active, location: "Kabul, Karte Parwan", user_idx: 8 },
-  { title: "Huawei MateBook D15 Laptop", description: "Core i5, 8GB RAM, 512GB SSD. Slim and light. Windows 11 activated. 1 year old.", price: 32_000, category: cat["electronics"], status: :active, location: "Herat", user_idx: 9 },
-  { title: "Samsung Galaxy Tab A8", description: "32GB, 4GB RAM. Wi-Fi only. 10.5 inch display. Great for reading, videos, kids. Good condition.", price: 16_000, category: cat["electronics"], status: :active, location: "Kabul, Karte 3", user_idx: 15 },
-  { title: "Wireless Earbuds — Samsung Galaxy Buds2", description: "Active noise cancellation. Used 3 months. Original box and case. All tips included.", price: 7_800, category: cat["electronics"], status: :active, location: "Kabul", user_idx: 17 },
+  { title: "Samsung Galaxy S24 Ultra", description: "Bought 4 months ago, fully working, minor scratch on back. Original box and charger included. 256GB storage, 12GB RAM. Selling because upgrading.", price: 62_000, category: cat["electronics"], status: :active, location: "Kabul, Shahr-e-Naw", user_idx: 0, photo: "samsung,galaxy,smartphone" },
+  { title: "iPhone 13 128GB", description: "Used 1 year. Battery health 89%. No cracks. FaceID works perfectly. Selling because upgrading to 15.", price: 55_000, category: cat["electronics"], status: :active, location: "Herat, City Center", user_idx: 2, photo: "iphone,smartphone" },
+  { title: "Lenovo ThinkPad Laptop Core i5", description: "11th Gen Core i5, 8GB RAM, 256GB SSD. Excellent for office and development. Charger included.", price: 38_000, category: cat["electronics"], status: :active, location: "Kabul, Wazir Akbar Khan", user_idx: 3, photo: "laptop,thinkpad" },
+  { title: "Sony 55 inch 4K Smart TV", description: "2022 model. Works perfectly. Selling because bought a bigger screen. Original remote and stand included.", price: 48_000, category: cat["electronics"], status: :active, location: "Mazar-i-Sharif, Downtown", user_idx: 4, photo: "television,tv" },
+  { title: "Canon EOS 200D DSLR Camera", description: "18-55mm kit lens included. 300 shutter count only. Great for beginners. Camera bag and extra battery included.", price: 35_000, category: cat["electronics"], status: :reserved, location: "Kabul, Macroyan", user_idx: 6, photo: "dslr,camera" },
+  { title: "JBL Xtreme 3 Bluetooth Speaker", description: "Loud sound, 15-hour battery, waterproof. Used only 5 times. Like new.", price: 9_500, category: cat["electronics"], status: :active, location: "Jalalabad", user_idx: 5, photo: "bluetooth,speaker" },
+  { title: "Apple MacBook Air M1", description: "8GB RAM, 256GB SSD. Very fast and silent. All-day battery. Small scratch on lid. Original charger.", price: 72_000, category: cat["electronics"], status: :active, location: "Kabul, Qala-e-Fatullah", user_idx: 7, photo: "macbook,laptop" },
+  { title: "Xiaomi Redmi Note 12 128GB", description: "6GB RAM. 50MP camera. Like new, all accessories and box included.", price: 14_500, category: cat["electronics"], status: :draft, location: "Kandahar City", user_idx: 1, photo: "smartphone,phone" },
+  { title: "PlayStation 5 Disc Edition + 2 Controllers", description: "Comes with 2 games. Very good condition. Selling urgently due to travel.", price: 55_000, category: cat["electronics"], status: :active, location: "Kabul, Karte Parwan", user_idx: 8, photo: "playstation,console" },
+  { title: "Huawei MateBook D15 Laptop", description: "Core i5, 8GB RAM, 512GB SSD. Slim and light. Windows 11 activated. 1 year old.", price: 32_000, category: cat["electronics"], status: :active, location: "Herat", user_idx: 9, photo: "laptop,computer" },
+  { title: "Samsung Galaxy Tab A8", description: "32GB, 4GB RAM. Wi-Fi only. 10.5 inch display. Great for reading, videos, kids. Good condition.", price: 16_000, category: cat["electronics"], status: :active, location: "Kabul, Karte 3", user_idx: 15, photo: "tablet" },
+  { title: "Wireless Earbuds — Samsung Galaxy Buds2", description: "Active noise cancellation. Used 3 months. Original box and case. All tips included.", price: 7_800, category: cat["electronics"], status: :active, location: "Kabul", user_idx: 17, photo: "earbuds,headphones" },
 
   # Clothes
-  { title: "Men Traditional Perahan Tunban Set XL", description: "Brand new, size XL. Soft cotton. Blue color. Never worn. Ideal for weddings and celebrations.", price: 2_500, category: cat["clothes"], status: :active, location: "Kabul, Mandawi Bazaar", user_idx: 10 },
-  { title: "Women Embroidered Dress from Herat", description: "Handmade embroidery. Size M. Worn once at a wedding. Beautiful red and gold design.", price: 4_000, category: cat["clothes"], status: :active, location: "Herat", user_idx: 2 },
-  { title: "Nike Air Max Sneakers Size 42", description: "Authentic Nike. Worn 3 times. Excellent condition. Original box.", price: 7_200, category: cat["clothes"], status: :active, location: "Kabul", user_idx: 3 },
-  { title: "Thick Winter Down Jacket XL Black", description: "Kept very clean. Perfect for Kabul winters. Size XL.", price: 3_800, category: cat["clothes"], status: :active, location: "Kabul, Kote Sangi", user_idx: 11 },
-  { title: "Wedding Dress White Size S", description: "Worn once. Dry-cleaned. Beautiful crystal design. With veil and accessories. Size S/M.", price: 12_000, category: cat["clothes"], status: :sold, location: "Mazar-i-Sharif", user_idx: 4 },
-  { title: "Men Suit Navy Blue Size L", description: "Worn twice. Very good condition. Comes with tie. Suitable for formal occasions.", price: 8_500, category: cat["clothes"], status: :active, location: "Kabul, Shar-e-Naw", user_idx: 0 },
+  { title: "Men Traditional Perahan Tunban Set XL", description: "Brand new, size XL. Soft cotton. Blue color. Never worn. Ideal for weddings and celebrations.", price: 2_500, category: cat["clothes"], status: :active, location: "Kabul, Mandawi Bazaar", user_idx: 10, photo: "mens,clothing" },
+  { title: "Women Embroidered Dress from Herat", description: "Handmade embroidery. Size M. Worn once at a wedding. Beautiful red and gold design.", price: 4_000, category: cat["clothes"], status: :active, location: "Herat", user_idx: 2, photo: "embroidered,dress" },
+  { title: "Nike Air Max Sneakers Size 42", description: "Authentic Nike. Worn 3 times. Excellent condition. Original box.", price: 7_200, category: cat["clothes"], status: :active, location: "Kabul", user_idx: 3, photo: "sneakers,shoes" },
+  { title: "Thick Winter Down Jacket XL Black", description: "Kept very clean. Perfect for Kabul winters. Size XL.", price: 3_800, category: cat["clothes"], status: :active, location: "Kabul, Kote Sangi", user_idx: 11, photo: "winter,jacket" },
+  { title: "Wedding Dress White Size S", description: "Worn once. Dry-cleaned. Beautiful crystal design. With veil and accessories. Size S/M.", price: 12_000, category: cat["clothes"], status: :sold, location: "Mazar-i-Sharif", user_idx: 4, photo: "wedding,dress" },
+  { title: "Men Suit Navy Blue Size L", description: "Worn twice. Very good condition. Comes with tie. Suitable for formal occasions.", price: 8_500, category: cat["clothes"], status: :active, location: "Kabul, Shar-e-Naw", user_idx: 0, photo: "suit,men" },
 
   # Vehicles
-  { title: "Toyota Corolla 2015 Low Mileage", description: "Single owner. 85,000 km. Full service history. Clean interior. AC works. No accidents.", price: 1_250_000, category: cat["vehicles"], status: :active, location: "Kabul, Sarak-e-Darulaman", user_idx: 1 },
-  { title: "Honda CG 125 Motorbike 2021", description: "Red color. Good engine. No rust. Second owner. Registration done. Comes with extra tyres.", price: 85_000, category: cat["vehicles"], status: :active, location: "Kandahar", user_idx: 1 },
-  { title: "Toyota Land Cruiser 2008 4WD Diesel", description: "Excellent off-road. New tyres. AC working. 180,000 km. All documents available.", price: 2_800_000, category: cat["vehicles"], status: :active, location: "Jalalabad", user_idx: 5 },
-  { title: "Suzuki Mehran 2019 White", description: "One owner. City use only. Low mileage. All documents. Selling due to travel.", price: 420_000, category: cat["vehicles"], status: :reserved, location: "Kabul", user_idx: 15 },
-  { title: "Electric Bicycle 48V Foldable", description: "25km range per charge. Great for city commute. 6 months old. Charger included.", price: 32_000, category: cat["vehicles"], status: :active, location: "Herat", user_idx: 9 },
+  { title: "Toyota Corolla 2015 Low Mileage", description: "Single owner. 85,000 km. Full service history. Clean interior. AC works. No accidents.", price: 1_250_000, category: cat["vehicles"], status: :active, location: "Kabul, Sarak-e-Darulaman", user_idx: 1, photo: "toyota,corolla,car" },
+  { title: "Honda CG 125 Motorbike 2021", description: "Red color. Good engine. No rust. Second owner. Registration done. Comes with extra tyres.", price: 85_000, category: cat["vehicles"], status: :active, location: "Kandahar", user_idx: 1, photo: "motorcycle,motorbike" },
+  { title: "Toyota Land Cruiser 2008 4WD Diesel", description: "Excellent off-road. New tyres. AC working. 180,000 km. All documents available.", price: 2_800_000, category: cat["vehicles"], status: :active, location: "Jalalabad", user_idx: 5, photo: "landcruiser,suv,car" },
+  { title: "Suzuki Mehran 2019 White", description: "One owner. City use only. Low mileage. All documents. Selling due to travel.", price: 420_000, category: cat["vehicles"], status: :reserved, location: "Kabul", user_idx: 15, photo: "car,white" },
+  { title: "Electric Bicycle 48V Foldable", description: "25km range per charge. Great for city commute. 6 months old. Charger included.", price: 32_000, category: cat["vehicles"], status: :active, location: "Herat", user_idx: 9, photo: "electric,bicycle" },
 
   # Home & Furniture
-  { title: "8-Seat Wooden Dining Table Set", description: "Solid wood. 8 matching chairs. Good condition. Light scratch on one chair. Must collect in Kabul.", price: 28_000, category: cat["home"], status: :active, location: "Kabul, Macroyan 3", user_idx: 6 },
-  { title: "King Size Bed Frame and Mattress", description: "Imported wood frame. Spring mattress. Used 2 years. Very comfortable. No stains.", price: 22_000, category: cat["home"], status: :active, location: "Mazar-i-Sharif", user_idx: 12 },
-  { title: "Samsung 350L Two-Door Fridge", description: "Works perfectly. 3 years old. Small dent on side (cosmetic). Full size, great for families.", price: 18_000, category: cat["home"], status: :active, location: "Kabul, Qala-e-Zaman Khan", user_idx: 0 },
-  { title: "Gas Cooking Range 4 Burners", description: "Excellent condition. 1 year old. All burners work. Delivery within Kabul included.", price: 8_500, category: cat["home"], status: :active, location: "Kabul", user_idx: 16 },
-  { title: "Persian Hand-Woven Carpet 3x5 Meter", description: "Authentic Afghan carpet from Kunduz. Rich colors. No tears or fading. Ideal for living room.", price: 45_000, category: cat["home"], status: :active, location: "Kunduz", user_idx: 7 },
-  { title: "LG Fully Automatic Washing Machine 7kg", description: "Works great. 2 years old. All cycles functional. Selling due to moving.", price: 12_000, category: cat["home"], status: :active, location: "Herat", user_idx: 14 },
-  { title: "L-Shaped Sofa Set 6 Seats", description: "Light brown fabric. Very comfortable. 18 months old. No damage.", price: 35_000, category: cat["home"], status: :draft, location: "Kabul, Karte 4", user_idx: 3 },
+  { title: "8-Seat Wooden Dining Table Set", description: "Solid wood. 8 matching chairs. Good condition. Light scratch on one chair. Must collect in Kabul.", price: 28_000, category: cat["home"], status: :active, location: "Kabul, Macroyan 3", user_idx: 6, photo: "dining,table" },
+  { title: "King Size Bed Frame and Mattress", description: "Imported wood frame. Spring mattress. Used 2 years. Very comfortable. No stains.", price: 22_000, category: cat["home"], status: :active, location: "Mazar-i-Sharif", user_idx: 12, photo: "bed,bedroom" },
+  { title: "Samsung 350L Two-Door Fridge", description: "Works perfectly. 3 years old. Small dent on side (cosmetic). Full size, great for families.", price: 18_000, category: cat["home"], status: :active, location: "Kabul, Qala-e-Zaman Khan", user_idx: 0, photo: "refrigerator,fridge" },
+  { title: "Gas Cooking Range 4 Burners", description: "Excellent condition. 1 year old. All burners work. Delivery within Kabul included.", price: 8_500, category: cat["home"], status: :active, location: "Kabul", user_idx: 16, photo: "stove,cooking" },
+  { title: "Persian Hand-Woven Carpet 3x5 Meter", description: "Authentic Afghan carpet from Kunduz. Rich colors. No tears or fading. Ideal for living room.", price: 45_000, category: cat["home"], status: :active, location: "Kunduz", user_idx: 7, photo: "carpet,rug" },
+  { title: "LG Fully Automatic Washing Machine 7kg", description: "Works great. 2 years old. All cycles functional. Selling due to moving.", price: 12_000, category: cat["home"], status: :active, location: "Herat", user_idx: 14, photo: "washing,machine" },
+  { title: "L-Shaped Sofa Set 6 Seats", description: "Light brown fabric. Very comfortable. 18 months old. No damage.", price: 35_000, category: cat["home"], status: :draft, location: "Kabul, Karte 4", user_idx: 3, photo: "sofa,couch" },
 
   # Books
-  { title: "Engineering Textbooks Collection 10 Books", description: "Calculus, Physics, Circuits, Algorithms and more. Used one semester. All in English.", price: 3_500, category: cat["books"], status: :active, location: "Kabul, Polytechnic", user_idx: 13 },
-  { title: "Pashto Learning Books Beginner to Advanced", description: "5-book series. Excellent for language learners. Some notes inside.", price: 2_200, category: cat["books"], status: :active, location: "Kabul", user_idx: 0 },
-  { title: "Medical Anatomy Atlas Grays 42nd Edition", description: "Like new. A few pages highlighted. Essential for medical students.", price: 4_800, category: cat["books"], status: :active, location: "Kabul, Aliabad Medical Area", user_idx: 8 },
-  { title: "Quran with Dari Translation Large Print", description: "Hardcover. New condition. Bought as gift, already have one.", price: 800, category: cat["books"], status: :active, location: "Mazar-i-Sharif", user_idx: 4 },
+  { title: "Engineering Textbooks Collection 10 Books", description: "Calculus, Physics, Circuits, Algorithms and more. Used one semester. All in English.", price: 3_500, category: cat["books"], status: :active, location: "Kabul, Polytechnic", user_idx: 13, photo: "textbooks,books" },
+  { title: "Pashto Learning Books Beginner to Advanced", description: "5-book series. Excellent for language learners. Some notes inside.", price: 2_200, category: cat["books"], status: :active, location: "Kabul", user_idx: 0, photo: "books" },
+  { title: "Medical Anatomy Atlas Grays 42nd Edition", description: "Like new. A few pages highlighted. Essential for medical students.", price: 4_800, category: cat["books"], status: :active, location: "Kabul, Aliabad Medical Area", user_idx: 8, photo: "medical,book" },
+  { title: "Quran with Dari Translation Large Print", description: "Hardcover. New condition. Bought as gift, already have one.", price: 800, category: cat["books"], status: :active, location: "Mazar-i-Sharif", user_idx: 4, photo: "quran,book" },
 
   # Food
-  { title: "Fresh Pomegranates from Kandahar 50kg Bulk", description: "Freshly harvested. Sweet Kandahari variety. Bulk orders available. Delivery to Kabul possible.", price: 4_500, category: cat["food"], status: :active, location: "Kandahar", user_idx: 1 },
-  { title: "Organic Saffron from Herat 500g Premium", description: "Certified organic. Sealed packaging. Premium grade. Great for cooking and export.", price: 22_000, category: cat["food"], status: :active, location: "Herat", user_idx: 2 },
-  { title: "Wild Mountain Honey from Nuristan 1kg Jars", description: "Pure wild honey. No additives. Minimum order 3 jars. Very limited stock.", price: 1_200, category: cat["food"], status: :active, location: "Jalalabad", user_idx: 5 },
+  { title: "Fresh Pomegranates from Kandahar 50kg Bulk", description: "Freshly harvested. Sweet Kandahari variety. Bulk orders available. Delivery to Kabul possible.", price: 4_500, category: cat["food"], status: :active, location: "Kandahar", user_idx: 1, photo: "pomegranate,fruit" },
+  { title: "Organic Saffron from Herat 500g Premium", description: "Certified organic. Sealed packaging. Premium grade. Great for cooking and export.", price: 22_000, category: cat["food"], status: :active, location: "Herat", user_idx: 2, photo: "saffron,spice" },
+  { title: "Wild Mountain Honey from Nuristan 1kg Jars", description: "Pure wild honey. No additives. Minimum order 3 jars. Very limited stock.", price: 1_200, category: cat["food"], status: :active, location: "Jalalabad", user_idx: 5, photo: "honey,jar" },
 
   # Tools
-  { title: "Makita Drill Set with Bits and 2 Batteries", description: "Makita DF487D. Used twice. All bits included. Like new condition.", price: 8_200, category: cat["tools"], status: :active, location: "Kabul, Industrial Area", user_idx: 15 },
-  { title: "MMA Welding Machine 200A", description: "Good condition. Cables and welding mask included. Works on 220V generator.", price: 12_000, category: cat["tools"], status: :active, location: "Kandahar", user_idx: 1 },
-  { title: "Carpenter Tool Box 30 Pieces", description: "Hammers, saws, chisels, squares. Organized metal box. Good quality tools.", price: 5_500, category: cat["tools"], status: :active, location: "Kabul", user_idx: 7 },
+  { title: "Makita Drill Set with Bits and 2 Batteries", description: "Makita DF487D. Used twice. All bits included. Like new condition.", price: 8_200, category: cat["tools"], status: :active, location: "Kabul, Industrial Area", user_idx: 15, photo: "drill,tools" },
+  { title: "MMA Welding Machine 200A", description: "Good condition. Cables and welding mask included. Works on 220V generator.", price: 12_000, category: cat["tools"], status: :active, location: "Kandahar", user_idx: 1, photo: "welding,machine" },
+  { title: "Carpenter Tool Box 30 Pieces", description: "Hammers, saws, chisels, squares. Organized metal box. Good quality tools.", price: 5_500, category: cat["tools"], status: :active, location: "Kabul", user_idx: 7, photo: "tools,toolbox" },
 
   # Property
-  { title: "2-Bedroom Apartment for Rent Kabul", description: "Modern flat, 90 sqm. 2nd floor. Backup power. Security guard. Near Kabul University.", price: 18_000, category: cat["property"], status: :active, location: "Kabul, Karte Char", user_idx: 11 },
-  { title: "Shop Space for Rent in Herat Bazaar", description: "15 sqm. Ground floor. Busy street. Electricity available. Suit for clothing or electronics.", price: 12_000, category: cat["property"], status: :active, location: "Herat, Main Bazaar", user_idx: 14 },
+  { title: "2-Bedroom Apartment for Rent Kabul", description: "Modern flat, 90 sqm. 2nd floor. Backup power. Security guard. Near Kabul University.", price: 18_000, category: cat["property"], status: :active, location: "Kabul, Karte Char", user_idx: 11, photo: "apartment,interior" },
+  { title: "Shop Space for Rent in Herat Bazaar", description: "15 sqm. Ground floor. Busy street. Electricity available. Suit for clothing or electronics.", price: 12_000, category: cat["property"], status: :active, location: "Herat, Main Bazaar", user_idx: 14, photo: "shop,storefront" },
 
   # Services
-  { title: "Professional Tailoring Men and Women", description: "Traditional and modern clothes. 20 years experience. Work done in 2-3 days. Bring your fabric.", price: 500, category: cat["services"], status: :active, location: "Herat, Tailors Street", user_idx: 2 },
-  { title: "Home Electrician All Kabul Areas", description: "Wiring, solar panels, inverter installation. 10 years experience. Available daily.", price: 800, category: cat["services"], status: :active, location: "Kabul", user_idx: 0 },
+  { title: "Professional Tailoring Men and Women", description: "Traditional and modern clothes. 20 years experience. Work done in 2-3 days. Bring your fabric.", price: 500, category: cat["services"], status: :active, location: "Herat, Tailors Street", user_idx: 2, photo: "tailor,sewing" },
+  { title: "Home Electrician All Kabul Areas", description: "Wiring, solar panels, inverter installation. 10 years experience. Available daily.", price: 800, category: cat["services"], status: :active, location: "Kabul", user_idx: 0, photo: "electrician,wiring" },
 
   # Other
-  { title: "Chicco Baby Stroller Barely Used", description: "Folds easily. Navy blue. Used 3 months. All parts working. Rain cover included.", price: 5_500, category: cat["other"], status: :active, location: "Kabul, Wazir Akbar Khan", user_idx: 6 },
-  { title: "Motorized Treadmill Foldable", description: "Speed up to 12 km/h. Works well. 2 years old. Heavy item. Selling due to moving.", price: 16_000, category: cat["other"], status: :active, location: "Kabul, Karte Seh", user_idx: 18 },
-  { title: "Children Bicycle Age 5 to 8", description: "Red color. Training wheels attached. Helmet included. No rust.", price: 2_800, category: cat["other"], status: :active, location: "Mazar-i-Sharif", user_idx: 4 }
+  { title: "Chicco Baby Stroller Barely Used", description: "Folds easily. Navy blue. Used 3 months. All parts working. Rain cover included.", price: 5_500, category: cat["other"], status: :active, location: "Kabul, Wazir Akbar Khan", user_idx: 6, photo: "stroller,baby" },
+  { title: "Motorized Treadmill Foldable", description: "Speed up to 12 km/h. Works well. 2 years old. Heavy item. Selling due to moving.", price: 16_000, category: cat["other"], status: :active, location: "Kabul, Karte Seh", user_idx: 18, photo: "treadmill,gym" },
+  { title: "Children Bicycle Age 5 to 8", description: "Red color. Training wheels attached. Helmet included. No rust.", price: 2_800, category: cat["other"], status: :active, location: "Mazar-i-Sharif", user_idx: 4, photo: "kids,bicycle" },
+
+  # ── Pashto listings (title + description in Pashto) — for RTL testing ────────
+  { title: "د سامسنګ ګلکسي A54 نوی موبایل", description: "بشپړ نوی، د بکس او چارجر سره. ۱۲۸ ګیګابایټه حافظه، ۸ ګیګابایټه رام. رنګ تور. د ضمانت سره خرڅلاو. په کابل کې ملاقات کیدای شي.", price: 24_000, category: cat["electronics"], status: :active, location: "کابل، شهر نو", user_idx: 0, photo: "samsung,smartphone" },
+  { title: "د لرګي د خوب کوټې الماري", description: "درې دروازې لرګینه الماري، ښه حالت لري، دوه کاله زوړ. د کډې کولو له امله خرڅلاو. په کابل کې پورته کول.", price: 15_000, category: cat["home"], status: :active, location: "کابل، کارته نو", user_idx: 7, photo: "wardrobe,furniture" },
+  { title: "افغاني لاسي جوړ قالین ۳x۴ متره", description: "اصلي افغاني قالین، ښکلي رنګونه لري، هیڅ زیان یا رنګ تلل نلري. د میلمستون او خوب کوټې لپاره مناسب دی.", price: 38_000, category: cat["home"], status: :active, location: "کندهار ښار", user_idx: 1, photo: "carpet,rug" },
+
+  # ── Dari listings (title + description in Dari) — for RTL testing ────────────
+  { title: "گوشی شیائومی ردمی نوت ۱۳ نو", description: "کاملاً نو، همراه با جعبه و شارژر اصلی. ۲۵۶ گیگابایت حافظه، رنگ آبی. قیمت قابل معامله است. محل ملاقات مرکز شهر هرات.", price: 22_000, category: cat["electronics"], status: :active, location: "هرات، مرکز شهر", user_idx: 2, photo: "xiaomi,smartphone" },
+  { title: "یخچال ال جی دو درب کم کارکرد", description: "به خوبی کار می‌کند، سه سال استفاده شده و هیچ خرابی ندارد. به دلیل نقل مکان به فروش می‌رسد. تحویل در مزار شریف.", price: 17_000, category: cat["home"], status: :active, location: "مزار شریف", user_idx: 4, photo: "refrigerator,fridge" },
+  { title: "دوچرخه کوهی حرفه‌ای ۲۹ اینچ", description: "دوچرخه کوهی با دنده‌های شیمانو، سبک و مقاوم. کمتر از یک سال استفاده شده. مناسب برای شهر و مسیرهای کوهی.", price: 14_000, category: cat["vehicles"], status: :active, location: "هرات", user_idx: 8, photo: "mountain,bicycle" }
 ]
 
 listing_data.each do |d|
   seller = users[d[:user_idx]]
   next if d[:category].nil?
-  next if Listing.exists?(user: seller, title: d[:title])
 
-  Listing.create!(
+  # find_or_create so a re-run backfills photos onto listings seeded before
+  # photo support existed, instead of skipping them entirely.
+  listing = Listing.find_by(user: seller, title: d[:title])
+  listing ||= Listing.create!(
     user:        seller,
     category:    d[:category],
     title:       d[:title],
@@ -307,7 +352,10 @@ listing_data.each do |d|
     location:    d[:location],
     views_count: rand(3..420)
   )
+
+  attach_seed_photos!(listing, d[:photo])
 end
+puts "" # newline after the per-listing photo progress dots
 
 puts "  listings: #{Listing.count} (#{Listing.active.count} active, #{Listing.draft.count} draft, #{Listing.reserved.count} reserved, #{Listing.sold.count} sold)"
 

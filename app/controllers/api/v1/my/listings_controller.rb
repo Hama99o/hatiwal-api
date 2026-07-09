@@ -5,7 +5,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     listings = policy_scope(
       current_user.listings
                   .not_removed
-                  .includes(:category, :conversations, :price_histories, images_attachments: :blob)
+                  .includes(:category, :conversations, :price_histories, images_attachments: { blob: { variant_records: { image_attachment: :blob } } })
     ).ordered
     listings = listings.for_status_filter(params[:status]) if params[:status].present?
 
