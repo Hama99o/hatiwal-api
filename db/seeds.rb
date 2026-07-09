@@ -578,6 +578,82 @@ end
 puts "  reports: #{Report.count}"
 
 # =============================================================================
+puts "=== Seeding Reviews (double-blind, on sold transactions) ==="
+# =============================================================================
+# A Review hangs off a SOLD Transaction (seller + buyer + listing). We reuse the
+# buyer<->listing pairs from the seeded conversations above (the buyer must be a
+# conversation participant — a Transaction model validation), mark each listing
+# sold to that buyer, then leave reviews.
+#
+# Most pairs get BOTH sides reviewed — revealed via #submit!'s reveal-on-second
+# rule, so avg_rating/review_count populate. A couple get only ONE side, left
+# hidden: realistic "pending / awaiting the other person" data for the mobile
+# pending-reviews nudge. Idempotent — re-uses an existing sold sale and skips a
+# sale that already has reviews.
+
+def seed_sold_sale(buyer, fragment)
+  listing = Listing.where("title ILIKE ?", "%#{fragment}%").first
+  return nil if listing.nil? || listing.user == buyer
+  return nil unless Conversation.exists?(listing: listing, buyer: buyer, seller: listing.user)
+
+  existing = Transaction.find_by(listing: listing, buyer: buyer, status: :sold)
+  return existing if existing
+
+  sale = listing.sold_with_buyer!(buyer_id: buyer.id, final_price: listing.price)
+  listing.sold! unless listing.sold?
+  sale
+rescue ActiveRecord::RecordInvalid
+  nil
+end
+
+# [ buyer, listing_fragment, seller_rating, seller_comment, buyer_rating, buyer_comment ]
+reviewed_sales = [
+  [ users[2],  "MMA Welding Machine",        5, "Serious buyer, paid on time.",  5, "Machine works perfectly, met at a safe spot." ],
+  [ users[3],  "iPhone 13 128GB",            4, "Smooth deal, friendly.",        5, "Great seller, quick to respond." ],
+  [ users[13], "Toyota Corolla 2015",        5, "Straightforward buyer.",        4, "Car was clean, small delay meeting up." ],
+  [ users[19], "Apple MacBook Air M1",       5, "Easy handover.",                5, "Genuine device, honest seller." ],
+  [ users[5],  "PlayStation 5 Disc Edition", 4, "Good communication.",           4, "As described, fair price." ],
+  [ users[8],  "Persian Hand-Woven Carpet",  5, "Polite and punctual.",          5, "Beautiful carpet, trustworthy seller." ]
+]
+
+reviewed = 0
+reviewed_sales.each do |buyer, fragment, s_rating, s_comment, b_rating, b_comment|
+  sale = seed_sold_sale(buyer, fragment)
+  next if sale.nil? || sale.reviews.exists?
+
+  # Seller reviews the buyer (of_buyer), then buyer reviews the seller
+  # (of_seller) — the second #submit! reveals BOTH and recomputes stats.
+  Review.new(sale: sale, reviewer: sale.seller, reviewee: sale.buyer,
+             role: :of_buyer, rating: s_rating, comment: s_comment).submit!
+  Review.new(sale: sale, reviewer: sale.buyer, reviewee: sale.seller,
+             role: :of_seller, rating: b_rating, comment: b_comment).submit!
+  reviewed += 1
+rescue ActiveRecord::RecordInvalid
+  next
+end
+
+# One-sided sales — the seller reviewed, the buyer hasn't yet. Stays HIDDEN
+# (double-blind) so the buyer has a pending review to leave.
+pending_sales = [
+  [ users[6], "Toyota Land Cruiser",    5, "Reliable buyer, no haggling games." ],
+  [ users[9], "JBL Xtreme 3 Bluetooth", 4, "Quick and easy meetup." ]
+]
+
+pending = 0
+pending_sales.each do |buyer, fragment, s_rating, s_comment|
+  sale = seed_sold_sale(buyer, fragment)
+  next if sale.nil? || sale.reviews.exists?
+
+  Review.new(sale: sale, reviewer: sale.seller, reviewee: sale.buyer,
+             role: :of_buyer, rating: s_rating, comment: s_comment).submit!
+  pending += 1
+rescue ActiveRecord::RecordInvalid
+  next
+end
+
+puts "  reviews: #{Review.count} (#{Review.visible.count} visible, #{Review.hidden.count} pending) from #{reviewed} completed + #{pending} pending sales"
+
+# =============================================================================
 puts ""
 puts "======================================"
 puts "  SEED COMPLETE"
@@ -593,6 +669,7 @@ puts "  Saved:         #{SavedListing.count}"
 puts "  Conversations: #{Conversation.count}"
 puts "  Messages:      #{Message.count}"
 puts "  Reports:       #{Report.count}"
+puts "  Reviews:       #{Review.count} (#{Review.visible.count} visible)"
 puts ""
 puts "  Accounts (password: password123)"
 puts "  demo@hatiwal.com     general demo"

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_04_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_09_120001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -226,6 +226,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_04_130000) do
     t.index ["status"], name: "index_reports_on_status"
   end
 
+  create_table "reviews", force: :cascade do |t|
+    t.text "comment"
+    t.datetime "created_at", null: false
+    t.integer "rating", null: false
+    t.datetime "revealed_at"
+    t.bigint "reviewee_id", null: false
+    t.bigint "reviewer_id", null: false
+    t.integer "role", null: false
+    t.bigint "transaction_id", null: false
+    t.datetime "updated_at", null: false
+    t.boolean "visible", default: false, null: false
+    t.index ["reviewee_id", "visible"], name: "index_reviews_on_reviewee_id_and_visible"
+    t.index ["reviewee_id"], name: "index_reviews_on_reviewee_id"
+    t.index ["reviewer_id"], name: "index_reviews_on_reviewer_id"
+    t.index ["transaction_id", "reviewer_id"], name: "index_reviews_unique_per_reviewer_per_txn", unique: true
+    t.index ["transaction_id"], name: "index_reviews_on_transaction_id"
+  end
+
   create_table "saved_listings", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "listing_id", null: false
@@ -288,6 +306,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_04_130000) do
   create_table "users", force: :cascade do |t|
     t.boolean "allow_password_change", default: false
     t.boolean "auto_blocked", default: false, null: false
+    t.decimal "avg_rating", precision: 3, scale: 2
     t.datetime "away_until"
     t.string "bio"
     t.string "block_reason"
@@ -322,6 +341,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_04_130000) do
     t.datetime "remember_created_at"
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
+    t.integer "review_count", default: 0, null: false
     t.boolean "seller_mode", default: false, null: false
     t.integer "sign_in_count", default: 0, null: false
     t.integer "status", default: 0, null: false
@@ -331,6 +351,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_04_130000) do
     t.string "unlock_token"
     t.datetime "updated_at", null: false
     t.boolean "verified", default: false, null: false
+    t.index ["avg_rating"], name: "index_users_on_avg_rating"
     t.index ["city"], name: "index_users_on_city"
     t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
     t.index ["deleted_at"], name: "index_users_on_deleted_at"
@@ -363,6 +384,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_04_130000) do
   add_foreign_key "messages", "messages", column: "responds_to_id"
   add_foreign_key "messages", "users"
   add_foreign_key "reports", "users", column: "reporter_id"
+  add_foreign_key "reviews", "transactions"
+  add_foreign_key "reviews", "users", column: "reviewee_id"
+  add_foreign_key "reviews", "users", column: "reviewer_id"
   add_foreign_key "saved_listings", "listings"
   add_foreign_key "saved_listings", "users"
   add_foreign_key "saved_searches", "categories"

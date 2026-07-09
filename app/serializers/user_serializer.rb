@@ -12,6 +12,8 @@ class UserSerializer < ApplicationSerializer
     field(:full_name) { |u| u.full_name }
     field(:listings_count) { |u| u.listings.active.not_expired.count }
     field(:sold_count) { |u| u.listings.sold.count }
+    field(:avg_rating) { |u| u.avg_rating&.to_f }
+    field(:review_count) { |u| u.review_count }
     field(:member_since) { |u| u.created_at.strftime("%B %Y") }
     field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
     # Whether the current viewer has blocked this user. Keeps the block/unblock
@@ -55,6 +57,8 @@ class UserSerializer < ApplicationSerializer
     # No money total: listings span currencies (AFN/USD/EUR) with no FX rate, so
     # summing them would be meaningless. We surface counts only.
     field(:saved_items_count) { |u| u.saved_listings.count }
+    field(:avg_rating) { |u| u.avg_rating&.to_f }
+    field(:review_count) { |u| u.review_count }
     field(:unread_message_count) do |u|
       # Exclude conversations the user has archived — archiving should silence the badge.
       conversation_ids = Conversation.for_user(u.id).not_archived_for(u).select(:id)

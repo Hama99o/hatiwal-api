@@ -19,3 +19,6 @@ production:
   finalize_account_deletions:
     class: FinalizeAccountDeletionsJob
     schedule: every day at 4am
+  reveal_overdue_reviews:
+    class: RevealOverdueReviewsJob
+    schedule: every day at 5am

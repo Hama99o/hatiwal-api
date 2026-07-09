@@ -117,6 +117,16 @@ Rails.application.routes.draw do
       # Reports
       resources :reports, only: [ :create, :index ]
 
+      # Reviews (double-blind, on a sold Transaction)
+      resources :transactions, only: [] do
+        # POST /api/v1/transactions/:transaction_id/reviews
+        resources :reviews, only: [ :create ]
+      end
+      # PATCH /api/v1/reviews/:id — edit your own review while still hidden
+      resources :reviews, only: [ :update ]
+      # GET /api/v1/users/:user_id/reviews — a user's visible reviews (public)
+      get "users/:user_id/reviews", to: "reviews#index", as: :user_reviews
+
       # User profiles
       namespace :users do
         get   "/me",          to: "profiles#me",        as: :me
@@ -172,6 +182,8 @@ Rails.application.routes.draw do
         resources :hidden_listings, only: [ :index ]
         # GET /my/transactions — the caller's own transactions, as buyer or seller (TASK-TX01).
         resources :transactions, only: [ :index ]
+        # GET /my/reviews/pending — sold sales the caller still owes a review on.
+        get "reviews/pending", to: "reviews#pending"
       end
     end
   end

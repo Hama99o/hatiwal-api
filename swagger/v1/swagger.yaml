@@ -211,6 +211,36 @@ paths:
             exactly 8
         '404':
           description: not found for non-existent listing
+  "/api/v1/my/reviews/pending":
+    get:
+      summary: sold sales the caller still owes a review on
+      tags:
+      - Reviews
+      description: Returns the caller's SOLD transactions (as buyer or seller) that
+        they have not yet reviewed. Drives the rating prompt.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '401':
+          description: requires authentication
+        '200':
+          description: lists unreviewed sold sales
   "/api/v1/my/transactions":
     get:
       summary: list the caller's transactions (as buyer and/or seller)
@@ -332,6 +362,100 @@ paths:
                   - reportable_type
                   - reportable_id
                   - reason
+  "/api/v1/transactions/{transaction_id}/reviews":
+    post:
+      summary: leave a review on a sold sale
+      tags:
+      - Reviews
+      description: |
+        The caller (a party to a SOLD transaction) rates the other party. The
+        review is created hidden (double-blind) and revealed only once the
+        counterparty also submits, or after the reveal window elapses.
+      security:
+      - bearer: []
+      parameters:
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '401':
+          description: requires authentication
+        '201':
+          description: creates a hidden review
+        '403':
+          description: rejects a non-party
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                review:
+                  type: object
+                  properties:
+                    rating:
+                      type: integer
+                      minimum: 1
+                      maximum: 5
+                    comment:
+                      type: string
+                  required:
+                  - rating
+  "/api/v1/users/{user_id}/reviews":
+    get:
+      summary: list a user's visible reviews
+      tags:
+      - Reviews
+      description: Public, paginated list of the VISIBLE reviews a user has received.
+        Optional ?role=of_seller|of_buyer.
+      security:
+      - bearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: role
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: returns only visible reviews
   "/api/v1/users/{user_id}/sold_listings":
     get:
       summary: list a seller's sold listings (public)

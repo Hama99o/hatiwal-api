@@ -8,6 +8,8 @@ class Transaction < ApplicationRecord
   belongs_to :seller, class_name: User.name
   belongs_to :buyer,  class_name: User.name
 
+  has_many :reviews, class_name: Review.name, foreign_key: :transaction_id, dependent: :destroy, inverse_of: :sale
+
   enum :status, { reserved: 0, sold: 1 }
 
   validates :final_price, presence: true, numericality: { greater_than: 0 }

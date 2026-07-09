@@ -25,6 +25,8 @@ class User < ApplicationRecord
   has_many :listing_views, dependent: :destroy
   has_many :viewed_listings, through: :listing_views, source: :listing
   has_many :warnings, class_name: "UserWarning", dependent: :destroy
+  has_many :reviews_written, class_name: Review.name, foreign_key: :reviewer_id, dependent: :destroy, inverse_of: :reviewer
+  has_many :reviews_received, class_name: Review.name, foreign_key: :reviewee_id, dependent: :destroy, inverse_of: :reviewee
 
   validates :firstname, presence: true
   validates :lastname, presence: true
@@ -41,6 +43,17 @@ class User < ApplicationRecord
 
   def full_name
     "#{firstname} #{lastname}".strip
+  end
+
+  # Refresh the denormalized rating aggregates from this user's VISIBLE reviews
+  # (as reviewee). Called only when a review is revealed, so feeds never sum
+  # reviews per row. update_columns skips validations/callbacks by design.
+  def recompute_review_stats!
+    visible = Review.visible.for_reviewee(self)
+    update_columns(
+      review_count: visible.count,
+      avg_rating: visible.average(:rating)&.round(2)
+    )
   end
 
   def blocked?(other_user)
