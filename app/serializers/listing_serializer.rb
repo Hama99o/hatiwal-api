@@ -79,6 +79,11 @@ class ListingSerializer < ApplicationSerializer
         phone: phone,
         verified: u.verified,
         avatar_url: u.avatar.attached? ? u.avatar.url : nil,
+        # Rating summary so the buyer sees the seller's trust score on the
+        # highest-intent screen (listing detail), matching the seller profile.
+        # avg_rating is nil until the seller has at least one revealed review.
+        avg_rating: u.avg_rating&.to_f,
+        review_count: u.review_count,
         response_rate_percent: u.response_rate_percent,
         response_time_label: u.response_time_label&.to_s,
         last_active_label: u.last_active_label&.to_s,

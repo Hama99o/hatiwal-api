@@ -85,6 +85,34 @@ RSpec.describe ListingSerializer, type: :serializer do
     end
   end
 
+  describe ":detailed view — seller rating summary" do
+    let(:buyer) { create(:user) }
+
+    subject(:seller_hash) do
+      described_class.render_as_hash(listing, view: :detailed, current_user: buyer)[:seller]
+    end
+
+    it "includes avg_rating and review_count keys" do
+      expect(seller_hash).to have_key(:avg_rating)
+      expect(seller_hash).to have_key(:review_count)
+    end
+
+    it "returns nil avg_rating for a seller with no revealed reviews" do
+      expect(seller_hash[:avg_rating]).to be_nil
+    end
+
+    context "when the seller has revealed reviews" do
+      # Set the denormalized aggregates directly, the way recompute_review_stats!
+      # writes them — the serializer contract is what's under test here.
+      before { seller.update_columns(review_count: 3, avg_rating: 4.67) }
+
+      it "surfaces the average as a float and the count" do
+        expect(seller_hash[:avg_rating]).to eq(4.67)
+        expect(seller_hash[:review_count]).to eq(3)
+      end
+    end
+  end
+
   describe ":detailed view — seller last_active_label" do
     let(:buyer) { create(:user) }
 
