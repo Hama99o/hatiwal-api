@@ -26,6 +26,33 @@ RSpec.describe "Api::V1::Listings filtering", type: :request do
     end
   end
 
+  describe "page[size] pagination" do
+    before { create_list(:listing, 5, :active) }
+
+    def body
+      JSON.parse(response.body)
+    end
+
+    it "honors a client-requested page size" do
+      get "/api/v1/listings", params: { page: { size: 2, number: 1 } }, headers: headers
+      expect(body["listings"].length).to eq(2)
+      expect(body["meta"]["pagination"]["total_pages"]).to eq(3)
+      expect(body["meta"]["pagination"]["total_count"]).to eq(5)
+    end
+
+    it "defaults to the standard page size when page[size] is absent" do
+      get "/api/v1/listings", headers: headers
+      expect(body["listings"].length).to eq(5) # 5 < default 20 → single page
+      expect(body["meta"]["pagination"]["total_pages"]).to eq(1)
+    end
+
+    it "ignores a non-positive page[size] and falls back to the default" do
+      get "/api/v1/listings", params: { page: { size: 0 } }, headers: headers
+      expect(body["listings"].length).to eq(5)
+      expect(body["meta"]["pagination"]["total_pages"]).to eq(1)
+    end
+  end
+
   describe "guest access (no auth token)" do
     it "lets a guest browse the feed" do
       create(:listing, :active)

@@ -42,13 +42,33 @@ class ApplicationController < ActionController::API
     render json: { serializer.model_name.plural => serializer.render_as_hash(collection, view: view, **options) }, status: status
   end
 
-  def paginate_blue(serializer, collection, extra: {})
-    # params[:page] can arrive as a nested hash (e.g. page[size]=10 from some
-    # JSON:API clients) — extract the integer page number safely.
+  # Largest page[size] a client may request (guards against abusive limits).
+  MAX_PAGE_SIZE = 100
+
+  # Pagy options from JSON:API-style params: page[number] plus an OPTIONAL
+  # page[size] (clamped to 1..MAX_PAGE_SIZE; falls back to Pagy's default limit
+  # when absent). Both the web and mobile clients send page[size] and expect it
+  # honored — e.g. the web chat thread requests 50 messages/page and the seller
+  # grids request 24 — so it must not be silently ignored.
+  def pagy_page_options
     raw_page = params[:page]
-    page_num = raw_page.is_a?(ActionController::Parameters) ? raw_page[:number].to_i : raw_page.to_i
-    page_num = 1 if page_num < 1
-    pagy, records = pagy(collection, page: page_num)
+    if raw_page.is_a?(ActionController::Parameters)
+      page_num = raw_page[:number].to_i
+      page_size = raw_page[:size].to_i
+    else
+      page_num = raw_page.to_i
+      page_size = 0
+    end
+    opts = { page: page_num < 1 ? 1 : page_num }
+    # Pagy 8.x's per-page var is `:items` (`pagy.items`); pass it explicitly so
+    # the size is honored. (Pagy also reads `page:` from us so it doesn't choke
+    # on the nested params[:page] hash.)
+    opts[:items] = page_size.clamp(1, MAX_PAGE_SIZE) if page_size.positive?
+    opts
+  end
+
+  def paginate_blue(serializer, collection, extra: {})
+    pagy, records = pagy(collection, **pagy_page_options)
     render json: {
       serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default, **extra.except(:view)),
       meta: {
@@ -72,10 +92,7 @@ class ApplicationController < ActionController::API
   #     page.filter_map(&:listing)
   #   end
   def paginate_blue_with_transform(serializer, collection, extra: {}, &transform)
-    raw_page = params[:page]
-    page_num = raw_page.is_a?(ActionController::Parameters) ? raw_page[:number].to_i : raw_page.to_i
-    page_num = 1 if page_num < 1
-    pagy, paged_records = pagy(collection, page: page_num)
+    pagy, paged_records = pagy(collection, **pagy_page_options)
     records = block_given? ? transform.call(paged_records) : paged_records
     render json: {
       serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default, **extra.except(:view)),
