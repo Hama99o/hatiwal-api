@@ -31,7 +31,7 @@ def e2e_user(email:, firstname:, lastname:, city:, province:)
       uid:                   email,
       provider:              "email"
     )
-    user.skip_confirmation!
+    user.skip_confirmation! if user.respond_to?(:skip_confirmation!)
     user.save!
     puts "  created #{email}"
   else
@@ -269,7 +269,7 @@ e2e_extra_buyers = [
       city: "Kabul", province: "Kabul", preferred_language: "en",
       preferred_theme: "system", uid: attrs[:email], provider: "email"
     )
-    u.skip_confirmation!
+    u.skip_confirmation! if u.respond_to?(:skip_confirmation!)
     u.save!
     puts "  created e2e buyer: #{attrs[:email]}"
   end
