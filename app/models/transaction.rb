@@ -23,6 +23,15 @@ class Transaction < ApplicationRecord
   validate :seller_matches_listing_owner
   validate :buyer_is_conversation_participant
 
+  # ── Trust-stat counters (TASK-TX02) ─────────────────────────────────────────
+  # Bump the denormalized users.sold_count / users.bought_count columns the
+  # moment a transaction FIRST becomes sold — whether created directly as sold
+  # (skip-reserve) or advanced from reserved via #mark_sold!. Fires at most
+  # once per transaction (guarded by saved_change_to_status?), so correcting
+  # other attributes on an already-sold row never double-counts. There is
+  # currently no "unsell" flow, so counters are only ever incremented.
+  after_save :bump_trust_counters!, if: -> { sold? && saved_change_to_status? }
+
   scope :as_buyer,  ->(user) { where(buyer_id: user.id) }
   scope :as_seller, ->(user) { where(seller_id: user.id) }
   scope :for_user,  ->(user) { where("buyer_id = ? OR seller_id = ?", user.id, user.id) }
@@ -41,6 +50,13 @@ class Transaction < ApplicationRecord
   end
 
   private
+
+  # Atomic single-column UPDATEs (no read-then-write race, no extra SELECT) —
+  # same reasoning as ActiveRecord's own #increment_counter.
+  def bump_trust_counters!
+    User.increment_counter(:sold_count, seller_id)
+    User.increment_counter(:bought_count, buyer_id)
+  end
 
   def buyer_is_not_seller
     return if buyer_id.blank? || seller_id.blank?

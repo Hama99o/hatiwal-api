@@ -48,6 +48,38 @@ RSpec.describe "Api::V1::Blocks", type: :request do
       ids = JSON.parse(response.body)["users"].map { |u| u["id"] }
       expect(ids).to eq([ newer.id, older.id ])
     end
+
+    # TASK-TX02 — sold_count/bought_count are plain column reads on the
+    # already-eager-loaded blocked user, so listing many blocked profiles must
+    # NOT add one query per user (the old sold_count implementation queried
+    # `u.listings.sold.count` per row, which would have regressed this).
+    it "includes sold_count/bought_count without adding a query per blocked user (no N+1)" do
+      blocked_one = create(:user)
+      create(:block, blocker: user, blocked: blocked_one)
+
+      queries_with_1 = 0
+      ActiveSupport::Notifications.subscribed(->(*) { queries_with_1 += 1 }, "sql.active_record") do
+        get "/api/v1/blocks", headers: headers, as: :json
+      end
+      body_1 = JSON.parse(response.body)["users"]
+      expect(body_1.first).to have_key("sold_count")
+      expect(body_1.first).to have_key("bought_count")
+
+      3.times do
+        other = create(:user)
+        create(:block, blocker: user, blocked: other)
+        create(:transaction, :sold, seller: other, listing: create(:listing, :sold, user: other))
+      end
+
+      queries_with_4 = 0
+      ActiveSupport::Notifications.subscribed(->(*) { queries_with_4 += 1 }, "sql.active_record") do
+        get "/api/v1/blocks", headers: headers, as: :json
+      end
+
+      expect(queries_with_4).to be <= queries_with_1 + 2,
+        "Expected query count to stay ~constant (no N+1) as blocked-user count grows, " \
+        "but got #{queries_with_1} queries with 1 blocked user and #{queries_with_4} with 4"
+    end
   end
 
   describe "POST /api/v1/blocks/:user_id" do

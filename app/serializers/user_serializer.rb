@@ -11,7 +11,12 @@ class UserSerializer < ApplicationSerializer
     field(:lastname) { |u| u.lastname }
     field(:full_name) { |u| u.full_name }
     field(:listings_count) { |u| u.listings.active.not_expired.count }
-    field(:sold_count) { |u| u.listings.sold.count }
+    # TASK-TX02 — denormalized counters (users.sold_count / users.bought_count),
+    # bumped by Transaction#bump_trust_counters! on every completed sale. Plain
+    # column reads: zero extra queries here, so a public-profile load AND a list
+    # of many profiles (e.g. GET /blocks) both stay N+1-free for these stats.
+    field(:sold_count) { |u| u.sold_count }
+    field(:bought_count) { |u| u.bought_count }
     field(:avg_rating) { |u| u.avg_rating&.to_f }
     field(:review_count) { |u| u.review_count }
     field(:member_since) { |u| u.created_at.strftime("%B %Y") }
@@ -57,6 +62,12 @@ class UserSerializer < ApplicationSerializer
     # No money total: listings span currencies (AFN/USD/EUR) with no FX rate, so
     # summing them would be meaningless. We surface counts only.
     field(:saved_items_count) { |u| u.saved_listings.count }
+    # TASK-TX02 — trust stats sourced from the transactions table (a real sale
+    # with a confirmed counterparty), distinct from items_sold_count above
+    # (which counts listing.status == sold regardless of whether a buyer was
+    # ever identified). Plain column reads — no extra query.
+    field(:sold_count) { |u| u.sold_count }
+    field(:bought_count) { |u| u.bought_count }
     field(:avg_rating) { |u| u.avg_rating&.to_f }
     field(:review_count) { |u| u.review_count }
     field(:unread_message_count) do |u|

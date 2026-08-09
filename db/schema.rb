@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_09_120001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_09_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -310,6 +310,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_09_120001) do
     t.datetime "away_until"
     t.string "bio"
     t.string "block_reason"
+    t.integer "bought_count", default: 0, null: false
     t.string "city"
     t.datetime "confirmation_sent_at"
     t.string "confirmation_token"
@@ -344,6 +345,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_09_120001) do
     t.integer "review_count", default: 0, null: false
     t.boolean "seller_mode", default: false, null: false
     t.integer "sign_in_count", default: 0, null: false
+    t.integer "sold_count", default: 0, null: false
     t.integer "status", default: 0, null: false
     t.json "tokens"
     t.string "uid", default: "", null: false

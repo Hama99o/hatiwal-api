@@ -60,6 +60,63 @@ RSpec.describe Transaction, type: :model do
     end
   end
 
+  describe "trust-stat counters (TASK-TX02)" do
+    it "bumps seller.sold_count and buyer.bought_count when created directly as sold" do
+      seller  = create(:user)
+      buyer   = create(:user)
+      listing = create(:listing, :active, user: seller)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+
+      expect do
+        create(:transaction, :sold, listing: listing, seller: seller, buyer: buyer)
+      end.to change { seller.reload.sold_count }.by(1)
+              .and change { buyer.reload.bought_count }.by(1)
+    end
+
+    it "bumps counters when a reserved transaction is advanced to sold via #mark_sold!" do
+      txn = create(:transaction, status: :reserved)
+
+      expect { txn.mark_sold! }
+        .to change { txn.seller.reload.sold_count }.by(1)
+        .and change { txn.buyer.reload.bought_count }.by(1)
+    end
+
+    it "does not bump counters while a transaction stays reserved" do
+      seller = create(:user)
+      buyer  = create(:user)
+      create(:transaction, status: :reserved, seller: seller, buyer: buyer)
+
+      expect(seller.reload.sold_count).to eq(0)
+      expect(buyer.reload.bought_count).to eq(0)
+    end
+
+    it "does not double-count when an already-sold transaction is saved again" do
+      txn = create(:transaction, :sold)
+
+      expect { txn.update!(final_price: txn.final_price + 1) }
+        .not_to change { txn.seller.reload.sold_count }
+      expect(txn.buyer.reload.bought_count).to eq(1)
+    end
+
+    it "never counts the seller and buyer of two different sales into each other" do
+      seller_a = create(:user)
+      buyer_a  = create(:user)
+      seller_b = create(:user)
+      buyer_b  = create(:user)
+      create(:transaction, :sold, seller: seller_a, buyer: buyer_a,
+                                  listing: create(:listing, :active, user: seller_a))
+      create(:transaction, :sold, seller: seller_b, buyer: buyer_b,
+                                  listing: create(:listing, :active, user: seller_b))
+
+      expect(seller_a.reload.sold_count).to eq(1)
+      expect(seller_a.reload.bought_count).to eq(0)
+      expect(buyer_a.reload.bought_count).to eq(1)
+      expect(buyer_a.reload.sold_count).to eq(0)
+      expect(seller_b.reload.sold_count).to eq(1)
+      expect(buyer_b.reload.bought_count).to eq(1)
+    end
+  end
+
   describe "scopes" do
     it ".as_buyer / .as_seller / .for_user" do
       user_a = create(:user)

@@ -39,6 +39,33 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       expect(body).to have_key("unread_message_count")
       expect(body).not_to have_key("total_sales") # money never summed across currencies
     end
+
+    # TASK-TX02 — sold_count/bought_count on the :me view, sourced from the
+    # transactions table (distinct from the listings-based items_sold_count
+    # above, which counts listing.status == sold regardless of a confirmed buyer).
+    it "includes sold_count and bought_count sourced from transactions" do
+      other_seller = create(:user)
+      other_buyer  = create(:user)
+      create(:transaction, :sold, seller: user, listing: create(:listing, :sold, user: user))
+      create(:transaction, :sold, buyer: user, seller: other_seller,
+                                   listing: create(:listing, :sold, user: other_seller))
+      # An unrelated sale the current user has nothing to do with — must not leak in.
+      create(:transaction, :sold, seller: other_buyer, listing: create(:listing, :sold, user: other_buyer))
+
+      get "/api/v1/users/me", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body["sold_count"]).to eq(1)
+      expect(body["bought_count"]).to eq(1)
+    end
+
+    it "returns 0 (not omitted) for sold_count/bought_count when the user has no transactions" do
+      get "/api/v1/users/me", headers: headers, as: :json
+
+      body = JSON.parse(response.body)["user"]
+      expect(body["sold_count"]).to eq(0)
+      expect(body["bought_count"]).to eq(0)
+    end
   end
 
   describe "PUT /api/v1/users/me" do
@@ -283,7 +310,7 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
     it "returns another user's public profile with trust fields" do
       other = create(:user, firstname: "Fatima", lastname: "Noori")
       create(:listing, :active, user: other)
-      create(:listing, :sold, user: other)
+      create(:transaction, :sold, seller: other, listing: create(:listing, :sold, user: other))
 
       get "/api/v1/users/#{other.id}", headers: headers, as: :json
 
@@ -291,7 +318,9 @@ RSpec.describe "Api::V1::Users::Profiles", type: :request do
       body = JSON.parse(response.body)["user"]
       expect(body["full_name"]).to eq("Fatima Noori")
       expect(body["listings_count"]).to eq(1)
+      # sold_count is sourced from the transactions table (TASK-TX02).
       expect(body["sold_count"]).to eq(1)
+      expect(body).to have_key("bought_count")
       expect(body["member_since"]).to be_present
       expect(body).to have_key("avatar_url")
       # PII must not appear in the :public view

@@ -17,8 +17,8 @@ RSpec.describe "Api::V1::Users::PublicProfiles", type: :request do
 
     it "returns the seller's public profile with trust fields" do
       create(:listing, :active, user: seller)
-      create(:listing, :sold, user: seller)
-      create(:listing, :sold, user: seller)
+      create(:transaction, :sold, seller: seller, listing: create(:listing, :sold, user: seller))
+      create(:transaction, :sold, seller: seller, listing: create(:listing, :sold, user: seller))
 
       get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json
 
@@ -26,7 +26,10 @@ RSpec.describe "Api::V1::Users::PublicProfiles", type: :request do
       body = JSON.parse(response.body)["user"]
       expect(body["full_name"]).to eq("Ahmad Shah")
       expect(body["listings_count"]).to eq(1)
+      # sold_count is sourced from the transactions table (TASK-TX02), not
+      # listing.status — each :sold transaction bumps the counter by 1.
       expect(body["sold_count"]).to eq(2)
+      expect(body).to have_key("bought_count")
       expect(body["member_since"]).to be_present
       expect(body["verified"]).to be(false)
       # PII must not appear in the public view
@@ -61,7 +64,7 @@ RSpec.describe "Api::V1::Users::PublicProfiles", type: :request do
       end
 
       it "does not affect sold_count — sold listings are not expiry-gated" do
-        create(:listing, :sold, user: seller)
+        create(:transaction, :sold, seller: seller, listing: create(:listing, :sold, user: seller))
         create(:listing, :expired, user: seller)
 
         get "/api/v1/users/#{seller.id}/public_profile", headers: headers, as: :json

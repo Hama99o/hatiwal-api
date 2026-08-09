@@ -280,6 +280,36 @@ RSpec.describe UserSerializer, type: :serializer do
     end
   end
 
+  describe "sold_count / bought_count (TASK-TX02)" do
+    let(:seller) { create(:user) }
+    let(:buyer)  { create(:user) }
+    let(:viewer) { create(:user) }
+
+    before do
+      create(:transaction, :sold, seller: seller, buyer: buyer,
+                                   listing: create(:listing, :sold, user: seller))
+    end
+
+    it "returns sold_count/bought_count as plain columns in the :public view" do
+      # #increment_counter is a raw atomic UPDATE — it never touches the
+      # in-memory `seller`/`buyer` objects `let` already memoized, so reload
+      # before rendering (exactly like any other caller reading fresh stats).
+      result = described_class.render_as_hash(seller.reload, view: :public, current_user: viewer)
+      expect(result[:sold_count]).to eq(1)
+      expect(result[:bought_count]).to eq(0)
+
+      buyer_result = described_class.render_as_hash(buyer.reload, view: :public, current_user: viewer)
+      expect(buyer_result[:sold_count]).to eq(0)
+      expect(buyer_result[:bought_count]).to eq(1)
+    end
+
+    it "returns sold_count/bought_count in the :me view" do
+      result = described_class.render_as_hash(seller.reload, view: :me)
+      expect(result[:sold_count]).to eq(1)
+      expect(result[:bought_count]).to eq(0)
+    end
+  end
+
   describe ":minimal view — away fields not exposed" do
     let(:user) { create(:user, away_until: 3.days.from_now) }
 

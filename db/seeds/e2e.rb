@@ -319,6 +319,44 @@ else
 end
 
 # =============================================================================
+puts "=== E2E Seed: Transaction (sold/bought trust stats — TASK-TX02) ==="
+# =============================================================================
+# Attaches a `sold` Transaction to the already-seeded sold listing so
+# seller@hatiwal.test.sold_count and buyer@hatiwal.test.bought_count are both
+# guaranteed >= 1 in every Maestro E2E run (the "Sold N · Bought N" trust
+# badge / profile stats row have a non-empty state to assert against).
+# newbuyer@hatiwal.test deliberately has NO transaction history — it is the
+# fixture for asserting the badge/stat is HIDDEN when the count is 0.
+
+tx_listing = Listing.find_by(user: seller, title: "Xiaomi Redmi Note 11 128GB")
+
+if tx_listing
+  # The buyer must be a conversation participant on this listing (Transaction
+  # model validation) — create one if it doesn't already exist.
+  unless Conversation.exists?(listing: tx_listing, seller: seller, buyer: buyer)
+    Conversation.create!(listing: tx_listing, seller: seller, buyer: buyer)
+    puts "  created conversation for the sold-listing transaction"
+  end
+
+  unless Transaction.exists?(listing: tx_listing, seller: seller, buyer: buyer, status: :sold)
+    Transaction.create!(
+      listing:      tx_listing,
+      seller:       seller,
+      buyer:        buyer,
+      final_price:  tx_listing.price,
+      currency:     tx_listing.currency,
+      status:       :sold,
+      completed_at: tx_listing.sold_at || 3.days.ago
+    )
+    puts "  seeded sold Transaction: #{tx_listing.title} (seller sold_count / buyer bought_count both >= 1)"
+  else
+    puts "  sold Transaction already present for #{tx_listing.title}"
+  end
+else
+  puts "  WARN: Xiaomi Redmi Note 11 listing not found — transaction seed skipped"
+end
+
+# =============================================================================
 puts ""
 puts "======================================"
 puts "  E2E SEED COMPLETE"
@@ -332,6 +370,9 @@ puts "    active:   #{Listing.where(user: seller, status: :active).count}"
 puts "    reserved: #{Listing.where(user: seller, status: :reserved).count}"
 puts "    sold:     #{Listing.where(user: seller, status: :sold).count}"
 puts "    convos:   #{Conversation.where(seller: seller).count} (response-rate badge: #{Conversation.where(seller: seller).count >= 5 ? 'YES' : 'NO — needs >=5'})"
+puts "    sold_count (trust stat): #{seller.reload.sold_count}"
+puts "  buyer@hatiwal.test    bought_count (trust stat): #{buyer.reload.bought_count}"
+puts "  newbuyer@hatiwal.test bought_count (trust stat): #{newbuyer.reload.bought_count} (should be 0 — no history fixture)"
 puts "  newbuyer@hatiwal.test — fresh account, nothing saved"
 puts ""
 puts "  Run E2E tests: maestro test hatiwal-mobile/maestro/"
