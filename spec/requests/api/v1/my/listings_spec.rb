@@ -126,6 +126,66 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         "Expected query count to be constant (no N+1): " \
         "got #{count_1[0]} with 1 listing and #{count_3[0]} with 3 listings"
     end
+
+    # ── TASK-R418 ────────────────────────────────────────────────────────────
+    describe "sale (owner-only buyer identity) on the seller feed" do
+      it "includes sale.buyer for a reserved row and sale: null for a buyer-less reserve" do
+        with_buyer    = create(:listing, :reserved, user: user)
+        txn           = create(:transaction, listing: with_buyer, seller: user)
+        legacy_reserve = create(:listing, :reserved, user: user)
+
+        get "/api/v1/my/listings", headers: headers, as: :json
+
+        listings = JSON.parse(response.body)["listings"]
+        with_buyer_row = listings.find { |l| l["id"] == with_buyer.id }
+        legacy_row     = listings.find { |l| l["id"] == legacy_reserve.id }
+
+        expect(with_buyer_row["sale"]["buyer"]["id"]).to eq(txn.buyer.id)
+        expect(legacy_row["sale"]).to be_nil
+      end
+
+      it "issues a constant number of queries regardless of how many rows have a Transaction (no N+1)" do
+        # Warm up connection/schema caches.
+        get "/api/v1/my/listings", headers: headers, as: :json
+
+        one_listing = create(:listing, :reserved, user: user, title: "R418 Guard One")
+        create(:transaction, listing: one_listing, seller: user)
+
+        count_1 = [ 0 ]
+        ActiveSupport::Notifications.subscribed(
+          lambda { |*, payload|
+            sql = payload[:sql].to_s
+            next if sql.start_with?("SAVEPOINT", "RELEASE SAVEPOINT")
+            next if sql =~ /\AUPDATE "users" SET "tokens"/
+
+            count_1[0] += 1
+          },
+          "sql.active_record"
+        ) { get "/api/v1/my/listings", headers: headers, as: :json }
+
+        3.times do |i|
+          listing = create(:listing, :reserved, user: user, title: "R418 Guard Extra #{i}")
+          create(:transaction, listing: listing, seller: user)
+        end
+
+        count_4 = [ 0 ]
+        ActiveSupport::Notifications.subscribed(
+          lambda { |*, payload|
+            sql = payload[:sql].to_s
+            next if sql.start_with?("SAVEPOINT", "RELEASE SAVEPOINT")
+            next if sql =~ /\AUPDATE "users" SET "tokens"/
+
+            count_4[0] += 1
+          },
+          "sql.active_record"
+        ) { get "/api/v1/my/listings", headers: headers, as: :json }
+
+        expect(response).to have_http_status(:ok)
+        expect(count_4[0]).to be <= count_1[0] + 3,
+          "Expected query count to be constant (no N+1): " \
+          "got #{count_1[0]} with 1 sold-with-buyer row and #{count_4[0]} with 4"
+      end
+    end
   end
 
   describe "GET /api/v1/my/listings/:id" do
@@ -161,6 +221,56 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       expect(response).to have_http_status(:ok)
       body = JSON.parse(response.body)["listing"]
       expect(body["conversations_count"]).to eq(1)
+    end
+
+    # ── TASK-R418 ────────────────────────────────────────────────────────────
+    describe "sale (owner-only buyer identity)" do
+      it "a reserved listing with a Transaction returns sale.buyer / final_price / conversation_id" do
+        listing = create(:listing, :reserved, user: user)
+        txn = create(:transaction, listing: listing, seller: user, final_price: 12_345)
+        convo = Conversation.find_by(listing: listing, seller: user, buyer: txn.buyer)
+
+        get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        sale = JSON.parse(response.body)["listing"]["sale"]
+        expect(sale).to be_present
+        expect(sale["status"]).to eq("reserved")
+        expect(sale["final_price"].to_f).to eq(12_345.0)
+        expect(sale["buyer"]["id"]).to eq(txn.buyer.id)
+        expect(sale["buyer"]["name"]).to eq(txn.buyer.full_name)
+        expect(sale["buyer"]).to have_key("avatar_url")
+        expect(sale["buyer"]).to have_key("verified")
+        expect(sale["conversation_id"]).to eq(convo.id)
+      end
+
+      it "a sold listing with a Transaction returns sale.status sold and completed_at" do
+        listing = create(:listing, :sold, user: user)
+        create(:transaction, :sold, listing: listing, seller: user)
+
+        get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+
+        sale = JSON.parse(response.body)["listing"]["sale"]
+        expect(sale["status"]).to eq("sold")
+        expect(sale["completed_at"]).to be_present
+      end
+
+      it "a legacy reserve with no Transaction returns sale: null" do
+        listing = create(:listing, :reserved, user: user)
+
+        get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["listing"]["sale"]).to be_nil
+      end
+
+      it "a draft/active listing returns sale: null even if somehow a Transaction row exists" do
+        listing = create(:listing, :active, user: user)
+
+        get "/api/v1/my/listings/#{listing.id}", headers: headers, as: :json
+
+        expect(JSON.parse(response.body)["listing"]["sale"]).to be_nil
+      end
     end
   end
 
@@ -402,6 +512,10 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(body["transaction"]["status"]).to eq("reserved")
         expect(body["transaction"]["buyer"]["id"]).to eq(buyer.id)
         expect(body["transaction"]["final_price"].to_f).to eq(active.price.to_f)
+        # TASK-R418 — the listing itself already carries `sale` in the same
+        # response, no client-side merge of `transaction` needed.
+        expect(body["listing"]["sale"]["buyer"]["id"]).to eq(buyer.id)
+        expect(body["listing"]["sale"]["status"]).to eq("reserved")
       end
 
       it "with buyer_id and final_price records the negotiated price" do
@@ -517,6 +631,9 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         body = JSON.parse(response.body)
         expect(body["transaction"]["status"]).to eq("sold")
         expect(body["transaction"]["completed_at"]).to be_present
+        # TASK-R418
+        expect(body["listing"]["sale"]["buyer"]["id"]).to eq(buyer.id)
+        expect(body["listing"]["sale"]["status"]).to eq("sold")
       end
 
       # ── TASK-TX02 (review fix) — the legacy buyer-less path must still bump

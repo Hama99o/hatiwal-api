@@ -5,7 +5,15 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     listings = policy_scope(
       current_user.listings
                   .not_removed
-                  .includes(:category, :conversations, :price_histories, images_attachments: { blob: { variant_records: { image_attachment: :blob } } })
+                  .includes(
+                    :category, :conversations, :price_histories,
+                    # TASK-R418: the :seller_list view's `sale` field reads
+                    # listing.current_sale (=> sale_transactions) and its
+                    # buyer's avatar — eager-load both so a feed full of
+                    # reserved/sold rows stays a constant number of queries.
+                    sale_transactions: { buyer: { avatar_attachment: :blob } },
+                    images_attachments: { blob: { variant_records: { image_attachment: :blob } } }
+                  )
     ).ordered
     listings = listings.for_status_filter(params[:status]) if params[:status].present?
 
@@ -13,7 +21,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   end
 
   def show
-    render_blue(ListingSerializer, @listing, view: :detailed)
+    render_blue(ListingSerializer, @listing, view: :owner_detailed)
   end
 
   def create
@@ -124,8 +132,11 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   # Composite payload for reserve/sold — always includes the listing; the
   # `transaction` key is present only when a buyer was identified (TASK-TX01).
+  # TASK-R418: the listing is rendered with :owner_detailed (not :detailed) so
+  # the response's own `listing.sale` already reflects the just-recorded
+  # buyer — no client-side merge of `transaction` into the listing needed.
   def render_lifecycle_response(txn)
-    payload = { listing: ListingSerializer.render_as_hash(@listing, view: :detailed) }
+    payload = { listing: ListingSerializer.render_as_hash(@listing, view: :owner_detailed) }
     payload[:transaction] = TransactionSerializer.render_as_hash(txn) if txn
     render_ok(payload)
   end

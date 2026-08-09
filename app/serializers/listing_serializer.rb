@@ -1,4 +1,48 @@
 class ListingSerializer < ApplicationSerializer
+  # TASK-R418 — owner-only "who is the buyer for this reservation/sale" block.
+  # Shared between :seller_list (My Listings feed row) and :owner_detailed (My
+  # Listings detail + reserve/sold lifecycle response) via `field(:sale,
+  # &SALE_FIELD)` so the payload shape can never drift between the two.
+  #
+  # A plain `proc` (never `lambda`) — Blueprinter's BlockExtractor always calls
+  # `block.call(object, **local_options)`, and a lambda's strict arity would
+  # raise when local_options is non-empty; a proc lenient-drops the extra args
+  # exactly like every other single-arg `field(:x) { |l| ... }` in this file.
+  #
+  # nil when the listing has no Transaction yet (draft/active) or was
+  # reserved/sold via the legacy buyer-less path — never render an empty card
+  # for those on the client.
+  #
+  # PRIVACY: do NOT add this field to :list or :detailed — those views ship to
+  # guests and to any buyer, and the buyer's identity must stay owner-scoped.
+  SALE_FIELD = proc do |l|
+    txn = l.current_sale
+    next nil unless txn
+
+    buyer = txn.buyer
+    {
+      id: txn.id,
+      status: txn.status,
+      final_price: txn.final_price,
+      currency: txn.currency,
+      completed_at: txn.completed_at,
+      buyer: {
+        id: buyer.id,
+        name: buyer.full_name,
+        avatar_url: buyer.avatar.attached? ? buyer.avatar.url : nil,
+        verified: buyer.verified
+      },
+      # `.find_by` on an eager-loaded association still issues a query, so we
+      # search the in-memory array when `conversations` is already loaded
+      # (My::ListingsController#index includes it) to keep this N+1-free.
+      conversation_id: if l.conversations.loaded?
+                          l.conversations.to_a.find { |c| c.buyer_id == txn.buyer_id }&.id
+                       else
+                          l.conversations.find_by(buyer_id: txn.buyer_id)&.id
+                       end
+    }
+  end
+
   fields :id, :title, :price, :currency, :status, :location, :address, :condition, :created_at
 
   view :list do
@@ -45,6 +89,8 @@ class ListingSerializer < ApplicationSerializer
     # Price-drop badge data for seller listing cards. Both nil when no recent drop.
     field(:price_drop_percent) { |l| l.price_drop_percent }
     field(:price_dropped_at)   { |l| l.price_dropped_at }
+    # TASK-R418 — owner-only buyer/final-price block for reserved/sold rows.
+    field(:sale, &SALE_FIELD)
   end
 
   view :detailed do
@@ -102,5 +148,14 @@ class ListingSerializer < ApplicationSerializer
     # Canonical share URL — https when PUBLIC_SHARE_BASE_URL env is set, else nil.
     # Mobile falls back to a hatiwal:// deep link when this is nil.
     field(:share_url) { |l| Listing.share_url_for(l) }
+  end
+
+  # TASK-R418 — the owner's own listing detail + the reserve/sold lifecycle
+  # response. Everything :detailed has, PLUS the owner-only `sale` (buyer)
+  # block. NEVER used for the public GET /listings/:id (guests/buyers) —
+  # that stays on :detailed.
+  view :owner_detailed do
+    include_view :detailed
+    field(:sale, &SALE_FIELD)
   end
 end

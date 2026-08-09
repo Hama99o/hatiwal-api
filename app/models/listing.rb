@@ -186,6 +186,28 @@ class Listing < ApplicationRecord
     sale_transactions.reserved.order(created_at: :desc).first
   end
 
+  # TASK-R418 — the buyer identified for the CURRENT reservation/sale of this
+  # listing (the most recent Transaction row), or nil when the listing has
+  # never had a buyer identified via the buyer picker: draft/active listings,
+  # or a legacy buyer-less reserve/sold. Used by ListingSerializer's owner-only
+  # `sale` field (:seller_list / :owner_detailed views) — NEVER surfaced on the
+  # public :list / :detailed views.
+  #
+  # Mirrors the loaded-vs-query guard used by `recent_price_drop` above: when
+  # the controller eager-loads `sale_transactions`, we sort the already-loaded
+  # array in Ruby instead of firing `.order(...).first`, which would otherwise
+  # issue a fresh query per row (an association's `.order` always hits the DB,
+  # ignoring the loaded target) and reintroduce an N+1 across the seller feed.
+  def current_sale
+    return nil unless reserved? || sold?
+
+    if sale_transactions.loaded?
+      sale_transactions.max_by(&:created_at)
+    else
+      sale_transactions.order(created_at: :desc).first
+    end
+  end
+
   # Create or advance the Transaction when the seller reserves this listing
   # for a specific buyer. Returns nil (no-op) when buyer_id is blank — the
   # legacy bare `PUT .../reserve` call never touches the transactions table.

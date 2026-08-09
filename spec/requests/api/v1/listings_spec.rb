@@ -445,6 +445,9 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
           expect(data["listing"]).to have_key("category")
           # Authenticated user who does NOT own the listing must see the phone
           expect(data["listing"]["seller"]["phone"]).to eq(listing.user.phone)
+          # TASK-R418 — PRIVACY: the public :detailed view must NEVER carry the
+          # owner-only buyer/sale block, even for a signed-in non-owner viewer.
+          expect(data["listing"]).not_to have_key("sale")
         end
 
         after do |example|
@@ -464,6 +467,8 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
         run_test! do |response|
           data = JSON.parse(response.body)
           expect(data["listing"]["seller"]["phone"]).to be_nil
+          # TASK-R418 — PRIVACY: guests must never see the buyer/sale block.
+          expect(data["listing"]).not_to have_key("sale")
         end
       end
 
@@ -474,6 +479,56 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
         run_test! do |response|
           data = JSON.parse(response.body)
           expect(data["listing"]["seller"]["phone"]).to be_nil
+        end
+      end
+
+      # ── TASK-R418 ────────────────────────────────────────────────────────────
+      # PRIVACY (hard requirement): the buyer's identity for a reserved/sold
+      # listing may ONLY ship through the owner-scoped views (My::ListingsController
+      # / :seller_list, :owner_detailed). The public GET /listings/:id — used by
+      # guests, buyers, AND the owner themselves — must render `:detailed`, which
+      # never includes `sale`, even when a real Transaction exists on the listing.
+      response "200", "reserved listing with a recorded buyer — authenticated non-owner sees no sale key" do
+        let(:seller_of_reserved) { create(:user) }
+        let(:reserved_listing)   { create(:listing, :reserved, user: seller_of_reserved) }
+        let!(:sale_transaction) do
+          create(:transaction, listing: reserved_listing, seller: seller_of_reserved)
+        end
+        let(:listing) { reserved_listing }
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]).not_to have_key("sale")
+        end
+      end
+
+      response "200", "reserved listing with a recorded buyer — guest (no auth) sees no sale key" do
+        let(:seller_of_reserved) { create(:user) }
+        let(:reserved_listing)   { create(:listing, :reserved, user: seller_of_reserved) }
+        let!(:sale_transaction) do
+          create(:transaction, listing: reserved_listing, seller: seller_of_reserved)
+        end
+        let(:listing) { reserved_listing }
+        let(:"access-token") { nil }
+        let(:client) { nil }
+        let(:uid)    { nil }
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]).not_to have_key("sale")
+        end
+      end
+
+      response "200", "reserved listing with a recorded buyer — the listing OWNER also gets no sale key on the public path" do
+        let(:reserved_listing) { create(:listing, :reserved, user: user) }
+        let!(:sale_transaction) do
+          create(:transaction, listing: reserved_listing, seller: user)
+        end
+        let(:listing) { reserved_listing }
+
+        run_test! do |response|
+          data = JSON.parse(response.body)
+          expect(data["listing"]).not_to have_key("sale")
         end
       end
     end
