@@ -35,7 +35,12 @@ class Listing < ApplicationRecord
 
   scope :active,      -> { where(status: :active) }
   scope :ordered,     -> { order(created_at: :desc) }
-  scope :by_category, ->(id) { where(category_id: id) }
+  # Filtering by a category includes everything filed under its subcategories:
+  # the create-listing picker lets a seller file an item under
+  # "Electronics > Phones", and that item is still an Electronics listing.
+  # Expressed as a subquery so it stays one round-trip and composes with the
+  # rest of the browse scope chain.
+  scope :by_category, ->(id) { where(category_id: Category.self_and_children(id).select(:id)) }
   scope :by_seller,   ->(id) { where(user_id: id) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :not_removed, -> { where(removed_at: nil) }
@@ -225,6 +230,23 @@ class Listing < ApplicationRecord
         completed_at: Time.current
       )
     end
+  end
+
+  # TASK-TX02 (review fix) — bump the seller's denormalized users.sold_count
+  # for the legacy buyer-less sale path. `sold_with_buyer!` above never
+  # touches the transactions table when buyer_id is blank, so nothing else
+  # ever counts that sale — without this, the counter silently regresses
+  # versus the old (pre-TX02) `u.listings.sold.count` figure every time a
+  # seller completes a sale without picking a buyer.
+  #
+  # Deliberately NOT a `sold?` after_save callback: that would fire for
+  # ANY path that flips a listing to `sold` (factories, data migrations,
+  # admin tools, or the buyer-identified branch itself, which is already
+  # counted via its own Transaction) and double- or over-count. Instead the
+  # `sold` controller action calls this explicitly, and only when
+  # `sold_with_buyer!` returned nil (no buyer identified for this sale).
+  def bump_seller_sold_count_for_legacy_sale!
+    User.increment_counter(:sold_count, user_id)
   end
 
   # ── Admin take-down (soft remove) ────────────────────────────────────────────

@@ -54,6 +54,27 @@ RSpec.describe Listing, type: :model do
         create(:listing)
         expect(Listing.by_category(category.id)).to contain_exactly(match)
       end
+
+      it "includes listings filed under the category's subcategories" do
+        parent = create(:category)
+        child  = create(:category, parent: parent)
+        direct = create(:listing, category: parent)
+        nested = create(:listing, category: child)
+        create(:listing)
+
+        expect(Listing.by_category(parent.id)).to contain_exactly(direct, nested)
+      end
+
+      it "does not widen a subcategory filter to its parent or siblings" do
+        parent  = create(:category)
+        child   = create(:category, parent: parent)
+        sibling = create(:category, parent: parent)
+        nested  = create(:listing, category: child)
+        create(:listing, category: parent)
+        create(:listing, category: sibling)
+
+        expect(Listing.by_category(child.id)).to contain_exactly(nested)
+      end
     end
 
     describe ".by_seller" do
@@ -572,6 +593,38 @@ RSpec.describe Listing, type: :model do
 
       expect(second.id).to eq(first.id)
       expect(second.reload.buyer_id).to eq(other_buyer.id)
+    end
+  end
+
+  # ── TASK-TX02 (review fix) — legacy buyer-less sale must still bump the
+  # seller's denormalized sold_count, or it silently regresses versus the old
+  # always-accurate `u.listings.sold.count` figure. The bump is an explicit
+  # method (NOT a blanket `sold?` callback) so factories/admin tools/data
+  # migrations that flip a listing to `sold` directly are never affected —
+  # only the `sold` controller action's legacy branch calls it. ─────────────
+  describe "#bump_seller_sold_count_for_legacy_sale!" do
+    let(:seller) { create(:user) }
+
+    it "increments the seller's sold_count by 1" do
+      listing = create(:listing, :active, user: seller)
+
+      expect { listing.bump_seller_sold_count_for_legacy_sale! }
+        .to change { seller.reload.sold_count }.by(1)
+    end
+
+    it "is a plain atomic counter increment — never touches other users" do
+      other = create(:user)
+      listing = create(:listing, :active, user: seller)
+
+      listing.bump_seller_sold_count_for_legacy_sale!
+
+      expect(other.reload.sold_count).to eq(0)
+    end
+
+    it "merely creating/updating a sold listing directly never calls it (no implicit callback)" do
+      listing = create(:listing, :active, user: seller)
+
+      expect { listing.sold! }.not_to change { seller.reload.sold_count }
     end
   end
 end

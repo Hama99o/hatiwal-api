@@ -101,6 +101,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing, :sold?
     txn = @listing.sold_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
     @listing.sold!
+    # TASK-TX02 (review fix): the legacy buyer-less path (txn is nil) never
+    # touches the transactions table, so nothing else bumps the seller's
+    # trust-stat counter for it — do it here, once, explicitly.
+    @listing.bump_seller_sold_count_for_legacy_sale! if txn.nil?
     render_lifecycle_response(txn)
   rescue ActiveRecord::RecordInvalid => e
     render_unprocessable_entity(e.record)

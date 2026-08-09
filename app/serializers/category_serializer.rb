@@ -7,20 +7,32 @@ class CategorySerializer < ApplicationSerializer
 
   view :with_subcategories do
     field(:subcategories) do |c|
-      CategorySerializer.render_as_hash(c.subcategories.active.ordered, view: :default)
+      CategorySerializer.render_as_hash(c.visible_subcategories, view: :default)
     end
   end
 
-  # Adds active_listings_count for the category hub screen.
-  # The count is precomputed in the controller via a single GROUP BY query and
-  # passed in via opts[:counts_by_id] — no per-category SQL query is issued here.
-  view :with_counts do
+  # Leaf view for the subcategories nested under a hub card: its own count and
+  # nothing else, so rendering children costs no extra query.
+  view :with_count do
     field(:active_listings_count) do |c, opts|
       (opts[:counts_by_id] || {})[c.id].to_i
     end
+  end
 
-    field(:subcategories) do |c|
-      CategorySerializer.render_as_hash(c.subcategories.active.ordered, view: :default)
+  # Category hub view. Every row — parent and subcategory alike — carries an
+  # active_listings_count, so a client can show buyers where the inventory
+  # actually is without a request per row. All counts are precomputed in the
+  # controller in a single GROUP BY and passed in via opts[:counts_by_id]; a
+  # parent's count rolls up its subcategories' (see the controller for why).
+  view :with_counts do
+    include_view :with_count
+
+    field(:subcategories) do |c, opts|
+      CategorySerializer.render_as_hash(
+        c.visible_subcategories,
+        view: :with_count,
+        counts_by_id: opts[:counts_by_id]
+      )
     end
   end
 end

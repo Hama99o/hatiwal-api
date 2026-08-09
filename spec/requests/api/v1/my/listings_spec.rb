@@ -500,6 +500,40 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(body["transaction"]["status"]).to eq("sold")
         expect(body["transaction"]["completed_at"]).to be_present
       end
+
+      # ── TASK-TX02 (review fix) — the legacy buyer-less path must still bump
+      # the seller's denormalized sold_count, or it silently regresses versus
+      # the old always-accurate `u.listings.sold.count` figure. ────────────────
+      it "without buyer_id (legacy) still bumps the seller's sold_count by 1" do
+        active = create(:listing, :active, user: user)
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", headers: headers, as: :json
+        end.to change { user.reload.sold_count }.by(1)
+
+        expect(response).to have_http_status(:ok)
+      end
+
+      it "with buyer_id does NOT double-count on top of the Transaction bump" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        end.to change { user.reload.sold_count }.by(1)
+      end
+
+      it "advancing a prior reserve-with-buyer Transaction to sold bumps sold_count exactly once" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+        put "/api/v1/my/listings/#{active.id}/reserve", params: { buyer_id: buyer.id }, headers: headers, as: :json
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        end.to change { user.reload.sold_count }.by(1)
+      end
     end
 
     describe "PUT unpublish" do

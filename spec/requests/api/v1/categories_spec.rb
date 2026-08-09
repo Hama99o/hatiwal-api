@@ -158,6 +158,72 @@ RSpec.describe "Api::V1::Categories", type: :request do
       expect(cat["subcategories"]).to be_an(Array)
     end
 
+    it "rolls subcategory listings up into the parent's count" do
+      parent = create(:category, active: true)
+      child  = create(:category, parent: parent, active: true)
+      seller = create(:user)
+
+      create(:listing, category: parent, user: seller, status: :active)
+      create(:listing, category: child, user: seller, status: :active)
+      create(:listing, category: child, user: seller, status: :active)
+      # non-browsable in a subcategory — must not inflate the parent
+      create(:listing, category: child, user: seller, status: :draft)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      cat = JSON.parse(response.body)["categories"].find { |c| c["id"] == parent.id }
+      expect(cat["active_listings_count"]).to eq(3)
+    end
+
+    it "matches the number of listings the category filter actually returns" do
+      parent = create(:category, active: true)
+      child  = create(:category, parent: parent, active: true)
+      seller = create(:user)
+
+      create(:listing, category: parent, user: seller, status: :active)
+      create(:listing, category: child, user: seller, status: :active)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+      cat = JSON.parse(response.body)["categories"].find { |c| c["id"] == parent.id }
+
+      expect(cat["active_listings_count"]).to eq(Listing.browsable.by_category(parent.id).count)
+    end
+
+    it "gives each subcategory its own active_listings_count" do
+      parent = create(:category, active: true)
+      child  = create(:category, parent: parent, active: true)
+      empty_child = create(:category, parent: parent, active: true)
+      seller = create(:user)
+
+      create(:listing, category: child, user: seller, status: :active)
+      create(:listing, category: child, user: seller, status: :active)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      cat  = JSON.parse(response.body)["categories"].find { |c| c["id"] == parent.id }
+      subs = cat["subcategories"].index_by { |s| s["id"] }
+
+      expect(subs[child.id]["active_listings_count"]).to eq(2)
+      expect(subs[empty_child.id]["active_listings_count"]).to eq(0)
+    end
+
+    it "counts every category in the tree without an N+1 (one COUNT query)" do
+      2.times do
+        parent = create(:category, active: true)
+        3.times { create(:category, parent: parent, active: true) }
+      end
+
+      count_queries = 0
+      subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+        count_queries += 1 if payload[:sql].include?("COUNT")
+      end
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+      ActiveSupport::Notifications.unsubscribe(subscriber)
+
+      expect(response).to have_http_status(:ok)
+      expect(count_queries).to eq(1)
+    end
+
     it "is public — guests can request counts without auth" do
       create(:category, active: true)
 

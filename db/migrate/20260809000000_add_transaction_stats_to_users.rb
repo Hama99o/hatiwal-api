@@ -22,6 +22,27 @@ class AddTransactionStatsToUsers < ActiveRecord::Migration[8.1]
       WHERE users.id = sub.seller_id
     SQL
 
+    # Second pass (review fix): also credit sales that predate the
+    # transactions table entirely, or were completed via the legacy
+    # buyer-less `PUT .../sold` call (never created a Transaction — see
+    # Listing#sold_with_buyer!). Without this, a seller whose sales are not
+    # represented in `transactions` regresses from the old, always-accurate
+    # `u.listings.sold.count` figure straight to 0 on their live public
+    # profile. GREATEST (not SUM) because every transaction-tracked sale also
+    # flips its listing to `sold`, so summing the two sources would double
+    # count. status = 3 is Listing::sold (enum draft/active/reserved/sold).
+    execute <<~SQL.squish
+      UPDATE users
+      SET sold_count = GREATEST(users.sold_count, sub.cnt)
+      FROM (
+        SELECT user_id, COUNT(*) AS cnt FROM listings WHERE status = 3 GROUP BY user_id
+      ) sub
+      WHERE users.id = sub.user_id
+    SQL
+
+    # bought_count has no listing-based fallback — pre-TX01 sales never
+    # recorded which buyer completed them (Listing has no buyer column), so
+    # the transactions table is the only possible source of truth here.
     execute <<~SQL.squish
       UPDATE users
       SET bought_count = sub.cnt

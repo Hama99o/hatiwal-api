@@ -72,6 +72,40 @@ RSpec.describe Category, type: :model do
         expect(result).not_to include(other)
       end
     end
+
+    describe ".self_and_children" do
+      it "returns the category together with its direct children" do
+        parent = create(:category)
+        child1 = create(:category, parent: parent)
+        child2 = create(:category, parent: parent)
+        create(:category)
+
+        expect(Category.self_and_children(parent.id)).to contain_exactly(parent, child1, child2)
+      end
+
+      it "returns just the category when it has no children" do
+        parent = create(:category)
+        create(:category, parent: parent)
+        leaf = create(:category)
+
+        expect(Category.self_and_children(leaf.id)).to contain_exactly(leaf)
+      end
+    end
+  end
+
+  describe "#visible_subcategories" do
+    it "returns active subcategories ordered by position" do
+      parent = create(:category)
+      second = create(:category, parent: parent, position: 2, active: true)
+      first  = create(:category, parent: parent, position: 1, active: true)
+      create(:category, parent: parent, active: false)
+
+      expect(parent.visible_subcategories).to eq([ first, second ])
+    end
+
+    it "returns an empty array for a category with no children" do
+      expect(create(:category).visible_subcategories).to eq([])
+    end
   end
 
   describe "#name_for" do

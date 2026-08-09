@@ -1,7 +1,6 @@
 require "rails_helper"
 
 RSpec.describe CategorySerializer, type: :serializer do
-  let(:seller)   { create(:user) }
   let(:category) { create(:category, name_en: "Electronics", name_ps: "بریښنایي", name_fa: "الکترونیک", icon: "📱") }
 
   describe "default view" do
@@ -23,14 +22,10 @@ RSpec.describe CategorySerializer, type: :serializer do
   end
 
   describe ":with_counts view" do
-    # Helper: compute counts exactly as the controller does — a single
-    # GROUP BY query so the serializer reads from opts[:counts_by_id].
-    def render_with_counts(cat)
-      counts = Listing.browsable
-                      .except(:order)
-                      .where(category_id: cat.id)
-                      .group(:category_id)
-                      .count
+    # The view is a pure reader: the controller precomputes every count in one
+    # GROUP BY and hands them over as opts[:counts_by_id]. The roll-up itself is
+    # covered in spec/requests/api/v1/categories_spec.rb.
+    def render_with_counts(cat, counts = {})
       described_class.render_as_hash(cat, view: :with_counts, counts_by_id: counts)
     end
 
@@ -45,53 +40,43 @@ RSpec.describe CategorySerializer, type: :serializer do
       expect(result[:subcategories]).to be_an(Array)
     end
 
-    context "when category has no listings" do
-      it "returns 0 for active_listings_count" do
+    it "reads the count for its own id out of counts_by_id" do
+      other = create(:category)
+      result = render_with_counts(category, { category.id => 7, other.id => 99 })
+      expect(result[:active_listings_count]).to eq(7)
+    end
+
+    context "when counts_by_id has no entry for the category" do
+      it "returns 0 rather than nil" do
         result = render_with_counts(category)
         expect(result[:active_listings_count]).to eq(0)
       end
     end
 
-    context "when category has only browsable (active, not expired, not removed) listings" do
-      before do
-        create(:listing, category: category, user: seller, status: :active)
-      end
-
-      it "counts the browsable listing" do
-        result = render_with_counts(category)
-        expect(result[:active_listings_count]).to eq(1)
-      end
-    end
-
-    context "when category has a mix of browsable and non-browsable listings" do
-      before do
-        # browsable: active, not expired, not removed
-        create(:listing, category: category, user: seller, status: :active)
-        # draft — excluded
-        create(:listing, category: category, user: seller, status: :draft)
-        # sold — excluded
-        create(:listing, category: category, user: seller, status: :sold)
-        # expired — excluded
-        create(:listing, category: category, user: seller, status: :active, expires_at: 1.hour.ago)
-        # removed — excluded
-        create(:listing, category: category, user: seller, status: :active, removed_at: 1.hour.ago)
-      end
-
-      it "counts only browsable listings" do
-        result = render_with_counts(category)
-        expect(result[:active_listings_count]).to eq(1)
+    context "when counts_by_id is missing entirely" do
+      it "still renders a 0 count" do
+        result = described_class.render_as_hash(category, view: :with_counts)
+        expect(result[:active_listings_count]).to eq(0)
       end
     end
 
     context "when category has subcategories" do
-      before do
-        create(:category, parent: category, active: true)
-        create(:category, parent: category, active: false)
-      end
+      let!(:active_sub)   { create(:category, parent: category, active: true, position: 1) }
+      let!(:inactive_sub) { create(:category, parent: category, active: false, position: 2) }
 
       it "includes only active subcategories" do
         result = render_with_counts(category)
-        expect(result[:subcategories].length).to eq(1)
+        expect(result[:subcategories].map { |s| s[:id] }).to eq([ active_sub.id ])
+      end
+
+      it "gives each subcategory its own active_listings_count" do
+        result = render_with_counts(category, { category.id => 5, active_sub.id => 3 })
+        expect(result[:subcategories].first[:active_listings_count]).to eq(3)
+      end
+
+      it "does not nest subcategories inside subcategories" do
+        result = render_with_counts(category)
+        expect(result[:subcategories].first).not_to have_key(:subcategories)
       end
     end
   end
