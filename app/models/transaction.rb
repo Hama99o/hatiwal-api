@@ -30,6 +30,20 @@ class Transaction < ApplicationRecord
   # once per transaction (guarded by saved_change_to_status?), so correcting
   # other attributes on an already-sold row never double-counts. There is
   # currently no "unsell" flow, so counters are only ever incremented.
+  #
+  # Review fix (TASK-TX02, MED — "no compensating path"): this is safe ONLY
+  # because a `Listing` can never re-trigger `sold` once it reaches that
+  # terminal status — `ListingPolicy#sold?` requires `active?`/`reserved?`, so
+  # a repeat `PUT .../sold` on an already-sold listing 403s before the bump
+  # logic ever runs (see the regression spec "rejects a repeat sold call on an
+  # already-sold listing" in spec/requests/api/v1/my/listings_spec.rb). If a
+  # future feature ever allows re-selling, relisting, or un-selling a listing,
+  # a real decrement path must be added here — don't assume increment-only
+  # stays safe. Note this counter is also intentionally a LIFETIME stat: it is
+  # NOT decremented when a sold listing is later soft-removed, so it can
+  # legitimately read higher than the public "Sold" showcase tab (which only
+  # lists currently-visible sold listings) — the mobile client accounts for
+  # this explicitly (see soldShowcaseEmptyState.ts).
   after_save :bump_trust_counters!, if: -> { sold? && saved_change_to_status? }
 
   scope :as_buyer,  ->(user) { where(buyer_id: user.id) }

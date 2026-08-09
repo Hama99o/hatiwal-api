@@ -458,6 +458,24 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(response).to have_http_status(:forbidden)
       end
 
+      # ── TASK-TX02 (review fix, MED) ────────────────────────────────────────
+      # The denormalized sold_count/bought_count counters are increment-only
+      # (Transaction#bump_trust_counters!, Listing#bump_seller_sold_count_for_legacy_sale!)
+      # with no decrement path — this is only safe because a repeat `sold` call
+      # on an already-sold (terminal) listing is rejected by ListingPolicy#sold?
+      # before it ever reaches the bump logic. Guards the invariant explicitly
+      # so nobody removes the `sold?` terminal check without noticing it is
+      # the ONLY thing preventing the counter from double-counting.
+      it "rejects a repeat sold call on an already-sold listing and never double-counts sold_count" do
+        sold = create(:listing, :sold, user: user)
+
+        expect do
+          put "/api/v1/my/listings/#{sold.id}/sold", headers: headers, as: :json
+        end.not_to change { user.reload.sold_count }
+
+        expect(response).to have_http_status(:forbidden)
+      end
+
       # ── TASK-TX01 ──────────────────────────────────────────────────────────
       it "without buyer_id (legacy) never creates a Transaction" do
         active = create(:listing, :active, user: user)
