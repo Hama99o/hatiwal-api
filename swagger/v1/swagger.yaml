@@ -200,17 +200,35 @@ paths:
       schema:
         type: integer
     get:
-      summary: similar listings rail
+      summary: similar listings rail — respects 'Not interested'
       tags:
       - Listings
-      description: Returns up to 8 browsable listings in the same category, excluding
-        the source listing. Public — guests and authenticated users both have access.
+      description: Returns up to 8 browsable listings in the same category (and its
+        child categories), excluding the source listing and anything the caller dismissed
+        with "Not interested". Public — guests and authenticated users both have access.
       responses:
         '200':
-          description: capped at 8 — creating 9 same-category active listings returns
-            exactly 8
+          description: another user's dismissal does not shrink my rail
         '404':
           description: not found for non-existent listing
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
   "/api/v1/my/reviews/pending":
     get:
       summary: sold sales the caller still owes a review on

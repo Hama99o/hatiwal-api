@@ -1,7 +1,19 @@
 class ConversationSerializer < ApplicationSerializer
   fields :id, :status, :last_message_at, :created_at
 
+  # Shared by both views (TASK-R517) — tells the client which side of this
+  # thread the requesting user is on so the inbox can render a Buying/Selling
+  # hint. `nil` when there is no current_user (e.g. a serializer unit test
+  # that doesn't pass one).
+  def self.viewer_role_for(conversation, opts)
+    current_user = opts[:current_user]
+    return nil unless current_user
+
+    conversation.buyer_id == current_user.id ? "buyer" : "seller"
+  end
+
   view :list do
+    field(:viewer_role) { |c, opts| viewer_role_for(c, opts) }
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c|
       next nil if c.listing_deleted?
@@ -48,6 +60,7 @@ class ConversationSerializer < ApplicationSerializer
   end
 
   view :detailed do
+    field(:viewer_role) { |c, opts| viewer_role_for(c, opts) }
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c|
       next nil if c.listing_deleted?

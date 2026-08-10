@@ -1,4 +1,9 @@
 class Api::V1::ConversationsController < Api::V1::BaseController
+  # Allowed values for the `role` index param (TASK-R517) — "conversations
+  # where I am buying" vs "conversations where I am selling". A frozen
+  # constant so the branch below never compares against bare string literals.
+  ROLES = { buying: "buying", selling: "selling" }.freeze
+
   before_action :set_listing, only: [ :create ]
   before_action :set_conversation, only: [ :show ]
   before_action :set_conversation_for_mutation, only: [ :destroy, :mark_read, :mark_unread, :archive, :unarchive ]
@@ -10,6 +15,8 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     base_scope = show_archived \
       ? Conversation.for_user(current_user.id).not_deleted_for(current_user).archived_for(current_user) \
       : Conversation.for_user(current_user.id).not_deleted_for(current_user).not_archived_for(current_user)
+
+    base_scope = apply_role_filter(base_scope)
 
     conversations = policy_scope(
       base_scope.ordered
@@ -113,6 +120,21 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   end
 
   private
+
+  # Applies the `role` index param, when it is a recognised value, to narrow
+  # the inbox to just the caller's buyer threads or just their seller threads.
+  # Any absent or unrecognised value is a no-op — the full mixed inbox is the
+  # existing (and default) behaviour, never a 500 or an accidentally-empty list.
+  def apply_role_filter(scope)
+    case params[:role]
+    when ROLES[:buying]
+      scope.as_buyer_for(current_user)
+    when ROLES[:selling]
+      scope.as_seller_for(current_user)
+    else
+      scope
+    end
+  end
 
   def set_listing
     @listing = Listing.find(params[:listing_id])

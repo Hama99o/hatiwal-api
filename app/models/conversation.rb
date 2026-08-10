@@ -18,6 +18,13 @@ class Conversation < ApplicationRecord
     where("buyer_id = ? OR seller_id = ?", user_id, user_id)
   }
 
+  # Role-scoped views of the inbox (TASK-R517) — "conversations where I am
+  # buying" vs "conversations where I am selling". Used by the controller's
+  # `role` query param so a user with 20 buyer threads and their own selling
+  # threads can triage each side separately.
+  scope :as_buyer_for, ->(user) { where(buyer_id: user.id) }
+  scope :as_seller_for, ->(user) { where(seller_id: user.id) }
+
   # Scopes that filter by archive state for a specific user.
   # The caller's role (buyer vs seller) determines which column to test.
   scope :not_archived_for, ->(user) {

@@ -843,7 +843,7 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
 
     get "similar listings rail" do
       tags "Listings"
-      description "Returns up to 8 browsable listings in the same category, excluding the source listing. Public — guests and authenticated users both have access."
+      description "Returns up to 8 browsable listings in the same category (and its child categories), excluding the source listing and anything the caller dismissed with \"Not interested\". Public — guests and authenticated users both have access."
       produces "application/json"
 
       let(:category)  { create(:category) }
@@ -924,6 +924,75 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
         run_test! do |response|
           data = JSON.parse(response.body)
           expect(data["listings"].length).to eq(8)
+        end
+      end
+
+      response "200", "a listing filed on a PARENT category still gets its children's stock" do
+        # A seller who files an item directly on "Electronics" must still be
+        # cross-sold the phones and laptops beneath it — same expansion the
+        # browse feed applies (Listing.by_category → Category.self_and_children).
+        let(:parent) { create(:category) }
+        let(:child)  { create(:category, parent: parent) }
+        let(:source) { create(:listing, :active, category: parent) }
+
+        before { @in_child = create(:listing, :active, category: child) }
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to include(@in_child.id)
+        end
+      end
+    end
+  end
+
+  # The rail is a buyer surface, so it obeys the same "Not interested" dismissal
+  # the feed does. Needs auth headers, which the guest-oriented block above does
+  # not declare, hence its own path block.
+  path "/api/v1/listings/{id}/similar" do
+    parameter name: :id, in: :path, type: :integer
+
+    get "similar listings rail — respects 'Not interested'" do
+      tags "Listings"
+      produces "application/json"
+      security [ { bearer: [] } ]
+
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+
+      let(:user)    { create(:user) }
+      let(:headers) { auth_headers_for(user) }
+      let(:"access-token") { headers["access-token"] }
+      let(:client)  { headers["client"] }
+      let(:uid)     { headers["uid"] }
+
+      let(:category) { create(:category) }
+      let(:source)   { create(:listing, :active, category: category) }
+      let(:id)       { source.id }
+
+      response "200", "a listing the caller hid is not offered back to them" do
+        before do
+          @hidden = create(:listing, :active, category: category)
+          @kept   = create(:listing, :active, category: category)
+          create(:hidden_listing, user: user, listing: @hidden)
+        end
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to include(@kept.id)
+          expect(ids).not_to include(@hidden.id)
+        end
+      end
+
+      response "200", "another user's dismissal does not shrink my rail" do
+        before do
+          @listing = create(:listing, :active, category: category)
+          create(:hidden_listing, user: create(:user), listing: @listing)
+        end
+
+        run_test! do |response|
+          ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
+          expect(ids).to include(@listing.id)
         end
       end
     end

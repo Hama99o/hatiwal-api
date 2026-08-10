@@ -50,6 +50,24 @@ RSpec.describe Conversation, type: :model do
         expect(Conversation.for_user(user.id)).to contain_exactly(as_buyer, as_seller)
       end
     end
+
+    describe ".as_buyer_for / .as_seller_for" do
+      it ".as_buyer_for returns only conversations where the user is the buyer" do
+        user = create(:user)
+        as_buyer  = create(:conversation, buyer: user, listing: create(:listing))
+        create(:conversation, listing: create(:listing, user: user)) # as_seller, excluded
+
+        expect(Conversation.as_buyer_for(user)).to contain_exactly(as_buyer)
+      end
+
+      it ".as_seller_for returns only conversations where the user is the seller" do
+        user = create(:user)
+        as_seller = create(:conversation, listing: create(:listing, user: user))
+        create(:conversation, buyer: user, listing: create(:listing)) # as_buyer, excluded
+
+        expect(Conversation.as_seller_for(user)).to contain_exactly(as_seller)
+      end
+    end
   end
 
   describe "#participant?" do

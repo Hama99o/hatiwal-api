@@ -145,6 +145,113 @@ RSpec.describe "Api::V1::Conversations", type: :request do
     end
   end
 
+  # ---------------------------------------------------------------------------
+  # TASK-R517 — role scope (?role=buying|selling) + viewer_role field
+  # ---------------------------------------------------------------------------
+
+  describe "GET /api/v1/conversations?role=" do
+    let(:buyer_thread) { create(:conversation, buyer: buyer, seller: seller, listing: listing) }
+    let(:other_listing) { create(:listing, :active, user: buyer) }
+    let(:other_buyer) { create(:user) }
+    let(:seller_thread) { create(:conversation, buyer: other_buyer, seller: buyer, listing: other_listing) }
+
+    it "returns only threads where the caller is the seller when role=selling" do
+      buyer_thread
+      seller_thread
+
+      get "/api/v1/conversations?role=selling", headers: headers, as: :json
+
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to eq([ seller_thread.id ])
+    end
+
+    it "returns only threads where the caller is the buyer when role=buying" do
+      buyer_thread
+      seller_thread
+
+      get "/api/v1/conversations?role=buying", headers: headers, as: :json
+
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to eq([ buyer_thread.id ])
+    end
+
+    it "returns everything (no 500, no empty list) for an unrecognised role value" do
+      buyer_thread
+      seller_thread
+
+      get "/api/v1/conversations?role=nonsense", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to contain_exactly(buyer_thread.id, seller_thread.id)
+    end
+
+    it "returns everything when role is absent (today's default behaviour)" do
+      buyer_thread
+      seller_thread
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to contain_exactly(buyer_thread.id, seller_thread.id)
+    end
+
+    it "composes with archived=true — role=selling only returns the caller's archived seller threads" do
+      # `seller_thread` casts `buyer` (our caller/headers holder) as the seller,
+      # so archiving it as the caller means setting seller_archived_at.
+      seller_thread.update!(seller_archived_at: Time.current)
+      buyer_thread
+
+      get "/api/v1/conversations?role=selling&archived=true", headers: headers, as: :json
+
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to eq([ seller_thread.id ])
+    end
+
+    it "composes with listing_id — role=buying + listing_id narrows to that single buyer thread" do
+      buyer_thread
+      seller_thread
+
+      get "/api/v1/conversations?role=buying&listing_id=#{listing.id}", headers: headers, as: :json
+
+      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(ids).to eq([ buyer_thread.id ])
+    end
+  end
+
+  describe "viewer_role — GET /api/v1/conversations (list) and GET /api/v1/conversations/:id (detailed)" do
+    let(:conversation) { create(:conversation, buyer: buyer, seller: seller, listing: listing) }
+
+    it "is 'buyer' for the buyer on the list view" do
+      conversation
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conversation.id }
+      expect(row["viewer_role"]).to eq("buyer")
+    end
+
+    it "is 'seller' for the seller on the list view" do
+      conversation
+      get "/api/v1/conversations", headers: auth_headers_for(seller), as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conversation.id }
+      expect(row["viewer_role"]).to eq("seller")
+    end
+
+    it "is 'buyer' for the buyer on the detailed (show) view" do
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      expect(JSON.parse(response.body)["conversation"]["viewer_role"]).to eq("buyer")
+    end
+
+    it "is 'seller' for the seller on the detailed (show) view" do
+      get "/api/v1/conversations/#{conversation.id}", headers: auth_headers_for(seller), as: :json
+
+      expect(JSON.parse(response.body)["conversation"]["viewer_role"]).to eq("seller")
+    end
+  end
+
   describe "blocked_with_participant flag — GET /api/v1/conversations (list)" do
     let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
 

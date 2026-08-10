@@ -91,7 +91,11 @@ class Api::V1::ListingsController < Api::V1::BaseController
 
   def similar
     authorize @listing, :similar?
+    # not_hidden_for: a cross-sell rail must respect "Not interested" exactly like
+    # the feed does — re-offering something the viewer explicitly dismissed reads
+    # as the app not listening. No-op for guests.
     listings = policy_scope(Listing.similar_to(@listing))
+                 .not_hidden_for(current_user)
                  .includes(
                    :category,
                    :price_histories,

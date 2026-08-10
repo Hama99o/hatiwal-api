@@ -79,9 +79,14 @@ class Listing < ApplicationRecord
 
   # Similar listings rail: same category, browsable (never leaks draft/sold/expired/removed),
   # excluding the source listing itself, ordered by recency, capped at 8.
+  #
+  # Uses +by_category+ (self_and_children), not a bare category_id match: a seller
+  # who files an item on a PARENT category ("Electronics") would otherwise get an
+  # empty rail even when the children below it are full of stock. Filed on a leaf
+  # this is identical to a plain equality check, so the rail can only get wider.
   scope :similar_to, lambda { |listing|
     browsable
-      .where(category_id: listing.category_id)
+      .by_category(listing.category_id)
       .where.not(id: listing.id)
       .limit(8)
   }

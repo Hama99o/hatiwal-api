@@ -86,6 +86,49 @@ RSpec.describe Listing, type: :model do
       end
     end
 
+    describe ".similar_to" do
+      it "returns browsable same-category listings, newest first, without the source" do
+        category = create(:category)
+        source   = create(:listing, :active, category: category)
+        older    = create(:listing, :active, category: category, created_at: 2.days.ago)
+        newer    = create(:listing, :active, category: category, created_at: 1.hour.ago)
+        create(:listing, :draft, category: category)
+        create(:listing, :sold, category: category)
+        create(:listing, :active)
+
+        expect(Listing.similar_to(source).to_a).to eq([ newer, older ])
+      end
+
+      it "cross-sells the children's stock for a listing filed on a parent category" do
+        parent = create(:category)
+        child  = create(:category, parent: parent)
+        source = create(:listing, :active, category: parent)
+        nested = create(:listing, :active, category: child)
+
+        expect(Listing.similar_to(source)).to contain_exactly(nested)
+      end
+
+      it "does not widen a child-category listing to its parent or siblings" do
+        parent  = create(:category)
+        child   = create(:category, parent: parent)
+        sibling = create(:category, parent: parent)
+        source  = create(:listing, :active, category: child)
+        match   = create(:listing, :active, category: child)
+        create(:listing, :active, category: parent)
+        create(:listing, :active, category: sibling)
+
+        expect(Listing.similar_to(source)).to contain_exactly(match)
+      end
+
+      it "caps the rail at 8" do
+        category = create(:category)
+        source   = create(:listing, :active, category: category)
+        create_list(:listing, 9, :active, category: category)
+
+        expect(Listing.similar_to(source).length).to eq(8)
+      end
+    end
+
     describe ".browsable" do
       it "returns active listings newest first" do
         create(:listing, :draft)
