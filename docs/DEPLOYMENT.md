@@ -178,6 +178,22 @@ kamal app exec 'bin/rails db:version'
 bin/kms migrate
 ```
 
+### Trust-stat counters drifted (users.sold_count / bought_count)
+`ListingDashboard::FORM_ATTRIBUTES` lets an admin edit a Listing's `status`
+directly via Administrate, bypassing `Listing#sold_with_buyer!`/`#sold!` and
+letting a seller complete the same sale a second time — this over-counts the
+live incremental bump on `Transaction#bump_trust_counters!` with no live
+decrement path. Repair by recomputing every user's counters from the
+transactions table (idempotent, safe to run any time):
+```bash
+bin/kms console  # or a local `bin/rails console`
+Rake::Task["transactions:recompute_counters"].invoke
+# or from a shell:
+bin/rails transactions:recompute_counters
+```
+See `lib/tasks/transactions.rake` / `User#recompute_transaction_counters!`
+(TASK-TX02) and `spec/tasks/transactions_rake_spec.rb` for coverage.
+
 ### Check running containers
 ```bash
 kamal app exec 'echo OK'

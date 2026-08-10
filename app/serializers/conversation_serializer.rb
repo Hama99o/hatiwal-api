@@ -71,6 +71,7 @@ class ConversationSerializer < ApplicationSerializer
       # views render) instead of a 4th hand-rolled inline hash.
       current_user = opts[:current_user]
       txn = c.listing.current_sale
+      viewer_is_sale_buyer = txn.present? && current_user.present? && txn.buyer_id == current_user.id
       { id: c.listing_id, title: c.listing.title, price: c.listing.price, currency: c.listing.currency,
         thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location,
         negotiable: c.listing.negotiable,
@@ -83,7 +84,18 @@ class ConversationSerializer < ApplicationSerializer
         # is FALSE and actively harmful when shown to that same buyer. Never
         # leaks WHO the buyer is when it's someone else — that identity stays
         # owner-scoped in ListingSerializer's `sale` field, never here.
-        viewer_is_sale_buyer: txn.present? && current_user.present? && txn.buyer_id == current_user.id }
+        viewer_is_sale_buyer: viewer_is_sale_buyer,
+        # TASK-K729 (review fix, HIGH follow-up): the viewer's OWN transaction
+        # id — only ever populated when `viewer_is_sale_buyer` is true, so
+        # this never leaks another buyer's transaction id. Lets the mobile
+        # "You bought this item" notice open the REV2 ReviewPromptSheet
+        # (rate the seller) with a real transactionId instead of the
+        # positive close being copy-only with no next step.
+        viewer_sale_transaction_id: viewer_is_sale_buyer ? txn.id : nil,
+        # Whether the viewer has already left their review on this sale —
+        # lets the client hide the "Rate the seller" CTA once done instead of
+        # re-offering a review the server would 422 on as a duplicate.
+        viewer_has_reviewed_sale: viewer_is_sale_buyer ? Review.exists?(transaction_id: txn.id, reviewer_id: current_user.id) : nil }
     end
     field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
     field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, verified: s.verified, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }

@@ -441,6 +441,59 @@ RSpec.describe "Api::V1::Conversations", type: :request do
         expect(JSON.parse(response.body)["conversation"]["listing"]["viewer_is_sale_buyer"]).to be true
       end
     end
+
+    # TASK-K729 (review fix, HIGH follow-up): the winning buyer's OWN
+    # transaction id — needed so the mobile "You bought this item" notice can
+    # open the REV2 review prompt with a real transactionId — plus whether
+    # they have already reviewed it, so the client can hide a CTA the server
+    # would 422 on as a duplicate.
+    describe "listing.viewer_sale_transaction_id / listing.viewer_has_reviewed_sale" do
+      let(:listing) { create(:listing, :sold, user: seller) }
+
+      it "exposes the viewer's own transaction id when they are the sale buyer" do
+        conversation
+        txn = create(:transaction, listing: listing, seller: seller, buyer: buyer, status: :sold)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+        data = JSON.parse(response.body)["conversation"]["listing"]
+        expect(data["viewer_sale_transaction_id"]).to eq(txn.id)
+        expect(data["viewer_has_reviewed_sale"]).to be false
+      end
+
+      it "is true once the viewer has already reviewed the sale" do
+        conversation
+        txn = create(:transaction, listing: listing, seller: seller, buyer: buyer, status: :sold)
+        create(:review, :of_seller, sale: txn, reviewer: buyer, reviewee: seller)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+        expect(JSON.parse(response.body)["conversation"]["listing"]["viewer_has_reviewed_sale"]).to be true
+      end
+
+      it "is nil for a losing buyer's thread — never leaks another buyer's transaction id" do
+        winning_buyer = create(:user)
+        create(:conversation, buyer: winning_buyer, listing: listing)
+        create(:transaction, listing: listing, seller: seller, buyer: winning_buyer, status: :sold)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+        data = JSON.parse(response.body)["conversation"]["listing"]
+        expect(data["viewer_sale_transaction_id"]).to be_nil
+        expect(data["viewer_has_reviewed_sale"]).to be_nil
+      end
+
+      it "is nil for the seller's own view of the same thread" do
+        conversation
+        create(:transaction, listing: listing, seller: seller, buyer: buyer, status: :sold)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: auth_headers_for(seller), as: :json
+
+        data = JSON.parse(response.body)["conversation"]["listing"]
+        expect(data["viewer_sale_transaction_id"]).to be_nil
+        expect(data["viewer_has_reviewed_sale"]).to be_nil
+      end
+    end
   end
 
   describe "DELETE /api/v1/conversations/:id" do
