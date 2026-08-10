@@ -56,6 +56,32 @@ class User < ApplicationRecord
     )
   end
 
+  # Refresh the denormalized sold_count / bought_count (TASK-TX02) from
+  # source data — a safety net for `bin/rails transactions:recompute_counters`
+  # (see lib/tasks/transactions.rake) rather than something the normal
+  # reserve/sold flow needs to call. Normal operation bumps these counters
+  # incrementally via Transaction#bump_trust_counters! /
+  # Listing#bump_seller_sold_count_for_legacy_sale!; this method recomputes
+  # them from scratch instead, so it also repairs any drift caused by a path
+  # that bypasses those — e.g. an admin directly editing a Listing's `status`
+  # via the Administrate dashboard (ListingDashboard::FORM_ATTRIBUTES permits
+  # `:status`, which skips Listing#sold_with_buyer!/#sold! entirely).
+  #
+  # Mirrors the two-source GREATEST(...) logic in
+  # db/migrate/20260809000000_add_transaction_stats_to_users.rb: sold_count is
+  # the larger of the real transactions-table count and the legacy
+  # listings.sold count, since a pre-TX01 (or buyer-less) sale is only
+  # reflected in the latter. update_columns skips validations/callbacks by
+  # design, same as recompute_review_stats! above.
+  def recompute_transaction_counters!
+    sold_from_transactions = Transaction.as_seller(self).sold.count
+    sold_from_legacy_listings = listings.sold.count
+    update_columns(
+      sold_count: [ sold_from_transactions, sold_from_legacy_listings ].max,
+      bought_count: Transaction.as_buyer(self).sold.count
+    )
+  end
+
   def blocked?(other_user)
     blocked_users.exists?(other_user.id)
   end

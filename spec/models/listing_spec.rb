@@ -594,6 +594,19 @@ RSpec.describe Listing, type: :model do
       expect(listing.sale_transactions).to be_empty
     end
 
+    # ── TASK-TX02 (review fix, CR LOW — "skip strands a reserved
+    # Transaction") ──────────────────────────────────────────────────────────
+    it "sold_with_buyer! closes out an existing reserved Transaction even when buyer_id is blank" do
+      reserved = listing.reserve_with_buyer!(buyer_id: buyer.id)
+
+      txn = listing.sold_with_buyer!(buyer_id: nil)
+
+      expect(txn.id).to eq(reserved.id)
+      expect(txn).to be_sold
+      expect(txn.buyer_id).to eq(buyer.id)
+      expect(txn.completed_at).to be_present
+    end
+
     it "reserve_with_buyer! creates a reserved Transaction defaulting final_price to the listing price" do
       txn = listing.reserve_with_buyer!(buyer_id: buyer.id)
 

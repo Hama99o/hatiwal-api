@@ -31,16 +31,32 @@ class Transaction < ApplicationRecord
   # other attributes on an already-sold row never double-counts. There is
   # currently no "unsell" flow, so counters are only ever incremented.
   #
-  # Review fix (TASK-TX02, MED — "no compensating path"): this is safe ONLY
-  # because a `Listing` can never re-trigger `sold` once it reaches that
-  # terminal status — `ListingPolicy#sold?` requires `active?`/`reserved?`, so
-  # a repeat `PUT .../sold` on an already-sold listing 403s before the bump
-  # logic ever runs (see the regression spec "rejects a repeat sold call on an
-  # already-sold listing" in spec/requests/api/v1/my/listings_spec.rb). If a
-  # future feature ever allows re-selling, relisting, or un-selling a listing,
-  # a real decrement path must be added here — don't assume increment-only
-  # stays safe. Note this counter is also intentionally a LIFETIME stat: it is
-  # NOT decremented when a sold listing is later soft-removed, so it can
+  # Review fix (TASK-TX02, MED — "no compensating path"): this is safe with
+  # respect to the ONE mutation path the mobile client and the public API can
+  # reach — `ListingPolicy#sold?` requires `active?`/`reserved?`, so a repeat
+  # `PUT .../sold` on an already-sold listing 403s before the bump logic ever
+  # runs (see the regression spec "rejects a repeat sold call on an
+  # already-sold listing" in spec/requests/api/v1/my/listings_spec.rb).
+  #
+  # That guarantee does NOT extend to the admin dashboard:
+  # `ListingDashboard::FORM_ATTRIBUTES` permits `:status` directly, so an
+  # admin CAN flip a Listing's status back and forth via Administrate,
+  # bypassing `ListingPolicy` and `Listing#sold_with_buyer!`/`#sold!`
+  # entirely. In practice that specific bypass still can't double-count THIS
+  # counter — Administrate edits a Listing row, never a Transaction row, so
+  # `bump_trust_counters!` (a Transaction callback) never fires from it — but
+  # if a future feature adds any other path that saves a Transaction to
+  # `sold` more than once (re-selling, relisting, un-selling), a real
+  # decrement/guard must be added here — don't assume increment-only stays
+  # safe just because the mobile-reachable path is guarded.
+  #
+  # Recovery: if the denormalized counters ever drift for any reason, run
+  # `bin/rails transactions:recompute_counters` (lib/tasks/transactions.rake,
+  # backed by User#recompute_transaction_counters!) to recompute them from
+  # source data rather than trusting the incremental bumps.
+  #
+  # Note this counter is also intentionally a LIFETIME stat: it is NOT
+  # decremented when a sold listing is later soft-removed, so it can
   # legitimately read higher than the public "Sold" showcase tab (which only
   # lists currently-visible sold listings) — the mobile client accounts for
   # this explicitly (see soldShowcaseEmptyState.ts).

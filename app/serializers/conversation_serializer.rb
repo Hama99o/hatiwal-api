@@ -64,9 +64,15 @@ class ConversationSerializer < ApplicationSerializer
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c|
       next nil if c.listing_deleted?
+      # TASK-K729: category is included so the mobile thread's reserved/sold
+      # recovery notice can offer a "Browse similar in {category}" CTA
+      # (pre-filters Browse by category_id) instead of leaving a dead end.
+      category = c.listing.category
       { id: c.listing_id, title: c.listing.title, price: c.listing.price, currency: c.listing.currency,
         thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location,
-        negotiable: c.listing.negotiable }
+        negotiable: c.listing.negotiable,
+        category: { id: category.id, name_en: category.name_en, name_ps: category.name_ps,
+                     name_fa: category.name_fa, slug: category.slug } }
     end
     field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
     field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }

@@ -349,6 +349,19 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       other = JSON.parse(response.body)["conversation"]["other_participant"]
       expect(other["id"]).to eq(buyer.id)
     end
+
+    # TASK-K729: the mobile thread's reserved/sold recovery notice needs the
+    # listing's category to build a "Browse similar in {category}" CTA.
+    it "includes the listing's category on the detailed listing payload" do
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      category = JSON.parse(response.body)["conversation"]["listing"]["category"]
+      expect(category).to be_present
+      expect(category["id"]).to eq(listing.category_id)
+      expect(category["name_en"]).to eq(listing.category.name_en)
+      expect(category["slug"]).to eq(listing.category.slug)
+    end
   end
 
   describe "DELETE /api/v1/conversations/:id" do

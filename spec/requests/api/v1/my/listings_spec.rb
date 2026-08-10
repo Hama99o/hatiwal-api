@@ -669,6 +669,37 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
           put "/api/v1/my/listings/#{active.id}/sold", params: { buyer_id: buyer.id }, headers: headers, as: :json
         end.to change { user.reload.sold_count }.by(1)
       end
+
+      # ── TASK-TX02 (review fix, CR LOW — "skip strands a reserved
+      # Transaction") — the seller already reserved WITH a confirmed buyer,
+      # then marks the listing sold WITHOUT re-sending that buyer_id (mirrors
+      # BuyerPickerSheet's "Someone else / skip" option being tapped on the
+      # sold step). The existing reserved Transaction must still close out to
+      # sold — never left orphaned at "reserved" while the Listing is sold. ──
+      it "closes out an existing reserved Transaction to sold even when the sold call is buyer-less (skip)" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+        put "/api/v1/my/listings/#{active.id}/reserve", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        txn_id = JSON.parse(response.body)["transaction"]["id"]
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", headers: headers, as: :json
+        end.to change(Transaction, :count).by(0)
+             .and change { user.reload.sold_count }.by(1)
+             .and change { buyer.reload.bought_count }.by(1)
+
+        expect(response).to have_http_status(:ok)
+        txn = Transaction.find(txn_id)
+        expect(txn).to be_sold
+        expect(txn.buyer_id).to eq(buyer.id)
+        expect(txn.completed_at).to be_present
+
+        body = JSON.parse(response.body)
+        expect(body["transaction"]["id"]).to eq(txn_id)
+        expect(body["transaction"]["status"]).to eq("sold")
+        expect(active.reload).to be_sold
+      end
     end
 
     describe "PUT unpublish" do

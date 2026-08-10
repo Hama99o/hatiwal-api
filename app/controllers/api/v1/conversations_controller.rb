@@ -141,7 +141,9 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   end
 
   def set_conversation
-    @conversation = policy_scope(Conversation).find(params[:id])
+    # TASK-K729: eager-load the listing's category — the detailed serializer
+    # now surfaces it for the mobile thread's reserved/sold recovery notice.
+    @conversation = policy_scope(Conversation).includes(listing: :category).find(params[:id])
   end
 
   def set_conversation_for_mutation

@@ -308,4 +308,58 @@ RSpec.describe User, type: :model do
       expect(User.search_by_name("mohammad karimi")).to contain_exactly(target)
     end
   end
+
+  # ── TASK-TX02 (review fix, CR MED — safety-net recompute) ───────────────────
+  describe "#recompute_transaction_counters!" do
+    it "recomputes sold_count/bought_count from the transactions table, correcting drift" do
+      seller = create(:user)
+      buyer  = create(:user)
+      listing = create(:listing, :active, user: seller)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+      create(:transaction, :sold, listing: listing, seller: seller, buyer: buyer)
+
+      # Simulate drift — e.g. a manual DB fix or an admin edit that bypassed
+      # the normal increment path — by corrupting the counters directly.
+      seller.update_columns(sold_count: 99)
+      buyer.update_columns(bought_count: 99)
+
+      seller.recompute_transaction_counters!
+      buyer.recompute_transaction_counters!
+
+      expect(seller.reload.sold_count).to eq(1)
+      expect(buyer.reload.bought_count).to eq(1)
+    end
+
+    it "falls back to the legacy listings.sold count when there is no Transaction row" do
+      seller = create(:user)
+      create(:listing, :sold, user: seller)
+      seller.update_columns(sold_count: 0)
+
+      seller.recompute_transaction_counters!
+
+      expect(seller.reload.sold_count).to eq(1)
+    end
+
+    it "takes the GREATEST of the transaction-backed and legacy listing counts (never double-counts the same sale)" do
+      seller = create(:user)
+      buyer  = create(:user)
+      listing = create(:listing, :sold, user: seller)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+      create(:transaction, :sold, listing: listing, seller: seller, buyer: buyer)
+
+      seller.recompute_transaction_counters!
+
+      expect(seller.reload.sold_count).to eq(1)
+    end
+
+    it "resets to 0 when the user has no sales at all" do
+      seller = create(:user)
+      seller.update_columns(sold_count: 5, bought_count: 5)
+
+      seller.recompute_transaction_counters!
+
+      expect(seller.reload.sold_count).to eq(0)
+      expect(seller.reload.bought_count).to eq(0)
+    end
+  end
 end

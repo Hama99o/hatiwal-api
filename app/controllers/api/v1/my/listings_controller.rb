@@ -89,10 +89,19 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # buyer from one of the listing's conversations — when given, creates or
   # advances the Transaction. Bare calls (no buyer_id) behave exactly as
   # before for backward compatibility with clients already in production.
+  #
+  # Review fix (TASK-TX02, CR LOW): the Transaction write and the Listing
+  # status flip are wrapped in one DB transaction — if `reserved!` ever raised
+  # (e.g. a future validation) after `reserve_with_buyer!` already persisted,
+  # the Transaction would otherwise be left committed as "reserved" for a
+  # listing that never actually became `reserved`. All-or-nothing instead.
   def reserve
     authorize @listing, :reserve?
-    txn = @listing.reserve_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
-    @listing.reserved!
+    txn = nil
+    ActiveRecord::Base.transaction do
+      txn = @listing.reserve_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
+      @listing.reserved!
+    end
     render_lifecycle_response(txn)
   rescue ActiveRecord::RecordInvalid => e
     render_unprocessable_entity(e.record)
@@ -105,14 +114,24 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     render_blue(ListingSerializer, @listing, view: :detailed)
   end
 
+  # Review fix (TASK-TX02, CR LOW — "wrap sold_with_buyer! + sold! in a
+  # transaction"): same all-or-nothing reasoning as #reserve above. Without
+  # this, a `sold!` failure after `sold_with_buyer!` already advanced/created
+  # a Transaction to `sold` (bumping trust counters via
+  # Transaction#bump_trust_counters!) would strand a "sold" Transaction on a
+  # Listing that never actually reached `sold` — counters bumped for a sale
+  # that, from the Listing's own status, never happened.
   def sold
     authorize @listing, :sold?
-    txn = @listing.sold_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
-    @listing.sold!
-    # TASK-TX02 (review fix): the legacy buyer-less path (txn is nil) never
-    # touches the transactions table, so nothing else bumps the seller's
-    # trust-stat counter for it — do it here, once, explicitly.
-    @listing.bump_seller_sold_count_for_legacy_sale! if txn.nil?
+    txn = nil
+    ActiveRecord::Base.transaction do
+      txn = @listing.sold_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
+      @listing.sold!
+      # TASK-TX02 (review fix): the legacy buyer-less path (txn is nil) never
+      # touches the transactions table, so nothing else bumps the seller's
+      # trust-stat counter for it — do it here, once, explicitly.
+      @listing.bump_seller_sold_count_for_legacy_sale! if txn.nil?
+    end
     render_lifecycle_response(txn)
   rescue ActiveRecord::RecordInvalid => e
     render_unprocessable_entity(e.record)

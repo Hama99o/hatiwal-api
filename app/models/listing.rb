@@ -238,33 +238,49 @@ class Listing < ApplicationRecord
   # listing as sold for a specific buyer. When a reserved Transaction already
   # exists it is advanced (reserved → sold); otherwise a sold Transaction is
   # created directly (selling straight from active, skipping reserve).
-  # Returns nil (no-op) when buyer_id is blank — the legacy bare
-  # `PUT .../sold` call never touches the transactions table.
+  # Returns nil (no-op) when buyer_id is blank AND there is no existing
+  # reservation to close out — the legacy bare `PUT .../sold` call never
+  # touches the transactions table for a listing that was never reserved
+  # through the buyer picker.
+  #
+  # Review fix (TASK-TX02, CR LOW — "skip strands a reserved Transaction"): a
+  # listing that was already reserved WITH a confirmed buyer must always have
+  # that Transaction closed out to `sold` when the listing itself becomes
+  # `sold` — even if this particular call comes in buyer-less (e.g. the
+  # seller picked BuyerPickerSheet's "Someone else / skip" option on the sold
+  # step after already reserving for a real buyer). Checking `open_transaction`
+  # BEFORE the blank-buyer_id short-circuit prevents that reserved row from
+  # being silently orphaned (stuck at status "reserved" forever, buyer's
+  # bought_count never bumped) while the listing moves on to `sold`.
   def sold_with_buyer!(buyer_id:, final_price: nil)
-    return nil if buyer_id.blank?
-
     existing = open_transaction
     if existing
+      # `mark_sold!` itself defaults a blank buyer_id back to the
+      # transaction's own buyer_id (see Transaction#mark_sold!), so passing
+      # it straight through is safe whether or not this call identified one.
       existing.mark_sold!(final_price: final_price, buyer_id: buyer_id)
-      existing
-    else
-      sale_transactions.create!(
-        seller_id: user_id,
-        buyer_id: buyer_id,
-        final_price: final_price.presence || price,
-        currency: currency,
-        status: :sold,
-        completed_at: Time.current
-      )
+      return existing
     end
+
+    return nil if buyer_id.blank?
+
+    sale_transactions.create!(
+      seller_id: user_id,
+      buyer_id: buyer_id,
+      final_price: final_price.presence || price,
+      currency: currency,
+      status: :sold,
+      completed_at: Time.current
+    )
   end
 
   # TASK-TX02 (review fix) — bump the seller's denormalized users.sold_count
-  # for the legacy buyer-less sale path. `sold_with_buyer!` above never
-  # touches the transactions table when buyer_id is blank, so nothing else
-  # ever counts that sale — without this, the counter silently regresses
-  # versus the old (pre-TX02) `u.listings.sold.count` figure every time a
-  # seller completes a sale without picking a buyer.
+  # for the legacy buyer-less sale path. `sold_with_buyer!` above only skips
+  # the transactions table entirely when buyer_id is blank AND there was no
+  # prior reservation to close out — that's the one case nothing else ever
+  # counts. Without this, the counter would silently regress versus the old
+  # (pre-TX02) `u.listings.sold.count` figure every time a seller completes a
+  # sale without ever picking a buyer (neither at reserve nor at sold time).
   #
   # Deliberately NOT a `sold?` after_save callback: that would fire for
   # ANY path that flips a listing to `sold` (factories, data migrations,
