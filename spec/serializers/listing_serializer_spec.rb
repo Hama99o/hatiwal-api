@@ -209,6 +209,33 @@ RSpec.describe ListingSerializer, type: :serializer do
     end
   end
 
+  # TASK-K729 dedup fix — the category block now comes from CategorySerializer
+  # (shared with ConversationSerializer's listing.category) instead of 3
+  # hand-rolled hashes.
+  describe "category — shared CategorySerializer shape" do
+    it ":list view includes the full CategorySerializer shape" do
+      result = described_class.render_as_hash(listing, view: :list)
+      expect(result[:category][:id]).to eq(listing.category_id)
+      expect(result[:category][:name_en]).to eq(listing.category.name_en)
+      expect(result[:category][:slug]).to eq(listing.category.slug)
+      expect(result[:category]).to have_key(:icon)
+      expect(result[:category]).to have_key(:position)
+    end
+
+    it ":seller_list view includes the full CategorySerializer shape" do
+      result = described_class.render_as_hash(listing, view: :seller_list)
+      expect(result[:category][:id]).to eq(listing.category_id)
+      expect(result[:category][:name_en]).to eq(listing.category.name_en)
+      expect(result[:category]).to have_key(:slug)
+    end
+
+    it ":detailed view includes the full CategorySerializer shape" do
+      result = described_class.render_as_hash(listing, view: :detailed, current_user: nil)
+      expect(result[:category][:id]).to eq(listing.category_id)
+      expect(result[:category][:slug]).to eq(listing.category.slug)
+    end
+  end
+
   describe ":list view — saves_count is not exposed" do
     it "does not include saves_count in the list view" do
       result = described_class.render_as_hash(listing, view: :list)

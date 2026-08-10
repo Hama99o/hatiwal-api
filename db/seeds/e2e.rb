@@ -175,6 +175,39 @@ e2e_listing(
   location:    "Kandahar"
 )
 
+# TASK-K729 — dedicated fixtures for the chat "reserved/sold dead end"
+# recovery-notice flows, kept distinct from every other active listing above
+# (each already claimed by its own mutating Maestro flow) so
+# maestro/chat/reserved_sold_dead_end_notice.yaml and
+# maestro/chat/reserved_for_you_notice.yaml never collide with each other or
+# with reserve_after_accept.yaml / offer_send_and_accept.yaml / mark_sold_with_buyer.yaml.
+
+# Legacy (buyer-less) reserve/sold path — the recovery notice's GENERIC copy
+# (no committed buyer identified via the buyer picker).
+e2e_listing(
+  user:        seller,
+  title:       "Wool Blanket Handmade King Size",
+  price:       4_200,
+  category:    home,
+  status:      :active,
+  description: "Thick handmade wool blanket. King size. Warm for winter nights.",
+  location:    "Kandahar, Old Bazaar"
+)
+
+# Buyer-identified reserve/sold path (via the in-thread offer -> accept ->
+# BuyerPickerSheet confirm) — the recovery notice's VIEWER-SCOPED copy
+# ("Reserved for you" / "You bought this item") for the buyer who actually
+# won the deal.
+e2e_listing(
+  user:        seller,
+  title:       "Bajaj CT100 Motorbike 2021",
+  price:       62_000,
+  category:    vehicles,
+  status:      :active,
+  description: "Fuel efficient commuter bike. Well maintained, all papers clear.",
+  location:    "Kandahar"
+)
+
 # Reserved listing — for lifecycle reactivate test
 e2e_listing(
   user:        seller,

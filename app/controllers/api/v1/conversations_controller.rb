@@ -141,9 +141,11 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   end
 
   def set_conversation
-    # TASK-K729: eager-load the listing's category — the detailed serializer
-    # now surfaces it for the mobile thread's reserved/sold recovery notice.
-    @conversation = policy_scope(Conversation).includes(listing: :category).find(params[:id])
+    # TASK-K729: eager-load the listing's category (reserved/sold recovery
+    # notice's "Browse similar in {category}" CTA) AND its sale_transactions
+    # (Listing#current_sale, used by viewer_is_sale_buyer below) so both stay
+    # query-flat — without this, current_sale would fire a fresh query.
+    @conversation = policy_scope(Conversation).includes(listing: [ :category, :sale_transactions ]).find(params[:id])
   end
 
   def set_conversation_for_mutation

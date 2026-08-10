@@ -73,12 +73,27 @@ class User < ApplicationRecord
   # listings.sold count, since a pre-TX01 (or buyer-less) sale is only
   # reflected in the latter. update_columns skips validations/callbacks by
   # design, same as recompute_review_stats! above.
+  #
+  # Review fix (TASK-TX02, MED — "distinct listings, not raw Transaction
+  # rows"): counts DISTINCT listing_id, not a raw row count. The admin
+  # dashboard bypass documented on Transaction#bump_trust_counters! really can
+  # create a SECOND sold Transaction for the same listing (ListingDashboard
+  # permits :status directly, so an admin can flip a sold Listing back to
+  # active/reserved and the mobile seller can then complete the sale again).
+  # That bypass is real and this recompute is the only repair path for it —
+  # counting distinct listings means one listing's sale is always worth
+  # exactly 1 toward the count no matter how many Transaction rows it
+  # accumulated, so re-running this task after the bypass restores the
+  # correct figure. The LIVE incremental bump (`bump_trust_counters!`) still
+  # over-counts by +1 per extra sold Transaction until this task is re-run —
+  # there is no live decrement path — so this recompute is a genuine repair
+  # lever, not a no-op.
   def recompute_transaction_counters!
-    sold_from_transactions = Transaction.as_seller(self).sold.count
+    sold_from_transactions = Transaction.as_seller(self).sold.distinct.count(:listing_id)
     sold_from_legacy_listings = listings.sold.count
     update_columns(
       sold_count: [ sold_from_transactions, sold_from_legacy_listings ].max,
-      bought_count: Transaction.as_buyer(self).sold.count
+      bought_count: Transaction.as_buyer(self).sold.distinct.count(:listing_id)
     )
   end
 

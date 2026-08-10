@@ -361,5 +361,27 @@ RSpec.describe User, type: :model do
       expect(seller.reload.sold_count).to eq(0)
       expect(seller.reload.bought_count).to eq(0)
     end
+
+    # ── TASK-TX02 (review fix, MED — "count distinct listings, not raw
+    # Transaction rows") — reproduces the admin-dashboard bypass documented on
+    # Transaction#bump_trust_counters!: ListingDashboard permits :status
+    # directly, so an admin can flip a sold Listing back to active/reserved
+    # and the seller can complete the sale a SECOND time, creating a second
+    # sold Transaction row for the SAME listing. One real sale must still
+    # only ever count as 1. ───────────────────────────────────────────────────
+    it "counts a listing with two sold Transaction rows only once (admin status-flip double-count guard)" do
+      seller  = create(:user)
+      buyer   = create(:user)
+      listing = create(:listing, :sold, user: seller)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+      create(:transaction, :sold, listing: listing, seller: seller, buyer: buyer)
+      create(:transaction, :sold, listing: listing, seller: seller, buyer: buyer)
+
+      seller.recompute_transaction_counters!
+      buyer.recompute_transaction_counters!
+
+      expect(seller.reload.sold_count).to eq(1)
+      expect(buyer.reload.bought_count).to eq(1)
+    end
   end
 end

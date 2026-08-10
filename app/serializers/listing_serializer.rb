@@ -54,9 +54,10 @@ class ListingSerializer < ApplicationSerializer
       u = l.user
       { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
     end
-    field(:category) do |l|
-      { id: l.category_id, name_en: l.category.name_en, name_ps: l.category.name_ps, name_fa: l.category.name_fa, slug: l.category.slug }
-    end
+    # Reuses CategorySerializer (TASK-K729 dedup fix) instead of hand-rolling
+    # the same {id, name_en, name_ps, name_fa, slug} shape a 3rd time — see
+    # the identical field in :seller_list and :detailed below.
+    field(:category) { |l| CategorySerializer.render_as_hash(l.category) }
     # Price-drop badge data for browse feed cards. Both nil when no recent drop.
     field(:price_drop_percent) { |l| l.price_drop_percent }
     field(:price_dropped_at)   { |l| l.price_dropped_at }
@@ -83,9 +84,7 @@ class ListingSerializer < ApplicationSerializer
     # instead of issuing a separate COUNT(*) query per listing row.
     field(:conversations_count) { |l| l.conversations.size }
     field(:expired) { |l| l.expired? }
-    field(:category) do |l|
-      { id: l.category_id, name_en: l.category.name_en, name_ps: l.category.name_ps, name_fa: l.category.name_fa }
-    end
+    field(:category) { |l| CategorySerializer.render_as_hash(l.category) }
     # Price-drop badge data for seller listing cards. Both nil when no recent drop.
     field(:price_drop_percent) { |l| l.price_drop_percent }
     field(:price_dropped_at)   { |l| l.price_dropped_at }
@@ -139,9 +138,7 @@ class ListingSerializer < ApplicationSerializer
         seller_away_until: u.away? ? u.away_until&.iso8601 : nil
       }
     end
-    field(:category) do |l|
-      { id: l.category_id, name_en: l.category.name_en, name_ps: l.category.name_ps, name_fa: l.category.name_fa, slug: l.category.slug }
-    end
+    field(:category) { |l| CategorySerializer.render_as_hash(l.category) }
     # Price-drop badge data — both nil if no reduction in the last 14 days.
     field(:price_dropped_at)  { |l| l.price_dropped_at }
     field(:price_drop_percent) { |l| l.price_drop_percent }

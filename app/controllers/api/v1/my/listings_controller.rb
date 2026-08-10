@@ -108,9 +108,19 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   end
 
   # reserved → active (undo a reservation when a deal falls through)
+  #
+  # Review fix (TASK-TX02, MAJOR — "activate never touches the Transaction"):
+  # the deal falling through must cancel any open reservation, or a stale
+  # `reserved` Transaction row survives and can later be silently closed out
+  # to `sold` against the wrong buyer by a subsequent buyer-less `sold` call
+  # (see Listing#sold_with_buyer!). Wrapped in one DB transaction for the same
+  # all-or-nothing reasoning as #reserve/#sold below.
   def activate
     authorize @listing, :activate?
-    @listing.active!
+    ActiveRecord::Base.transaction do
+      @listing.cancel_open_transaction!
+      @listing.active!
+    end
     render_blue(ListingSerializer, @listing, view: :detailed)
   end
 
@@ -125,7 +135,11 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing, :sold?
     txn = nil
     ActiveRecord::Base.transaction do
-      txn = @listing.sold_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
+      txn = @listing.sold_with_buyer!(
+        buyer_id: lifecycle_params[:buyer_id],
+        final_price: lifecycle_params[:final_price],
+        clear_buyer: ActiveModel::Type::Boolean.new.cast(lifecycle_params[:clear_buyer])
+      )
       @listing.sold!
       # TASK-TX02 (review fix): the legacy buyer-less path (txn is nil) never
       # touches the transactions table, so nothing else bumps the seller's
@@ -143,10 +157,12 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     @listing = current_user.listings.find(params[:id])
   end
 
-  # `buyer_id`/`final_price` are accepted flat (not nested under `listing:`)
-  # since reserve/sold are lifecycle commands, not resource updates.
+  # `buyer_id`/`final_price`/`clear_buyer` are accepted flat (not nested under
+  # `listing:`) since reserve/sold are lifecycle commands, not resource
+  # updates. `clear_buyer` (TASK-TX02 review fix) is the sold-only, explicit
+  # "Someone else / skip" signal — see Listing#sold_with_buyer!.
   def lifecycle_params
-    params.permit(:buyer_id, :final_price)
+    params.permit(:buyer_id, :final_price, :clear_buyer)
   end
 
   # Composite payload for reserve/sold — always includes the listing; the

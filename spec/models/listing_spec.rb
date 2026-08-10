@@ -594,10 +594,16 @@ RSpec.describe Listing, type: :model do
       expect(listing.sale_transactions).to be_empty
     end
 
-    # ── TASK-TX02 (review fix, CR LOW — "skip strands a reserved
-    # Transaction") ──────────────────────────────────────────────────────────
-    it "sold_with_buyer! closes out an existing reserved Transaction even when buyer_id is blank" do
+    # ── TASK-TX02 (review fix) — a listing genuinely CURRENTLY reserved with
+    # a confirmed buyer (its own status flipped to `reserved`, mirroring what
+    # the `reserve` controller action always does right after
+    # reserve_with_buyer!) must still close out to `sold` using its own
+    # recorded buyer when the sold call comes in buyer-less with no explicit
+    # `clear_buyer` — the true LEGACY-client case (never sends any buyer
+    # info at all). ──────────────────────────────────────────────────────────
+    it "sold_with_buyer! closes out a still-reserved Transaction using its own buyer when buyer_id is blank (legacy)" do
       reserved = listing.reserve_with_buyer!(buyer_id: buyer.id)
+      listing.reserved!
 
       txn = listing.sold_with_buyer!(buyer_id: nil)
 
@@ -605,6 +611,54 @@ RSpec.describe Listing, type: :model do
       expect(txn).to be_sold
       expect(txn.buyer_id).to eq(buyer.id)
       expect(txn.completed_at).to be_present
+    end
+
+    # ── TASK-TX02 (review fix, MAJOR — "clear_buyer must not re-attribute") ──
+    it "sold_with_buyer! with clear_buyer: true cancels a still-reserved Transaction instead of closing it out" do
+      reserved = listing.reserve_with_buyer!(buyer_id: buyer.id)
+      listing.reserved!
+
+      txn = listing.sold_with_buyer!(buyer_id: nil, clear_buyer: true)
+
+      expect(txn).to be_nil
+      expect(Transaction.exists?(reserved.id)).to be(false)
+      expect(listing.sale_transactions.reload).to be_empty
+    end
+
+    # ── TASK-TX02 (review fix, MAJOR — gate the close-out on `reserved?`) ────
+    # Reproduces the reviewer's exact repro: a reservation that has already
+    # fallen through (the listing's own status is no longer `reserved`) must
+    # never be closed out by a later buyer-less sold call, even if a stale
+    # Transaction row somehow still exists — the listing's CURRENT status is
+    # the source of truth, not the mere presence of an old row.
+    it "sold_with_buyer! ignores a stale reserved Transaction once the listing is no longer reserved" do
+      stale = listing.reserve_with_buyer!(buyer_id: buyer.id)
+      # Deliberately do NOT call `listing.reserved!` / `cancel_open_transaction!`
+      # here — this isolates the `reserved?` gate itself. The real `activate`
+      # controller action calls `cancel_open_transaction!` explicitly (covered
+      # by its own spec below), so in production this stale row never survives.
+      expect(listing).not_to be_reserved
+
+      txn = listing.sold_with_buyer!(buyer_id: nil)
+
+      expect(txn).to be_nil
+      expect(stale.reload).to be_reserved # untouched — not silently closed out
+    end
+
+    # ── TASK-TX02 (review fix, MAJOR — activate cancels the open reservation) ─
+    describe "#cancel_open_transaction!" do
+      it "destroys a still-open reserved Transaction" do
+        txn = listing.reserve_with_buyer!(buyer_id: buyer.id)
+
+        listing.cancel_open_transaction!
+
+        expect(Transaction.exists?(txn.id)).to be(false)
+        expect(listing.sale_transactions.reload).to be_empty
+      end
+
+      it "is a no-op when there is no open Transaction" do
+        expect { listing.cancel_open_transaction! }.not_to raise_error
+      end
     end
 
     it "reserve_with_buyer! creates a reserved Transaction defaulting final_price to the listing price" do
@@ -624,6 +678,7 @@ RSpec.describe Listing, type: :model do
 
     it "sold_with_buyer! advances an existing reserved Transaction to sold" do
       reserved = listing.reserve_with_buyer!(buyer_id: buyer.id)
+      listing.reserved!
 
       txn = listing.sold_with_buyer!(buyer_id: buyer.id)
 

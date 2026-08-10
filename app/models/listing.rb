@@ -243,17 +243,32 @@ class Listing < ApplicationRecord
   # touches the transactions table for a listing that was never reserved
   # through the buyer picker.
   #
-  # Review fix (TASK-TX02, CR LOW — "skip strands a reserved Transaction"): a
-  # listing that was already reserved WITH a confirmed buyer must always have
-  # that Transaction closed out to `sold` when the listing itself becomes
-  # `sold` — even if this particular call comes in buyer-less (e.g. the
-  # seller picked BuyerPickerSheet's "Someone else / skip" option on the sold
-  # step after already reserving for a real buyer). Checking `open_transaction`
-  # BEFORE the blank-buyer_id short-circuit prevents that reserved row from
-  # being silently orphaned (stuck at status "reserved" forever, buyer's
-  # bought_count never bumped) while the listing moves on to `sold`.
-  def sold_with_buyer!(buyer_id:, final_price: nil)
-    existing = open_transaction
+  # `clear_buyer: true` (TASK-TX02 review fix, MAJOR) is the WIRE-DISTINGUISHABLE
+  # signal that the seller explicitly tapped BuyerPickerSheet's "Someone else /
+  # skip" option — as opposed to a true legacy client that never sends any
+  # buyer info at all. On the wire, both cases look identical (`buyer_id`
+  # simply absent) unless something else marks the explicit case — so
+  # `clear_buyer` cancels any open reservation outright instead of silently
+  # re-attributing it to whoever was previously reserved. Without this
+  # distinction, an innocent previously-reserved buyer could be credited with
+  # a purchase they did not make the moment the seller says "no, not them."
+  #
+  # The close-out of an EXISTING reservation (the pre-TX02-review-fix, still
+  # legitimate "I already told you who" case) is only attempted while the
+  # listing is ACTUALLY `reserved` right now (`reserved?`) — never off a
+  # merely-present-but-stale Transaction row. A reservation that fell through
+  # (`activate`, reserved → active) has its open Transaction destroyed by
+  # `#cancel_open_transaction!` at that point, so by the time a later
+  # buyer-less `sold` call arrives there is nothing left to (wrongly) close
+  # out — see the reproduction this guards in
+  # spec/requests/api/v1/my/listings_spec.rb.
+  def sold_with_buyer!(buyer_id:, final_price: nil, clear_buyer: false)
+    if clear_buyer
+      cancel_open_transaction!
+      return nil
+    end
+
+    existing = reserved? ? open_transaction : nil
     if existing
       # `mark_sold!` itself defaults a blank buyer_id back to the
       # transaction's own buyer_id (see Transaction#mark_sold!), so passing
@@ -272,6 +287,16 @@ class Listing < ApplicationRecord
       status: :sold,
       completed_at: Time.current
     )
+  end
+
+  # Cancel any still-open (reserved) Transaction for this listing — a no-op
+  # when none exists. Called from `activate` (reserved → active, "the deal
+  # fell through") and from `sold_with_buyer!`'s `clear_buyer` branch above,
+  # so a stale reserved row can never survive to be silently closed out
+  # against the wrong buyer by a later buyer-less `sold` call (TASK-TX02
+  # review fix, MAJOR).
+  def cancel_open_transaction!
+    open_transaction&.destroy!
   end
 
   # TASK-TX02 (review fix) — bump the seller's denormalized users.sold_count

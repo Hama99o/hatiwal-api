@@ -362,6 +362,85 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       expect(category["name_en"]).to eq(listing.category.name_en)
       expect(category["slug"]).to eq(listing.category.slug)
     end
+
+    # TASK-K729 (review fix): dedup — the category block now comes from
+    # CategorySerializer (the same one ListingSerializer uses), so it also
+    # carries icon/position, not just the 4 fields the old hand-rolled hash had.
+    it "the category block includes CategorySerializer's icon and position fields" do
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      category = JSON.parse(response.body)["conversation"]["listing"]["category"]
+      expect(category).to have_key("icon")
+      expect(category).to have_key("position")
+    end
+
+    # TASK-K729 (review fix, HIGH): includes `verified` on the buyer/seller
+    # blocks so the mobile trust UI (UserIdentity) can show a verified badge
+    # in the reserved/sold recovery notice's seller identity row.
+    it "includes verified on the buyer and seller blocks" do
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      data = JSON.parse(response.body)["conversation"]
+      expect(data["buyer"]).to have_key("verified")
+      expect(data["seller"]).to have_key("verified")
+    end
+
+    # TASK-K729 (review fix, HIGH): `viewer_is_sale_buyer` is scoped to the
+    # CURRENT VIEWER, not just "does this listing have a committed buyer" —
+    # a false "reserved for another buyer" claim shown to the actual winning
+    # buyer was the original bug this field fixes.
+    describe "listing.viewer_is_sale_buyer" do
+      let(:listing) { create(:listing, :reserved, user: seller) }
+
+      it "is true for the conversation's buyer when they are the committed sale buyer" do
+        # Materialize `conversation` FIRST — the transaction factory's
+        # after(:build) hook auto-creates a conversation for its buyer/listing
+        # pair unless one already exists, and creating one AFTER would collide
+        # with `let(:conversation)` (a listing can't have two conversations
+        # with the same buyer).
+        conversation
+        create(:transaction, listing: listing, seller: seller, buyer: buyer, status: :reserved)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+        expect(JSON.parse(response.body)["conversation"]["listing"]["viewer_is_sale_buyer"]).to be true
+      end
+
+      it "is false for a losing buyer's thread when the sale went to someone else" do
+        winning_buyer = create(:user)
+        create(:conversation, buyer: winning_buyer, listing: listing)
+        create(:transaction, listing: listing, seller: seller, buyer: winning_buyer, status: :reserved)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+        expect(JSON.parse(response.body)["conversation"]["listing"]["viewer_is_sale_buyer"]).to be false
+      end
+
+      it "is false when the listing was reserved via the legacy buyer-less path (no Transaction at all)" do
+        get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+        expect(JSON.parse(response.body)["conversation"]["listing"]["viewer_is_sale_buyer"]).to be false
+      end
+
+      it "is false when a different participant (the seller) views the same thread" do
+        conversation
+        create(:transaction, listing: listing, seller: seller, buyer: buyer, status: :reserved)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: auth_headers_for(seller), as: :json
+
+        expect(JSON.parse(response.body)["conversation"]["listing"]["viewer_is_sale_buyer"]).to be false
+      end
+
+      it "is true when the sale is sold (not just reserved)" do
+        conversation
+        listing.update!(status: :sold)
+        create(:transaction, listing: listing, seller: seller, buyer: buyer, status: :sold)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+        expect(JSON.parse(response.body)["conversation"]["listing"]["viewer_is_sale_buyer"]).to be true
+      end
+    end
   end
 
   describe "DELETE /api/v1/conversations/:id" do

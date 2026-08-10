@@ -670,13 +670,15 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         end.to change { user.reload.sold_count }.by(1)
       end
 
-      # ── TASK-TX02 (review fix, CR LOW — "skip strands a reserved
-      # Transaction") — the seller already reserved WITH a confirmed buyer,
-      # then marks the listing sold WITHOUT re-sending that buyer_id (mirrors
-      # BuyerPickerSheet's "Someone else / skip" option being tapped on the
-      # sold step). The existing reserved Transaction must still close out to
-      # sold — never left orphaned at "reserved" while the Listing is sold. ──
-      it "closes out an existing reserved Transaction to sold even when the sold call is buyer-less (skip)" do
+      # ── TASK-TX02 (review fix) — a true LEGACY client (never sends buyer_id
+      # OR clear_buyer at all) calling `sold` while the listing is CURRENTLY
+      # reserved with a confirmed buyer must still close that reservation out
+      # to `sold` using its own recorded buyer — never left orphaned at
+      # "reserved" while the Listing itself moves on to `sold`. Distinct from
+      # the explicit "Someone else / skip" tap below, which the mobile client
+      # marks with `clear_buyer=true` specifically so it is never confused
+      # with this case. ─────────────────────────────────────────────────────
+      it "without any buyer info, closes out a still-reserved Transaction using its own recorded buyer (legacy client)" do
         active = create(:listing, :active, user: user)
         buyer  = create(:user)
         create(:conversation, listing: active, seller: user, buyer: buyer)
@@ -698,6 +700,57 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         body = JSON.parse(response.body)
         expect(body["transaction"]["id"]).to eq(txn_id)
         expect(body["transaction"]["status"]).to eq("sold")
+        expect(active.reload).to be_sold
+      end
+
+      # ── TASK-TX02 (review fix, MAJOR) — the seller explicitly tapped
+      # BuyerPickerSheet's "Someone else / skip" on the sold step (mobile
+      # sends `clear_buyer=true`). Even though the listing is still reserved
+      # WITH a confirmed buyer, that buyer must NOT be silently credited with
+      # a purchase they did not make — the stale reservation is cancelled
+      # instead, and only the legacy seller-side sold_count bump fires. ─────
+      it "clear_buyer=true cancels a still-reserved Transaction instead of re-attributing it to the reserved buyer" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+        put "/api/v1/my/listings/#{active.id}/reserve", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        txn_id = JSON.parse(response.body)["transaction"]["id"]
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", params: { clear_buyer: true }, headers: headers, as: :json
+        end.to change(Transaction, :count).by(-1)
+             .and change { user.reload.sold_count }.by(1)
+
+        expect(response).to have_http_status(:ok)
+        expect(Transaction.exists?(txn_id)).to be(false)
+        expect(buyer.reload.bought_count).to eq(0)
+        expect(JSON.parse(response.body)).not_to have_key("transaction")
+        expect(active.reload).to be_sold
+      end
+
+      # ── TASK-TX02 (review fix, MAJOR) — reproduces the reviewer's exact
+      # repro end-to-end: reserve WITH a buyer, the deal falls through
+      # (`activate`), and the seller later sells to someone else without
+      # picking a buyer. The stale reservation must never resurface to credit
+      # the original (uninvolved) buyer. ────────────────────────────────────
+      it "activate (deal fell through) then a buyer-less sold never re-attributes the original reserved buyer" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+        put "/api/v1/my/listings/#{active.id}/reserve", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        txn_id = JSON.parse(response.body)["transaction"]["id"]
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/activate", headers: headers, as: :json
+        end.to change(Transaction, :count).by(-1)
+        expect(Transaction.exists?(txn_id)).to be(false)
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/sold", headers: headers, as: :json
+        end.to change { user.reload.sold_count }.by(1)
+
+        expect(buyer.reload.bought_count).to eq(0)
+        expect(JSON.parse(response.body)).not_to have_key("transaction")
         expect(active.reload).to be_sold
       end
     end
@@ -729,6 +782,34 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         active = create(:listing, :active, user: user)
         put "/api/v1/my/listings/#{active.id}/activate", headers: headers, as: :json
         expect(response).to have_http_status(:forbidden)
+      end
+
+      # ── TASK-TX02 (review fix, MAJOR — "activate never touches the
+      # Transaction") ───────────────────────────────────────────────────────
+      it "cancels an open Transaction when the deal falls through" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+        put "/api/v1/my/listings/#{active.id}/reserve", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        txn_id = JSON.parse(response.body)["transaction"]["id"]
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/activate", headers: headers, as: :json
+        end.to change(Transaction, :count).by(-1)
+
+        expect(response).to have_http_status(:ok)
+        expect(Transaction.exists?(txn_id)).to be(false)
+      end
+
+      it "is a no-op on the Transaction table when there was never a buyer-identified reservation" do
+        active = create(:listing, :active, user: user)
+        put "/api/v1/my/listings/#{active.id}/reserve", headers: headers, as: :json
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/activate", headers: headers, as: :json
+        end.not_to change(Transaction, :count)
+
+        expect(response).to have_http_status(:ok)
       end
     end
 

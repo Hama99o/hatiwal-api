@@ -42,18 +42,26 @@ class Transaction < ApplicationRecord
   # `ListingDashboard::FORM_ATTRIBUTES` permits `:status` directly, so an
   # admin CAN flip a Listing's status back and forth via Administrate,
   # bypassing `ListingPolicy` and `Listing#sold_with_buyer!`/`#sold!`
-  # entirely. In practice that specific bypass still can't double-count THIS
-  # counter — Administrate edits a Listing row, never a Transaction row, so
-  # `bump_trust_counters!` (a Transaction callback) never fires from it — but
-  # if a future feature adds any other path that saves a Transaction to
-  # `sold` more than once (re-selling, relisting, un-selling), a real
-  # decrement/guard must be added here — don't assume increment-only stays
-  # safe just because the mobile-reachable path is guarded.
+  # entirely.
   #
-  # Recovery: if the denormalized counters ever drift for any reason, run
-  # `bin/rails transactions:recompute_counters` (lib/tasks/transactions.rake,
-  # backed by User#recompute_transaction_counters!) to recompute them from
-  # source data rather than trusting the incremental bumps.
+  # Review fix (TASK-TX02, MED — corrected residual-risk claim): the previous
+  # version of this comment claimed that bypass "can't double-count THIS
+  # counter" because Administrate only edits a Listing row, never a
+  # Transaction row. That is FALSE in effect: flipping a sold Listing back to
+  # `active`/`reserved` via the admin re-opens `ListingPolicy#sold?`
+  # (`active? || reserved?`), so the seller's normal mobile client can call
+  # `PUT .../sold` again — which DOES create/advance a second sold
+  # Transaction for the SAME listing, and this callback bumps the live
+  # counters a second time. There is no live decrement/guard against it. The
+  # real residual risk: after that bypass, sold_count/bought_count can read
+  # one higher than the number of listings actually sold, until repaired.
+  #
+  # Recovery: run `bin/rails transactions:recompute_counters`
+  # (lib/tasks/transactions.rake, backed by
+  # User#recompute_transaction_counters!), which counts DISTINCT listing_ids
+  # rather than raw Transaction rows — so it always restores the correct
+  # figure regardless of how many sold Transaction rows a single listing
+  # accumulated.
   #
   # Note this counter is also intentionally a LIFETIME stat: it is NOT
   # decremented when a sold listing is later soft-removed, so it can

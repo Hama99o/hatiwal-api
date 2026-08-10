@@ -62,20 +62,31 @@ class ConversationSerializer < ApplicationSerializer
   view :detailed do
     field(:viewer_role) { |c, opts| viewer_role_for(c, opts) }
     field(:listing_deleted) { |c| c.listing_deleted? }
-    field(:listing) do |c|
+    field(:listing) do |c, opts|
       next nil if c.listing_deleted?
       # TASK-K729: category is included so the mobile thread's reserved/sold
       # recovery notice can offer a "Browse similar in {category}" CTA
       # (pre-filters Browse by category_id) instead of leaving a dead end.
-      category = c.listing.category
+      # Reuses CategorySerializer (the same shape ListingSerializer's three
+      # views render) instead of a 4th hand-rolled inline hash.
+      current_user = opts[:current_user]
+      txn = c.listing.current_sale
       { id: c.listing_id, title: c.listing.title, price: c.listing.price, currency: c.listing.currency,
         thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location,
         negotiable: c.listing.negotiable,
-        category: { id: category.id, name_en: category.name_en, name_ps: category.name_ps,
-                     name_fa: category.name_fa, slug: category.slug } }
+        category: CategorySerializer.render_as_hash(c.listing.category),
+        # TASK-K729 (review fix, HIGH): boolean-only — true exactly when the
+        # viewer IS the buyer the seller committed to for the CURRENT
+        # reservation/sale (Listing#current_sale). Lets the mobile thread
+        # show "Reserved for you" / "You bought this item" to the buyer who
+        # actually won the deal, instead of the generic recovery copy which
+        # is FALSE and actively harmful when shown to that same buyer. Never
+        # leaks WHO the buyer is when it's someone else — that identity stays
+        # owner-scoped in ListingSerializer's `sale` field, never here.
+        viewer_is_sale_buyer: txn.present? && current_user.present? && txn.buyer_id == current_user.id }
     end
-    field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
-    field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }
+    field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
+    field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, verified: s.verified, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }
     # The thread screen shows the *other* person (name, avatar, tap-to-profile,
     # block toggle). Mirror the :list view so the detailed payload exposes it too
     # — without this the mobile Conversation screen silently hides those controls.
