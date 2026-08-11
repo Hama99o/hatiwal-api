@@ -91,7 +91,15 @@ class ConversationSerializer < ApplicationSerializer
         # "You bought this item" notice open the REV2 ReviewPromptSheet
         # (rate the seller) with a real transactionId instead of the
         # positive close being copy-only with no next step.
-        viewer_sale_transaction_id: viewer_is_sale_buyer ? txn.id : nil,
+        #
+        # TASK-K729 (review fix, LOW): additionally gated on `txn.sold?` —
+        # `Listing#current_sale` returns the open transaction for `reserved?`
+        # too, so without this a still-RESERVED sale (no review to leave yet)
+        # would populate this field despite the field's own doc comment
+        # promising a reviewable sale. `Review#sale_is_sold` would 422 a
+        # premature submit either way, but the field should not over-promise
+        # what it actually points at.
+        viewer_sale_transaction_id: viewer_is_sale_buyer && txn.sold? ? txn.id : nil,
         # Whether the viewer has already left their review on this sale —
         # lets the client hide the "Rate the seller" CTA once done instead of
         # re-offering a review the server would 422 on as a duplicate.

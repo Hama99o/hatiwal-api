@@ -493,6 +493,23 @@ RSpec.describe "Api::V1::Conversations", type: :request do
         expect(data["viewer_sale_transaction_id"]).to be_nil
         expect(data["viewer_has_reviewed_sale"]).to be_nil
       end
+
+      # TASK-K729 (review fix, LOW): `Listing#current_sale` returns the open
+      # transaction for a `reserved?` listing too, not just `sold?` — without
+      # gating on `txn.sold?` this field would populate for a reservation
+      # that has nothing to review yet, over-promising what its own doc
+      # comment claims ("lets the mobile notice open the REV2 review prompt").
+      it "is nil when the viewer is the sale buyer but the transaction is only RESERVED, not sold" do
+        reserved_listing = create(:listing, :reserved, user: seller)
+        reserved_conversation = create(:conversation, buyer: buyer, listing: reserved_listing)
+        create(:transaction, listing: reserved_listing, seller: seller, buyer: buyer, status: :reserved)
+
+        get "/api/v1/conversations/#{reserved_conversation.id}", headers: headers, as: :json
+
+        data = JSON.parse(response.body)["conversation"]["listing"]
+        expect(data["viewer_is_sale_buyer"]).to be true
+        expect(data["viewer_sale_transaction_id"]).to be_nil
+      end
     end
   end
 
