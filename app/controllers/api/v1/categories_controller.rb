@@ -26,13 +26,29 @@ class Api::V1::CategoriesController < Api::V1::BaseController
   # under "Electronics > Phones" is an Electronics listing: `Listing.by_category`
   # returns it when you filter by Electronics, so the hub number must include it
   # or the card would under-report the inventory sitting behind it.
+  #
+  # The count is taken from the SAME scope the feed uses
+  # (`policy_scope(Listing.browsable).not_hidden_for(current_user)` — see
+  # ListingsController#index), so a hub card can never promise listings that
+  # `?category_id=` then filters out for this viewer (blocked users, "not
+  # interested").
   def hub_listing_counts(categories)
-    child_ids_by_parent = categories.to_h { |c| [ c.id, c.visible_subcategories.map(&:id) ] }
+    # Every child, not just the visible ones: `Category.self_and_children` — what
+    # `by_category` filters on — ignores `active`, so a listing parked under a
+    # deactivated subcategory still comes back when the parent is filtered and
+    # has to be in the parent's number too. Inactive children are simply never
+    # serialized (the serializer renders `visible_subcategories`).
+    child_ids_by_parent = categories.to_h { |c| [ c.id, c.subcategories.map(&:id) ] }
     all_ids = child_ids_by_parent.flat_map { |parent_id, child_ids| [ parent_id, *child_ids ] }
 
     # .except(:order): PostgreSQL rejects the ORDER BY column that `browsable`
     # carries (created_at) because it is neither grouped nor aggregated.
-    direct = Listing.browsable.except(:order).where(category_id: all_ids).group(:category_id).count
+    direct = policy_scope(Listing.browsable)
+               .not_hidden_for(current_user)
+               .except(:order)
+               .where(category_id: all_ids)
+               .group(:category_id)
+               .count
 
     counts = all_ids.index_with { |id| direct[id].to_i }
     child_ids_by_parent.each do |parent_id, child_ids|

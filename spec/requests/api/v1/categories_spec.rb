@@ -175,6 +175,54 @@ RSpec.describe "Api::V1::Categories", type: :request do
       expect(cat["active_listings_count"]).to eq(3)
     end
 
+    it "rolls a deactivated subcategory's listings up too — the filter still returns them" do
+      parent = create(:category, active: true)
+      # Deactivated: never rendered as a chip, but `Category.self_and_children`
+      # (what `by_category` filters on) does not exclude it, so its stock is
+      # still reachable through the parent and must be in the parent's count.
+      hidden_child = create(:category, parent: parent, active: false)
+      seller = create(:user)
+
+      create(:listing, category: parent, user: seller, status: :active)
+      create(:listing, category: hidden_child, user: seller, status: :active)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      cat = JSON.parse(response.body)["categories"].find { |c| c["id"] == parent.id }
+      expect(cat["active_listings_count"]).to eq(Listing.browsable.by_category(parent.id).count)
+      expect(cat["active_listings_count"]).to eq(2)
+      expect(cat["subcategories"]).to eq([])
+    end
+
+    it "excludes listings the viewer marked 'not interested' — the feed hides them" do
+      category = create(:category, active: true)
+      seller   = create(:user)
+
+      create(:listing, category: category, user: seller, status: :active)
+      hidden = create(:listing, category: category, user: seller, status: :active)
+      create(:hidden_listing, user: user, listing: hidden)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      cat = JSON.parse(response.body)["categories"].find { |c| c["id"] == category.id }
+      expect(cat["active_listings_count"]).to eq(1)
+    end
+
+    it "excludes a blocked seller's listings — policy_scope drops them from the feed" do
+      category = create(:category, active: true)
+      blocked  = create(:user)
+      create(:block, blocker: user, blocked: blocked)
+      other = create(:user)
+
+      create(:listing, category: category, user: other, status: :active)
+      create(:listing, category: category, user: blocked, status: :active)
+
+      get "/api/v1/categories", params: { with_counts: true }, headers: headers, as: :json
+
+      cat = JSON.parse(response.body)["categories"].find { |c| c["id"] == category.id }
+      expect(cat["active_listings_count"]).to eq(1)
+    end
+
     it "matches the number of listings the category filter actually returns" do
       parent = create(:category, active: true)
       child  = create(:category, parent: parent, active: true)
