@@ -29,7 +29,13 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing
 
     if @listing.save
-      render_blue(ListingSerializer, @listing, view: :detailed, status: :created)
+      # TASK-R418 (CR fix, CYCLE-4): every owner-scoped single-listing render
+      # in this controller uses :owner_detailed, not just show/reserve/sold —
+      # a freshly created draft never has a sale (Listing#current_sale
+      # returns nil unless reserved?/sold?), so this is a no-op today, but it
+      # keeps every response from this controller carrying the exact same
+      # shape rather than drifting case-by-case.
+      render_blue(ListingSerializer, @listing, view: :owner_detailed, status: :created)
     else
       render_unprocessable_entity(@listing)
     end
@@ -45,7 +51,11 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     if @listing.update(listing_params.except(:images))
       attach_new_images
       purge_removed_images
-      render_blue(ListingSerializer, @listing, view: :detailed)
+      # TASK-R418 (CR fix, CYCLE-4): :owner_detailed — a seller editing the
+      # title/description/photos of a RESERVED or SOLD listing must keep
+      # seeing the `sale` block in the response, not have it silently
+      # disappear because this one action rendered a different view.
+      render_blue(ListingSerializer, @listing, view: :owner_detailed)
     else
       render_unprocessable_entity(@listing)
     end
@@ -68,21 +78,23 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing, :publish?
     @listing.active!
     @listing.renew! # start the expiry clock
-    render_blue(ListingSerializer, @listing, view: :detailed)
+    # TASK-R418 (CR fix, CYCLE-4): :owner_detailed everywhere in this
+    # controller — see the identical rationale on #create/#update above.
+    render_blue(ListingSerializer, @listing, view: :owner_detailed)
   end
 
   # Restart the expiry clock on an active (possibly expired) listing.
   def renew
     authorize @listing, :renew?
     @listing.renew!
-    render_blue(ListingSerializer, @listing, view: :detailed)
+    render_blue(ListingSerializer, @listing, view: :owner_detailed)
   end
 
   # active → draft (take a published listing offline)
   def unpublish
     authorize @listing, :unpublish?
     @listing.draft!
-    render_blue(ListingSerializer, @listing, view: :detailed)
+    render_blue(ListingSerializer, @listing, view: :owner_detailed)
   end
 
   # TASK-TX01: optionally accepts `buyer_id` (+ `final_price`) identifying the
@@ -121,7 +133,9 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
       @listing.cancel_open_transaction!
       @listing.active!
     end
-    render_blue(ListingSerializer, @listing, view: :detailed)
+    # TASK-R418 (CR fix, CYCLE-4): :owner_detailed everywhere in this
+    # controller — see #create/#update/#publish above.
+    render_blue(ListingSerializer, @listing, view: :owner_detailed)
   end
 
   # Review fix (TASK-TX02, CR LOW — "wrap sold_with_buyer! + sold! in a

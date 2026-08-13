@@ -23,6 +23,21 @@ RSpec.describe "Api::V1::Conversations", type: :request do
       expect(ids).to eq([ mine.id ])
     end
 
+    # TASK-J471: the mobile inbox row renders a PriceTag from the listing
+    # payload — the :list view must carry price/currency, not just the
+    # :detailed view (GET /conversations/:id), or the row silently renders
+    # nothing.
+    it "includes the listing's price and currency for the inbox PriceTag" do
+      priced_listing = create(:listing, :active, user: seller, price: 1_250_000, currency: "AFN")
+      conv = create(:conversation, buyer: buyer, listing: priced_listing)
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conv.id }
+      expect(row["listing"]["price"].to_f).to eq(1_250_000.0)
+      expect(row["listing"]["currency"]).to eq("AFN")
+    end
+
     it "includes the last message body and kind for the preview" do
       conv = create(:conversation, buyer: buyer, listing: listing)
       conv.messages.create!(user: buyer, kind: :meetup_proposal, body: "Cafe | 3pm")

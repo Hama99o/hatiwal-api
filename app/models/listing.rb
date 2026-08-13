@@ -192,24 +192,36 @@ class Listing < ApplicationRecord
   end
 
   # TASK-R418 — the buyer identified for the CURRENT reservation/sale of this
-  # listing (the most recent Transaction row), or nil when the listing has
-  # never had a buyer identified via the buyer picker: draft/active listings,
-  # or a legacy buyer-less reserve/sold. Used by ListingSerializer's owner-only
-  # `sale` field (:seller_list / :owner_detailed views) — NEVER surfaced on the
-  # public :list / :detailed views.
+  # listing, or nil when the listing has never had a buyer identified via the
+  # buyer picker: draft/active listings, or a legacy buyer-less reserve/sold.
+  # Used by ListingSerializer's owner-only `sale` field (:seller_list /
+  # :owner_detailed views) — NEVER surfaced on the public :list / :detailed
+  # views.
+  #
+  # CR fix (CYCLE-4, HIGH): a listing can accumulate MULTIPLE Transaction rows
+  # over its lifetime (a reservation that fell through and was re-reserved,
+  # or an admin flipping `status` directly via Administrate — see
+  # Transaction#bump_trust_counters!'s own admin-bypass note) — so "most
+  # recently CREATED" is not the same thing as "the transaction whose status
+  # actually matches where this listing is right now". Filtering by status
+  # first (sold when the listing is sold, reserved when it's reserved) means
+  # a mismatched/stale row is never surfaced as this listing's sale — we show
+  # nothing rather than the wrong buyer.
   #
   # Mirrors the loaded-vs-query guard used by `recent_price_drop` above: when
-  # the controller eager-loads `sale_transactions`, we sort the already-loaded
-  # array in Ruby instead of firing `.order(...).first`, which would otherwise
-  # issue a fresh query per row (an association's `.order` always hits the DB,
-  # ignoring the loaded target) and reintroduce an N+1 across the seller feed.
+  # the controller eager-loads `sale_transactions`, we filter/sort the
+  # already-loaded array in Ruby instead of firing a fresh `.where(...)`
+  # query per row (an association's scope always hits the DB, ignoring the
+  # loaded target), which would reintroduce an N+1 across the seller feed.
   def current_sale
     return nil unless reserved? || sold?
 
+    target_status = sold? ? "sold" : "reserved"
+
     if sale_transactions.loaded?
-      sale_transactions.max_by(&:created_at)
+      sale_transactions.select { |t| t.status == target_status }.max_by(&:created_at)
     else
-      sale_transactions.order(created_at: :desc).first
+      sale_transactions.where(status: target_status).order(created_at: :desc).first
     end
   end
 

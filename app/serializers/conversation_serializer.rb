@@ -17,7 +17,11 @@ class ConversationSerializer < ApplicationSerializer
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c|
       next nil if c.listing_deleted?
-      { id: c.listing_id, title: c.listing.title, thumbnail_url: c.listing.thumbnail_url, status: c.listing.status }
+      # TASK-J471: price/currency so the inbox row's PriceTag has something to
+      # render — plain columns on an already-preloaded association (index
+      # `.includes(listing: ...)`), so this adds no N+1.
+      { id: c.listing_id, title: c.listing.title, thumbnail_url: c.listing.thumbnail_url, status: c.listing.status,
+        price: c.listing.price, currency: c.listing.currency }
     end
     field(:other_participant) do |c, opts|
       current_user = opts[:current_user]

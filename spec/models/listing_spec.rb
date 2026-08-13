@@ -707,6 +707,96 @@ RSpec.describe Listing, type: :model do
     end
   end
 
+  # ── TASK-R418 — the owner-only "who is the current buyer" lookup ───────────
+  # CR fix (CYCLE-4, HIGH): previously ZERO spec coverage, and the
+  # implementation picked the most-recently-CREATED Transaction row rather
+  # than the one whose own status actually matches the listing's current
+  # status — see the fix comment on Listing#current_sale itself.
+  describe "#current_sale" do
+    let(:seller)      { create(:user) }
+    let(:buyer)       { create(:user) }
+    let(:other_buyer) { create(:user) }
+    let(:listing)     { create(:listing, :active, user: seller) }
+
+    before do
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+      create(:conversation, listing: listing, seller: seller, buyer: other_buyer)
+    end
+
+    it "returns nil for a draft/active listing that has never been reserved or sold" do
+      expect(listing.current_sale).to be_nil
+    end
+
+    it "returns nil when reserved without ever identifying a buyer (legacy path)" do
+      listing.reserved!
+      expect(listing.current_sale).to be_nil
+    end
+
+    it "returns nil when sold without ever identifying a buyer (legacy path)" do
+      listing.sold!
+      expect(listing.current_sale).to be_nil
+    end
+
+    it "returns the reserved Transaction with its buyer while the listing is reserved" do
+      txn = listing.reserve_with_buyer!(buyer_id: buyer.id)
+      listing.reserved!
+
+      expect(listing.current_sale).to eq(txn)
+      expect(listing.current_sale.buyer_id).to eq(buyer.id)
+      expect(listing.current_sale).to be_reserved
+    end
+
+    it "returns the sold Transaction with its buyer once the listing is sold" do
+      listing.reserve_with_buyer!(buyer_id: buyer.id)
+      listing.reserved!
+      txn = listing.sold_with_buyer!(buyer_id: buyer.id)
+      listing.sold!
+
+      expect(listing.current_sale).to eq(txn)
+      expect(listing.current_sale).to be_sold
+    end
+
+    # The exact repro the review flagged: a listing can end up with a
+    # Transaction row whose OWN status no longer matches where the listing
+    # itself is right now — e.g. an admin flips `status` directly via
+    # Administrate, bypassing reserve_with_buyer!/sold_with_buyer! entirely
+    # (see Transaction#bump_trust_counters!'s own documented admin-bypass
+    # note). A newer but status-MISMATCHED row must never be surfaced as the
+    # current sale — better to show nothing than the wrong buyer.
+    it "ignores a newer Transaction row whose status does not match the listing's current status (unloaded)" do
+      sold_txn = create(:transaction, :sold, listing: listing, seller: seller, buyer: buyer)
+      stale_reserved = create(:transaction, listing: listing, seller: seller, buyer: other_buyer)
+      stale_reserved.update_column(:created_at, sold_txn.created_at + 1.hour)
+
+      listing.sold!
+      listing.reload
+
+      expect(listing.sale_transactions.loaded?).to be(false)
+      expect(listing.current_sale).to eq(sold_txn)
+      expect(listing.current_sale.buyer_id).to eq(buyer.id)
+    end
+
+    it "applies the same status filter when sale_transactions is already eager-loaded" do
+      sold_txn = create(:transaction, :sold, listing: listing, seller: seller, buyer: buyer)
+      stale_reserved = create(:transaction, listing: listing, seller: seller, buyer: other_buyer)
+      stale_reserved.update_column(:created_at, sold_txn.created_at + 1.hour)
+
+      listing.sold!
+      # Eager-load exactly like My::ListingsController#index does — exercises
+      # the `sale_transactions.loaded?` branch (filter-in-Ruby) instead of the
+      # `.where(...)` fallback covered above. The dedicated N+1 query-count
+      # assertion for this exact shape already lives at the request-spec
+      # layer (spec/requests/api/v1/my/listings_spec.rb, "sale (owner-only
+      # buyer identity) on the seller feed") — this spec only re-asserts
+      # correctness of the loaded branch.
+      reloaded = Listing.includes(:sale_transactions).find(listing.id)
+      expect(reloaded.sale_transactions.loaded?).to be(true)
+
+      expect(reloaded.current_sale).to eq(sold_txn)
+      expect(reloaded.current_sale.buyer_id).to eq(buyer.id)
+    end
+  end
+
   # ── TASK-TX02 (review fix) — legacy buyer-less sale must still bump the
   # seller's denormalized sold_count, or it silently regresses versus the old
   # always-accurate `u.listings.sold.count` figure. The bump is an explicit

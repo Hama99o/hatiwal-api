@@ -473,4 +473,72 @@ RSpec.describe ListingSerializer, type: :serializer do
       end
     end
   end
+
+  # ── TASK-R418 — owner-only `sale` field (buyer identity + agreed price) ────
+  describe ":owner_detailed view" do
+    it "includes everything :detailed has (include_view)" do
+      result = described_class.render_as_hash(listing, view: :owner_detailed)
+      detailed_keys = described_class.render_as_hash(listing, view: :detailed).keys
+      expect(result.keys).to include(*detailed_keys)
+    end
+
+    it "returns sale: nil for a draft/active listing" do
+      result = described_class.render_as_hash(listing, view: :owner_detailed)
+      expect(result).to have_key(:sale)
+      expect(result[:sale]).to be_nil
+    end
+
+    context "when reserved with a Transaction" do
+      let(:listing) { create(:listing, :reserved, user: seller) }
+      let!(:buyer)  { create(:user) }
+      let!(:convo)  { create(:conversation, listing: listing, seller: seller, buyer: buyer) }
+      let!(:txn) do
+        create(:transaction, listing: listing, seller: seller, buyer: buyer, final_price: 5_000)
+      end
+
+      it "includes the buyer identity, final price, and conversation_id" do
+        result = described_class.render_as_hash(listing, view: :owner_detailed)
+        sale = result[:sale]
+
+        expect(sale[:status]).to eq("reserved")
+        expect(sale[:final_price].to_f).to eq(5_000.0)
+        expect(sale[:buyer][:id]).to eq(buyer.id)
+        expect(sale[:buyer][:name]).to eq(buyer.full_name)
+        expect(sale[:conversation_id]).to eq(convo.id)
+      end
+
+      it "resolves conversation_id from the in-memory array when conversations is preloaded (no extra query)" do
+        loaded = Listing.includes(:conversations).find(listing.id)
+        result = described_class.render_as_hash(loaded, view: :owner_detailed)
+        expect(result[:sale][:conversation_id]).to eq(convo.id)
+      end
+    end
+
+    it "returns sale: nil for a legacy reserve with no Transaction" do
+      legacy = create(:listing, :reserved, user: seller)
+      result = described_class.render_as_hash(legacy, view: :owner_detailed)
+      expect(result[:sale]).to be_nil
+    end
+  end
+
+  # ── TASK-R418 — PRIVACY: `sale` must never leak onto the public views ──────
+  describe "privacy — :sale is owner-scoped only" do
+    let(:reserved_listing) { create(:listing, :reserved, user: seller) }
+    let(:buyer)            { create(:user) }
+
+    before do
+      create(:conversation, listing: reserved_listing, seller: seller, buyer: buyer)
+      create(:transaction, listing: reserved_listing, seller: seller, buyer: buyer)
+    end
+
+    it ":detailed never includes a sale key, even for a reserved listing with a real Transaction" do
+      result = described_class.render_as_hash(reserved_listing, view: :detailed, current_user: seller)
+      expect(result).not_to have_key(:sale)
+    end
+
+    it ":list never includes a sale key" do
+      result = described_class.render_as_hash(reserved_listing, view: :list)
+      expect(result).not_to have_key(:sale)
+    end
+  end
 end
