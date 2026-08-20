@@ -107,5 +107,34 @@ RSpec.describe "Api::V1::Listings is_saved (feed heart)", type: :request do
         "with 0 saved rows on the page and #{count_all_saved[0]} with all 10 saved — " \
         "is_saved N+1 regression"
     end
+
+    # Same acceptance criterion, proven the most literal way possible: count
+    # SQL statements that actually touch the "saved_listings" table by name,
+    # rather than inferring it from a before/after diff. Must be exactly 1 no
+    # matter how many rows are on the page or how many of them are saved — a
+    # per-row `saved_listings.exists?` (like the :detailed field uses) would
+    # push this to page_size + 1.
+    it "issues exactly one SQL query against saved_listings for a full page, regardless of page size" do
+      category = create(:category)
+      seller   = create(:user)
+      listings = create_list(:listing, 10, :active, category: category, user: seller)
+      listings.each { |l| create(:saved_listing, user: user, listing: l) }
+
+      saved_listings_query_count = 0
+      subscriber = lambda do |*, payload|
+        sql = payload[:sql].to_s
+        saved_listings_query_count += 1 if sql.match?(/from\s+"?saved_listings"?/i)
+      end
+
+      ActiveSupport::Notifications.subscribed(subscriber, "sql.active_record") do
+        get "/api/v1/listings", headers: headers, as: :json
+      end
+
+      expect(response).to have_http_status(:ok)
+      expect(JSON.parse(response.body)["listings"]).to all(include("is_saved" => true))
+      expect(saved_listings_query_count).to eq(1),
+        "Expected exactly one SELECT against saved_listings for the whole page, " \
+        "got #{saved_listings_query_count} — is_saved N+1 regression"
+    end
   end
 end
