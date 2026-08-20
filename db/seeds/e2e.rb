@@ -8,8 +8,13 @@
 #
 # Test accounts (password: Password123!):
 #   buyer@hatiwal.test    — buyer with saved listings + 1 conversation
-#   seller@hatiwal.test   — seller with draft / active / reserved listings
-#   newbuyer@hatiwal.test — fresh account, nothing saved, no history
+#   seller@hatiwal.test   — seller with draft / active / reserved listings;
+#                           ALSO the buyer on one thread (own listing "Mountain
+#                           Bike 26-inch Steel Frame", owned by newbuyer) — the
+#                           one account with both a Selling and a Buying
+#                           thread, for the TASK-R517 role-filter E2E flow.
+#   newbuyer@hatiwal.test — fresh account, no saved/bought history; owns the
+#                           one listing seller@hatiwal.test messages about
 # =============================================================================
 
 puts "=== E2E Seed: Users ==="
@@ -387,6 +392,48 @@ if tx_listing
   end
 else
   puts "  WARN: Xiaomi Redmi Note 11 listing not found — transaction seed skipped"
+end
+
+# =============================================================================
+puts "=== E2E Seed: seller@hatiwal.test's own Buying thread (TASK-R517) ==="
+# =============================================================================
+# Every other conversation above puts seller@hatiwal.test on the SELLER side
+# only (all seeded listings are owned by `seller`) — there was no fixture
+# where the SAME account also has an active BUYING thread, so the
+# Buying/Selling role-filter Maestro flow had nothing deterministic to assert
+# beyond "the chips exist". `newbuyer@hatiwal.test` gets one listing of its
+# own and seller@hatiwal.test starts a conversation on it, giving
+# seller@hatiwal.test both role types from a single login:
+#   - Selling: the response-badge + sold-transaction conversations above
+#   - Buying:  this one thread, where seller@hatiwal.test is the buyer
+
+newbuyer_listing_title = "Mountain Bike 26-inch Steel Frame"
+
+newbuyer_listing = Listing.find_or_create_by!(user: newbuyer, title: newbuyer_listing_title) do |l|
+  l.category    = vehicles
+  l.description = "Well-maintained mountain bike, 21-speed, recently serviced brakes and chain."
+  l.price        = 9_500
+  l.currency     = "AFN"
+  l.status       = :active
+  l.location     = "Herat"
+  l.views_count  = rand(5..50)
+  l.published_at = rand(1..10).days.ago
+end
+puts "  newbuyer listing ready: #{newbuyer_listing.title}"
+
+seller_buying_convo = Conversation.find_by(listing: newbuyer_listing, buyer: seller, seller: newbuyer)
+unless seller_buying_convo
+  seller_buying_convo = Conversation.create!(listing: newbuyer_listing, buyer: seller, seller: newbuyer)
+  buyer_msg_time = 1.day.ago
+  bm = Message.new(conversation: seller_buying_convo, user: seller, body: "Hi, is the mountain bike still available?",
+                    kind: :text)
+  bm.created_at = buyer_msg_time
+  bm.updated_at = buyer_msg_time
+  bm.save!
+  seller_buying_convo.update!(last_message_at: buyer_msg_time)
+  puts "  created seller@hatiwal.test's Buying-side conversation on #{newbuyer_listing.title}"
+else
+  puts "  seller@hatiwal.test's Buying-side conversation already present"
 end
 
 # =============================================================================
