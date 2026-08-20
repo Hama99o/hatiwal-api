@@ -42,7 +42,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
     paginate_blue(
       ListingSerializer,
       listings,
-      extra: { view: :list, viewed_ids: viewed_listing_ids(listings) }
+      extra: { view: :list, viewed_ids: viewed_listing_ids(listings), saved_ids: saved_listing_ids(listings) }
     )
   end
 
@@ -105,7 +105,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
       ListingSerializer,
       listings,
       view: :list,
-      options: { viewed_ids: viewed_listing_ids(listings) }
+      options: { viewed_ids: viewed_listing_ids(listings), saved_ids: saved_listing_ids(listings) }
     )
   end
 
@@ -118,6 +118,20 @@ class Api::V1::ListingsController < Api::V1::BaseController
     return Set.new if current_user.nil?
 
     current_user.listing_views
+                .where(listing_id: scope.reorder(nil).select(:id))
+                .pluck(:listing_id)
+                .to_set
+  end
+
+  # TASK-BE-SAVEDLIST — the feed heart's data source. Mirrors viewed_listing_ids
+  # exactly: one indexed query (a WHERE listing_id IN subquery), never a
+  # per-record `saved_listings.exists?` like the :detailed field uses (that
+  # would be an N+1 across a full page). Empty when not signed in — a guest
+  # always gets `false` for every row via the serializer's fallback.
+  def saved_listing_ids(scope)
+    return Set.new if current_user.nil?
+
+    current_user.saved_listings
                 .where(listing_id: scope.reorder(nil).select(:id))
                 .pluck(:listing_id)
                 .to_set

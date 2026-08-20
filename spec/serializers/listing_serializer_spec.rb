@@ -335,6 +335,52 @@ RSpec.describe ListingSerializer, type: :serializer do
     end
   end
 
+  # TASK-BE-SAVEDLIST (FlowApp #255) — :list never rendered is_saved at all
+  # before this; it only existed on :detailed. Mirrors the existing is_viewed
+  # (`viewed_ids`) contract exactly, plus the saved-screen shortcut.
+  describe ":list view — is_saved (TASK-BE-SAVEDLIST)" do
+    it "is false when no saved_ids/saved_by_listing_id option is passed" do
+      result = described_class.render_as_hash(listing, view: :list)
+      expect(result).to have_key(:is_saved)
+      expect(result[:is_saved]).to be(false)
+    end
+
+    it "is true when the listing id is present in the saved_ids Set" do
+      result = described_class.render_as_hash(listing, view: :list, saved_ids: Set[listing.id])
+      expect(result[:is_saved]).to be(true)
+    end
+
+    it "is false when saved_ids is present but does not include the listing id" do
+      other_id = listing.id + 1
+      result = described_class.render_as_hash(listing, view: :list, saved_ids: Set[other_id])
+      expect(result[:is_saved]).to be(false)
+    end
+
+    it "is true when the listing id is a key in saved_by_listing_id (My::SavedListings shortcut)" do
+      result = described_class.render_as_hash(
+        listing, view: :list, saved_by_listing_id: { listing.id => create(:saved_listing, listing: listing) }
+      )
+      expect(result[:is_saved]).to be(true)
+    end
+
+    it "does not raise or default to true for an unrelated row when saved_by_listing_id is present" do
+      other_listing = create(:listing, :active)
+      result = described_class.render_as_hash(
+        other_listing, view: :list, saved_by_listing_id: { listing.id => create(:saved_listing, listing: listing) }
+      )
+      expect(result[:is_saved]).to be(false)
+    end
+  end
+
+  # TASK-BE-SAVEDLIST — is_saved must NOT exist on :seller_list. The seller's
+  # own My Shop feed has no use for "did I save my own listing".
+  describe ":seller_list view — is_saved is not exposed" do
+    it "does not include is_saved" do
+      result = described_class.render_as_hash(listing, view: :seller_list)
+      expect(result).not_to have_key(:is_saved)
+    end
+  end
+
   describe ":detailed view — seller away mode (seller_is_away + seller_away_until)" do
     let(:buyer) { create(:user) }
 

@@ -50,6 +50,30 @@ class ListingSerializer < ApplicationSerializer
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
     field(:is_viewed) { |l, opts| opts[:viewed_ids]&.include?(l.id) || false }
+    # TASK-BE-SAVEDLIST (FlowApp #255) — the feed heart. Before this, :list
+    # never rendered is_saved at all (it only existed on :detailed), so no
+    # feed card — web Bazaar or mobile Browse — could paint a filled heart
+    # from the payload itself; both clients had to treat it as unknown until
+    # a second `GET /my/saved_listings` round-trip landed.
+    #
+    # Two ways a caller can prove a row is saved, mirroring the existing
+    # `viewed_ids` (is_viewed) precedent — never a per-record `exists?` here,
+    # that would be an N+1 across a full page:
+    #   - `saved_ids:` — a pre-computed Set for the current result set, fed by
+    #     ListingsController#index/#similar via `saved_listing_ids(scope)`.
+    #   - `saved_by_listing_id:` — the {listing_id => SavedListing} map the
+    #     My::SavedListingsController "Saved" screen already builds for
+    #     price_at_save/price_dropped; every row it renders IS a saved row by
+    #     construction, so a key hit is sufficient (no extra query needed).
+    # Any other :list caller that passes neither option (my/hidden_listings,
+    # my/viewed_listings, users/sold_listings) gets `false` for every row —
+    # a deliberate, documented scope decision (see the comments on those
+    # controllers), not a silent gap.
+    field(:is_saved) do |l, opts|
+      next true if opts[:saved_by_listing_id]&.key?(l.id)
+
+      opts[:saved_ids]&.include?(l.id) || false
+    end
     field(:seller) do |l|
       u = l.user
       { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
@@ -75,6 +99,11 @@ class ListingSerializer < ApplicationSerializer
     end
   end
 
+  # TASK-BE-SAVEDLIST — deliberately no `is_saved` field here. :seller_list
+  # renders the seller's OWN listings (My Shop); whether the owner has
+  # bookmarked their own item is not a product concept the feed heart needs
+  # to answer, so this view is left alone rather than fed a `saved_ids:` Set
+  # it has no use for.
   view :seller_list do
     fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at, :negotiable
     field(:thumbnail_url) { |l| l.thumbnail_url }

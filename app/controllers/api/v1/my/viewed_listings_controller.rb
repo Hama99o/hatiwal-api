@@ -24,6 +24,12 @@ class Api::V1::My::ViewedListingsController < Api::V1::BaseController
     # level, then the block runs filter_map to drop any listing that is no longer
     # browsable (sold, draft, expired, removed) or belongs to a blocked pair.
     # No 500 risk: nil listing guard handles hard-deleted records gracefully.
+    # TASK-BE-SAVEDLIST (FlowApp #255) — no `saved_ids:` fed here, so the
+    # serializer's `is_saved` falls back to `false` for every row. Deliberate
+    # scope decision (documented, not an oversight) — the card's guidance was
+    # to feed the real Set to the browse/saved/similar buyer surfaces first;
+    # "recently viewed" can be fed the same `saved_listing_ids`-style Set in a
+    # follow-up if product wants the heart to paint here too.
     paginate_blue_with_transform(ListingSerializer, viewed_relation, extra: { view: :list }) do |page|
       page.filter_map do |view|
         listing = view.listing

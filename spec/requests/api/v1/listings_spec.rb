@@ -65,6 +65,43 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
         end
       end
 
+      # TASK-BE-SAVEDLIST (FlowApp #255) — the browse feed heart. Before this,
+      # ListingSerializer's `is_saved` field lived only on :detailed, so no
+      # caller of `GET /listings` (:list view) ever received it.
+      response "200", "is_saved reflects the caller's SavedListing rows on the browse feed" do
+        let!(:saved_one)   { create(:listing, :active, title: "Saved") }
+        let!(:unsaved_one) { create(:listing, :active, title: "Unsaved") }
+
+        before { create(:saved_listing, user: user, listing: saved_one) }
+
+        run_test! do |response|
+          rows = JSON.parse(response.body)["listings"].to_h { |l| [ l["title"], l["is_saved"] ] }
+          expect(rows["Saved"]).to be(true)
+          expect(rows["Unsaved"]).to be(false)
+        end
+
+        after do |example|
+          example.metadata[:response][:content] = {
+            "application/json" => {
+              example: JSON.parse(response.body, symbolize_names: true)
+            }
+          }
+        end
+      end
+
+      response "200", "guest browse feed gets is_saved: false for every row" do
+        let(:"access-token") { nil }
+        let(:client) { nil }
+        let(:uid)    { nil }
+
+        before { create(:listing, :active, title: "Guest") }
+
+        run_test! do |response|
+          rows = JSON.parse(response.body)["listings"]
+          expect(rows).to all(include("is_saved" => false))
+        end
+      end
+
       response "200", "sort=newest returns listings ordered by created_at desc" do
         let(:sort) { "newest" }
 
@@ -969,6 +1006,20 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
       let(:category) { create(:category) }
       let(:source)   { create(:listing, :active, category: category) }
       let(:id)       { source.id }
+
+      response "200", "is_saved reflects the caller's SavedListing rows on the similar rail (TASK-BE-SAVEDLIST)" do
+        before do
+          @saved_sibling   = create(:listing, :active, category: category, title: "SavedSibling")
+          @unsaved_sibling = create(:listing, :active, category: category, title: "UnsavedSibling")
+          create(:saved_listing, user: user, listing: @saved_sibling)
+        end
+
+        run_test! do |response|
+          rows = JSON.parse(response.body)["listings"].to_h { |l| [ l["title"], l["is_saved"] ] }
+          expect(rows["SavedSibling"]).to be(true)
+          expect(rows["UnsavedSibling"]).to be(false)
+        end
+      end
 
       response "200", "a listing the caller hid is not offered back to them" do
         before do

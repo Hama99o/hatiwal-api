@@ -73,11 +73,12 @@ RSpec.describe "Api::V1::Listings filtering", type: :request do
       expect(response).to have_http_status(:unauthorized)
     end
 
-    it "guest browse omits per-user flags (is_saved false)" do
+    it "guest browse gets per-user flags as false (is_viewed and is_saved)" do
       create(:listing, :active, title: "Guest")
       get "/api/v1/listings"
       row = JSON.parse(response.body)["listings"].first
       expect(row["is_viewed"]).to be(false)
+      expect(row["is_saved"]).to be(false)
     end
   end
 

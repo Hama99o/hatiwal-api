@@ -26,6 +26,11 @@ class Api::V1::Users::SoldListingsController < Api::V1::BaseController
                    { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                  )
 
+    # TASK-BE-SAVEDLIST (FlowApp #255) — no `saved_ids:` fed here, so the
+    # serializer's `is_saved` falls back to `false` for every row. Deliberate
+    # scope decision (documented, not an oversight): this is a public seller
+    # profile rail (someone else's sold history), not the buyer's own
+    # browse/saved/similar surfaces the card asked to prioritize.
     paginate_blue(ListingSerializer, listings, extra: { view: :list })
   rescue ActiveRecord::RecordNotFound
     render_not_found

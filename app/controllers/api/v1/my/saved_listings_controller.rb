@@ -24,6 +24,9 @@ class Api::V1::My::SavedListingsController < Api::V1::BaseController
     # We pass the *same* Hash object through `extra` so the serializer fields
     # can look up the per-save price_at_save/price_dropped/price_drop_amount
     # without a second query — same pattern as `viewed_ids` on ListingsController.
+    # TASK-BE-SAVEDLIST: the serializer's `is_saved` field also reads this same
+    # map — every row this screen renders IS a saved listing by construction,
+    # so a key hit is proof enough; no separate `saved_ids:` Set needed here.
     saved_by_listing_id = {}
 
     # paginate_blue_with_transform handles the page-number extraction, Pagy call,
