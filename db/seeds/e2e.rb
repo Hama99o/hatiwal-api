@@ -95,7 +95,7 @@ puts "  categories ready"
 puts "=== E2E Seed: Seller Listings ==="
 # =============================================================================
 
-def e2e_listing(user:, title:, price:, category:, status:, description:, location:)
+def e2e_listing(user:, title:, price:, category:, status:, description:, location:, quantity: 1)
   return if Listing.exists?(user: user, title: title)
 
   attrs = {
@@ -107,6 +107,10 @@ def e2e_listing(user:, title:, price:, category:, status:, description:, locatio
     currency:    "AFN",
     status:      status,
     location:    location,
+    # Multi-quantity (docs/SPIKE_LISTING_QUANTITY.md). Defaults to 1, so every
+    # existing fixture stays a single-item listing and the flows written against
+    # them are unaffected.
+    quantity:    quantity,
     views_count: rand(5..200)
   }
 
@@ -178,6 +182,22 @@ e2e_listing(
   status:      :active,
   description: "Thick and warm. Worn twice. Excellent condition. Size XL.",
   location:    "Kandahar"
+)
+
+# Multi-quantity (docs/SPIKE_LISTING_QUANTITY.md, Tier 1) — the reseller case
+# the feature was built for: one listing, 15 identical units. Drives the "each"
+# per-unit price, the stock pill, and the buyer picker's "How many did you sell?"
+# field. Kept as the ONLY multi-unit fixture so every other flow keeps asserting
+# the single-item majority case.
+e2e_listing(
+  user:        seller,
+  title:       "Phone Case Silicone Clear - Wholesale",
+  price:       400,
+  category:    electronics,
+  status:      :active,
+  description: "Bought a box of 15. Selling individually or in bulk. Fits most 6.1 inch phones.",
+  location:    "Kandahar, Main Road",
+  quantity:    15
 )
 
 # TASK-K729 — dedicated fixtures for the chat "reserved/sold dead end"
@@ -267,6 +287,28 @@ if price_drop_listing
   end
 else
   puts "  WARN: Lenovo ThinkPad listing not found — price-drop seed skipped"
+end
+
+# =============================================================================
+puts "=== E2E Seed: Multi-quantity conversation (docs/SPIKE_LISTING_QUANTITY.md) ==="
+# =============================================================================
+# The buyer picker only offers CONVERSATION PARTICIPANTS (Transaction enforces
+# it), so without a thread on the multi-unit listing the "How many did you sell?"
+# field is unreachable in any E2E flow — the field only renders once a real buyer
+# is selected.
+
+multi_unit_listing = Listing.find_by(user: seller, title: "Phone Case Silicone Clear - Wholesale")
+if multi_unit_listing
+  if Conversation.exists?(listing: multi_unit_listing, buyer: buyer)
+    puts "  multi-quantity conversation already present"
+  else
+    mq_convo = Conversation.create!(listing: multi_unit_listing, buyer: buyer, seller: seller)
+    Message.create!(conversation: mq_convo, user: buyer, kind: :text,
+                    body: "Do you have 3 of these? I want three.")
+    puts "  created multi-quantity conversation with #{buyer.email}"
+  end
+else
+  puts "  WARN: multi-unit listing not found — multi-quantity conversation skipped"
 end
 
 # =============================================================================
