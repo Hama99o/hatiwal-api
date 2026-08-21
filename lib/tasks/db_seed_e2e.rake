@@ -31,6 +31,38 @@ namespace :db do
       Conversation.where(buyer_id: user_ids).or(Conversation.where(seller_id: user_ids)).delete_all
 
       listing_ids = Listing.where(user_id: user_ids).pluck(:id)
+
+      # Every table with an FK into `listings` or `transactions` has to go first,
+      # or Postgres refuses the delete below. This list is the FULL set as of the
+      # multi-quantity work — confirmed against the live FK graph, not guessed:
+      #
+      #   saved_listings · conversations · listing_views · listing_price_histories
+      #   hidden_listings · transactions   -> listings
+      #   reviews                          -> transactions
+      #
+      # It used to cover only the first two plus price histories, so the reset
+      # broke PERMANENTLY the first time a QA run sold, viewed or hid an e2e
+      # listing — `PG::ForeignKeyViolation ... "fk_rails_68f018eb40" on table
+      # "transactions"`, with the wipe half-done and the seed never reached.
+      # Selling is now a routine QA step (docs/SPIKE_LISTING_QUANTITY.md), so
+      # this was guaranteed to bite on every run.
+      #
+      # Matched on the e2e USER ids as well as the listing ids: a transaction can
+      # hang off an e2e buyer while the listing belongs to someone else, and
+      # deleting the user would then violate the same constraint from the other
+      # side.
+      txn_ids = Transaction.where(listing_id: listing_ids)
+                           .or(Transaction.where(seller_id: user_ids))
+                           .or(Transaction.where(buyer_id: user_ids))
+                           .pluck(:id)
+      Review.where(transaction_id: txn_ids)
+            .or(Review.where(reviewer_id: user_ids))
+            .or(Review.where(reviewee_id: user_ids))
+            .delete_all
+      Transaction.where(id: txn_ids).delete_all
+
+      ListingView.where(listing_id: listing_ids).or(ListingView.where(user_id: user_ids)).delete_all
+      HiddenListing.where(listing_id: listing_ids).or(HiddenListing.where(user_id: user_ids)).delete_all
       ListingPriceHistory.where(listing_id: listing_ids).delete_all
       Listing.where(id: listing_ids).delete_all
 
