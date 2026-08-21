@@ -25,6 +25,11 @@ class ListingSerializer < ApplicationSerializer
       status: txn.status,
       final_price: txn.final_price,
       currency: txn.currency,
+      # How many units this buyer took. 1 on a single-item listing (the column
+      # default), so nothing changes for the majority case — but on a batch it is
+      # the difference between "sold" and "sold 3 of 15", which is the question
+      # docs/SPIKE_LISTING_QUANTITY.md §0b exists to answer.
+      quantity: txn.quantity,
       completed_at: txn.completed_at,
       buyer: {
         id: buyer.id,
