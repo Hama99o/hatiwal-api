@@ -20,8 +20,13 @@ class ConversationSerializer < ApplicationSerializer
       # TASK-J471: price/currency so the inbox row's PriceTag has something to
       # render — plain columns on an already-preloaded association (index
       # `.includes(listing: ...)`), so this adds no N+1.
+      # multi_unit/available_units so the inbox row's PriceTag can render
+      # "14,000 each" instead of a bare figure a buyer may read as the price of
+      # the whole batch (docs/SPIKE_LISTING_QUANTITY.md §0c). Plain columns on
+      # the same preloaded association — still no N+1.
       { id: c.listing_id, title: c.listing.title, thumbnail_url: c.listing.thumbnail_url, status: c.listing.status,
-        price: c.listing.price, currency: c.listing.currency }
+        price: c.listing.price, currency: c.listing.currency,
+        multi_unit: c.listing.multi_unit?, available_units: c.listing.available_units }
     end
     field(:other_participant) do |c, opts|
       current_user = opts[:current_user]
@@ -79,6 +84,11 @@ class ConversationSerializer < ApplicationSerializer
       { id: c.listing_id, title: c.listing.title, price: c.listing.price, currency: c.listing.currency,
         thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location,
         negotiable: c.listing.negotiable,
+        # Same reason as :list above, and it matters more here: the thread header
+        # is where the buyer asks "how much for 5?", so a bare per-unit figure is
+        # read as the batch price at exactly the moment the deal is struck.
+        multi_unit: c.listing.multi_unit?,
+        available_units: c.listing.available_units,
         category: CategorySerializer.render_as_hash(c.listing.category),
         # TASK-K729 (review fix, HIGH): boolean-only — true exactly when the
         # viewer IS the buyer the seller committed to for the CURRENT
