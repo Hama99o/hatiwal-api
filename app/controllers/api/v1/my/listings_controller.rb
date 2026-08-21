@@ -152,9 +152,17 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
       txn = @listing.sold_with_buyer!(
         buyer_id: lifecycle_params[:buyer_id],
         final_price: lifecycle_params[:final_price],
-        clear_buyer: ActiveModel::Type::Boolean.new.cast(lifecycle_params[:clear_buyer])
+        clear_buyer: ActiveModel::Type::Boolean.new.cast(lifecycle_params[:clear_buyer]),
+        quantity: lifecycle_params[:quantity]
       )
-      @listing.sold!
+
+      # Multi-quantity (docs/SPIKE_LISTING_QUANTITY.md): record the units and only
+      # retire the listing once the stock is actually empty. A listing with 13 of
+      # 15 left MUST stay `active` and browsable — flipping it to `sold` here is
+      # what would have broken the feed, and it is the single most important line
+      # in this feature.
+      sold_out = @listing.record_units_sold!(txn&.quantity || @listing.available_units)
+      @listing.sold! if sold_out
       # TASK-TX02 (review fix): the legacy buyer-less path (txn is nil) never
       # touches the transactions table, so nothing else bumps the seller's
       # trust-stat counter for it — do it here, once, explicitly.
@@ -176,7 +184,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # updates. `clear_buyer` (TASK-TX02 review fix) is the sold-only, explicit
   # "Someone else / skip" signal — see Listing#sold_with_buyer!.
   def lifecycle_params
-    params.permit(:buyer_id, :final_price, :clear_buyer)
+    params.permit(:buyer_id, :final_price, :clear_buyer, :quantity)
   end
 
   # Composite payload for reserve/sold — always includes the listing; the
@@ -194,7 +202,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     params.require(:listing).permit(
       :title, :description, :price, :currency,
       :category_id, :location, :address, :latitude, :longitude, :condition,
-      :negotiable,
+      :negotiable, :quantity,
       images: []
     )
   end

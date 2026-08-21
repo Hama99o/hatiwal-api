@@ -20,6 +20,11 @@ class Listing < ApplicationRecord
 
   validates :title, presence: true, length: { maximum: 150 }
   validates :price, presence: true, numericality: { greater_than: 0 }
+  # Multi-quantity listings (docs/SPIKE_LISTING_QUANTITY.md, Tier 1). Defaults to
+  # 1 so nothing existing changes; the 999 ceiling is a sanity bound, not a
+  # business rule — this is a local marketplace, not a warehouse.
+  validates :quantity, numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: 999 }
+  validates :sold_units, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   CURRENCIES = %w[AFN USD EUR].freeze
   validates :currency, presence: true, inclusion: { in: CURRENCIES }
   validates :category, presence: true
@@ -191,6 +196,45 @@ class Listing < ApplicationRecord
     sale_transactions.reserved.order(created_at: :desc).first
   end
 
+  # ── Multi-quantity (docs/SPIKE_LISTING_QUANTITY.md, Tier 1) ─────────────────
+
+  # Units still for sale. The number a buyer is shown, and the ceiling on what a
+  # seller can mark sold in one go.
+  def available_units
+    [ quantity - sold_units, 0 ].max
+  end
+
+  # True only for listings the seller explicitly said they had several of. Every
+  # client uses this to decide whether to render ANY quantity UI at all, so a
+  # single-unit listing looks exactly as it does today — the governing rule of
+  # the spike's §0c.
+  def multi_unit?
+    quantity > 1
+  end
+
+  # Record `units` sold and return whether that emptied the listing.
+  #
+  # `with_lock` is hygiene rather than the load-bearing protection the spike
+  # first assumed: only the OWNER can mark units sold (the endpoint is
+  # PUT /my/listings/:id/sold, Pundit-authorized), so there is no buyer race to
+  # lose — just a seller double-tapping. The DB CHECK constraint is the thing
+  # that genuinely cannot be bypassed.
+  def record_units_sold!(units)
+    units = units.to_i
+    raise ArgumentError, "units must be positive" if units < 1
+
+    with_lock do
+      # Never oversell. A seller marking 5 sold on a listing with 3 left sells 3;
+      # clamping beats raising here because the sale physically happened and
+      # refusing to record it would lose the ledger entry.
+      taken = [ units, available_units ].min
+      return false if taken.zero?
+
+      update!(sold_units: sold_units + taken)
+      available_units.zero?
+    end
+  end
+
   # TASK-R418 — the buyer identified for the CURRENT reservation/sale of this
   # listing, or nil when the listing has never had a buyer identified via the
   # buyer picker: draft/active listings, or a legacy buyer-less reserve/sold.
@@ -274,17 +318,23 @@ class Listing < ApplicationRecord
   # buyer-less `sold` call arrives there is nothing left to (wrongly) close
   # out — see the reproduction this guards in
   # spec/requests/api/v1/my/listings_spec.rb.
-  def sold_with_buyer!(buyer_id:, final_price: nil, clear_buyer: false)
+  def sold_with_buyer!(buyer_id:, final_price: nil, clear_buyer: false, quantity: nil)
     if clear_buyer
       cancel_open_transaction!
       return nil
     end
+
+    # How many units this sale covers. Defaults to the WHOLE remaining stock,
+    # because "I sold them" is the common case and the seller should not have to
+    # type a number to say it. Clamped so a stale client cannot oversell.
+    units = (quantity.presence || available_units).to_i.clamp(1, [ available_units, 1 ].max)
 
     existing = reserved? ? open_transaction : nil
     if existing
       # `mark_sold!` itself defaults a blank buyer_id back to the
       # transaction's own buyer_id (see Transaction#mark_sold!), so passing
       # it straight through is safe whether or not this call identified one.
+      existing.update!(quantity: units) if multi_unit?
       existing.mark_sold!(final_price: final_price, buyer_id: buyer_id)
       return existing
     end
@@ -297,6 +347,7 @@ class Listing < ApplicationRecord
       final_price: final_price.presence || price,
       currency: currency,
       status: :sold,
+      quantity: units,
       completed_at: Time.current
     )
   end

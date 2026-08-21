@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_09_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_21_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -172,10 +172,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_09_000000) do
     t.boolean "negotiable", default: true, null: false
     t.decimal "price", precision: 12, scale: 2, null: false
     t.datetime "published_at"
+    t.integer "quantity", default: 1, null: false
     t.datetime "removed_at"
     t.string "removed_reason"
     t.datetime "reserved_at"
     t.datetime "sold_at"
+    t.integer "sold_units", default: 0, null: false
     t.integer "status", default: 0, null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
@@ -191,6 +193,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_09_000000) do
     t.index ["status", "views_count"], name: "index_listings_on_status_and_views_count"
     t.index ["status"], name: "index_listings_on_status"
     t.index ["user_id"], name: "index_listings_on_user_id"
+    t.check_constraint "quantity >= 1", name: "listings_quantity_positive"
+    t.check_constraint "sold_units >= 0 AND sold_units <= quantity", name: "listings_sold_units_within_quantity"
   end
 
   create_table "messages", force: :cascade do |t|
@@ -279,6 +283,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_09_000000) do
     t.string "currency", default: "AFN", null: false
     t.decimal "final_price", precision: 12, scale: 2, null: false
     t.bigint "listing_id", null: false
+    t.integer "quantity", default: 1, null: false
     t.bigint "seller_id", null: false
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
@@ -287,6 +292,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_09_000000) do
     t.index ["listing_id"], name: "index_transactions_on_listing_id_while_open", unique: true, where: "(status = 0)"
     t.index ["seller_id"], name: "index_transactions_on_seller_id"
     t.index ["status"], name: "index_transactions_on_status"
+    t.check_constraint "quantity >= 1", name: "transactions_quantity_positive"
   end
 
   create_table "user_warnings", force: :cascade do |t|
