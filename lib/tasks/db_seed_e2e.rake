@@ -66,6 +66,21 @@ namespace :db do
       ListingPriceHistory.where(listing_id: listing_ids).delete_all
       Listing.where(id: listing_ids).delete_all
 
+      # USER-SCOPED tables that nothing else cleans up. Missing these aborts the
+      # wipe with `PG::ForeignKeyViolation ... "fk_rails_63c5382842" on table
+      # "saved_searches"` — and because the abort happens AFTER the listings are
+      # gone, the database is left half-wiped: the e2e fixtures vanish and every
+      # later flow fails on a missing fixture rather than on a broken seed. That
+      # is a nasty failure to diagnose from the flow side, so the whole set is
+      # enumerated here rather than discovered one constraint at a time.
+      #
+      # Checked against the schema: conversations, messages, saved_listings,
+      # listing_views, hidden_listings, listing_price_histories, transactions and
+      # reviews are either handled above or cascade at the database level. These
+      # two are the ones that do not.
+      SavedSearch.where(user_id: user_ids).delete_all
+      UserWarning.where(user_id: user_ids).delete_all
+
       users.delete_all
 
       puts "  wiped #{E2E_EMAILS.length} users and all associated data"
