@@ -290,6 +290,69 @@ else
 end
 
 # =============================================================================
+puts "=== E2E Seed: Listing photos ==="
+# =============================================================================
+# The e2e fixtures had NO photos at all — 0 of the seller's listings, while the
+# main dev seed gives 55 of 67 listings three each. Consequences:
+#
+#   * every gallery flow was unsatisfiable (nothing to swipe through)
+#   * every QA screenshot showed "No photo", so the photo-first design this app
+#     is built around could not be reviewed from a single e2e run
+#   * only the photoless BRANCH of each card/detail screen was ever exercised
+#
+# Uses the repo's own fixture rather than the main seed's loremflickr fetch: e2e
+# seeding must be deterministic and work offline, and a network hiccup must never
+# be the reason a QA run reports a UI defect. Three copies per listing so the
+# gallery has real pages to swipe; identical bytes are fine — the flows assert
+# page COUNT and navigation, not that the pictures differ.
+E2E_PHOTO = Rails.root.join("spec/fixtures/files/test_image.jpg")
+
+if File.exist?(E2E_PHOTO)
+  photo_targets = Listing.where(user: seller).where(status: [ :active, :reserved, :sold ]).limit(6)
+  attached_count = 0
+  storage_denied = false
+
+  photo_targets.each do |listing|
+    next if listing.images.attached?
+
+    begin
+      3.times do |i|
+        listing.images.attach(
+          io: File.open(E2E_PHOTO),
+          filename: "e2e-#{listing.id}-#{i}.jpg",
+          content_type: "image/jpeg"
+        )
+      end
+      attached_count += 1
+    rescue Errno::EACCES, Errno::EPERM => e
+      # Seeding must NEVER abort on a storage-permission problem. It happened:
+      # `storage/` is owned by the host user but its subdirectories were created
+      # by root (a Docker container writing into the bind mount), so the
+      # host-run Rails cannot mkdir inside them — and since ActiveStorage keys
+      # hash into those existing directories, most attachments fail. That took
+      # the whole `reset_e2e` down with it, which is far worse than photo-less
+      # fixtures: every QA flow depends on this task completing.
+      #
+      # Fix for the environment (needs root, so it is not done here):
+      #   sudo chown -R "$USER" hatiwal-api/storage
+      storage_denied = true
+      warn "  ! photo attach denied (#{e.class}) — see storage ownership note above"
+      break
+    end
+  end
+
+  if storage_denied
+    puts "  photos SKIPPED: ActiveStorage cannot write under storage/ as this user."
+    puts "                  Listings stay photo-less; gallery flows will not pass."
+    puts "                  Fix: sudo chown -R \"$USER\" storage"
+  else
+    puts "  attached 3 photos to #{attached_count} listing(s)"
+  end
+else
+  puts "  WARN: #{E2E_PHOTO} missing — listings stay photo-less"
+end
+
+# =============================================================================
 puts "=== E2E Seed: Multi-quantity conversation (docs/SPIKE_LISTING_QUANTITY.md) ==="
 # =============================================================================
 # The buyer picker only offers CONVERSATION PARTICIPANTS (Transaction enforces
