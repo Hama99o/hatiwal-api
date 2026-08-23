@@ -19,7 +19,15 @@ class Listing < ApplicationRecord
   enum :condition, { brand_new: 0, like_new: 1, good: 2, fair: 3 }, prefix: :condition
 
   validates :title, presence: true, length: { maximum: 150 }
-  validates :price, presence: true, numericality: { greater_than: 0 }
+  # The `price` column is decimal(12, 2), so any value above 9_999_999_999.99
+  # overflows in Postgres and raises ActiveRecord::RangeError *after* validation
+  # has already passed. That surfaces to the mobile app as a 500 with no field
+  # errors, so the seller sees the publish fail with nothing telling them why —
+  # exactly the "it failed but I don't know from where" report. Bounding it here
+  # turns that into an ordinary 422 carrying a message on :price.
+  MAX_PRICE = 9_999_999_999.99
+  validates :price, presence: true,
+                    numericality: { greater_than: 0, less_than_or_equal_to: MAX_PRICE }
   # Multi-quantity listings (docs/SPIKE_LISTING_QUANTITY.md, Tier 1). Defaults to
   # 1 so nothing existing changes; the 999 ceiling is a sanity bound, not a
   # business rule — this is a local marketplace, not a warehouse.
@@ -28,6 +36,24 @@ class Listing < ApplicationRecord
   CURRENCIES = %w[AFN USD EUR].freeze
   validates :currency, presence: true, inclusion: { in: CURRENCIES }
   validates :category, presence: true
+
+  # A listing's coordinate must be a real coordinate.
+  #
+  # SavedSearch has validated its latitude range since it was written; Listing
+  # never did, so `latitude: 91` was accepted and persisted through
+  # POST /api/v1/my/listings (verified: 201, and lat=91.0 in the database). That
+  # is not a country restriction — a location OUTSIDE Afghanistan is deliberately
+  # allowed, and Paris and Sydney both save fine — it is the difference between
+  # "anywhere on Earth" and "off the Earth".
+  #
+  # It matters downstream: `distance_from` runs a haversine over these columns for
+  # nearest-first sort and radius filters, and a marker at 91°N cannot be drawn.
+  validates :latitude,
+            numericality: { greater_than_or_equal_to: -90, less_than_or_equal_to: 90 },
+            allow_nil: true
+  validates :longitude,
+            numericality: { greater_than_or_equal_to: -180, less_than_or_equal_to: 180 },
+            allow_nil: true
 
   EARTH_RADIUS_KM = 6371
   # How long a published listing stays in the buyer feed before it expires.
