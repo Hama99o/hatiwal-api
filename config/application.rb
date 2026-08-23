@@ -36,6 +36,21 @@ module HatiwalApi
     # config.time_zone = "Central Time (US & Canada)"
     # config.eager_load_paths << Rails.root.join("extras")
 
+    # A blob whose file is missing from storage is NOT a server error.
+    #
+    # ActiveStorage::Representations::RedirectController raises
+    # ActiveStorage::FileNotFoundError when the DB has an attachment whose
+    # underlying file is gone, and Rails maps an unknown exception to 500. The QA
+    # environment produced 14 of them in 40 minutes from 5 dangling blobs, and
+    # the mobile client cannot distinguish "the server is broken" from "this
+    # image is gone": it logs a network error and the caller sees a failed
+    # request instead of simply rendering no photo.
+    #
+    # 404 is the honest answer, and it matters beyond QA — object storage losing
+    # a file, or a restore that brings back rows without blobs, must degrade to a
+    # missing image, not a 500 on a listing's photo.
+    config.action_dispatch.rescue_responses["ActiveStorage::FileNotFoundError"] = :not_found
+
     # Only loads a smaller set of middleware suitable for API only apps.
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.

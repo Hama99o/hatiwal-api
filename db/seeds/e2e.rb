@@ -341,6 +341,21 @@ if File.exist?(E2E_PHOTO)
     end
   end
 
+  # A HALF-attached image is worse than no image. `images.attach` creates the
+  # blob row and then writes the file, so a storage error between the two leaves
+  # an attachment the API will serve a URL for and then fail to fulfil. Those
+  # dangling rows produced 14 HTTP 500s in 40 minutes of QA
+  # (ActiveStorage::FileNotFoundError from the variant redirect), and the mobile
+  # client could only report them as network errors.
+  #
+  # So: verify every blob's file really landed, and purge the ones that did not.
+  # Photo-less fixtures are a known, announced state; fixtures that lie are not.
+  dangling = ActiveStorage::Blob.find_each.reject { |b| b.service.exist?(b.key) }
+  if dangling.any?
+    dangling.each(&:purge)
+    puts "  purged #{dangling.size} attachment(s) whose file never reached storage"
+  end
+
   if storage_denied
     puts "  photos SKIPPED: ActiveStorage cannot write under storage/ as this user."
     puts "                  Listings stay photo-less; gallery flows will not pass."
