@@ -13,7 +13,24 @@ class Conversation < ApplicationRecord
   validates :listing_id, uniqueness: { scope: :buyer_id, message: "already has a conversation with this buyer", allow_nil: true }
   validate :buyer_is_not_seller
 
-  scope :ordered, -> { order(last_message_at: :desc, created_at: :desc) }
+  # NULLS LAST matters. A conversation is created the moment a buyer opens a
+  # thread from a listing, before any message is sent, so `last_message_at` is
+  # legitimately NULL for a while — and Postgres sorts NULLs FIRST in a DESC
+  # order. An empty thread therefore floated to the TOP of the inbox, above
+  # conversations with real recent activity, pushing live negotiations down.
+  # Seen in QA: an empty conversation ranked above one whose last message was
+  # minutes old.
+  #
+  # An empty conversation also cannot be marked read or unread (there is no
+  # message to mark), so having it first broke every flow that acts on "the
+  # topmost row" — see UI-027.
+  # Arel's `.nulls_last`, not `Arel.sql("… DESC NULLS LAST")`: a raw-SQL order
+  # cannot be reversed, so `.last` on this scope raises
+  # ActiveRecord::IrreversibleOrderError. No caller does that today, but leaving
+  # a scope that explodes on `.last` is a trap for the next one.
+  scope :ordered, lambda {
+    order(arel_table[:last_message_at].desc.nulls_last, created_at: :desc)
+  }
   scope :for_user, ->(user_id) {
     where("buyer_id = ? OR seller_id = ?", user_id, user_id)
   }

@@ -38,6 +38,20 @@ RSpec.describe Conversation, type: :model do
         expect(Conversation.ordered.first).to eq(newer)
         expect(Conversation.ordered.last).to eq(older)
       end
+
+      it "puts a conversation with no messages LAST, not first" do
+        # A conversation exists from the moment a buyer opens a thread on a
+        # listing, before sending anything, so last_message_at is legitimately
+        # NULL for a while. Postgres sorts NULLs FIRST in a DESC order, so those
+        # empty threads floated to the top of the inbox above live negotiations.
+        # Seen in QA with an empty conversation ranked above one whose last
+        # message was minutes old.
+        active = create(:conversation, last_message_at: 1.minute.ago)
+        empty  = create(:conversation, last_message_at: nil)
+
+        expect(Conversation.ordered.first).to eq(active)
+        expect(Conversation.ordered.last).to eq(empty)
+      end
     end
 
     describe ".for_user" do
