@@ -411,6 +411,50 @@ else
 end
 
 # =============================================================================
+puts "=== E2E Seed: Disposable listings for DESTRUCTIVE flows ==="
+# =============================================================================
+# Flows that mark a listing sold or reserved, unpublish it, or delete it need a
+# subject they are allowed to ruin. Fourteen of them used to grab "whichever
+# listing comes first", which is a SHARED fixture — so a lifecycle flow would set
+# a seeded listing to sold, and every later flow expecting it active failed. The
+# damage lasted until the next re-seed, so the cause surfaced nowhere near the
+# flow responsible. delete_listing was the extreme case: it removed
+# "iPhone 12 Pro - 128GB" outright.
+#
+# These exist purely to be destroyed. NOTHING may assert their presence, their
+# status or their count — one per destructive flow, named after it, so a failure
+# points at its owner instead of at a random neighbour.
+#
+# They are created ACTIVE directly. The app's publish blockers (a photo and a map
+# pin) are UI rules enforced by getPublishBlockers; the database has no such
+# constraint, and requiring each flow to publish through the form would add ~90s
+# apiece to test something those flows are not about.
+DISPOSABLE_OWNERS = %w[
+  lifecycle_reserve
+  lifecycle_sold
+  lifecycle_unpublish
+  mark_sold_with_buyer
+  reserved_buyer
+  saved_listing_goes_sold
+  rate_buyer_after_sale
+  my_listing_detail_view
+].freeze
+
+DISPOSABLE_OWNERS.each_with_index do |owner, i|
+  e2e_listing(
+    user:        seller,
+    title:       "QA Disposable #{owner}",
+    price:       1000 + (i * 100),
+    category:    electronics,
+    status:      :active,
+    description: "Disposable fixture for maestro/**/#{owner}.yaml. Safe to reserve, " \
+                 "sell, unpublish or delete — no flow asserts anything about it.",
+    location:    "Kabul"
+  )
+end
+puts "  #{DISPOSABLE_OWNERS.size} disposable listings ready"
+
+# =============================================================================
 puts "=== E2E Seed: Buyer Saved Listings ==="
 # =============================================================================
 
