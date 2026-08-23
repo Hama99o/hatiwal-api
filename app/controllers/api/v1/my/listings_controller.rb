@@ -16,6 +16,12 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
                   )
     ).ordered
     listings = listings.for_status_filter(params[:status]) if params[:status].present?
+    # The seller's own search. The mobile app has always SENT this — MyListings
+    # debounces the field and passes `search:` to getMyListings, which appends
+    # ?search= — and this controller dropped it, so "Search my listings..." typed
+    # into a box that did nothing. The public listings controller has applied the
+    # same scope since it was written; this one simply never did.
+    listings = listings.search(params[:search]) if params[:search].present?
 
     paginate_blue(ListingSerializer, listings, extra: { view: :seller_list })
   end
