@@ -429,30 +429,63 @@ puts "=== E2E Seed: Disposable listings for DESTRUCTIVE flows ==="
 # pin) are UI rules enforced by getPublishBlockers; the database has no such
 # constraint, and requiring each flow to publish through the form would add ~90s
 # apiece to test something those flows are not about.
-DISPOSABLE_OWNERS = %w[
-  lifecycle_reserve
-  lifecycle_sold
-  lifecycle_unpublish
-  mark_sold_with_buyer
-  reserved_buyer
-  saved_listing_goes_sold
-  rate_buyer_after_sale
-  my_listing_detail_view
+# Each entry is [flow name, starting status]. The status MATTERS: lifecycle_sold
+# taps the "Reserved" filter and then the primary action, which is "Mark as Sold"
+# only for a reserved listing — handing it an active one would fail for the wrong
+# reason. Every other flow here starts from the Active tab.
+#
+# rate_buyer_after_sale is deliberately absent: it needs a completed sale with an
+# identified buyer, which is a transaction fixture rather than a spare listing, and
+# it already has one.
+DISPOSABLE_LISTINGS = [
+  [ "lifecycle_reserve",       :active ],
+  [ "lifecycle_sold",          :reserved ],
+  [ "lifecycle_unpublish",     :active ],
+  [ "mark_sold_with_buyer",    :active ],
+  [ "reserved_buyer",          :active ],
+  [ "saved_listing_goes_sold", :active ],
+  [ "my_listing_detail_view",  :active ]
 ].freeze
 
-DISPOSABLE_OWNERS.each_with_index do |owner, i|
+DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
+  title = "QA Disposable #{owner}"
+
   e2e_listing(
     user:        seller,
-    title:       "QA Disposable #{owner}",
+    title:       title,
     price:       1000 + (i * 100),
     category:    electronics,
-    status:      :active,
+    status:      status,
     description: "Disposable fixture for maestro/**/#{owner}.yaml. Safe to reserve, " \
                  "sell, unpublish or delete — no flow asserts anything about it.",
     location:    "Kabul"
   )
+
+  # RESET the status every seed. `e2e_listing` is create-if-missing, so without
+  # this a disposable listing is single-use: the flow that owns it sells or
+  # unpublishes it, and every later cycle finds it in the wrong state and fails
+  # for a reason that has nothing to do with the code under test. Being
+  # restorable is the whole point of a disposable fixture.
+  #
+  # Recreate it outright if a flow DELETED it.
+  listing = Listing.find_by(user: seller, title: title)
+  if listing.nil?
+    e2e_listing(
+      user: seller, title: title, price: 1000 + (i * 100), category: electronics,
+      status: status, location: "Kabul",
+      description: "Disposable fixture for maestro/**/#{owner}.yaml."
+    )
+  elsif listing.status.to_sym != status
+    listing.update_columns(
+      status:      Listing.statuses[status],
+      published_at: %i[active reserved sold].include?(status) ? 2.days.ago : nil,
+      reserved_at: status == :reserved ? 1.day.ago : nil,
+      sold_at:     status == :sold ? 1.day.ago : nil
+    )
+    puts "  reset #{title} -> #{status}"
+  end
 end
-puts "  #{DISPOSABLE_OWNERS.size} disposable listings ready"
+puts "  #{DISPOSABLE_LISTINGS.size} disposable listings ready"
 
 # =============================================================================
 puts "=== E2E Seed: Buyer Saved Listings ==="
