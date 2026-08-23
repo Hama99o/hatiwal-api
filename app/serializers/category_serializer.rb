@@ -1,5 +1,12 @@
 class CategorySerializer < ApplicationSerializer
-  fields :id, :slug, :icon, :position
+  # `parent_id` is emitted because BOTH clients already declare it — mobile's
+  # `Category.parentId` and web's `types.ts` — and a mobile unit test asserts it
+  # against a hand-written mock. It was never actually sent, so `parentId` was
+  # `undefined` on every category at runtime, and a `parentId === null` test for
+  # "is this a top-level category?" would have been false for all of them.
+  # Nested `subcategories` covers the drilldown today; this makes the flat
+  # relationship readable without walking the tree.
+  fields :id, :slug, :icon, :position, :parent_id
 
   field(:name_en) { |c| c.name_en }
   field(:name_ps) { |c| c.name_ps }

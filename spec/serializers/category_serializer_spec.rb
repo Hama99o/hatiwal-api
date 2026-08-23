@@ -19,6 +19,19 @@ RSpec.describe CategorySerializer, type: :serializer do
     it "does not include active_listings_count in default view" do
       expect(result).not_to have_key(:active_listings_count)
     end
+
+    # Both clients declare this field (mobile `Category.parentId`, web
+    # `types.ts`) and it was never sent, so `parentId` was `undefined` on every
+    # category and a `=== null` check for "top-level?" was false for all of them.
+    it "exposes parent_id as nil for a top-level category" do
+      expect(result).to have_key(:parent_id)
+      expect(result[:parent_id]).to be_nil
+    end
+
+    it "exposes the parent's id for a subcategory" do
+      sub = create(:category, parent: category)
+      expect(described_class.render_as_hash(sub)[:parent_id]).to eq(category.id)
+    end
   end
 
   describe ":with_counts view" do
