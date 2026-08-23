@@ -7,6 +7,17 @@ class Api::V1::ListingsController < Api::V1::BaseController
   before_action :set_listing, only: [ :show, :save, :unsave, :similar, :hide, :unhide ]
 
   def index
+    # This feed is browsable-only BY DEFINITION: `browsable` is
+    # active.not_expired.not_removed, so there is no `status` filter here and
+    # none is wanted — a public feed does not show drafts or sold stock.
+    #
+    # Worth stating because both clients send `status` to this endpoint and it is
+    # silently dropped. Today that is harmless (they send "active", which is what
+    # browsable already means), but the mobile app and the web app each carried a
+    # comment reasoning about what `status` does here, so the next person to want
+    # a "sold" tab would have reached for `status=sold` and got a full page of
+    # ACTIVE listings back. Sold stock has its own endpoint:
+    # GET /users/:id/sold_listings.
     listings = policy_scope(Listing.browsable)
     listings = listings.not_hidden_for(current_user)
     listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
