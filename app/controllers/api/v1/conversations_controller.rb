@@ -87,7 +87,16 @@ class Api::V1::ConversationsController < Api::V1::BaseController
                                   .where.not(user_id: current_user.id)
                                   .order(created_at: :desc)
                                   .limit(1)
-    Message.where(id: latest_inbound).update_all(read_at: nil)
+    updated = Message.where(id: latest_inbound).update_all(read_at: nil)
+
+    # Nothing to mark. On a conversation where the other party never replied there
+    # is no inbound message, so the UPDATE touches 0 rows — and this used to still
+    # answer 204. The client took that as success, and since the row menu offers
+    # "Mark as unread" whenever unread is 0 (always true here), a user could tap it
+    # forever with nothing happening and no error to explain why. Say so instead:
+    # the mobile client already rolls back and shows its error toast on a non-2xx.
+    return render_unprocessable_entity("Nothing to mark as unread — this conversation has no messages from the other person") if updated.zero?
+
     head :no_content
   end
 

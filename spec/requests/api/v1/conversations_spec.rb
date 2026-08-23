@@ -733,6 +733,25 @@ RSpec.describe "Api::V1::Conversations", type: :request do
         expect(conversation.reload.unread_count_for(seller)).to be > 0
       end
 
+      it "reports a no-op instead of 204 when there is nothing to mark unread" do
+        # A one-sided conversation: the requester sent everything, so there is no
+        # INBOUND message whose read_at could be cleared. This used to answer 204
+        # while touching zero rows, and the row menu offers "Mark as unread"
+        # whenever unread is 0 — always true here — so a user could tap it forever
+        # with nothing happening and no error (UI-027). Real in the QA fixtures.
+        # Its OWN listing: Conversation validates one thread per listing+buyer, so
+        # it cannot share the outer one.
+        other_listing = create(:listing, user: seller)
+        one_sided = create(:conversation, buyer: buyer, listing: other_listing)
+        one_sided.messages.create!(user: seller, body: "Still for sale?", kind: :text)
+
+        put "/api/v1/conversations/#{one_sided.id}/mark_unread", headers: seller_headers, as: :json
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(JSON.parse(response.body)["error"]).to match(/no messages from the other person/)
+        expect(one_sided.reload.unread_count_for(seller)).to eq(0)
+      end
+
       it "clears read_at on the most recent inbound message only" do
         # Add a second message already read
         msg2 = conversation.messages.create!(user: buyer, body: "Hello?", kind: :text)

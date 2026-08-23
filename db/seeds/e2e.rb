@@ -390,7 +390,21 @@ if multi_unit_listing
     mq_convo = Conversation.create!(listing: multi_unit_listing, buyer: buyer, seller: seller)
     Message.create!(conversation: mq_convo, user: buyer, kind: :text,
                     body: "Do you have 3 of these? I want three.")
-    puts "  created multi-quantity conversation with #{buyer.email}"
+    # A SELLER REPLY, so this conversation is not one-sided.
+    #
+    # With only the buyer's message it had no INBOUND message from the buyer's
+    # point of view, and `mark_unread` nulls read_at on the latest inbound message
+    # — so on this conversation it touched 0 rows and still answered 204 (UI-027).
+    # Whenever a flow bumped this thread to the top of the list (composer_draft
+    # posts to it) or archived the thread above it (conversation_archive), the
+    # three unread-badge flows long-pressed THIS row and could never get a badge
+    # back. They failed on the app being unable to do something the fixture had
+    # made impossible.
+    #
+    # A seller who is asked "do you have 3?" answering is also simply realistic.
+    Message.create!(conversation: mq_convo, user: seller, kind: :text,
+                    body: "Yes, I have 15 in stock. How many do you need?")
+    puts "  created multi-quantity conversation with #{buyer.email} (both sides)"
   end
 else
   puts "  WARN: multi-unit listing not found — multi-quantity conversation skipped"
