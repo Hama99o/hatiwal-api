@@ -352,7 +352,14 @@ if File.exist?(E2E_PHOTO)
   # Photo-less fixtures are a known, announced state; fixtures that lie are not.
   dangling = ActiveStorage::Blob.find_each.reject { |b| b.service.exist?(b.key) }
   if dangling.any?
-    dangling.each(&:purge)
+    # Purge the ATTACHMENT, not the blob. `Blob#purge` is `destroy` with a bare
+    # `rescue ActiveRecord::InvalidForeignKey`, so on a blob that is still
+    # attached it raises, swallows, and reports success while deleting nothing —
+    # verified live: purge returned without error and the row was still there.
+    dangling.each do |blob|
+      blob.attachments.each(&:purge)
+      blob.purge if ActiveStorage::Blob.exists?(blob.id)
+    end
     puts "  purged #{dangling.size} attachment(s) whose file never reached storage"
   end
 
