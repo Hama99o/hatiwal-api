@@ -537,9 +537,18 @@ DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
   convo = Conversation.create!(listing: listing, buyer: buyer, seller: seller)
   Message.create!(conversation: convo, user: buyer, kind: :text,
                   body: "Is this still available? I can collect today.")
+  # READ, deliberately. The seller reply is INBOUND for the buyer, so leaving it
+  # unread plants a permanent unread badge on the buyer's inbox — and any flow
+  # asserting "no unread badge anywhere" then fails on a fixture rather than on
+  # anything it did. chat/conversation_read_status died exactly that way: it marked
+  # one conversation unread, read it, and still saw a badge, because THIS
+  # conversation was holding one the whole time.
+  #
+  # These flows need the conversation to exist so a buyer can be identified; the
+  # read state is irrelevant to them.
   Message.create!(conversation: convo, user: seller, kind: :text,
-                  body: "Yes — when suits you?")
-  puts "  conversation seeded on #{title} (buyer can be identified)"
+                  body: "Yes — when suits you?", read_at: Time.current)
+  puts "  conversation seeded on #{title} (buyer identifiable, no unread left behind)"
 end
 puts "  #{DISPOSABLE_LISTINGS.size} disposable listings ready"
 
