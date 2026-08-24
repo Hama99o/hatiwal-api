@@ -437,6 +437,22 @@ puts "=== E2E Seed: Disposable listings for DESTRUCTIVE flows ==="
 # rate_buyer_after_sale is deliberately absent: it needs a completed sale with an
 # identified buyer, which is a transaction fixture rather than a spare listing, and
 # it already has one.
+# ── Blocks: cleared every seed ────────────────────────────────────────────────
+# A block HIDES the blocked user's listings from the blocker's feed. So a block
+# flow that fails before its unblock step leaves the seller blocked, and every
+# later flow that needs one of their listings fails with "No visible element
+# found: Wool Blanket Handmade King Size" — a missing-fixture message for a
+# fixture that is present and merely hidden. That is exactly how report_listing
+# failed after block_user_hides_listings died mid-flow.
+#
+# Only the two e2e accounts' blocks are removed; real users' blocks are untouched.
+e2e_user_ids = [ buyer.id, seller.id ]
+removed_blocks = Block.where(blocker_id: e2e_user_ids)
+                      .or(Block.where(blocked_id: e2e_user_ids))
+                      .destroy_all
+                      .size
+puts "  cleared #{removed_blocks} block(s) between the e2e accounts"
+
 DISPOSABLE_LISTINGS = [
   [ "lifecycle_reserve",       :active ],
   [ "lifecycle_sold",          :reserved ],
