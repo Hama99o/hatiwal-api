@@ -500,6 +500,30 @@ DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
     )
     puts "  reset #{title} -> #{status}"
   end
+
+  # A CONVERSATION for the flows that need to identify a real buyer.
+  #
+  # mark_sold_with_buyer and reserved_buyer pick a committed buyer from the
+  # listing's own conversations, so their disposable fixture is useless without
+  # one — which is why both flows still reached for the shared
+  # "Lenovo ThinkPad Laptop Core i5 8GB" AFTER searching for their disposable,
+  # a search that had just filtered that listing out of the list. They failed on
+  # `No visible element found` for a listing the search itself had hidden.
+  #
+  # Only these two get one: an empty conversation list is what the other
+  # disposables are for, and giving every fixture a conversation would change
+  # what those flows see.
+  next unless %w[mark_sold_with_buyer reserved_buyer].include?(owner)
+
+  listing = Listing.find_by(user: seller, title: title)
+  next if listing.nil? || Conversation.exists?(listing: listing, buyer: buyer)
+
+  convo = Conversation.create!(listing: listing, buyer: buyer, seller: seller)
+  Message.create!(conversation: convo, user: buyer, kind: :text,
+                  body: "Is this still available? I can collect today.")
+  Message.create!(conversation: convo, user: seller, kind: :text,
+                  body: "Yes — when suits you?")
+  puts "  conversation seeded on #{title} (buyer can be identified)"
 end
 puts "  #{DISPOSABLE_LISTINGS.size} disposable listings ready"
 
