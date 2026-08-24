@@ -437,6 +437,22 @@ puts "=== E2E Seed: Disposable listings for DESTRUCTIVE flows ==="
 # rate_buyer_after_sale is deliberately absent: it needs a completed sale with an
 # identified buyer, which is a transaction fixture rather than a spare listing, and
 # it already has one.
+# ── Language: reset to English every seed ────────────────────────────────────
+# `preferred_language` is applied on login (applyLanguageFromUser), so a run that
+# ends with the e2e accounts set to Pashto or Dari starts the NEXT run in that
+# locale. Every handle on the login screen used to be English copy, which made
+# that unrecoverable: the suite could not sign in, and signing in is the only
+# route back to a language picker. Six seller flows died that way — three of them
+# spending ~7 minutes each before giving up.
+#
+# The mobile app also keeps its own AsyncStorage copy, so this is not the whole
+# story on a warm device — but it is the half the seed owns, and it means a fresh
+# login always lands in English.
+reset_langs = User.where(email: %w[buyer@hatiwal.test seller@hatiwal.test newbuyer@hatiwal.test])
+                  .where.not(preferred_language: "en")
+                  .update_all(preferred_language: "en")
+puts "  reset preferred_language -> en for #{reset_langs} e2e account(s)"
+
 # ── Blocks: cleared every seed ────────────────────────────────────────────────
 # A block HIDES the blocked user's listings from the blocker's feed. So a block
 # flow that fails before its unblock step leaves the seller blocked, and every
