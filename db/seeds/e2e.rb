@@ -322,6 +322,19 @@ if File.exist?(E2E_PHOTO)
                          .to_a
   publishable_draft = Listing.where(user: seller, status: :draft).order(:id).first
   photo_targets << publishable_draft if publishable_draft
+
+  # ...and COORDINATES, not just a photo. `e2e_listing` sets `location` as free text
+  # ("Kandahar, City Center") and no lat/long at all, but publishing requires an
+  # exact pin: getPublishBlockers(mode: "publish") reports a `location` blocker
+  # without one, and the API agrees. A draft with a photo and no pin is still
+  # unpublishable, so the photo alone did not make the publish path reachable —
+  # draft_lifecycle and lifecycle_publish would both still have been refused.
+  #
+  # Kabul city centre, matching where the rest of the e2e fixtures claim to be.
+  if publishable_draft && publishable_draft.latitude.blank?
+    publishable_draft.update_columns(latitude: 34.5553, longitude: 69.2075)
+    puts "  pinned #{publishable_draft.title} at Kabul (publishable draft)"
+  end
   attached_count = 0
   storage_denied = false
 
