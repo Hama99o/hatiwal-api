@@ -1,10 +1,26 @@
 class User < ApplicationRecord
-  devise :database_authenticatable, :registerable,
+  # :confirmable records whether the email address on an account is real.
+  #
+  # It is NON-BLOCKING on purpose — devise.rb sets allow_unconfirmed_access_for
+  # to nil, so an unconfirmed user signs up, signs in and uses the app exactly as
+  # before. What it buys today is the SIGNAL: `confirmed_at` on the user, visible
+  # in Administrate, which is the prerequisite for ever making a suspension stick
+  # (today a banned user is back in twenty seconds with x@y.com). Gating anything
+  # on it needs a "confirm your email" screen in both clients first —
+  # docs/EMAIL_CONFIRMATION.md.
+  devise :database_authenticatable, :registerable, :confirmable,
          :recoverable, :rememberable, :validatable, :trackable
 
   include DeviseTokenAuth::Concerns::User
 
   has_one_attached :avatar
+
+  # The avatar was unvalidated: `user[avatar]` accepted any file of any size.
+  # Smaller cap than a listing photo — this is one small square, and the mobile
+  # uploader already compresses it to JPEG before sending.
+  MAX_AVATAR_SIZE = 5.megabytes
+  validates :avatar,
+            attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: MAX_AVATAR_SIZE }
 
   enum :status, { active: 0, suspended: 1, banned: 2 }
 
@@ -133,6 +149,13 @@ class User < ApplicationRecord
   # login and surfaces `inactive_message` to the client.
   def active_for_authentication?
     super && !account_blocked? && !deleted?
+  end
+
+  # Devise sends its notifications with deliver_now, which would put an SMTP
+  # round-trip inside the signup request and — worse — turn a mail failure into a
+  # 500 on an account that was actually created. Queue them instead.
+  def send_devise_notification(notification, *args)
+    devise_mailer.send(notification, self, *args).deliver_later
   end
 
   def inactive_message

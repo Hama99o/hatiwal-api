@@ -37,6 +37,38 @@ class Listing < ApplicationRecord
   validates :currency, presence: true, inclusion: { in: CURRENCIES }
   validates :category, presence: true
 
+  # Photo limits. Both clients cap their picker at 8 photos (mobile
+  # PhotosSection MAX_DEFAULT, web listing-form MAX_PHOTOS); this enforces the
+  # same ceiling where a client cannot bypass it, plus a per-file size and type
+  # check. Nothing validated `images` before, so `listing[images][]` accepted
+  # any file of any size, any number of times.
+  MAX_IMAGES     = 8
+  MAX_IMAGE_SIZE = 10.megabytes
+  validates :images,
+            attached_file: {
+              types:     AttachedFileValidator::IMAGE_TYPES,
+              max_size:  MAX_IMAGE_SIZE,
+              max_count: MAX_IMAGES
+            }
+
+  # `description` is a text column and was entirely unbounded, so a client could
+  # POST a megabyte of prose per listing. 3 000 characters is far longer than any
+  # real item description needs (the title cap is 150, a chat message 1 000).
+  MAX_DESCRIPTION_LENGTH = 3_000
+  validates :description, length: { maximum: MAX_DESCRIPTION_LENGTH }
+
+  # A listing must carry at least one photo before it goes live. This is a
+  # photo-first marketplace: a photoless card renders as the grey "no photo" box,
+  # which reads to buyers as broken or fake.
+  #
+  # Deliberately scoped to the draft -> active transition ONLY. A listing created
+  # directly as active (seeds, Administrate) and a reserved listing being
+  # reactivated after a deal fell through are both left alone, so nothing that is
+  # ALREADY published can be stranded — unable to be edited, renewed or marked
+  # sold — by a rule introduced after it was created. Drafts stay saveable with
+  # no photos, which is what the "Save draft" button needs.
+  validate :photo_required_to_publish, if: :publishing?
+
   # A listing's coordinate must be a real coordinate.
   #
   # SavedSearch has validated its latitude range since it was written; Listing
@@ -212,6 +244,17 @@ class Listing < ApplicationRecord
   # (Re)start the expiry clock — used on publish and on seller renew.
   def renew!
     update!(expires_at: LISTING_LIFESPAN.from_now)
+  end
+
+  # draft -> active. Flips the status and starts the expiry clock in ONE write so
+  # `photo_required_to_publish` can veto the whole transition: returns false with
+  # the errors left on the record, which the controller renders as a 422. (The
+  # controller used to call `active!` + `renew!`, two bang writes that would have
+  # raised RecordInvalid — a 500 — the moment publishing could fail.)
+  def publish
+    self.status     = :active
+    self.expires_at = LISTING_LIFESPAN.from_now
+    save
   end
 
   # ── Transactions (TASK-TX01) ─────────────────────────────────────────────────
@@ -583,6 +626,24 @@ class Listing < ApplicationRecord
       old_price: old_price,
       new_price: new_price
     )
+  end
+
+  # True only while THIS save is taking an already-persisted draft to active.
+  #
+  # `persisted?` carries the weight: the status column defaults to 0, so a brand
+  # new record reports `status_in_database == "draft"` even when it is being
+  # created directly AS active (seeds, Administrate, factories) — without the
+  # persisted check those creations would be treated as publishing and refused.
+  # A reserved -> active reactivation is excluded too: there the previous status
+  # is "reserved", not "draft".
+  def publishing?
+    persisted? && will_save_change_to_status? && active? && status_in_database == "draft"
+  end
+
+  def photo_required_to_publish
+    return if images.attached?
+
+    errors.add(:base, "Add at least one photo before publishing")
   end
 
   def set_published_at

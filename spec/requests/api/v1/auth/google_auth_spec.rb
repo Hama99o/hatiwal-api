@@ -93,6 +93,18 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
         expect(user.status).to    eq("active")
       end
 
+      # Google only reaches user creation with email_verified == true, so the
+      # address is already proven: asking for a confirmation the user never
+      # typed an address for would be noise, and would leave every Google
+      # account permanently "unconfirmed" in the admin view.
+      it "creates the account already confirmed, with no confirmation email" do
+        expect do
+          post "/api/v1/auth/google", params: { id_token: "new_user_token" }, as: :json
+        end.not_to have_enqueued_mail(Devise::Mailer, :confirmation_instructions)
+
+        expect(User.find_by(email: google_email).confirmed_at).to be_present
+      end
+
       it "returns auth tokens in the body" do
         post "/api/v1/auth/google", params: { id_token: "new_user_token" }, as: :json
         expect(response).to have_http_status(:ok)

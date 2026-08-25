@@ -1,6 +1,11 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
   before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew ]
 
+  # Feed flooding. A real seller listing 30 items in one day is already an
+  # outlier on a local marketplace; a script posting 10 000 is what buries
+  # everyone else's listings.
+  throttle to: 30, within: 1.day, by: :user, only: :create
+
   def index
     listings = policy_scope(
       current_user.listings
@@ -54,8 +59,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     # gallery: assigning `images` directly would replace ALL attachments
     # (Rails replace_on_assign_to_many), destroying photos the client didn't
     # re-upload. See attach_new_images / purge_removed_images.
-    if @listing.update(listing_params.except(:images))
-      attach_new_images
+    if @listing.update(listing_params.except(:images)) && attach_new_images
       purge_removed_images
       # TASK-R418 (CR fix, CYCLE-4): :owner_detailed — a seller editing the
       # title/description/photos of a RESERVED or SOLD listing must keep
@@ -82,11 +86,20 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   def publish
     authorize @listing, :publish?
-    @listing.active!
-    @listing.renew! # start the expiry clock
+
+    # Listing#publish flips the status AND starts the expiry clock in a single
+    # write, so `photo_required_to_publish` can veto the transition and come
+    # back as an ordinary 422. The old `active!` + `renew!` pair were bang
+    # writes: the moment publishing became refusable they would have raised
+    # RecordInvalid and surfaced to the seller as a 500.
+    #
     # TASK-R418 (CR fix, CYCLE-4): :owner_detailed everywhere in this
     # controller — see the identical rationale on #create/#update above.
-    render_blue(ListingSerializer, @listing, view: :owner_detailed)
+    if @listing.publish
+      render_blue(ListingSerializer, @listing, view: :owner_detailed)
+    else
+      render_unprocessable_entity(@listing)
+    end
   end
 
   # Restart the expiry clock on an active (possibly expired) listing.
@@ -214,9 +227,20 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   end
 
   # Append newly-uploaded photos to the existing gallery (does NOT replace).
+  # Returns true when there was nothing to attach, or when the attach persisted.
+  #
+  # Active Storage's `attach` saves the record itself once it is persisted and
+  # unchanged, so a file rejected by Listing's attachment validation is silently
+  # DROPPED: attach returns, and this request would still render 200 with the
+  # photo missing. The explicit `save` is a no-op when attach already persisted
+  # the change, and re-runs the validation — returning false with the errors on
+  # the record — when it did not.
   def attach_new_images
     new_images = params.dig(:listing, :images)
-    @listing.images.attach(new_images) if new_images.present?
+    return true if new_images.blank?
+
+    @listing.images.attach(new_images)
+    @listing.save
   end
 
   # Remove only the photos the client explicitly dropped, identified by the

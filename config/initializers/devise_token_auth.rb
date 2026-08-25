@@ -73,4 +73,17 @@ DeviseTokenAuth.setup do |config|
   # devise confirmable module. If you want to use devise confirmable module and
   # send email, set it to true. (This is a setting for compatibility)
   # config.send_confirmation_email = true
+  #
+  # Left OFF deliberately. It only controls DTA's ConfirmableSupport, which
+  # re-enables devise's RECONFIRMABLE behaviour on email change — an email edit
+  # would then be held in unconfirmed_email until a link is clicked, while the
+  # clients show it as saved. The confirmation email on SIGNUP does not depend on
+  # this flag: DTA's RegistrationsController#create sends it directly.
+
+  # Where the link in the confirmation email lands after DTA confirms the token.
+  # Required: with :confirmable enabled and no redirect URL, DTA answers every
+  # signup with render_create_error_missing_confirm_success_url — a 422 — so this
+  # must always resolve to something. Real deployments set WEB_CONFIRM_URL; the
+  # default mirrors UserMailer's WEB_RESET_URL placeholder.
+  config.default_confirm_success_url = ENV.fetch("WEB_CONFIRM_URL", "https://hatiwal.com/email-confirmed")
 end

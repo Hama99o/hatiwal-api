@@ -1,0 +1,18 @@
+<% confirm_url = confirmation_url(
+     @resource,
+     confirmation_token: @token,
+     config:             message["client-config"].to_s,
+     redirect_url:       message["redirect-url"]
+   ) %>
+Welcome <%= @email %>,
+
+Confirming your email address shows buyers and sellers that this account is
+real. You can keep using Hatiwal either way — but a verified account is a
+trusted one.
+
+Confirm your email by opening this link:
+<%= confirm_url %>
+
+If you didn't create a Hatiwal account, you can safely ignore this email.
+
+— The Hatiwal Team

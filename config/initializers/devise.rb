@@ -30,7 +30,9 @@ Devise.setup do |config|
   # config.mailer = 'Devise::Mailer'
 
   # Configure the parent class responsible to send e-mails.
-  # config.parent_mailer = 'ActionMailer::Base'
+  # Devise's own emails (confirmation) go through ApplicationMailer so they pick
+  # up the branded `from:` and the mailer layout, like UserMailer already does.
+  config.parent_mailer = "ApplicationMailer"
 
   # ==> ORM configuration
   # Load and configure the ORM. Supports :active_record (default) and
@@ -143,7 +145,12 @@ Devise.setup do |config|
   # without confirming their account.
   # Default is 0.days, meaning the user cannot access the website without
   # confirming their account.
-  # config.allow_unconfirmed_access_for = 2.days
+  # nil = unlimited. This is the whole reason enabling :confirmable is safe on a
+  # LIVE app: an unconfirmed account keeps working forever, so nothing that is
+  # already installed on someone's phone breaks. `confirmed_at` becomes a signal
+  # we can see and act on, not a gate that silently locks people out — see
+  # docs/EMAIL_CONFIRMATION.md before changing this to a duration.
+  config.allow_unconfirmed_access_for = nil
 
   # A period that the user is allowed to confirm their account before their
   # token becomes invalid. For example, if set to 3.days, the user can confirm

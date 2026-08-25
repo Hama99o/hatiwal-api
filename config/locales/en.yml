@@ -51,3 +51,12 @@ en:
           attributes:
             reportable_id:
               already_reported: "has already been reported by you"
+  # Attachment validation (AttachedFileValidator). The API does not switch
+  # locale per request — validation errors are English and both clients display
+  # the server string as-is — so these live in en.yml only, like every other
+  # activerecord message above.
+  errors:
+    messages:
+      invalid_file_type: "has an unsupported file type (%{content_type})"
+      file_too_large: "is larger than the %{limit} limit"
+      too_many_files: "cannot have more than %{count} files"

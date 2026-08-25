@@ -12,8 +12,44 @@ RSpec.describe Listing, type: :model do
   describe "validations" do
     it { should validate_presence_of(:title) }
     it { should validate_length_of(:title).is_at_most(150) }
+    # `description` is a text column and was entirely unbounded — a client could
+    # POST a megabyte of prose per listing.
+    it { should validate_length_of(:description).is_at_most(described_class::MAX_DESCRIPTION_LENGTH) }
+
+    it "still accepts a listing with no description at all" do
+      expect(build(:listing, description: nil)).to be_valid
+    end
     it { should validate_presence_of(:price) }
     it { should validate_numericality_of(:price).is_greater_than(0) }
+    it { should validate_numericality_of(:price).is_less_than_or_equal_to(described_class::MAX_PRICE) }
+
+    # Regression: `price` is decimal(12, 2). Before MAX_PRICE existed, a larger
+    # value passed validation and then blew up in Postgres, reaching the mobile
+    # app as a 500 with no field errors — the seller saw the publish fail with no
+    # reason given. It must fail as an ordinary invalid record instead.
+    it "rejects a price above the column ceiling rather than overflowing the column" do
+      listing = build(:listing, price: described_class::MAX_PRICE + 1)
+
+      expect(listing).not_to be_valid
+      expect(listing.errors[:price]).to be_present
+    end
+
+    # The reported reproduction: a seller holds down "9" and submits a price of
+    # several hundred digits. Rails casts it to a BigDecimal far beyond
+    # decimal(12, 2), so without MAX_PRICE it reached Postgres and 500'd.
+    it "rejects a price typed as hundreds of digits" do
+      listing = build(:listing, price: "9" * 300)
+
+      expect(listing).not_to be_valid
+      expect(listing.errors[:price]).to be_present
+    end
+
+    it "does not raise when saving an absurdly large price" do
+      listing = build(:listing, price: 10**12)
+
+      expect { listing.save }.not_to raise_error
+      expect(listing).not_to be_persisted
+    end
     it { should validate_presence_of(:currency) }
     it { should validate_inclusion_of(:currency).in_array(%w[AFN USD EUR]) }
     it { should validate_presence_of(:category) }
@@ -293,7 +329,8 @@ RSpec.describe Listing, type: :model do
 
   describe "timestamp callbacks" do
     it "sets published_at when becoming active" do
-      listing = create(:listing, :draft)
+      # :with_image because publishing now requires at least one photo.
+      listing = create(:listing, :draft, :with_image)
       expect(listing.published_at).to be_nil
       listing.active!
       expect(listing.reload.published_at).to be_present

@@ -22,6 +22,16 @@ class Message < ApplicationRecord
   ].freeze
 
   validates :body, presence: true, length: { maximum: 1000 }
+
+  # Chat attachments were unvalidated: `attachment` accepted any file of any
+  # size. Documents are allowed as well as images because the :document message
+  # kind exists and both pickers offer .pdf/.doc/.docx/.txt.
+  MAX_ATTACHMENT_SIZE = 10.megabytes
+  validates :attachment,
+            attached_file: {
+              types:    AttachedFileValidator::IMAGE_TYPES + AttachedFileValidator::DOCUMENT_TYPES,
+              max_size: MAX_ATTACHMENT_SIZE
+            }
   validate :kind_must_not_be_system_when_user_authored
   validate :responds_to_must_be_in_same_conversation, if: -> { responds_to_id.present? }
 

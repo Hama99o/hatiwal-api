@@ -4,6 +4,12 @@ module Api
   module V1
     module Auth
       class RegistrationsController < DeviseTokenAuth::RegistrationsController
+        # Account creation is the cheapest thing to automate and the most
+        # damaging: every suspension we hand out is undone by simply signing up
+        # again. Generous enough for a family sharing one carrier NAT address,
+        # far too slow to farm accounts with.
+        throttle to: 10, within: 1.hour, by: :ip, only: :create
+
         # DELETE /api/v1/auth — request account deletion. We override the default
         # (which hard-destroys + cascades away the user's messages) to SCHEDULE a
         # 30-day deletion: the account is immediately hidden and logged out, but

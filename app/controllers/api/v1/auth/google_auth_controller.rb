@@ -19,6 +19,10 @@
 class Api::V1::Auth::GoogleAuthController < ApplicationController
   GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 
+  # The other door into account creation — and every call makes an outbound
+  # HTTPS request to Google on our dime.
+  throttle to: 20, within: 1.hour, by: :ip, only: :create
+
   def create
     id_token = params[:id_token].presence
     return render json: { error: "id_token is required" }, status: :unprocessable_entity if id_token.nil?
@@ -105,7 +109,12 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
       firstname: payload[:given_name].presence || "User",
       lastname: payload[:family_name].presence || ".",
       password: SecureRandom.hex(24),
-      status: :active
+      status: :active,
+      # Google only reaches this method with email_verified == true (checked
+      # above), so the address is already proven — asking the user to confirm an
+      # email they never typed would be noise, and would leave every Google
+      # account permanently "unconfirmed" in the admin view.
+      confirmed_at: Time.current
     )
   end
 

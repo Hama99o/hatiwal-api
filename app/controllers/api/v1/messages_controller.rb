@@ -2,6 +2,11 @@ class Api::V1::MessagesController < Api::V1::BaseController
   before_action :set_conversation
   before_action :set_message, only: [ :destroy ]
 
+  # Deliberately high: this is a chat, and haggling over a price is a burst of
+  # short messages. It exists only to stop a script from using the thread as a
+  # firehose (every message also enqueues a broadcast AND a push job).
+  throttle to: 120, within: 1.hour, by: :user, only: :create
+
   def index
     authorize @conversation, :read_messages?
     # Newest-first so page 1 is the MOST RECENT messages — correct for a chat

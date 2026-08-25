@@ -5,6 +5,12 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   ROLES = { buying: "buying", selling: "selling" }.freeze
 
   before_action :set_listing, only: [ :create ]
+
+  # Opening a conversation is how you reach a stranger's inbox, so it is the
+  # spam vector: one account messaging every seller in the city. Only NEW
+  # threads are limited — replies inside an existing thread go through
+  # MessagesController, which has its own, much higher limit.
+  throttle to: 30, within: 1.day, by: :user, only: :create
   before_action :set_conversation, only: [ :show ]
   before_action :set_conversation_for_mutation, only: [ :destroy, :mark_read, :mark_unread, :archive, :unarchive ]
 

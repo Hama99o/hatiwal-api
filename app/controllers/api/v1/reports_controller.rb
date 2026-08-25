@@ -1,4 +1,10 @@
 class Api::V1::ReportsController < Api::V1::BaseController
+  # Reporting is a trust tool, so it is also a harassment tool: unbounded, one
+  # account can bury a rival seller under reports, or bury the admin queue.
+  # Duplicate reports are already rejected by Report's uniqueness rule, so this
+  # bounds reports across DIFFERENT targets.
+  throttle to: 20, within: 1.day, by: :user, only: :create
+
   def index
     reports = policy_scope(Report).where(reporter: current_user)
                                   .includes(:reportable)

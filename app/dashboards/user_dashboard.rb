@@ -4,7 +4,9 @@ require "administrate/base_dashboard"
 # reset_password_token, unlock_token, confirmation_token, provider/uid) and the
 # ActiveStorage avatar association are deliberately omitted: they must never be
 # viewed or edited through the admin UI. Admins manage identity + moderation
-# fields (status, verified, seller_mode) only.
+# fields (status, verified, seller_mode) only. `confirmed_at` is shown but not
+# editable — whether an email address is real is proven by the user, not typed
+# in by an admin.
 class UserDashboard < Administrate::BaseDashboard
   ATTRIBUTE_TYPES = {
     id: Field::Number,
@@ -18,6 +20,7 @@ class UserDashboard < Administrate::BaseDashboard
     preferred_language: Field::String,
     seller_mode: Field::Boolean,
     verified: Field::Boolean,
+    confirmed_at: Field::DateTime,
     status: Field::Select.with_options(
       searchable: false,
       collection: ->(field) { field.resource.class.send(field.attribute.to_s.pluralize).keys }
@@ -36,6 +39,7 @@ class UserDashboard < Administrate::BaseDashboard
     email
     status
     verified
+    confirmed_at
     seller_mode
     created_at
     updated_at
@@ -53,6 +57,7 @@ class UserDashboard < Administrate::BaseDashboard
     preferred_language
     seller_mode
     verified
+    confirmed_at
     status
     block_reason
     listings
@@ -80,6 +85,11 @@ class UserDashboard < Administrate::BaseDashboard
 
   COLLECTION_FILTERS = {
     verified: ->(resources) { resources.where(verified: true) },
+    # `verified` above is the manual trust BADGE an admin toggles; confirmed /
+    # unconfirmed is whether the email address itself was ever proven. Different
+    # things, deliberately both here.
+    confirmed: ->(resources) { resources.where.not(confirmed_at: nil) },
+    unconfirmed: ->(resources) { resources.where(confirmed_at: nil) },
     sellers: ->(resources) { resources.where(seller_mode: true) },
     suspended: ->(resources) { resources.where(status: :suspended) },
     banned: ->(resources) { resources.where(status: :banned) }

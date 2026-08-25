@@ -457,7 +457,8 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
   describe "lifecycle transitions" do
     describe "PUT publish" do
       it "publishes a draft" do
-        draft = create(:listing, :draft, user: user)
+        # :with_image because publishing now requires at least one photo.
+        draft = create(:listing, :draft, :with_image, user: user)
         put "/api/v1/my/listings/#{draft.id}/publish", headers: headers, as: :json
         expect(response).to have_http_status(:ok)
         expect(draft.reload).to be_active
@@ -825,7 +826,7 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       end
 
       it "stamps expires_at when a draft is published" do
-        draft = create(:listing, :draft, user: user)
+        draft = create(:listing, :draft, :with_image, user: user)
         put "/api/v1/my/listings/#{draft.id}/publish", headers: headers, as: :json
         expect(draft.reload.expires_at).to be_present
         expect(draft.expires_at).to be > Time.current
