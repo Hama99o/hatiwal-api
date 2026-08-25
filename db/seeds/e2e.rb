@@ -448,6 +448,23 @@ puts "=== E2E Seed: Disposable listings for DESTRUCTIVE flows ==="
 # The mobile app also keeps its own AsyncStorage copy, so this is not the whole
 # story on a warm device — but it is the half the seed owns, and it means a fresh
 # login always lands in English.
+# ── An UNCONFIRMED account, so the confirm-email prompt can be tested ────────
+# The prompt only renders when `email_confirmed` is false, and every seeded
+# account is confirmed (the backfill migration confirmed all pre-existing users).
+# Without a deliberately unconfirmed fixture there is no way to exercise the
+# banner or its resend button on a device at all.
+#
+# A DEDICATED account, not one of the three above: making buyer@ unconfirmed would
+# put the banner on the profile screen that dozens of other flows assert against.
+unconfirmed = e2e_user(
+  email: "unconfirmed@hatiwal.test", firstname: "Nasrin", lastname: "Ahmadi",
+  city: "Kabul", province: "Kabul"
+)
+if unconfirmed.confirmed_at.present?
+  unconfirmed.update_columns(confirmed_at: nil)
+  puts "  unconfirmed@hatiwal.test reset to UNCONFIRMED (confirm-email prompt fixture)"
+end
+
 reset_langs = User.where(email: %w[buyer@hatiwal.test seller@hatiwal.test newbuyer@hatiwal.test])
                   .where.not(preferred_language: "en")
                   .update_all(preferred_language: "en")
