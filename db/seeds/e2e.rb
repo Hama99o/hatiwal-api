@@ -308,7 +308,20 @@ puts "=== E2E Seed: Listing photos ==="
 E2E_PHOTO = Rails.root.join("spec/fixtures/files/test_image.jpg")
 
 if File.exist?(E2E_PHOTO)
-  photo_targets = Listing.where(user: seller).where(status: [ :active, :reserved, :sold ]).limit(6)
+  # Drafts were excluded here, which made the PUBLISH path unseedable. Publishing
+  # requires at least one photo (Listing#photo_required_to_publish, and now the
+  # mobile client's own pre-check), so every flow that opens a SEEDED draft and
+  # publishes it was blocked before it started — lifecycle_publish among them, and
+  # the failure looked like a broken publish button rather than a fixture with no
+  # photo. One draft gets photos so the happy path is reachable; the other stays
+  # photoless deliberately, because "Publish is refused, and says which field is
+  # missing" is real behaviour that deserves a fixture too.
+  photo_targets = Listing.where(user: seller)
+                         .where(status: [ :active, :reserved, :sold ])
+                         .limit(6)
+                         .to_a
+  publishable_draft = Listing.where(user: seller, status: :draft).order(:id).first
+  photo_targets << publishable_draft if publishable_draft
   attached_count = 0
   storage_denied = false
 
