@@ -56,6 +56,16 @@ class UserSerializer < ApplicationSerializer
            :created_at, :deletion_scheduled_at
     field(:full_name) { |u| u.full_name }
     field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
+    # Whether this account's email address has been confirmed.
+    #
+    # A BOOLEAN, not `confirmed_at`: the clients only need to decide whether to show
+    # the "confirm your email" prompt, and the timestamp is not theirs to display.
+    #
+    # Without this the prompt could not exist at all — :confirmable has been on since
+    # the backend work, but no client could tell a confirmed account from an
+    # unconfirmed one, which is why nothing was ever gated on it
+    # (docs/EMAIL_CONFIRMATION.md).
+    field(:email_confirmed) { |u| u.confirmed_at.present? }
     # Dashboard stats for the user's own profile.
     field(:items_active_count) { |u| u.listings.active.count }
     field(:items_sold_count) { |u| u.listings.sold.count }

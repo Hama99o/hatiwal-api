@@ -75,7 +75,12 @@ Rails.application.routes.draw do
   mount_devise_token_auth_for "User", at: "api/v1/auth", controllers: {
     registrations: "api/v1/auth/registrations",
     sessions: "api/v1/auth/sessions",
-    passwords: "api/v1/auth/passwords"
+    passwords: "api/v1/auth/passwords",
+    # Confirmations are overridden ONLY to make the post-confirm redirect legal:
+    # DTA redirects to WEB_CONFIRM_URL, and Rails 7 raises on a cross-host
+    # redirect, so clicking the link in the email returned 500 while the account
+    # was in fact confirmed.
+    confirmations: "api/v1/auth/confirmations"
   }
 
   # Google OAuth for mobile — POST /api/v1/auth/google
