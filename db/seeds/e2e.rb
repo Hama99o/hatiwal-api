@@ -428,8 +428,17 @@ if multi_unit_listing
     # made impossible.
     #
     # A seller who is asked "do you have 3?" answering is also simply realistic.
+    #
+    # READ, though. The requirement above is that an inbound message EXISTS, not
+    # that it is unread: `mark_unread` nulls read_at on the latest inbound message,
+    # so it works just as well on a read one. Left unread, this reply is a permanent
+    # unread badge in the buyer's inbox, and chat/conversation_read_status ends by
+    # asserting `notVisible: unread-badge-\d+` — which this fixture made impossible.
+    # It failed on exactly that, with this conversation the only unread one in the
+    # database. Same fix as the disposable conversations further down.
     Message.create!(conversation: mq_convo, user: seller, kind: :text,
-                    body: "Yes, I have 15 in stock. How many do you need?")
+                    body: "Yes, I have 15 in stock. How many do you need?",
+                      read_at: Time.current)
     puts "  created multi-quantity conversation with #{buyer.email} (both sides)"
   end
 else
