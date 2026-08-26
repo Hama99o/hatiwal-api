@@ -95,7 +95,7 @@ puts "  categories ready"
 puts "=== E2E Seed: Seller Listings ==="
 # =============================================================================
 
-def e2e_listing(user:, title:, price:, category:, status:, description:, location:, quantity: 1)
+def e2e_listing(user:, title:, price:, category:, status:, description:, location:, latitude: nil, longitude: nil, quantity: 1)
   return if Listing.exists?(user: user, title: title)
 
   attrs = {
@@ -113,6 +113,21 @@ def e2e_listing(user:, title:, price:, category:, status:, description:, locatio
     quantity:    quantity,
     views_count: rand(5..200)
   }
+
+    # A published listing REQUIRES an exact pin: getPublishBlockers refuses to
+    # publish without lat/long, so a seeded :active listing with no coordinates is
+    # a state the app itself could never have produced. 51 of 53 active fixtures
+    # were exactly that, which also left the listing-detail Location section (and
+    # its map) with nothing to render from — browse/listing_detail failed scrolling
+    # to a section that legitimately did not exist. Callers may pass their own pin;
+    # drafts stay pinless on purpose, since a draft is allowed to be incomplete.
+    if %i[active reserved sold].include?(status)
+      attrs[:latitude]  = latitude || 34.5553
+      attrs[:longitude] = longitude || 69.2075
+    elsif latitude && longitude
+      attrs[:latitude]  = latitude
+      attrs[:longitude] = longitude
+    end
 
   attrs[:published_at] = rand(1..30).days.ago if %i[active reserved sold].include?(status)
   attrs[:reserved_at]  = rand(1..7).days.ago   if status == :reserved
