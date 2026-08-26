@@ -96,7 +96,39 @@ puts "=== E2E Seed: Seller Listings ==="
 # =============================================================================
 
 def e2e_listing(user:, title:, price:, category:, status:, description:, location:, latitude: nil, longitude: nil, quantity: 1)
-  return if Listing.exists?(user: user, title: title)
+  # RESET the status of a fixture that already exists, rather than leaving it wherever
+  # the flows left it.
+  #
+  # This used to be a bare `return if exists?`, and shared fixtures drifted
+  # permanently as a result: flows reserve and sell them and nothing put them back. By
+  # the time this was noticed three seeded :active listings were in the wrong state —
+  # Lenovo ThinkPad and Traditional Kandahari Carpet stuck RESERVED, Wool Blanket stuck
+  # SOLD. (Xiaomi Redmi Note 11 is also SOLD and belongs that way: it is seeded :sold
+  # as the fixture for sold-listing flows. Worth stating, because a status audit that
+  # does not check the seeded intent flags it as drift.)
+  #
+  # That is not a cosmetic drift. A sold listing leaves the browsable feed, so every
+  # flow that scrolls to one of them fails with "No visible element found" for a
+  # fixture that exists — a missing-fixture message for a listing that is merely in
+  # the wrong state. It also made single-shot flows out of repeatable ones:
+  # reviews/rate_buyer_after_sale marks the Lenovo sold as its own setup, so it could
+  # only ever work once per database, and after it ran the eight flows that share that
+  # listing lost their active fixture.
+  #
+  # Same semantics as the DISPOSABLE_LISTINGS reset further down, which solved exactly
+  # this for the "QA Disposable" listings; seeded fixtures need it just as much.
+  if (existing = Listing.find_by(user: user, title: title))
+    if existing.status.to_sym != status
+      existing.update_columns(
+        status:       Listing.statuses[status],
+        published_at: %i[active reserved sold].include?(status) ? 2.days.ago : nil,
+        reserved_at:  status == :reserved ? 1.day.ago : nil,
+        sold_at:      status == :sold ? 1.day.ago : nil
+      )
+      puts "  reset listing [#{status}] #{title}"
+    end
+    return
+  end
 
   attrs = {
     user:        user,
