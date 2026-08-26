@@ -536,6 +536,22 @@ removed_blocks = Block.where(blocker_id: e2e_user_ids)
                       .size
 puts "  cleared #{removed_blocks} block(s) between the e2e accounts"
 
+# Reports leak the same way blocks do, with a sharper edge: a Report is UNIQUE per
+# reporter+target (Report validates it with `message: :already_reported`), so the
+# FIRST run of a report flow creates the row and every run after it is answered with
+# report.errors.duplicate instead of report.success.
+#
+# chat/report_participant failed exactly that way once the buyer->seller "fraud" row
+# existed. report/report_user and report/report_user_then_block could not pass at
+# all while it does: ReportSheet.tsx offers the "Block this user?" prompt from inside
+# the mutation's onSuccess, so on the duplicate path everything after it is
+# unreachable. See RIG-004 in hatiwal-mobile/qa/UI_FINDINGS.md.
+#
+# Only reports FILED BY the e2e accounts are removed. Reports filed by real users
+# against them are left untouched, so no moderation data is ever destroyed.
+removed_reports = Report.where(reporter_id: e2e_user_ids).destroy_all.size
+puts "  cleared #{removed_reports} report(s) filed by the e2e accounts"
+
 DISPOSABLE_LISTINGS = [
   [ "lifecycle_reserve",       :active ],
   [ "lifecycle_sold",          :reserved ],
