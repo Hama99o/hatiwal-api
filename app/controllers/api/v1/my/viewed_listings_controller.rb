@@ -17,6 +17,9 @@ class Api::V1::My::ViewedListingsController < Api::V1::BaseController
                                   .includes(listing: [
                                     :category,
                                     :price_histories,
+                                    # SF-B2 — preloaded for the base `held_units` field; see
+                                    # Listing#open_sale's loaded-array guard.
+                                    :sale_transactions,
                                     { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                                   ])
 

@@ -117,9 +117,29 @@ RSpec.describe Listing, "multi-quantity" do
   end
 
   describe "#sold_with_buyer! with quantity" do
-    it "defaults to the whole remaining stock — 'I sold them' needs no number" do
+    # REVERSED by SF-B3, and for the reason the CONTROLLER already documented:
+    # "the default for a BATCH is ONE unit, not the whole shelf", after a device
+    # report (50 in stock, one sale, listing retired reading "0 of 50 left").
+    # That fix only ever covered the branch where `sold_with_buyer!` returned nil;
+    # the model's own default still said "the whole shelf", so a batch sold to an
+    # IDENTIFIED buyer with no quantity retired the entire stock. One default now,
+    # in one place, and it is the conservative one — in a marketplace with no
+    # payments the destructive outcome must be the one you ask for explicitly.
+    it "defaults a BATCH to ONE unit — retiring the whole shelf must be asked for" do
       listing = with_conversation(create(:listing, user: seller, status: :active, quantity: 15), buyer)
       txn = listing.sold_with_buyer!(buyer_id: buyer.id)
+      expect(txn.quantity).to eq(1)
+    end
+
+    it "still sells the single unit of a single-item listing with no number given" do
+      listing = with_conversation(create(:listing, user: seller, status: :active, quantity: 1), buyer)
+      txn = listing.sold_with_buyer!(buyer_id: buyer.id)
+      expect(txn.quantity).to eq(1)
+    end
+
+    it "sells the whole batch when the seller says the number explicitly" do
+      listing = with_conversation(create(:listing, user: seller, status: :active, quantity: 15), buyer)
+      txn = listing.sold_with_buyer!(buyer_id: buyer.id, quantity: 15)
       expect(txn.quantity).to eq(15)
     end
 

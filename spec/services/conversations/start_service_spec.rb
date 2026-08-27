@@ -30,10 +30,28 @@ RSpec.describe Conversations::StartService do
     expect(Conversation.count).to eq(1)
   end
 
-  it "raises error when listing is not active" do
+  it "raises error when listing is not live" do
     draft_listing = create(:listing, :draft, user: seller)
     svc = described_class.new(buyer: buyer, listing: draft_listing, message_body: "hi")
     expect { svc.call }.to raise_error(Conversations::StartService::Error)
+
+    sold_listing = create(:listing, :sold, user: seller)
+    svc = described_class.new(buyer: buyer, listing: sold_listing, message_body: "hi")
+    expect { svc.call }.to raise_error(Conversations::StartService::Error)
+  end
+
+  # SF-B1 — a reserved listing is back in the feed and in search, so the first
+  # message on it must go through; refusing it would advertise a listing the
+  # buyer cannot reach.
+  it "starts a conversation on a RESERVED listing (SF-B1)" do
+    reserved_listing = create(:listing, :reserved, user: seller)
+    svc = described_class.new(buyer: buyer, listing: reserved_listing, message_body: "still up?")
+
+    conversation = svc.call
+
+    expect(conversation).to be_persisted
+    expect(conversation.listing_id).to eq(reserved_listing.id)
+    expect(conversation.messages.first.body).to eq("still up?")
   end
 
   it "raises error when buyer is the seller" do

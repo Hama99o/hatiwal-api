@@ -9,13 +9,17 @@ class SavedListing < ApplicationRecord
   scope :ordered, -> { order(created_at: :desc) }
 
   # True when the listing's current price is lower than the price it had
-  # the moment the buyer saved it, and the listing is still active (a
-  # dropped price on a sold/reserved listing is no longer an actionable
+  # the moment the buyer saved it, and the listing is still live (a dropped
+  # price on a SOLD or admin-removed listing is no longer an actionable
   # "come back and buy" signal).
+  #
+  # SF-B1 — `live?`, not `active?`: a price drop on a HELD listing is just as
+  # real a signal to the buyer who saved it, and reserved listings are back in
+  # the feed the price-drop badge decorates.
   def price_dropped?
     return false if listing.nil? || price_at_save.nil?
 
-    listing.active? && listing.price < price_at_save
+    listing.live? && listing.price < price_at_save
   end
 
   # Positive amount the price fell by, or nil when it did not drop.

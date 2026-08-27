@@ -105,9 +105,19 @@ RSpec.describe ListingPolicy do
       expect(described_class.new(owner, listing).unpublish?).to be true
     end
 
-    it "is false when not active" do
+    # SF-B1 — reachable from `reserved` too. Reserving no longer hides a listing,
+    # so "pull it off the market while I finish this deal" needs a one-step route
+    # that does not first throw away the record of who it is held for.
+    it "is true for the owner of a RESERVED listing (SF-B1)" do
+      reserved = create(:listing, :reserved, user: owner)
+      expect(described_class.new(owner, reserved).unpublish?).to be true
+    end
+
+    it "is false when not live" do
       draft = create(:listing, :draft, user: owner)
       expect(described_class.new(owner, draft).unpublish?).to be false
+      sold = create(:listing, :sold, user: owner)
+      expect(described_class.new(owner, sold).unpublish?).to be false
     end
 
     it "is false for a non-owner" do
@@ -125,9 +135,30 @@ RSpec.describe ListingPolicy do
       expect(described_class.new(owner, listing).activate?).to be false
     end
 
+    # SF-B8 — a multi-unit listing keeps status `active` while units are held
+    # (SF-B2), so without this a batch's hold could not be released at all, and
+    # SF-B8's "release the hold first" copy would name an action that 403s.
+    it "is true for the owner of an ACTIVE listing that is holding units (a batch)" do
+      buyer = create(:user)
+      batch = create(:listing, :active, user: owner, quantity: 15)
+      create(:conversation, listing: batch, buyer: buyer)
+      batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 10)
+
+      expect(described_class.new(owner, batch.reload).activate?).to be true
+    end
+
     it "is false for a non-owner" do
       reserved = create(:listing, :reserved, user: owner)
       expect(described_class.new(other, reserved).activate?).to be false
+    end
+
+    it "is false for a non-owner of an active listing that is holding units" do
+      buyer = create(:user)
+      batch = create(:listing, :active, user: owner, quantity: 15)
+      create(:conversation, listing: batch, buyer: buyer)
+      batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 10)
+
+      expect(described_class.new(other, batch.reload).activate?).to be false
     end
   end
 
@@ -136,9 +167,19 @@ RSpec.describe ListingPolicy do
       expect(described_class.new(owner, listing).renew?).to be true
     end
 
-    it "is false when not active" do
+    # SF-B1 — `Listing#expired?` widened to `live?` at the same time, so a
+    # reserved listing can now expire out of `browsable`. Without this it would
+    # expire with no way to renew it.
+    it "is true for the owner of a RESERVED listing (SF-B1)" do
+      reserved = create(:listing, :reserved, user: owner)
+      expect(described_class.new(owner, reserved).renew?).to be true
+    end
+
+    it "is false when not live" do
       draft = create(:listing, :draft, user: owner)
       expect(described_class.new(owner, draft).renew?).to be false
+      sold = create(:listing, :sold, user: owner)
+      expect(described_class.new(owner, sold).renew?).to be false
     end
 
     it "is false for a non-owner" do
@@ -159,9 +200,19 @@ RSpec.describe ListingPolicy do
       expect(described_class.new(owner, listing).start_conversation?).to be true
     end
 
-    it "is false when the listing is not active" do
+    # SF-B1 — the single most important widen in this ticket. The feed now shows
+    # reserved listings; if they were not messageable the buyer would hit a dead
+    # end on a listing we had just advertised to them.
+    it "is true for a non-owner on a RESERVED listing (SF-B1)" do
+      reserved = create(:listing, :reserved, user: owner)
+      expect(described_class.new(other, reserved).start_conversation?).to be true
+    end
+
+    it "is false when the listing is not live" do
       draft = create(:listing, :draft, user: owner)
       expect(described_class.new(other, draft).start_conversation?).to be false
+      sold = create(:listing, :sold, user: owner)
+      expect(described_class.new(other, sold).start_conversation?).to be false
     end
   end
 

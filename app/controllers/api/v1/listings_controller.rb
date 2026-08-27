@@ -48,7 +48,12 @@ class Api::V1::ListingsController < Api::V1::BaseController
     else
                  listings.sorted(params[:sort])
     end
-    listings = listings.includes(:price_histories)
+    # `sale_transactions` is eager-loaded for the base `held_units` field
+    # (SF-B2): the serializer asks every row how many units are held, and an
+    # association scope always hits the database, so without this the public feed
+    # would fire one extra query per card. Listing#open_sale reads the loaded
+    # array instead when it is present.
+    listings = listings.includes(:price_histories, :sale_transactions)
 
     paginate_blue(
       ListingSerializer,
@@ -110,6 +115,9 @@ class Api::V1::ListingsController < Api::V1::BaseController
                  .includes(
                    :category,
                    :price_histories,
+                   # SF-B2 — preloaded for the base `held_units` field; see
+                   # Listing#open_sale's loaded-array guard.
+                   :sale_transactions,
                    { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                  )
     render_blue_collection(

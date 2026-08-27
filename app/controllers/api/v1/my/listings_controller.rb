@@ -67,7 +67,16 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
       # disappear because this one action rendered a different view.
       render_blue(ListingSerializer, @listing, view: :owner_detailed)
     else
-      render_unprocessable_entity(@listing)
+      # SF-B6: `code:` carries the ONE edit failure the seller has to act on —
+      # `quantity_below_sold_units`, when they lowered the quantity under what
+      # they have already sold. The `errors` array is unchanged English prose
+      # (the fallback for clients that predate the code); the code is what lets a
+      # ps/fa client pin its own localized sentence under the quantity field
+      # instead of showing a raw Rails string, or worse the generic "server
+      # error" this used to 500 with. Nil for every other validation failure, and
+      # `render_unprocessable_entity` omits the key then. Listing#error_code owns
+      # the mapping — see its note there.
+      render_unprocessable_entity(@listing, code: @listing.error_code)
     end
   end
 
@@ -103,17 +112,58 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   end
 
   # Restart the expiry clock on an active (possibly expired) listing.
+  #
+  # SF-B7 — the `rescue` is the whole point of this comment, and it is the same
+  # rescue #reserve and #sold have always had.
+  #
+  # `renew!` is a BANG write (`update!`), so any validation failure raises
+  # ActiveRecord::RecordInvalid, and nothing in the stack rescues it:
+  # ApplicationController only maps Pundit::NotAuthorizedError,
+  # ActiveRecord::RecordNotFound and ActionDispatch::ParamError. The seller got a
+  # 500 with an EMPTY BODY, and mobile's `apiErrorMessage` falls back to its
+  # generic "server error" string on exactly that shape — so the failure was
+  # invisible by construction, which is the report this ticket came from.
+  #
+  # This is reachable for real rows, not theoretical. Every one of Listing's
+  # bounds was added AFTER listings already existed — `latitude: 91` "was
+  # accepted and persisted" before the coordinate range existed (see its note in
+  # listing.rb), and MAX_DESCRIPTION_LENGTH / MAX_IMAGES the same. A legacy row
+  # that violates one of them cannot be renewed, unpublished or reactivated, and
+  # until now it could not even say why.
+  #
+  # Deliberately the SAME shape as #reserve/#sold rather than a new one: an
+  # ordinary 422 carrying `errors`, which every client already renders.
   def renew
     authorize @listing, :renew?
     @listing.renew!
     render_blue(ListingSerializer, @listing, view: :owner_detailed)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
   end
 
-  # active → draft (take a published listing offline)
+  # live → draft (take a published listing offline)
+  #
+  # SF-B1: reachable from `reserved` too, now that reserving no longer takes a
+  # listing out of the feed — "get it off the market while I finish this deal" has
+  # to stay a one-step action. Taking it offline cancels any open hold in the same
+  # DB transaction, for the same reason #activate does: a draft listing cannot
+  # carry a live reservation, and a surviving `reserved` row would later be
+  # silently closed out against the wrong buyer (TASK-TX02 review fix, MAJOR).
+  #
+  # SF-B7: `draft!` is a bang write — rescued into a 422 for the same reason
+  # #renew above is. The rescue sits outside the DB transaction, exactly as
+  # #reserve/#sold do it, so the cancelled hold is rolled back with the failed
+  # status flip and the seller is answered with the field error instead of an
+  # empty 500.
   def unpublish
     authorize @listing, :unpublish?
-    @listing.draft!
+    ActiveRecord::Base.transaction do
+      @listing.cancel_open_transaction!
+      @listing.draft!
+    end
     render_blue(ListingSerializer, @listing, view: :owner_detailed)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
   end
 
   # TASK-TX01: optionally accepts `buyer_id` (+ `final_price`) identifying the
@@ -130,9 +180,14 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing, :reserve?
     txn = nil
     ActiveRecord::Base.transaction do
+      # SF-B2: `quantity` passes through here exactly as it already does on
+      # #sold, so "2 held for Ahmad" can be a true number on a batch instead of
+      # always reading "1". A single-item listing ignores it (see
+      # Listing#reserve_with_buyer!).
       txn = @listing.reserve_with_buyer!(
         buyer_id: lifecycle_params[:buyer_id],
-        final_price: lifecycle_params[:final_price]
+        final_price: lifecycle_params[:final_price],
+        quantity: lifecycle_params[:quantity]
       )
       # A BATCH does not leave the market because one unit is held. `reserved` is a
       # whole-listing state and `browsable` is `active.not_expired.not_removed`, so
@@ -157,6 +212,11 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # to `sold` against the wrong buyer by a subsequent buyer-less `sold` call
   # (see Listing#sold_with_buyer!). Wrapped in one DB transaction for the same
   # all-or-nothing reasoning as #reserve/#sold below.
+  #
+  # SF-B7: `active!` is a bang write — rescued into a 422, same rationale and
+  # same shape as #renew/#unpublish above. This one matters most of the three:
+  # releasing a hold is the seller's documented way OUT of SF-B8's refusal, so it
+  # must never be the action that dead-ends in an unexplained 500.
   def activate
     authorize @listing, :activate?
     ActiveRecord::Base.transaction do
@@ -166,6 +226,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     # TASK-R418 (CR fix, CYCLE-4): :owner_detailed everywhere in this
     # controller — see #create/#update/#publish above.
     render_blue(ListingSerializer, @listing, view: :owner_detailed)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
   end
 
   # Review fix (TASK-TX02, CR LOW — "wrap sold_with_buyer! + sold! in a
@@ -205,14 +267,18 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
       #
       # This also protects clients that predate the quantity field — an old build marking
       # a batch sold now moves one unit instead of destroying the stock.
-      requested_units = lifecycle_params[:quantity].presence&.to_i
-      default_units   = @listing.multi_unit? ? 1 : @listing.available_units
-      sold_out = @listing.record_units_sold!(txn&.quantity || requested_units || default_units)
+      # SF-B3: `sold_with_buyer!` now ALWAYS returns a sold Transaction — the
+      # outside-buyer sale and the bare legacy call included — so its `quantity`
+      # is the single source of how many units moved. The controller no longer
+      # carries its own duplicate default (`multi_unit? ? 1 : available_units`);
+      # that rule lives in Listing#units_for_sale, one copy, so the number in the
+      # ledger row and the number taken off the shelf can never disagree.
+      sold_out = @listing.record_units_sold!(txn.quantity)
       @listing.sold! if sold_out
-      # TASK-TX02 (review fix): the legacy buyer-less path (txn is nil) never
-      # touches the transactions table, so nothing else bumps the seller's
-      # trust-stat counter for it — do it here, once, explicitly.
-      @listing.bump_seller_sold_count_for_legacy_sale! if txn.nil?
+      # SF-B3 removed the manual `bump_seller_sold_count_for_legacy_sale!` call
+      # that used to sit here: every sale now has a Transaction, and
+      # Transaction#bump_trust_counters! counts the seller once. Keeping it would
+      # have double-counted every buyer-less sale.
     end
     render_lifecycle_response(txn)
   rescue ActiveRecord::RecordInvalid => e
@@ -225,10 +291,12 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     @listing = current_user.listings.find(params[:id])
   end
 
-  # `buyer_id`/`final_price`/`clear_buyer` are accepted flat (not nested under
-  # `listing:`) since reserve/sold are lifecycle commands, not resource
-  # updates. `clear_buyer` (TASK-TX02 review fix) is the sold-only, explicit
-  # "Someone else / skip" signal — see Listing#sold_with_buyer!.
+  # `buyer_id`/`final_price`/`clear_buyer`/`quantity` are accepted flat (not
+  # nested under `listing:`) since reserve/sold are lifecycle commands, not
+  # resource updates. `clear_buyer` (TASK-TX02 review fix) is the sold-only,
+  # explicit "Someone else / skip" signal — see Listing#sold_with_buyer!.
+  # `quantity` is read by BOTH #reserve (SF-B2, units held) and #sold (units
+  # sold); the two actions share this permit list.
   def lifecycle_params
     params.permit(:buyer_id, :final_price, :clear_buyer, :quantity)
   end

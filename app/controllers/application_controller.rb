@@ -111,12 +111,19 @@ class ApplicationController < ActionController::API
 
   # Accepts either an ActiveRecord model (renders its validation errors array)
   # or a plain String/Exception (renders a single error message).
-  def render_unprocessable_entity(record_or_message)
+  #
+  # `code:` (optional) adds a stable machine-readable marker alongside the human
+  # text, so a client with three locales can render its OWN copy instead of
+  # showing an English sentence from the API. Mirrors the `account_suspended`
+  # convention #reject_blocked_user! below already uses. Purely additive — every
+  # existing caller omits it and gets exactly the payload it always did.
+  def render_unprocessable_entity(record_or_message, code: nil)
     body = if record_or_message.respond_to?(:errors)
              { errors: record_or_message.errors.full_messages }
     else
              { error: record_or_message.to_s }
     end
+    body[:code] = code if code.present?
     render json: body, status: :unprocessable_entity
   end
 

@@ -6,7 +6,11 @@
 class Transaction < ApplicationRecord
   belongs_to :listing
   belongs_to :seller, class_name: User.name
-  belongs_to :buyer,  class_name: User.name
+  # SF-B3 — OPTIONAL. `buyer_id` is nil for "sold to someone not on Hatiwal":
+  # a real sale, a real ledger row, no counterparty account. Everything that
+  # reads a buyer here must be nil-safe (the two validations below already were;
+  # TransactionSerializer and ListingSerializer::SALE_FIELD now are too).
+  belongs_to :buyer,  class_name: User.name, optional: true
 
   has_many :reviews, class_name: Review.name, foreign_key: :transaction_id, dependent: :destroy, inverse_of: :sale
 
@@ -28,8 +32,13 @@ class Transaction < ApplicationRecord
   # moment a transaction FIRST becomes sold — whether created directly as sold
   # (skip-reserve) or advanced from reserved via #mark_sold!. Fires at most
   # once per transaction (guarded by saved_change_to_status?), so correcting
-  # other attributes on an already-sold row never double-counts. There is
-  # currently no "unsell" flow, so counters are only ever incremented.
+  # other attributes on an already-sold row never double-counts.
+  #
+  # SF-B4 supplied the compensating path this comment used to say did not exist:
+  # #void! and #correct! below decrement these counters with a
+  # GREATEST(x - 1, 0) floor, so an undone sale gives the count back and a
+  # reassigned buyer moves it. Anything new that bumps a counter here needs a
+  # matching decrement there.
   #
   # Review fix (TASK-TX02, MED — "no compensating path"): this is safe with
   # respect to the ONE mutation path the mobile client and the public API can
@@ -74,6 +83,13 @@ class Transaction < ApplicationRecord
   scope :as_seller, ->(user) { where(seller_id: user.id) }
   scope :for_user,  ->(user) { where("buyer_id = ? OR seller_id = ?", user.id, user.id) }
   scope :ordered,   -> { order(created_at: :desc) }
+  # Sales that have a real counterparty account on both sides. SF-B3 made
+  # `buyer_id` nullable for "sold to someone not on Hatiwal", so anything that
+  # needs two ratable parties (reviews, the pending-review prompt) must say so.
+  scope :with_counterparty, -> { where.not(buyer_id: nil) }
+  # SF-B5 — one listing's ledger, for the Sales screen
+  # (GET /my/transactions?listing_id=42&as=seller&status=sold).
+  scope :for_listing, ->(listing_id) { where(listing_id: listing_id) }
 
   # Advances an existing (reserved) transaction to sold, optionally updating
   # the final price and/or buyer (a seller may correct their buyer pick right
@@ -87,13 +103,91 @@ class Transaction < ApplicationRecord
     )
   end
 
+  # ── SF-B4: correcting and voiding a recorded sale ───────────────────────────
+  #
+  # Both are reached only through Listing#correct_sold_transaction!, which holds
+  # the row locks and keeps `listings.sold_units` in step. Do not call them
+  # directly from a controller: on their own they would leave the listing's stock
+  # count claiming units this sale no longer accounts for.
+
+  # Edit a recorded sale: its quantity, its price, and/or who it was to.
+  #
+  # Reassigning the BUYER moves the `bought_count` trust counter — off the person
+  # who did not buy it, onto the person who did — with a GREATEST(x - 1, 0) floor
+  # so a counter that has already been repaired by
+  # `bin/rails transactions:recompute_counters` can never be driven negative.
+  #
+  # `clear_buyer: true` reuses the exact wire convention #sold established
+  # ("reassign to someone not on Hatiwal") rather than inventing a second way to
+  # say the same thing.
+  def correct!(quantity: nil, buyer_id: nil, clear_buyer: false, final_price: nil)
+    new_buyer_id  = clear_buyer ? nil : (buyer_id.presence || self.buyer_id)
+    buyer_changed = new_buyer_id.to_i != self.buyer_id.to_i
+    raise Listing::CorrectionBlocked, REVIEWED_SALE_ERROR if buyer_changed && reviews.exists?
+
+    old_buyer_id = self.buyer_id
+    update!(
+      quantity: quantity.presence || self.quantity,
+      buyer_id: new_buyer_id,
+      final_price: final_price.presence || self.final_price
+    )
+
+    return self unless buyer_changed
+
+    decrement_bought_count!(old_buyer_id)
+    User.where(id: new_buyer_id).update_all("bought_count = bought_count + 1") if new_buyer_id
+    self
+  end
+
+  # "This sale did not happen." Removes the row and gives back the trust counters
+  # it took — the compensating path TASK-TX02's own comment said did not exist.
+  #
+  # Only a SOLD row ever bumped a counter, so only a sold row gives one back; a
+  # still-reserved row is simply destroyed (that is what
+  # Listing#cancel_open_transaction! does, and this stays consistent with it).
+  def void!
+    raise Listing::CorrectionBlocked, REVIEWED_SALE_ERROR if reviews.exists?
+
+    if sold?
+      User.where(id: seller_id).update_all("sold_count = GREATEST(sold_count - 1, 0)")
+      decrement_bought_count!(buyer_id)
+    end
+
+    destroy!
+  end
+
+  # SF-B4 — the one deliberate refusal in the whole correction feature, flagged
+  # here so it is never mistaken for an oversight: a sale that already has a
+  # review attached can be neither voided nor reassigned to a different buyer.
+  # A real, already-written review must not vanish or be re-pointed at someone
+  # else because of an unrelated quantity typo. Quantity and price edits on a
+  # reviewed sale are still allowed — those do not change who reviewed whom.
+  REVIEWED_SALE_ERROR = "This sale already has a review and cannot be removed or reassigned"
+  # Machine-readable marker for the 422, so a 3-locale client renders its own
+  # copy instead of the English sentence above (mirrors the `account_suspended`
+  # convention ApplicationController#reject_blocked_user! already uses).
+  REVIEWED_SALE_CODE = "sale_has_review"
+
   private
+
+  # GREATEST(...) floor, not a bare `- 1`: these counters can already have been
+  # rewritten by `bin/rails transactions:recompute_counters`, and a negative
+  # trust stat on a public profile is worse than a stale one.
+  def decrement_bought_count!(user_id)
+    return if user_id.blank?
+
+    User.where(id: user_id).update_all("bought_count = GREATEST(bought_count - 1, 0)")
+  end
 
   # Atomic single-column UPDATEs (no read-then-write race, no extra SELECT) —
   # same reasoning as ActiveRecord's own #increment_counter.
   def bump_trust_counters!
     User.increment_counter(:sold_count, seller_id)
-    User.increment_counter(:bought_count, buyer_id)
+    # SF-B3 — the buyer half is guarded: an outside-buyer sale has no account to
+    # credit. The seller's sold_count still moves, because the sale still
+    # happened. (`increment_counter` with a nil id would be a no-op UPDATE rather
+    # than an error, but relying on that would hide the intent.)
+    User.increment_counter(:bought_count, buyer_id) if buyer_id.present?
   end
 
   def buyer_is_not_seller

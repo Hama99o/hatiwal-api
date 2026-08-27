@@ -229,6 +229,196 @@ paths:
         required: true
         schema:
           type: string
+  "/api/v1/my/listings/{id}/renew":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    put:
+      summary: renew one of the caller's own listings
+      tags:
+      - Listings
+      description: |
+        Seller lifecycle command. SF-B7 — a listing that fails validation
+        (typically a legacy row that predates one of Listing's bounds) is
+        answered with 422 and the field errors, never a 500 with an empty body.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: successful
+        '422':
+          description: the listing fails validation
+  "/api/v1/my/listings/{id}/unpublish":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    put:
+      summary: unpublish one of the caller's own listings
+      tags:
+      - Listings
+      description: |
+        Seller lifecycle command. SF-B7 — a listing that fails validation
+        (typically a legacy row that predates one of Listing's bounds) is
+        answered with 422 and the field errors, never a 500 with an empty body.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: successful
+        '422':
+          description: the listing fails validation
+  "/api/v1/my/listings/{id}/activate":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    put:
+      summary: activate one of the caller's own listings
+      tags:
+      - Listings
+      description: |
+        Seller lifecycle command. SF-B7 — a listing that fails validation
+        (typically a legacy row that predates one of Listing's bounds) is
+        answered with 422 and the field errors, never a 500 with an empty body.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: successful
+        '422':
+          description: the listing fails validation
+  "/api/v1/my/listings/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    put:
+      summary: update one of the caller's own listings
+      tags:
+      - Listings
+      description: |
+        Edits a listing the caller owns. Photos are appended (never replaced) and
+        removed by signed id via `removed_image_ids`.
+
+        SF-B6 — changing `quantity` reconciles the listing's own status:
+
+        * raising it above `sold_units` re-opens a `sold` listing as `active`,
+          clears `sold_at`, and refreshes `expires_at` when the 30-day clock had
+          already run out (so it comes back into the feed, not into the seller's
+          Expired tab);
+        * lowering it onto `sold_units` retires a live listing as `sold`;
+        * lowering it BELOW `sold_units` is refused with 422 +
+          `code: "quantity_below_sold_units"`. The seller's way out is to undo a
+          sale first (`DELETE /api/v1/my/transactions/:id`, SF-B4).
+
+        SF-B8 — the same endpoint enforces a second floor: lowering `quantity`
+        below the units currently ON HOLD for a buyer is refused with 422 +
+        `code: "quantity_below_held_units"`. The hold is never silently shrunk.
+        The seller's way out is to release the hold
+        (`PUT /api/v1/my/listings/:id/activate`) or set the quantity to at least
+        the held count.
+
+        The two floors report EXCLUSIVELY — whichever is higher raises the error,
+        so `code` is one value and the minimum named in the message is always the
+        minimum that actually works.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: quantity raised — the sold-out listing re-opens with its stock
+        '422':
+          description: quantity below the units already sold
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                listing:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                    price:
+                      type: number
+                    quantity:
+                      type: integer
+                      description: Total units; may not be below sold_units
+        required: true
   "/api/v1/my/reviews/pending":
     get:
       summary: sold sales the caller still owes a review on
@@ -290,12 +480,118 @@ paths:
         description: 'Optional role filter: ''buyer'' or ''seller'''
         schema:
           type: string
+      - name: listing_id
+        in: query
+        required: false
+        description: SF-B5 — narrow to one listing's ledger (the Sales screen)
+        schema:
+          type: integer
+      - name: status
+        in: query
+        required: false
+        description: 'Optional status filter: ''reserved'' or ''sold'''
+        schema:
+          type: string
       responses:
         '401':
           description: unauthorized
         '200':
-          description: "?as=seller narrows to transactions where the caller is the
-            seller"
+          description: "?listing_id= narrows to one listing's ledger"
+  "/api/v1/my/transactions/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    patch:
+      summary: correct a recorded sale
+      tags:
+      - Transactions
+      description: |
+        SF-B4 — edit a sale the seller already recorded: its quantity, its price,
+        and/or who it was to. `quantity: 0` means "this sale did not happen" and
+        is handled exactly like DELETE.
+
+        Restores stock, moves the trust counters, and reconciles the listing's own
+        status (a `sold` listing re-opens as `active` when the correction leaves
+        units unsold). Refused with 422 + `code: "sale_has_review"` when the sale
+        already has a review AND the change would void it or move its buyer.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: sale corrected; listing status and stock reconciled
+        '422':
+          description: the corrected quantity exceeds the listing's stock
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: integer
+                  description: New unit count; 0 voids the sale
+                buyer_id:
+                  type: integer
+                  description: Reassign to another conversation participant
+                clear_buyer:
+                  type: boolean
+                  description: Reassign to 'not on Hatiwal'
+                final_price:
+                  type: number
+                  description: Per-unit price actually agreed
+    delete:
+      summary: void a recorded sale
+      tags:
+      - Transactions
+      description: |
+        SF-B4 — "Undo". Removes the sale, puts its units back in stock, gives back
+        the seller's `sold_count` and the buyer's `bought_count` (never below
+        zero), and re-opens the listing if this sale was what retired it.
+
+        Refused with 422 + `code: "sale_has_review"` when the sale already has a
+        review attached.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: sale removed, stock restored, listing re-opened
+        '422':
+          description: the sale already has a review
   "/api/v1/reports":
     get:
       summary: list the current user's reports

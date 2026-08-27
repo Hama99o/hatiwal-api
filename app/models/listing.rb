@@ -1,4 +1,12 @@
 class Listing < ApplicationRecord
+  # SF-B4 — raised when a correction is refused for a reason that is a product
+  # decision rather than a validation failure: right now, exactly one case, a
+  # sale that already has a review attached (see Transaction#correct!/#void!).
+  # The controller turns it into a 422 carrying the machine-readable code
+  # `sale_has_review`, so a 3-locale client can render its own copy instead of
+  # showing an English sentence from the API.
+  class CorrectionBlocked < StandardError; end
+
   belongs_to :user
   belongs_to :category
   has_many_attached :images
@@ -33,6 +41,55 @@ class Listing < ApplicationRecord
   # business rule — this is a local marketplace, not a warehouse.
   validates :quantity, numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: 999 }
   validates :sold_units, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
+  # SF-B6 — a seller editing `quantity` DOWN below what they have ALREADY sold
+  # used to reach the DB CHECK constraint `listings_sold_units_within_quantity`
+  # and come back as an uncaught ActiveRecord::CheckViolation: a 500 with an
+  # empty body, so the seller taps Save, it fails, and the app can only show its
+  # generic "server error". Exactly the failure class MAX_PRICE was added to
+  # prevent (see its note above), bounded the same way — an ordinary 422 with a
+  # message on :quantity. The CHECK constraint STAYS as the backstop for
+  # everything that bypasses validation (update_column, raw SQL, Administrate).
+  #
+  # The copy names the way out, because since SF-B4 there IS one:
+  # DELETE /api/v1/my/transactions/:id undoes a recorded sale and puts its units
+  # back, which lowers `sold_units` and lets the same edit through.
+  QUANTITY_BELOW_SOLD_UNITS       = :below_sold_units
+  # Wire code the client maps to its own ps/fa/en copy — the `errors` array is
+  # English Rails prose, and this app must never show an untranslated string to a
+  # Pashto or Dari seller. Mirrors SF-B4's `sale_has_review`.
+  QUANTITY_BELOW_SOLD_UNITS_CODE  = "quantity_below_sold_units".freeze
+  validate :quantity_covers_sold_units
+
+  # SF-B8 — the sibling rule one floor over: `quantity` may never fall below the
+  # units currently ON HOLD for a buyer either.
+  #
+  # SF-B6 covered units already SOLD; nothing covered an open hold. So a listing
+  # with 15 units and 10 held for a buyer accepted an edit down to `quantity: 2`,
+  # and the buyer-facing held pill (SF-M4) then rendered "2 available · 10 held"
+  # — arithmetic nonsense, on a stranger's screen, in the one place this app has
+  # to be believable.
+  #
+  # THE EDIT IS REFUSED, the hold is NOT silently shrunk. Both were on the table;
+  # refusing won for two reasons:
+  #
+  #   * it mirrors `quantity_covers_sold_units` sitting immediately above, so a
+  #     seller meets ONE rule ("quantity covers what you have committed") instead
+  #     of two contradictory ones (sold units block the edit, held units quietly
+  #     rewrite someone's reservation);
+  #   * a hold is a promise between two people who have already agreed to meet in
+  #     person. There is no payment in this marketplace to arbitrate a broken one
+  #     — trust IS the product — so a seller shrinking a reservation must do it
+  #     deliberately, not discover it happened.
+  #
+  # The way out is named in the copy and is a real endpoint:
+  # PUT /api/v1/my/listings/:id/activate releases the hold (it destroys the open
+  # Transaction), after which the same down-edit goes through.
+  QUANTITY_BELOW_HELD_UNITS       = :below_held_units
+  # Wire code, same contract and same reason as QUANTITY_BELOW_SOLD_UNITS_CODE
+  # above: the `errors` array is raw English Rails prose and this app ships en +
+  # ps + fa, so the client localizes off the code and never echoes the string.
+  QUANTITY_BELOW_HELD_UNITS_CODE  = "quantity_below_held_units".freeze
+  validate :quantity_covers_held_units
   CURRENCIES = %w[AFN USD EUR].freeze
   validates :currency, presence: true, inclusion: { in: CURRENCIES }
   validates :category, presence: true
@@ -97,6 +154,16 @@ class Listing < ApplicationRecord
   SORT_KEYS = %w[newest oldest price_asc price_desc most_viewed nearest].freeze
 
   scope :active,      -> { where(status: :active) }
+  # SF-B1 — "live" is the market-visible pair. A `reserved` listing has NOT left
+  # the market: on a single item it means "someone is first in line", on a batch
+  # it means "some units are held" (the status is not even flipped there). Before
+  # this scope existed, `browsable` was `active`-only, so reserving a bike made it
+  # vanish from search with nothing telling the seller why — the "my listing
+  # disappeared" report this widen exists to fix (docs/SELL_FLOW_AUDIT.md §7).
+  #
+  # `sold`, `draft` and admin-removed listings are the genuinely-unavailable set
+  # and stay out.
+  scope :live,        -> { where(status: [ :active, :reserved ]) }
   scope :ordered,     -> { order(created_at: :desc) }
   # Filtering by a category includes everything filed under its subcategories:
   # the create-listing picker lets a seller file an item under
@@ -107,7 +174,12 @@ class Listing < ApplicationRecord
   scope :by_seller,   ->(id) { where(user_id: id) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :not_removed, -> { where(removed_at: nil) }
-  scope :expired_active, -> { active.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
+  # A LIVE listing (active or reserved) whose 30-day clock has run out — the
+  # seller's "Expired"/Renew bucket. Widened with `live` alongside `expired?`
+  # (SF-B1): a reserved listing that can expire must also be able to land in the
+  # tab that offers Renew, or it would drop out of `browsable` (`not_expired`)
+  # and appear in NO seller tab at all. Name kept for its callers.
+  scope :expired_active, -> { live.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
 
   # Sort the result set by the supplied key. Falls back to newest (created_at
   # desc) for any absent or unrecognised value — the SORT_KEYS whitelist prevents
@@ -123,18 +195,27 @@ class Listing < ApplicationRecord
   }
 
   # Seller "My Listings" tab filter. "expired" and "active" are refined so the
-  # tabs cleanly partition: Active = live (not past expiry), Expired = active
-  # but past its 30-day clock (the Renew bucket). Other values map to the enum.
+  # tabs cleanly partition: Active = live (not past expiry), Expired = live but
+  # past its 30-day clock (the Renew bucket). Other values map to the enum.
+  #
+  # SF-B1: the "active" tab is `live`, so a held listing stays in the tab the
+  # seller already had it in instead of moving to a separate "Reserved" tab the
+  # clients are dropping. An explicit `?status=reserved` still returns exactly
+  # the reserved rows via the `else` branch — nothing that asks for the raw enum
+  # loses the ability to.
   STATUS_FILTER_EXPIRED = "expired"
   scope :for_status_filter, lambda { |status|
     case status.to_s
     when STATUS_FILTER_EXPIRED then expired_active
-    when "active"              then active.not_expired
+    when "active"              then live.not_expired
     else where(status: status)
     end
   }
-  # Buyer feed: active, not past its expiry, and not removed by an admin.
-  scope :browsable,   -> { active.not_expired.not_removed.ordered }
+  # Buyer feed: live (active OR reserved), not past its expiry, and not removed
+  # by an admin. THE load-bearing line of SF-B1 — the feed, search, category
+  # counts, the similar-listings rail and recently-viewed all compose on top of
+  # this one scope, so widening it here widens all of them at once.
+  scope :browsable,   -> { live.not_expired.not_removed.ordered }
 
   # Explicit per-user "Not interested" dismissal — excludes listings the given
   # user has hidden from their own feed. Guests (nil user) see everything.
@@ -235,10 +316,48 @@ class Listing < ApplicationRecord
   # already persisted and the write succeeded.
   after_update :record_price_history, if: :saved_change_to_price?
 
-  # An active listing whose expiry has passed — hidden from the buyer feed,
-  # shown to the seller with a "Renew" action.
+  # SF-B6 — a plain `PUT /my/listings/:id` that changes `quantity` must reconcile
+  # the listing's status, exactly as a sale correction already does (SF-B4).
+  #
+  # Both directions were broken because nothing reconciled after a quantity edit:
+  #
+  #   UP   15 of 15 sold, seller edits quantity to 20 -> stayed `sold` with 5
+  #        unsold units: out of `browsable` (buyers cannot see it) AND out of
+  #        `ListingPolicy#sold?` (which needs `live?`, so the seller cannot sell
+  #        them either). Stock stranded with no in-app recovery.
+  #   DOWN a live listing whose quantity drops onto `sold_units` stayed `active`
+  #        with nothing left to sell.
+  #
+  # `after_update` rather than `before_save` because `reconcile_sold_status!` is
+  # the SF-B4 method reused verbatim, and it persists with `update!` — the same
+  # shape, for the same reason, as `record_price_history` directly above.
+  #
+  # Registered AFTER `record_price_history` deliberately: the nested `update!`
+  # inside the reconcile REPLACES `saved_changes` with the nested save's, so
+  # running first would hide a price change from the history recorder on an edit
+  # that changed price and quantity together (guarded by its own spec).
+  #
+  # No recursion: the nested save touches `status`/`sold_at`/`expires_at`, never
+  # `quantity`, so this guard is false the second time through.
+  after_update :reconcile_status_after_quantity_change, if: :saved_change_to_quantity?
+
+  # Still on the market: active, or reserved-but-not-gone (SF-B1). The predicate
+  # form of the `live` scope — used by ListingPolicy#start_conversation?,
+  # Conversations::StartService and SavedListing#price_dropped?, all of which
+  # asked `active?` and so treated a held listing as a dead end.
+  def live?
+    active? || reserved?
+  end
+
+  # A live listing whose expiry has passed — hidden from the buyer feed, shown
+  # to the seller with a "Renew" action.
+  #
+  # SF-B1 widened this from `active?` to `live?`: a reserved listing used to
+  # never expire, so it sat live forever. Now that reserved listings are
+  # browsable that would be a listing in the feed with an expiry the feed itself
+  # ignores.
   def expired?
-    active? && expires_at.present? && expires_at.past?
+    live? && expires_at.present? && expires_at.past?
   end
 
   # (Re)start the expiry clock — used on publish and on seller renew.
@@ -263,6 +382,49 @@ class Listing < ApplicationRecord
   # a partial unique DB index on transactions.listing_id).
   def open_transaction
     sale_transactions.reserved.order(created_at: :desc).first
+  end
+
+  # The same row as #open_transaction, read from an ALREADY-EAGER-LOADED
+  # association when there is one.
+  #
+  # `sale_transactions.reserved` always hits the database — an association's
+  # scope ignores its loaded target — so calling #open_transaction from a
+  # serializer field would fire one query per row and reintroduce the exact N+1
+  # `current_sale` was written to avoid (see its own note below, and the guard
+  # spec "issues a constant number of queries regardless of how many rows have a
+  # Transaction"). The mutation paths (#reserve_with_buyer!,
+  # #cancel_open_transaction!) deliberately keep using #open_transaction: they
+  # must never act on a possibly-stale in-memory copy.
+  def open_sale
+    return open_transaction unless sale_transactions.loaded?
+
+    sale_transactions.select(&:reserved?).max_by(&:created_at)
+  end
+
+  # SF-B2 — how many units are currently HELD for a buyer, as a plain integer.
+  #
+  # PUBLIC-SAFE BY CONSTRUCTION: a count, never an identity. This is what powers
+  # the buyer-facing "13 available · 2 held" clause, so it ships on the base
+  # serializer fields (every view, guests included). The buyer's NAME for a held
+  # listing stays owner-only, on the existing `sale` field — do not add anything
+  # here that could identify them.
+  #
+  # Advisory, not an inventory reservation: held units are NOT subtracted from
+  # `available_units` (docs/SELL_FLOW_REDESIGN.md §3.6). A real per-unit hold
+  # would need expiry/leak machinery this marketplace deliberately does not have.
+  def held_units
+    (open_sale&.quantity).to_i
+  end
+
+  # SF-B5 — how many SOLD entries this listing's ledger holds (not units: a buyer
+  # taking 3 of 15 is ONE sale). Same loaded-vs-query guard as everything else
+  # that reads `sale_transactions` from a serializer field.
+  def sales_count
+    if sale_transactions.loaded?
+      sale_transactions.count(&:sold?)
+    else
+      sale_transactions.sold.count
+    end
   end
 
   # ── Multi-quantity (docs/SPIKE_LISTING_QUANTITY.md, Tier 1) ─────────────────
@@ -300,6 +462,10 @@ class Listing < ApplicationRecord
       return false if taken.zero?
 
       update!(sold_units: sold_units + taken)
+      # SF-B9 — the units that just left the shelf may have been the same units
+      # an open hold was still claiming. Bring the hold back inside what is
+      # actually left; see #shrink_open_hold_to_available_units!.
+      shrink_open_hold_to_available_units!
       available_units.zero?
     end
   end
@@ -326,27 +492,48 @@ class Listing < ApplicationRecord
   # already-loaded array in Ruby instead of firing a fresh `.where(...)`
   # query per row (an association's scope always hits the DB, ignoring the
   # loaded target), which would reintroduce an N+1 across the seller feed.
+  # SF-B2 — the `reserved? || sold?` gate is gone. It made this method blind to
+  # the single case the multi-quantity feature created: a MULTI-UNIT listing
+  # whose status deliberately stays `active` while units are held for a buyer
+  # (My::ListingsController#reserve, "a batch does not leave the market because
+  # one unit is held"). `current_sale` returned nil there, so the seller's own
+  # listing card showed no buyer for a hold they had just placed.
+  #
+  # Now: a sold listing surfaces its latest SOLD row; anything else surfaces the
+  # open hold, if any. That covers single-item `reserved?` and multi-item
+  # `active?`-with-a-hold through one expression instead of two special cases.
   def current_sale
-    return nil unless reserved? || sold?
+    # A SOLD listing shows the sale that completed it — never a hold row that
+    # happened to survive (a batch can be sold out to one buyer while an older
+    # hold for someone else is still open).
+    return latest_sold_sale if sold?
 
-    target_status = sold? ? "sold" : "reserved"
-
-    if sale_transactions.loaded?
-      sale_transactions.select { |t| t.status == target_status }.max_by(&:created_at)
-    else
-      sale_transactions.where(status: target_status).order(created_at: :desc).first
-    end
+    # Otherwise: the hold in progress if there is one, else the most recent
+    # completed sale. That last fallback is what makes a PARTIALLY-sold live
+    # batch show its latest buyer ("sold 3 to Zahra") next to `sales_count`'s
+    # "+2 more · View all sales" — without it the card vanished the moment a
+    # correction re-opened a sold-out listing, and a partially-sold batch showed
+    # no buyer at all even though the ledger held several (audit §5, Gap D).
+    open_sale || latest_sold_sale
   end
 
   # Create or advance the Transaction when the seller reserves this listing
   # for a specific buyer. Returns nil (no-op) when buyer_id is blank — the
   # legacy bare `PUT .../reserve` call never touches the transactions table.
-  def reserve_with_buyer!(buyer_id:, final_price: nil)
+  # SF-B2 adds the optional `quantity`. Without it a reservation was always
+  # `quantity: 1` (the column default) regardless of batch size, so "N held for
+  # Ahmad" could only ever say "1 held" — the number was a lie on any batch. The
+  # clamp mirrors `sold_with_buyer!` field-for-field: a single-item listing
+  # ignores the param entirely (there is exactly one unit to hold), and a stale
+  # client cannot hold more units than exist.
+  def reserve_with_buyer!(buyer_id:, final_price: nil, quantity: nil)
     return nil if buyer_id.blank?
+
+    units = multi_unit? ? (quantity.presence || 1).to_i.clamp(1, [ available_units, 1 ].max) : 1
 
     existing = open_transaction
     if existing
-      existing.update!(buyer_id: buyer_id, final_price: final_price.presence || price)
+      existing.update!(buyer_id: buyer_id, final_price: final_price.presence || price, quantity: units)
       existing
     else
       sale_transactions.create!(
@@ -354,7 +541,8 @@ class Listing < ApplicationRecord
         buyer_id: buyer_id,
         final_price: final_price.presence || price,
         currency: currency,
-        status: :reserved
+        status: :reserved,
+        quantity: units
       )
     end
   end
@@ -379,45 +567,55 @@ class Listing < ApplicationRecord
   # a purchase they did not make the moment the seller says "no, not them."
   #
   # The close-out of an EXISTING reservation (the pre-TX02-review-fix, still
-  # legitimate "I already told you who" case) is only attempted while the
-  # listing is ACTUALLY `reserved` right now (`reserved?`) — never off a
-  # merely-present-but-stale Transaction row. A reservation that fell through
-  # (`activate`, reserved → active) has its open Transaction destroyed by
-  # `#cancel_open_transaction!` at that point, so by the time a later
-  # buyer-less `sold` call arrives there is nothing left to (wrongly) close
-  # out — see the reproduction this guards in
+  # legitimate "I already told you who" case) is decided by
+  # `#hold_closed_by_sale` — NOT by the listing's own status. SF-B9 moved that
+  # line; read its note for why the `reserved?` gate it replaced had stopped
+  # being true. TASK-TX02's protection is unchanged and is now stated directly:
+  # a hold belonging to a DIFFERENT buyer is never re-attributed to this sale,
+  # and a buyer-less sale still only closes out a listing that is genuinely
+  # `reserved` right now — see the reproduction this guards in
   # spec/requests/api/v1/my/listings_spec.rb.
   def sold_with_buyer!(buyer_id:, final_price: nil, clear_buyer: false, quantity: nil)
+    # SF-B3 — every `sold` call now leaves EXACTLY ONE sold Transaction. There is
+    # no `return nil` branch left.
+    #
+    # Two paths used to record nothing: the explicit "Someone else / skip"
+    # (`clear_buyer: true`) and the bare legacy call that carries no buyer info at
+    # all. Both moved `sold_units` while the ledger stayed silent, so the seller
+    # could never see the sale again and SF-B4's correction endpoint had nothing
+    # to point at. They are the SAME fact — a sale happened, no counterparty was
+    # recorded — so they now produce the same row, and
+    # Transaction#bump_trust_counters! counts the seller's sale once, like every
+    # other sale. That is what let `bump_seller_sold_count_for_legacy_sale!` be
+    # deleted rather than merely bypassed.
+    #
+    # `cancel_open_transaction!` on the clear_buyer branch keeps its original
+    # reason: a specific reserved buyer falling through is a SEPARATE fact from
+    # this sale, and must never be silently re-attributed to whoever happened to
+    # be holding it (TASK-TX02 review fix, MAJOR).
     if clear_buyer
       cancel_open_transaction!
-      return nil
+      return create_sold_sale!(buyer_id: nil, final_price: final_price, units: units_for_sale(quantity))
     end
 
-    # How many units this sale covers. Defaults to the WHOLE remaining stock,
-    # because "I sold them" is the common case and the seller should not have to
-    # type a number to say it. Clamped so a stale client cannot oversell.
-    units = (quantity.presence || available_units).to_i.clamp(1, [ available_units, 1 ].max)
-
-    existing = reserved? ? open_transaction : nil
+    existing = hold_closed_by_sale(buyer_id)
     if existing
-      # `mark_sold!` itself defaults a blank buyer_id back to the
-      # transaction's own buyer_id (see Transaction#mark_sold!), so passing
-      # it straight through is safe whether or not this call identified one.
-      existing.update!(quantity: units) if multi_unit?
+      # Closing out an existing hold. The units already HELD are the sale unless
+      # the seller says otherwise — before SF-B2 gave a hold a real quantity
+      # there was no held number to honour, so this defaulted to a guess.
+      #
+      # `mark_sold!` itself defaults a blank buyer_id back to the transaction's
+      # own buyer_id (see Transaction#mark_sold!), so passing it straight through
+      # is safe whether or not this call identified one.
+      existing.update!(quantity: units_for_sale(quantity, default: existing.quantity)) if multi_unit?
       existing.mark_sold!(final_price: final_price, buyer_id: buyer_id)
       return existing
     end
 
-    return nil if buyer_id.blank?
-
-    sale_transactions.create!(
-      seller_id: user_id,
-      buyer_id: buyer_id,
-      final_price: final_price.presence || price,
-      currency: currency,
-      status: :sold,
-      quantity: units,
-      completed_at: Time.current
+    # `buyer_id.presence` is what makes the bare legacy call a buyer-less sale
+    # rather than a validation error.
+    create_sold_sale!(
+      buyer_id: buyer_id.presence, final_price: final_price, units: units_for_sale(quantity)
     )
   end
 
@@ -431,22 +629,107 @@ class Listing < ApplicationRecord
     open_transaction&.destroy!
   end
 
-  # TASK-TX02 (review fix) — bump the seller's denormalized users.sold_count
-  # for the legacy buyer-less sale path. `sold_with_buyer!` above only skips
-  # the transactions table entirely when buyer_id is blank AND there was no
-  # prior reservation to close out — that's the one case nothing else ever
-  # counts. Without this, the counter would silently regress versus the old
-  # (pre-TX02) `u.listings.sold.count` figure every time a seller completes a
-  # sale without ever picking a buyer (neither at reserve nor at sold time).
+  # ── SF-B4: undo & edit a recorded sale ──────────────────────────────────────
   #
-  # Deliberately NOT a `sold?` after_save callback: that would fire for
-  # ANY path that flips a listing to `sold` (factories, data migrations,
-  # admin tools, or the buyer-identified branch itself, which is already
-  # counted via its own Transaction) and double- or over-count. Instead the
-  # `sold` controller action calls this explicitly, and only when
-  # `sold_with_buyer!` returned nil (no buyer identified for this sale).
-  def bump_seller_sold_count_for_legacy_sale!
-    User.increment_counter(:sold_count, user_id)
+  # The hole this closes (docs/SELL_FLOW_AUDIT.md §4): a seller who tapped "sold
+  # 5" on a batch of 15 instead of "sold 1" had permanently lost 4 units of
+  # stock. `record_units_sold!` only ever ADDS, the counters were increment-only,
+  # and a sold-out listing was terminal — so there was no path down anywhere in
+  # the stack, and repair meant a human running a rake task.
+  #
+  # ONE method does both the toast's "Undo" and the Sales screen's editable row.
+  # There is no separate "correction form" concept: `quantity: 0` (or any
+  # non-positive number) means "this sale did not happen", anything else means
+  # "it was for this many".
+  #
+  # The listing's own status is reconciled as a SIDE EFFECT of fixing the ledger,
+  # never as a separate action a seller has to find: dropping below full stock
+  # re-opens a `sold` listing, and reaching full stock retires an `active` one. A
+  # single-item listing's only possible correction is voiding its one sale (its
+  # quantity cannot go below 1 without voiding) — same code path, no special case.
+  #
+  # `with_lock` here is load-bearing in a way it is not in `record_units_sold!`:
+  # this method READS `sold_units`, computes from it and writes it back, so two
+  # concurrent corrections could otherwise lose one of the two adjustments. The
+  # transaction row is locked too, in a fixed order (listing then transaction) so
+  # two corrections on the same listing cannot deadlock each other.
+  def correct_sold_transaction!(transaction:, quantity: nil, buyer_id: nil, clear_buyer: false, final_price: nil)
+    raise ArgumentError, "transaction does not belong to this listing" unless transaction.listing_id == id
+    raise ArgumentError, "only a sold transaction can be corrected" unless transaction.sold?
+
+    # `total_units` and not `quantity`: the keyword argument SHADOWS the column
+    # reader inside this method, and reading the seller's requested number where
+    # the listing's total was meant is exactly the kind of silent mistake that
+    # would corrupt stock. Named apart so it cannot happen.
+    total_units = self.quantity
+    voiding     = quantity.present? && quantity.to_i <= 0
+
+    with_lock do
+      transaction.lock!
+      old_units = transaction.quantity
+
+      if voiding
+        transaction.void!
+        new_sold_units = [ sold_units - old_units, 0 ].max
+      else
+        new_units = quantity.presence&.to_i || old_units
+        # What this sale is allowed to grow to: everything not accounted for by
+        # the OTHER sales of this listing.
+        capacity = total_units - (sold_units - old_units)
+        raise_capacity_error!(transaction, new_units, capacity) if new_units < 1 || new_units > capacity
+
+        transaction.correct!(
+          quantity: new_units, buyer_id: buyer_id, clear_buyer: clear_buyer, final_price: final_price
+        )
+        new_sold_units = [ sold_units - old_units + new_units, 0 ].max
+      end
+
+      update!(sold_units: new_sold_units)
+      reconcile_sold_status!(new_sold_units, total_units)
+    end
+
+    reload
+  end
+
+  # SF-B3 removed `bump_seller_sold_count_for_legacy_sale!`.
+  #
+  # It existed for exactly one reason: an outside-buyer ("Someone else / skip")
+  # sale created NO Transaction, so nothing else ever bumped the seller's
+  # sold_count for it, and the controller had to do it by hand. That sale now
+  # always creates a sold Transaction, and Transaction#bump_trust_counters!
+  # counts it like every other sale — so keeping the manual bump would have
+  # counted every outside-buyer sale TWICE. Deleted here and at its call site in
+  # My::ListingsController#sold together, deliberately, as one change.
+  #
+  # The genuinely buyer-less legacy path that remains (a bare `PUT .../sold` with
+  # no buyer_id and no clear_buyer, on a listing that was never reserved) still
+  # creates no Transaction and still bumps nothing — unchanged, and correct: no
+  # counterparty was ever asserted, so there is no confirmed sale to count.
+
+  # SF-B6 — the machine-readable code for the validation errors currently on this
+  # record, or nil. Lives here rather than in the controller so the controller
+  # stays a two-liner and the code/validation pair can never drift apart.
+  #
+  # Only the quantity-floor failures get one: they are the edit errors a seller is
+  # expected to ACT on (undo a sale, release a hold, or raise the number), so the
+  # client has to render them inline under the field in the seller's own language
+  # instead of echoing the English `errors` string.
+  #
+  # SF-B8 added the second code. The two can never BOTH be present: the floors
+  # report exclusively — whichever is higher raises the error and the other stays
+  # silent (see `hold_sets_quantity_floor?`) — so this is an ordered list of
+  # mutually exclusive cases, not a tiebreak that runs in practice.
+  #
+  # It is still written as a precedence, deliberately, so a future third rule
+  # cannot make this method return whichever code happens to be first in the
+  # errors array: units-already-sold wins, because it is the floor a seller cannot
+  # lower by releasing anything — undoing a completed sale needs SF-B4's
+  # correction endpoint, while a hold is released with one tap on `activate`.
+  def error_code
+    return QUANTITY_BELOW_SOLD_UNITS_CODE if errors.where(:quantity, QUANTITY_BELOW_SOLD_UNITS).any?
+    return QUANTITY_BELOW_HELD_UNITS_CODE if errors.where(:quantity, QUANTITY_BELOW_HELD_UNITS).any?
+
+    nil
   end
 
   # ── Admin take-down (soft remove) ────────────────────────────────────────────
@@ -616,6 +899,262 @@ class Listing < ApplicationRecord
   end
 
   private
+
+  # SF-B9 — the open hold that THIS `sold` call closes out, or nil.
+  #
+  # It used to be `reserved? ? open_transaction : nil`. That read the LISTING'S
+  # STATUS as a proxy for "is a hold in progress", which was true when placing a
+  # hold always flipped the status — and stopped being true the day SF-B2 made a
+  # multi-unit batch deliberately stay `active` while units are held ("a batch
+  # does not leave the market because one unit is held"). From then on `existing`
+  # was ALWAYS nil for a batch, so selling held units to the very buyer holding
+  # them left the hold open beside the new sale: two rows, and a buyer reading
+  # "5 available · 10 held" for ten units already sold to them (measured, not
+  # theorised — card SF-B9). The same phantom hold then set SF-B8's quantity
+  # floor, so it refused legitimate down-edits too.
+  #
+  # The question the gate should have been asking all along is not "where is the
+  # listing" but "is there an open hold FOR THIS BUYER". Both cases below are
+  # that question; neither reads `status` as evidence of a hold:
+  #
+  #   * the seller named the person the units are held for -> this sale IS that
+  #     hold completing, whatever the listing's status. Covers single-item
+  #     (`reserved`) and batch (`active`) through one expression.
+  #   * a buyer-LESS call (a true legacy client, which sends no buyer info at
+  #     all) on a listing that is genuinely `reserved` right now -> closes out
+  #     using the buyer already recorded on the hold. TASK-TX02's case, verbatim,
+  #     including its `reserved?` requirement: a hold that has fallen through
+  #     must never be resurrected by a later buyer-less sale.
+  #
+  # And TASK-TX02's protection, now stated rather than implied: a hold belonging
+  # to a DIFFERENT buyer is NOT closed out against this sale. Someone who never
+  # bought the item cannot be credited with buying it, and the sale keeps its own
+  # row instead of quietly repurposing theirs. (The explicit "Someone else /
+  # skip" tap has always said so with `clear_buyer`; this makes the same true of
+  # naming a different buyer outright.) What happens to that other buyer's hold
+  # afterwards is decided by stock, not by this method — see
+  # #shrink_open_hold_to_available_units!.
+  def hold_closed_by_sale(buyer_id)
+    hold = open_transaction
+    return nil if hold.nil?
+    return hold if buyer_id.present? && hold.buyer_id.present? && hold.buyer_id == buyer_id.to_i
+    return hold if buyer_id.blank? && reserved?
+
+    nil
+  end
+
+  # SF-B9 — keep an advisory hold inside the stock that actually remains.
+  #
+  # A hold is deliberately NOT an inventory reservation: `held_units` is never
+  # subtracted from `available_units` (docs/SELL_FLOW_REDESIGN.md §3.6), so a
+  # seller CAN sell units another buyer is holding — nothing set them aside. What
+  # they must not be able to do is leave a hold claiming more units than the
+  # listing has left, which renders on a stranger's screen as "0 available ·
+  # 1 held" — the exact arithmetic nonsense SF-B8 exists to keep off it, reached
+  # here through an ordinary sale rather than an edit.
+  #
+  # So the hold is narrowed to what survived the sale, and destroyed when
+  # nothing did. Only ever narrowed, never widened.
+  #
+  # This is deliberately NOT the call SF-B8 makes. There a seller LOWERING
+  # `quantity` is refused rather than having a hold silently shrunk, because an
+  # edit is a choice they can revise and a hold is a promise between two people
+  # who agreed to meet. A sale is not a choice — it already happened in person,
+  # which is why `record_units_sold!` clamps instead of raising ("refusing to
+  # record it would lose the ledger entry"). A hold on units that no longer
+  # exist cannot be honoured by anybody; saying so is the honest option left.
+  #
+  # Destroying a still-`reserved` row touches no trust counter — only a `sold`
+  # row ever bumped one (Transaction#void! reasons the same way).
+  #
+  # `update_columns` and not `update!`, which is load-bearing rather than a
+  # shortcut — measured, not assumed. Transaction validates
+  # `buyer_is_conversation_participant`, and a Conversation is HARD-destroyed
+  # once BOTH parties delete the thread (Conversation#delete_for!). So a hold
+  # whose thread is gone cannot be saved at all, and an `update!` here made the
+  # WHOLE SALE fail: 422 "Buyer must be a participant in a conversation on this
+  # listing", naming a rule about a third party's deleted chat, rolled back
+  # inside My::ListingsController#sold's DB transaction — a seller unable to
+  # record a real sale because of a hold they are not even selling to.
+  #
+  # A narrowing write of ONE column must not be refused by a validation about an
+  # attribute it does not touch and an inconsistency that predates it. Same call
+  # `record_units_sold!` makes one floor up: the sale already happened, so it is
+  # recorded, and `transactions_quantity_positive` (quantity >= 1) is the DB
+  # backstop that cannot be edited away — honoured here by destroying the row
+  # rather than writing a zero. `updated_at` is moved by hand since
+  # `update_columns` will not.
+  def shrink_open_hold_to_available_units!
+    hold = open_transaction
+    return if hold.nil? || hold.quantity <= available_units
+    return hold.destroy! if available_units.zero?
+
+    hold.update_columns(quantity: available_units, updated_at: Time.current)
+  end
+
+  # How many units one `sold` call covers.
+  #
+  # Defaults to ONE unit of a batch, not the whole shelf — the seller's number
+  # when they give one, otherwise the conservative reading of "I sold it". This
+  # matches the default My::ListingsController#sold has documented since the
+  # device report it came from (50 in stock, one sale, listing retired reading
+  # "0 of 50 left"): in a marketplace with no payments, the destructive outcome
+  # must be the one you ask for explicitly, never the silent one.
+  #
+  # A single-item listing is unaffected — its `available_units` IS 1, so both
+  # halves of the ternary are the same number.
+  #
+  # Clamped so a stale client cannot oversell; the DB CHECK constraint
+  # (`listings_sold_units_within_quantity`) is the backstop that cannot be edited
+  # away.
+  # `default:` lets the caller override the fallback — used when closing out a
+  # hold, where the units already held are the better default than a guess.
+  def units_for_sale(quantity, default: nil)
+    fallback = default || (multi_unit? ? 1 : available_units)
+    (quantity.presence || fallback).to_i.clamp(1, [ available_units, 1 ].max)
+  end
+
+  # Re-open a listing that went sold-out by mistake, or retire one whose
+  # correction has just emptied it. `sold_at` is cleared on the way back out so
+  # the seller's card does not keep claiming a sale date for a listing that is
+  # live again.
+  def reconcile_sold_status!(new_sold_units, total_units)
+    if sold? && new_sold_units < total_units
+      update!({ status: :active, sold_at: nil }.merge(refreshed_expiry))
+    elsif active? && new_sold_units >= total_units && new_sold_units.positive?
+      update!(status: :sold)
+    end
+  end
+
+  # SF-B6 — a listing coming back from `sold` has to come back INTO the feed.
+  #
+  # Its 30-day clock kept running while it sat sold, so by the time it re-opens it
+  # is usually already past `expires_at` — and reopening it without touching that
+  # drops it straight into the seller's Expired tab (`expired_active` is `live` +
+  # past expiry), where they have to go hunting for Renew to finish a fix they
+  # just made. Refreshed ONLY when the expiry has actually passed: a listing with
+  # three weeks left keeps them, and a listing that never had an expiry (nil
+  # reads as "never expires" to `not_expired`) is not given one here.
+  #
+  # Inside `reconcile_sold_status!` and not in the SF-B6 callback so the SF-B4
+  # correction path (undo a sale on a sold-out listing that has since expired)
+  # gets the same treatment — it had the identical hole.
+  def refreshed_expiry
+    return {} unless expires_at.present? && expires_at.past?
+
+    { expires_at: LISTING_LIFESPAN.from_now }
+  end
+
+  # SF-B6 — see the `after_update` registration above. Reads the CURRENT columns:
+  # by the time an after_update callback runs, both are the values just saved.
+  def reconcile_status_after_quantity_change
+    reconcile_sold_status!(sold_units, quantity)
+  end
+
+  # SF-B6 — `quantity` may never fall below the units already sold.
+  def quantity_covers_sold_units
+    return if quantity.blank? || sold_units.blank?
+    return if quantity >= sold_units
+    # SF-B8 — an open hold can sit HIGHER than the units already sold, and when it
+    # does `quantity_covers_held_units` is the rule that names the number; this one
+    # steps aside so exactly one minimum is ever reported. A no-op for any listing
+    # without a hold, which is almost all of them (held_units is then 0).
+    return if hold_sets_quantity_floor?
+
+    errors.add(
+      :quantity,
+      QUANTITY_BELOW_SOLD_UNITS,
+      message: "cannot be less than the #{sold_units} #{'unit'.pluralize(sold_units)} already sold. " \
+               "Set it to #{sold_units} or more, or undo a sale first."
+    )
+  end
+
+  # SF-B8 — `quantity` may never fall below the units on hold for a buyer.
+  #
+  # Worded to read correctly through `errors.full_messages`, which prefixes the
+  # attribute name: "Quantity cannot be less than the 10 units on hold for a
+  # buyer. Release the hold first, or set it to 10 or more." Singularized at 1
+  # like SF-B6's, though `quantity` is validated `greater_than: 0` so a one-unit
+  # hold can never actually breach this floor.
+  def quantity_covers_held_units
+    return unless hold_sets_quantity_floor?
+
+    held = held_units
+    return if quantity >= held
+
+    errors.add(
+      :quantity,
+      QUANTITY_BELOW_HELD_UNITS,
+      message: "cannot be less than the #{held} #{'unit'.pluralize(held)} on hold for a buyer. " \
+               "Release the hold first, or set it to #{held} or more."
+    )
+  end
+
+  # SF-B8 — true when an open hold sets a STRICTLY higher floor under `quantity`
+  # than the units already sold: the hold is then the number to report.
+  #
+  # Asked by BOTH quantity floors so they report exclusively. Without it a listing
+  # that is below sold_units AND below held_units answers with two different
+  # minimums ("set it to 8 or more" beside "set it to 10 or more"), and a seller
+  # who obeys the smaller one is refused again — a contradictory pair rather than
+  # an answer. Whichever floor is higher speaks; the other is silent; the number
+  # the seller is given is always the number that actually works.
+  #
+  # Scoped to saves that actually CHANGE `quantity`, for two reasons:
+  #
+  #   * every other write on a listing (renew!, take_down!, a price edit, SF-B6's
+  #     status reconcile) would otherwise pay for a `sale_transactions` lookup it
+  #     has no use for. `held_units` reads `open_sale`, whose loaded-array guard
+  #     only helps the eager-loaded feed — from a validation it is a real query.
+  #   * a row already BELOW its hold must stay editable. Those rows exist: this
+  #     bug has been accepting exactly that edit since SF-B2 shipped holds with a
+  #     quantity. An unconditional rule would strand them — renew, unpublish and
+  #     every unrelated edit refused, forever — which is the retroactive-validation
+  #     trap SF-B7 was just written to soften, and the one
+  #     `photo_required_to_publish` is scoped to the publish transition to avoid.
+  #     Raising the quantity to the held count still fixes them, so does releasing
+  #     the hold; nothing else is blocked in the meantime.
+  def hold_sets_quantity_floor?
+    return false if new_record? || quantity.blank?
+    return false unless will_save_change_to_quantity?
+
+    held_units > sold_units.to_i
+  end
+
+  # Rendered as an ordinary 422 with a field error, the same shape as any other
+  # validation failure — the client already knows how to show it.
+  def raise_capacity_error!(transaction, new_units, capacity)
+    transaction.errors.add(
+      :quantity,
+      "must be between 1 and #{[ capacity, 1 ].max} for this listing's remaining stock (asked for #{new_units})"
+    )
+    raise ActiveRecord::RecordInvalid, transaction
+  end
+
+  # The one place a sold Transaction is created. `buyer_id` may be nil (SF-B3,
+  # a sale with no counterparty account).
+  def create_sold_sale!(buyer_id:, final_price:, units:)
+    sale_transactions.create!(
+      seller_id: user_id,
+      buyer_id: buyer_id,
+      final_price: final_price.presence || price,
+      currency: currency,
+      status: :sold,
+      quantity: units,
+      completed_at: Time.current
+    )
+  end
+
+  # The newest SOLD row for this listing. Same loaded-vs-query guard as
+  # #open_sale: filter the eager-loaded array in Ruby when there is one, so a
+  # feed full of sold rows stays a constant number of queries.
+  def latest_sold_sale
+    if sale_transactions.loaded?
+      sale_transactions.select(&:sold?).max_by(&:created_at)
+    else
+      sale_transactions.sold.order(created_at: :desc).first
+    end
+  end
 
   def record_price_history
     old_price, new_price = previous_changes[:price]

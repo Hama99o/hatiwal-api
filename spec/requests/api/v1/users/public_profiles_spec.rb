@@ -57,10 +57,10 @@ RSpec.describe "Api::V1::Users::PublicProfiles", type: :request do
 
         # Confirm the profile count matches the browsable scope directly, which
         # is what the buyer grid (GET /listings?user_id=) uses under the hood.
-        browsable_count = seller.listings.active.not_expired.count
+        browsable_count = seller.listings.live.not_expired.count
         expect(browsable_count).to eq(body["listings_count"]),
           "listings_count in the profile header (#{body['listings_count']}) " \
-          "must equal seller.listings.active.not_expired.count (#{browsable_count})"
+          "must equal seller.listings.live.not_expired.count (#{browsable_count})"
       end
 
       it "does not affect sold_count — sold listings are not expiry-gated" do

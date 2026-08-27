@@ -76,8 +76,8 @@ class User < ApplicationRecord
   # source data — a safety net for `bin/rails transactions:recompute_counters`
   # (see lib/tasks/transactions.rake) rather than something the normal
   # reserve/sold flow needs to call. Normal operation bumps these counters
-  # incrementally via Transaction#bump_trust_counters! /
-  # Listing#bump_seller_sold_count_for_legacy_sale!; this method recomputes
+  # incrementally via Transaction#bump_trust_counters! (and decrementally via
+  # Transaction#void!/#correct!, SF-B4); this method recomputes
   # them from scratch instead, so it also repairs any drift caused by a path
   # that bypasses those — e.g. an admin directly editing a Listing's `status`
   # via the Administrate dashboard (ListingDashboard::FORM_ATTRIBUTES permits

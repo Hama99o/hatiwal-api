@@ -4,7 +4,9 @@ RSpec.describe Transaction, type: :model do
   describe "associations" do
     it { is_expected.to belong_to(:listing) }
     it { is_expected.to belong_to(:seller).class_name("User") }
-    it { is_expected.to belong_to(:buyer).class_name("User") }
+    # SF-B3 — OPTIONAL: nil for "sold to someone not on Hatiwal", a real sale
+    # with no counterparty account.
+    it { is_expected.to belong_to(:buyer).class_name("User").optional }
   end
 
   describe "validations" do

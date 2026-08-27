@@ -31,16 +31,28 @@ class ListingSerializer < ApplicationSerializer
       # docs/SPIKE_LISTING_QUANTITY.md §0b exists to answer.
       quantity: txn.quantity,
       completed_at: txn.completed_at,
-      buyer: {
-        id: buyer.id,
-        name: buyer.full_name,
-        avatar_url: buyer.avatar.attached? ? buyer.avatar.url : nil,
-        verified: buyer.verified
-      },
+      # SF-B3 — nil for an outside-buyer sale. The sale itself is real and must
+      # still render (quantity, price, "sold"); only the counterparty is absent.
+      # Mobile's SaleBuyerCard already optional-chains `sale.buyer?.name`.
+      buyer: if buyer.nil?
+               nil
+             else
+               {
+                 id: buyer.id,
+                 name: buyer.full_name,
+                 avatar_url: buyer.avatar.attached? ? buyer.avatar.url : nil,
+                 verified: buyer.verified
+               }
+             end,
       # `.find_by` on an eager-loaded association still issues a query, so we
       # search the in-memory array when `conversations` is already loaded
       # (My::ListingsController#index includes it) to keep this N+1-free.
-      conversation_id: if l.conversations.loaded?
+      # nil when there is no buyer to have a thread with (SF-B3, outside-buyer
+      # sale) — checked before the lookup so we never ask the DB for
+      # `buyer_id IS NULL`.
+      conversation_id: if txn.buyer_id.nil?
+                          nil
+                       elsif l.conversations.loaded?
                           l.conversations.to_a.find { |c| c.buyer_id == txn.buyer_id }&.id
                        else
                           l.conversations.find_by(buyer_id: txn.buyer_id)&.id
@@ -61,6 +73,24 @@ class ListingSerializer < ApplicationSerializer
   field(:quantity) { |l| l.quantity }
   field(:available_units) { |l| l.available_units }
   field(:multi_unit) { |l| l.multi_unit? }
+  # SF-B2 — units currently held for a buyer, as a plain integer. On the BASE
+  # fields for the same reason as the three above: the buyer-facing stock pill
+  # ("13 available · 2 held") has to read the same number on the feed card and on
+  # the detail page, and a view that omitted it would silently render "13
+  # available" for a listing where two are already promised.
+  #
+  # PUBLIC-SAFE: a count, never an identity. The buyer's NAME for a held listing
+  # stays on the owner-only `sale` field below — never move it here.
+  #
+  # Costs no per-row query wherever the caller eager-loads `sale_transactions`
+  # (My::ListingsController#index and ListingsController#index both do) — see
+  # Listing#open_sale's loaded-array guard.
+  field(:held_units) { |l| l.held_units }
+  # SF-B5 — how many SOLD entries this listing's ledger holds. Powers
+  # SaleBuyerCard's "+2 more · View all sales" link, so a seller learns there is
+  # more than one buyer without having to open the full ledger screen to find out.
+  # `sale` (above) shows only the latest sale; this is the number that says so.
+  field(:sales_count) { |l| l.sales_count }
 
   view :list do
     fields :category_id, :views_count, :negotiable

@@ -185,8 +185,10 @@ Rails.application.routes.draw do
         resources :saved_listings, only: [ :index ]
         resources :viewed_listings, only: [ :index ]
         resources :hidden_listings, only: [ :index ]
-        # GET /my/transactions — the caller's own transactions, as buyer or seller (TASK-TX01).
-        resources :transactions, only: [ :index ]
+        # GET    /my/transactions      — the caller's own transactions, as buyer or seller (TASK-TX01).
+        # PATCH  /my/transactions/:id   — correct a recorded sale (quantity / buyer / price) (SF-B4).
+        # DELETE /my/transactions/:id   — void a recorded sale, restoring stock and counters (SF-B4).
+        resources :transactions, only: [ :index, :update, :destroy ]
         # GET /my/reviews/pending — sold sales the caller still owes a review on.
         get "reviews/pending", to: "reviews#pending"
       end

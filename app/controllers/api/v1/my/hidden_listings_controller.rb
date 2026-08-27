@@ -9,6 +9,11 @@ class Api::V1::My::HiddenListingsController < Api::V1::BaseController
                                   .includes(listing: [
                                     :category,
                                     :price_histories,
+                                    # SF-B2 — the base `held_units` field asks every row for its open
+                                    # hold; an association scope always queries, so without this preload
+                                    # the list would fire one extra query per card (Listing#open_sale
+                                    # reads the loaded array when it is present).
+                                    :sale_transactions,
                                     { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                                   ])
 

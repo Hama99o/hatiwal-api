@@ -574,9 +574,11 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       end
 
       # ── TASK-TX02 (review fix, MED) ────────────────────────────────────────
-      # The denormalized sold_count/bought_count counters are increment-only
-      # (Transaction#bump_trust_counters!, Listing#bump_seller_sold_count_for_legacy_sale!)
-      # with no decrement path — this is only safe because a repeat `sold` call
+      # The denormalized sold_count/bought_count counters are bumped by
+      # Transaction#bump_trust_counters!. SF-B4 added the only decrement path
+      # (Transaction#void!/#correct!, reached solely through
+      # PATCH/DELETE /my/transactions/:id) — so a repeat `sold` call must still
+      # not sneak an extra bump in. This is only safe because a repeat `sold` call
       # on an already-sold (terminal) listing is rejected by ListingPolicy#sold?
       # before it ever reaches the bump logic. Guards the invariant explicitly
       # so nobody removes the `sold?` terminal check without noticing it is
@@ -592,14 +594,27 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       end
 
       # ── TASK-TX01 ──────────────────────────────────────────────────────────
-      it "without buyer_id (legacy) never creates a Transaction" do
+      # INVERTED by SF-B3. A bare legacy `sold` used to record nothing at all:
+      # `sold_units` moved, no row existed, the seller could never see the sale
+      # again, and there was nothing for the correction endpoint to point at. It
+      # is the same fact as "sold to someone not on Hatiwal", so it now produces
+      # the same buyer-less row.
+      it "without buyer_id (legacy) records a buyer-less sold Transaction (SF-B3)" do
         active = create(:listing, :active, user: user)
 
         expect do
           put "/api/v1/my/listings/#{active.id}/sold", headers: headers, as: :json
-        end.not_to change(Transaction, :count)
+        end.to change(Transaction, :count).by(1)
 
-        expect(JSON.parse(response.body)).not_to have_key("transaction")
+        txn = active.sale_transactions.sole
+        expect(txn).to be_sold
+        expect(txn.buyer_id).to be_nil
+
+        # The lifecycle response now carries the row, with a null buyer — the
+        # clients render "Buyer not on Hatiwal" from it.
+        body = JSON.parse(response.body)
+        expect(body["transaction"]["id"]).to eq(txn.id)
+        expect(body["transaction"]["buyer"]).to be_nil
       end
 
       it "advances a prior reserve-with-buyer Transaction to sold" do
@@ -637,10 +652,12 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(body["listing"]["sale"]["status"]).to eq("sold")
       end
 
-      # ── TASK-TX02 (review fix) — the legacy buyer-less path must still bump
-      # the seller's denormalized sold_count, or it silently regresses versus
-      # the old always-accurate `u.listings.sold.count` figure. ────────────────
-      it "without buyer_id (legacy) still bumps the seller's sold_count by 1" do
+      # The counter still moves by exactly 1 — but via
+      # Transaction#bump_trust_counters! now, not the hand-rolled
+      # `bump_seller_sold_count_for_legacy_sale!` that SF-B3 deleted. This is the
+      # assertion that would catch either half of the trap: deleting the manual
+      # bump without giving the path a Transaction (0), or keeping both (2).
+      it "without buyer_id (legacy) still bumps the seller's sold_count by exactly 1" do
         active = create(:listing, :active, user: user)
 
         expect do
@@ -717,15 +734,20 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         put "/api/v1/my/listings/#{active.id}/reserve", params: { buyer_id: buyer.id }, headers: headers, as: :json
         txn_id = JSON.parse(response.body)["transaction"]["id"]
 
+        # Net zero rows: the hold is destroyed AND the sale is written down
+        # (SF-B3). Before, the hold was destroyed and the sale recorded nothing.
         expect do
           put "/api/v1/my/listings/#{active.id}/sold", params: { clear_buyer: true }, headers: headers, as: :json
-        end.to change(Transaction, :count).by(-1)
+        end.to change(Transaction, :count).by(0)
              .and change { user.reload.sold_count }.by(1)
 
         expect(response).to have_http_status(:ok)
         expect(Transaction.exists?(txn_id)).to be(false)
         expect(buyer.reload.bought_count).to eq(0)
-        expect(JSON.parse(response.body)).not_to have_key("transaction")
+
+        body = JSON.parse(response.body)
+        expect(body["transaction"]["buyer"]).to be_nil
+        expect(body["transaction"]["id"]).not_to eq(txn_id)
         expect(active.reload).to be_sold
       end
 
@@ -750,8 +772,10 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
           put "/api/v1/my/listings/#{active.id}/sold", headers: headers, as: :json
         end.to change { user.reload.sold_count }.by(1)
 
+        # The original buyer is still never credited. SF-B3 only changes WHERE
+        # the sale is recorded, never to whom.
         expect(buyer.reload.bought_count).to eq(0)
-        expect(JSON.parse(response.body)).not_to have_key("transaction")
+        expect(JSON.parse(response.body)["transaction"]["buyer"]).to be_nil
         expect(active.reload).to be_sold
       end
     end
@@ -764,10 +788,41 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(active.reload).to be_draft
       end
 
-      it "forbids unpublishing a non-active listing" do
+      it "forbids unpublishing a non-live listing" do
         draft = create(:listing, :draft, user: user)
         put "/api/v1/my/listings/#{draft.id}/unpublish", headers: headers, as: :json
         expect(response).to have_http_status(:forbidden)
+
+        sold = create(:listing, :sold, user: user)
+        put "/api/v1/my/listings/#{sold.id}/unpublish", headers: headers, as: :json
+        expect(response).to have_http_status(:forbidden)
+      end
+
+      # SF-B1 — reserving no longer hides a listing, so "pull it off the market
+      # while I finish this deal" needs a one-step route from `reserved`.
+      it "takes a RESERVED listing back to draft (SF-B1)" do
+        reserved = create(:listing, :reserved, user: user)
+        put "/api/v1/my/listings/#{reserved.id}/unpublish", headers: headers, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(reserved.reload).to be_draft
+      end
+
+      # A draft listing cannot carry a live reservation: leaving the `reserved`
+      # row alive is how it later gets silently closed out against the wrong
+      # buyer (TASK-TX02 review fix, MAJOR — same reasoning as #activate).
+      it "cancels an open hold when taking the listing offline" do
+        active = create(:listing, :active, user: user)
+        buyer  = create(:user)
+        create(:conversation, listing: active, seller: user, buyer: buyer)
+        put "/api/v1/my/listings/#{active.id}/reserve", params: { buyer_id: buyer.id }, headers: headers, as: :json
+        expect(active.reload).to be_reserved
+
+        expect do
+          put "/api/v1/my/listings/#{active.id}/unpublish", headers: headers, as: :json
+        end.to change(Transaction, :count).by(-1)
+
+        expect(active.reload).to be_draft
+        expect(active.open_transaction).to be_nil
       end
     end
 

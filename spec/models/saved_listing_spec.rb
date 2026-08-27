@@ -79,11 +79,21 @@ RSpec.describe SavedListing, type: :model do
       expect(saved.reload.price_dropped?).to be false
     end
 
-    it "is false when the listing is no longer active, even if the price dropped" do
+    it "is false when the listing is no longer live, even if the price dropped" do
       listing = create(:listing, :active, price: 5000)
       saved = create(:saved_listing, listing: listing)
       listing.update!(price: 4000, status: :sold)
       expect(saved.reload.price_dropped?).to be false
+    end
+
+    # SF-B1 — a price drop on a HELD listing is just as actionable a signal to
+    # the buyer who saved it: the hold may fall through, and the listing is back
+    # in the feed the badge decorates.
+    it "is true on a RESERVED listing whose price dropped (SF-B1)" do
+      listing = create(:listing, :active, price: 5000)
+      saved = create(:saved_listing, listing: listing)
+      listing.update!(price: 4000, status: :reserved)
+      expect(saved.reload.price_dropped?).to be true
     end
   end
 

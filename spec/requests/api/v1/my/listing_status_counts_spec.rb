@@ -43,11 +43,25 @@ RSpec.describe "Api::V1::My::ListingStatusCounts", type: :request do
         expect(body["sold"]).to eq(2)
       end
 
-      it "active count excludes expired-active listings" do
+      # SF-B1 — the "Active" tab is `live.not_expired` (active + reserved), so the
+      # badge must count reserved rows too: 2 non-expired active + 1 reserved.
+      # A badge that reads 2 over a list of 3 is the drift TASK-B903 fixed once
+      # already on the public profile.
+      it "active count includes reserved listings and excludes expired-active ones" do
         get "/api/v1/my/listings/status_counts", headers: headers, as: :json
         body = JSON.parse(response.body)
 
-        expect(body["active"]).to eq(2)
+        expect(body["active"]).to eq(3)
+      end
+
+      it "the active badge equals what the widened Active tab actually returns" do
+        get "/api/v1/my/listings/status_counts", headers: headers, as: :json
+        badge = JSON.parse(response.body)["active"]
+
+        get "/api/v1/my/listings", params: { status: "active" }, headers: headers, as: :json
+        rows = JSON.parse(response.body)["listings"].length
+
+        expect(badge).to eq(rows)
       end
 
       it "expired count equals the number of active listings past their expiry" do

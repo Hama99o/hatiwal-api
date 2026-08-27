@@ -172,6 +172,82 @@ RSpec.describe Listing, type: :model do
         new_active = create(:listing, :active, created_at: 1.hour.ago)
         expect(Listing.browsable.to_a).to eq([ new_active, old_active ])
       end
+
+      # SF-B1 — the load-bearing widen. Every browse surface (feed, search,
+      # category counts, similar rail, recently-viewed, saved searches) composes
+      # on this one scope, so a reserved listing being in it is what puts held
+      # listings back on the market everywhere at once.
+      it "includes reserved listings (SF-B1)" do
+        reserved = create(:listing, :reserved)
+        expect(Listing.browsable).to include(reserved)
+      end
+
+      it "still excludes draft, sold, expired and admin-removed listings" do
+        draft    = create(:listing, :draft)
+        sold     = create(:listing, :sold)
+        expired  = create(:listing, :expired)
+        removed  = create(:listing, :reserved, removed_at: Time.current)
+        expect(Listing.browsable).not_to include(draft, sold, expired, removed)
+      end
+
+      it "excludes an EXPIRED reserved listing (the expiry clock now applies to holds)" do
+        held_and_expired = create(:listing, :reserved, expires_at: 1.day.ago)
+        expect(Listing.browsable).not_to include(held_and_expired)
+      end
+    end
+
+    describe ".live" do
+      it "returns active and reserved listings only" do
+        active   = create(:listing, :active)
+        reserved = create(:listing, :reserved)
+        create(:listing, :draft)
+        create(:listing, :sold)
+
+        expect(Listing.live).to contain_exactly(active, reserved)
+      end
+    end
+
+    describe ".for_status_filter" do
+      # SF-B1 — the seller's "Active" tab is the `live` set, so a held listing
+      # stays in the tab it was already in rather than needing a "Reserved" tab
+      # the clients are dropping.
+      it "'active' returns non-expired active AND reserved listings" do
+        active   = create(:listing, :active)
+        reserved = create(:listing, :reserved)
+        create(:listing, :expired)
+        create(:listing, :draft)
+
+        expect(Listing.for_status_filter("active")).to contain_exactly(active, reserved)
+      end
+
+      it "'reserved' still returns exactly the reserved rows" do
+        reserved = create(:listing, :reserved)
+        create(:listing, :active)
+
+        expect(Listing.for_status_filter("reserved")).to contain_exactly(reserved)
+      end
+
+      it "'expired' includes a reserved listing past its clock, so it can still be renewed" do
+        expired_active   = create(:listing, :expired)
+        expired_reserved = create(:listing, :reserved, expires_at: 1.day.ago)
+
+        expect(Listing.for_status_filter("expired")).to contain_exactly(expired_active, expired_reserved)
+      end
+
+      # The two tabs must partition the live set — a listing that appears in
+      # neither is invisible to its own seller, which is how a finished listing
+      # gets stranded.
+      it "partitions the live set between the 'active' and 'expired' buckets" do
+        live_rows = [
+          create(:listing, :active),
+          create(:listing, :reserved),
+          create(:listing, :expired),
+          create(:listing, :reserved, expires_at: 1.day.ago)
+        ]
+
+        bucketed = Listing.for_status_filter("active").to_a + Listing.for_status_filter("expired").to_a
+        expect(bucketed).to match_array(live_rows)
+      end
     end
 
     describe ".with_recent_price_drop" do
@@ -324,6 +400,35 @@ RSpec.describe Listing, type: :model do
         result = Listing.nearest_first(nil, nil)
         expect(result.count).to eq(2)
       end
+    end
+  end
+
+  # SF-B1 — the predicate form of the `live` scope, and the expiry widen that
+  # rides with it.
+  describe "#live? / #expired?" do
+    it "is live for an active listing" do
+      expect(create(:listing, :active)).to be_live
+    end
+
+    it "is live for a reserved listing — a hold is not a departure from the market" do
+      expect(create(:listing, :reserved)).to be_live
+    end
+
+    it "is not live for a draft or a sold listing" do
+      expect(create(:listing, :draft)).not_to be_live
+      expect(create(:listing, :sold)).not_to be_live
+    end
+
+    it "expires a reserved listing past its clock (it used to sit live forever)" do
+      expect(create(:listing, :reserved, expires_at: 1.day.ago)).to be_expired
+    end
+
+    it "does not expire a reserved listing whose clock has not run out" do
+      expect(create(:listing, :reserved, expires_at: 1.day.from_now)).not_to be_expired
+    end
+
+    it "never reports a sold listing as expired" do
+      expect(create(:listing, :sold, expires_at: 1.day.ago)).not_to be_expired
     end
   end
 
@@ -626,9 +731,17 @@ RSpec.describe Listing, type: :model do
       expect(listing.sale_transactions).to be_empty
     end
 
-    it "sold_with_buyer! is a no-op and returns nil when buyer_id is blank (legacy path)" do
-      expect(listing.sold_with_buyer!(buyer_id: nil)).to be_nil
-      expect(listing.sale_transactions).to be_empty
+    # SF-B3 — no longer a no-op. `reserve_with_buyer!` above still is (a hold on
+    # nobody is not a hold), but a SALE with nobody named is still a sale, and
+    # recording nothing is what made it unviewable and uncorrectable.
+    it "sold_with_buyer! records a buyer-less sale when buyer_id is blank (SF-B3)" do
+      txn = listing.sold_with_buyer!(buyer_id: nil)
+
+      expect(txn).to be_present
+      expect(txn).to be_sold
+      expect(txn.buyer_id).to be_nil
+      expect(txn.seller_id).to eq(listing.user_id)
+      expect(listing.sale_transactions.reload).to contain_exactly(txn)
     end
 
     # ── TASK-TX02 (review fix) — a listing genuinely CURRENTLY reserved with
@@ -657,9 +770,14 @@ RSpec.describe Listing, type: :model do
 
       txn = listing.sold_with_buyer!(buyer_id: nil, clear_buyer: true)
 
-      expect(txn).to be_nil
+      # The reserved row is still destroyed (never re-attributed) — but SF-B3
+      # writes the sale itself down instead of returning nil, so the seller can
+      # see it afterwards and SF-B4 can correct it.
       expect(Transaction.exists?(reserved.id)).to be(false)
-      expect(listing.sale_transactions.reload).to be_empty
+      expect(txn).to be_present
+      expect(txn).to be_sold
+      expect(txn.buyer_id).to be_nil
+      expect(listing.sale_transactions.reload).to contain_exactly(txn)
     end
 
     # ── TASK-TX02 (review fix, MAJOR — gate the close-out on `reserved?`) ────
@@ -671,15 +789,113 @@ RSpec.describe Listing, type: :model do
     it "sold_with_buyer! ignores a stale reserved Transaction once the listing is no longer reserved" do
       stale = listing.reserve_with_buyer!(buyer_id: buyer.id)
       # Deliberately do NOT call `listing.reserved!` / `cancel_open_transaction!`
-      # here — this isolates the `reserved?` gate itself. The real `activate`
+      # here — this isolates the buyer-less half of the gate. The real `activate`
       # controller action calls `cancel_open_transaction!` explicitly (covered
       # by its own spec below), so in production this stale row never survives.
+      #
+      # SF-B9 narrowed what "stale" can mean without weakening this: the
+      # close-out now keys on the BUYER, and this call names none, so the row is
+      # still left alone. A call that DID name this hold's buyer would close it
+      # out — correctly, because since SF-B2 a hold on an `active` listing is the
+      # normal shape for a batch, not evidence of staleness.
       expect(listing).not_to be_reserved
 
       txn = listing.sold_with_buyer!(buyer_id: nil)
 
-      expect(txn).to be_nil
       expect(stale.reload).to be_reserved # untouched — not silently closed out
+      # SF-B3: the sale is recorded as its own buyer-less row rather than
+      # vanishing. The point of this spec is unchanged — the stale hold is not
+      # what got sold.
+      expect(txn).to be_present
+      expect(txn.id).not_to eq(stale.id)
+      expect(txn.buyer_id).to be_nil
+    end
+
+    # ── SF-B9 — the close-out gate is the BUYER, not the listing's status ─────
+    #
+    # `existing = reserved? ? open_transaction : nil` read the listing's status
+    # as a proxy for "a hold is in progress". SF-B2 broke that proxy: a
+    # multi-unit batch deliberately stays `active` while units are held, so for
+    # every batch the gate was permanently closed and a sale to the very buyer
+    # holding the units left the hold open next to it. The end-to-end
+    # consequences (a buyer shown "5 available · 10 held" for units already sold
+    # to them, and SF-B8 refusing legitimate down-edits) are covered in
+    # spec/requests/api/v1/my/listing_hold_close_out_spec.rb — `sold_units` moves
+    # in the CONTROLLER, so only the request layer can assert those numbers.
+    it "sold_with_buyer! closes out a batch's open hold when the sale names the same buyer (SF-B9)" do
+      batch = create(:listing, :active, user: seller, quantity: 15)
+      create(:conversation, listing: batch, seller: seller, buyer: buyer)
+      hold = batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 10)
+      expect(batch.reload).to be_active # NOT `reserved` — that is the whole point
+
+      txn = batch.sold_with_buyer!(buyer_id: buyer.id, quantity: 10)
+
+      expect(txn.id).to eq(hold.id)
+      expect(txn).to be_sold
+      expect(txn.quantity).to eq(10)
+      expect(batch.sale_transactions.reload.count).to eq(1)
+      expect(batch.open_transaction).to be_nil
+      expect(batch.held_units).to eq(0)
+    end
+
+    it "sold_with_buyer! leaves a hold belonging to a DIFFERENT buyer alone (SF-B9 keeps TASK-TX02)" do
+      other = create(:user)
+      batch = create(:listing, :active, user: seller, quantity: 15)
+      [ buyer, other ].each { |b| create(:conversation, listing: batch, seller: seller, buyer: b) }
+      hold = batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 10)
+
+      txn = batch.sold_with_buyer!(buyer_id: other.id, quantity: 2)
+
+      expect(txn.id).not_to eq(hold.id)
+      expect(txn.buyer_id).to eq(other.id)
+      # The other buyer's hold is never repurposed into this sale.
+      expect(hold.reload).to be_reserved
+      expect(hold.buyer_id).to eq(buyer.id)
+      expect(hold.quantity).to eq(10)
+    end
+
+    # ── SF-B9 — the advisory hold is kept inside the remaining stock ──────────
+    describe "#record_units_sold! and a surviving hold" do
+      let(:batch) { create(:listing, :active, user: seller, quantity: 15) }
+
+      before { create(:conversation, listing: batch, seller: seller, buyer: buyer) }
+
+      it "leaves a hold that still fits untouched" do
+        batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 10)
+
+        batch.record_units_sold!(3)
+
+        expect(batch.reload.available_units).to eq(12)
+        expect(batch.held_units).to eq(10)
+      end
+
+      it "narrows a hold the sale no longer leaves room for" do
+        hold = batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 10)
+
+        batch.record_units_sold!(12)
+
+        expect(batch.reload.available_units).to eq(3)
+        expect(hold.reload.quantity).to eq(3)
+        expect(batch.held_units).to eq(3)
+      end
+
+      it "destroys a hold once nothing is left to hold" do
+        hold = batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 10)
+
+        batch.record_units_sold!(15)
+
+        expect(Transaction.exists?(hold.id)).to be(false)
+        expect(batch.reload.held_units).to eq(0)
+        expect(batch.available_units).to eq(0)
+      end
+
+      it "never widens a hold when stock is added back" do
+        hold = batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 2)
+
+        batch.record_units_sold!(1)
+
+        expect(hold.reload.quantity).to eq(2)
+      end
     end
 
     # ── TASK-TX02 (review fix, MAJOR — activate cancels the open reservation) ─
@@ -832,37 +1048,273 @@ RSpec.describe Listing, type: :model do
       expect(reloaded.current_sale).to eq(sold_txn)
       expect(reloaded.current_sale.buyer_id).to eq(buyer.id)
     end
+
+    # SF-B2 — the case the old `reserved? || sold?` gate was blind to. A
+    # multi-unit listing deliberately keeps status `active` while units are held
+    # (My::ListingsController#reserve), so `current_sale` returned nil and the
+    # seller's own card showed no buyer for a hold they had just placed.
+    it "surfaces an open hold on an ACTIVE multi-unit listing (SF-B2)" do
+      batch = create(:listing, :active, user: seller, quantity: 15)
+      create(:conversation, listing: batch, seller: seller, buyer: buyer)
+
+      txn = batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 3)
+
+      expect(batch.reload).to be_active
+      expect(batch.current_sale).to eq(txn)
+      expect(batch.current_sale.quantity).to eq(3)
+    end
+
+    it "surfaces the open hold from an eager-loaded association without a fresh query" do
+      batch = create(:listing, :active, user: seller, quantity: 15)
+      create(:conversation, listing: batch, seller: seller, buyer: buyer)
+      txn = batch.reserve_with_buyer!(buyer_id: buyer.id, quantity: 3)
+
+      reloaded = Listing.includes(:sale_transactions).find(batch.id)
+      expect(reloaded.sale_transactions.loaded?).to be(true)
+      expect(reloaded.current_sale).to eq(txn)
+    end
   end
 
-  # ── TASK-TX02 (review fix) — legacy buyer-less sale must still bump the
-  # seller's denormalized sold_count, or it silently regresses versus the old
-  # always-accurate `u.listings.sold.count` figure. The bump is an explicit
-  # method (NOT a blanket `sold?` callback) so factories/admin tools/data
-  # migrations that flip a listing to `sold` directly are never affected —
-  # only the `sold` controller action's legacy branch calls it. ─────────────
-  describe "#bump_seller_sold_count_for_legacy_sale!" do
+  # SF-B2 — the public-safe half of "N held". A COUNT, never an identity: this
+  # field ships on the base serializer view, guests included.
+  describe "#held_units" do
+    let(:seller)  { create(:user) }
+    let(:buyer)   { create(:user) }
+    let(:listing) { create(:listing, :active, user: seller, quantity: 15) }
+
+    before { create(:conversation, listing: listing, seller: seller, buyer: buyer) }
+
+    it "is 0 when nothing is held" do
+      expect(listing.held_units).to eq(0)
+    end
+
+    it "reports the held quantity of the open hold" do
+      listing.reserve_with_buyer!(buyer_id: buyer.id, quantity: 4)
+      expect(listing.reload.held_units).to eq(4)
+    end
+
+    it "is 1 for a held single-item listing" do
+      single = create(:listing, :active, user: seller, quantity: 1)
+      create(:conversation, listing: single, seller: seller, buyer: buyer)
+      single.reserve_with_buyer!(buyer_id: buyer.id)
+
+      expect(single.reload.held_units).to eq(1)
+    end
+
+    it "returns to 0 once the hold is cancelled" do
+      listing.reserve_with_buyer!(buyer_id: buyer.id, quantity: 4)
+      listing.cancel_open_transaction!
+
+      expect(listing.reload.held_units).to eq(0)
+    end
+
+    it "ignores a SOLD transaction — sold units are not held units" do
+      listing.sold_with_buyer!(buyer_id: buyer.id, quantity: 4)
+
+      expect(listing.reload.held_units).to eq(0)
+    end
+
+    it "does not subtract from available_units — a hold is advisory, not inventory" do
+      listing.reserve_with_buyer!(buyer_id: buyer.id, quantity: 4)
+
+      expect(listing.reload.available_units).to eq(15)
+    end
+  end
+
+  # SF-B2 — the optional hold quantity. Without it every reservation was
+  # `quantity: 1`, so "N held for Ahmad" could only ever read "1 held".
+  describe "#reserve_with_buyer! quantity" do
+    let(:seller) { create(:user) }
+    let(:buyer)  { create(:user) }
+
+    def held(quantity:, requested:)
+      listing = create(:listing, :active, user: seller, quantity: quantity)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+      listing.reserve_with_buyer!(buyer_id: buyer.id, quantity: requested)
+    end
+
+    it "stores the requested units on a batch" do
+      expect(held(quantity: 15, requested: 3).quantity).to eq(3)
+    end
+
+    it "defaults a batch to ONE unit — holding the whole shelf is a deliberate act" do
+      expect(held(quantity: 15, requested: nil).quantity).to eq(1)
+    end
+
+    it "clamps above the available stock" do
+      expect(held(quantity: 3, requested: 99).quantity).to eq(3)
+    end
+
+    it "clamps a zero or negative request up to 1" do
+      expect(held(quantity: 15, requested: 0).quantity).to eq(1)
+      expect(held(quantity: 15, requested: -5).quantity).to eq(1)
+    end
+
+    it "ignores the quantity entirely on a single-item listing" do
+      expect(held(quantity: 1, requested: 9).quantity).to eq(1)
+    end
+
+    it "clamps to 1 on a sold-out batch rather than violating the DB check constraint" do
+      listing = create(:listing, :active, user: seller, quantity: 2, sold_units: 2)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+
+      expect(listing.reserve_with_buyer!(buyer_id: buyer.id, quantity: 5).quantity).to eq(1)
+    end
+  end
+
+  # ── SF-B3 — `bump_seller_sold_count_for_legacy_sale!` is GONE. It existed only
+  # because an outside-buyer sale created no Transaction and so nothing counted
+  # it; that sale now always creates one and
+  # Transaction#bump_trust_counters! counts it like any other. The specs that
+  # used to live here asserted the manual bump; what matters now is that the
+  # counter moves EXACTLY ONCE per outside-buyer sale — the double-count trap —
+  # which is asserted end to end in
+  # spec/requests/api/v1/my/listing_outside_buyer_spec.rb. ──────────────────
+  describe "sold_count on a listing flipped to sold directly" do
     let(:seller) { create(:user) }
 
-    it "increments the seller's sold_count by 1" do
-      listing = create(:listing, :active, user: seller)
-
-      expect { listing.bump_seller_sold_count_for_legacy_sale! }
-        .to change { seller.reload.sold_count }.by(1)
-    end
-
-    it "is a plain atomic counter increment — never touches other users" do
-      other = create(:user)
-      listing = create(:listing, :active, user: seller)
-
-      listing.bump_seller_sold_count_for_legacy_sale!
-
-      expect(other.reload.sold_count).to eq(0)
-    end
-
-    it "merely creating/updating a sold listing directly never calls it (no implicit callback)" do
+    it "is never bumped by an implicit callback — only a Transaction counts a sale" do
       listing = create(:listing, :active, user: seller)
 
       expect { listing.sold! }.not_to change { seller.reload.sold_count }
+    end
+  end
+
+  # ── SF-B8 — the open-hold floor under `quantity` ────────────────────────────
+  #
+  # SF-B6 validated `quantity >= sold_units`; nothing validated it against an
+  # OPEN HOLD, so a 15-unit listing with 10 held accepted `quantity: 2` and the
+  # buyer-facing pill rendered "2 available · 10 held". The edit is REFUSED, never
+  # resolved by silently shrinking someone's reservation.
+  describe "quantity vs. an open hold (SF-B8)" do
+    let(:seller) { create(:user) }
+    let(:buyer)  { create(:user) }
+
+    def held_listing(total:, held:, sold: 0)
+      listing = create(:listing, :active, user: seller, quantity: total, sold_units: sold)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+      listing.reserve_with_buyer!(buyer_id: buyer.id, quantity: held)
+      listing.reload
+    end
+
+    it "refuses a quantity below the held units, with the error on :quantity" do
+      listing = held_listing(total: 15, held: 10)
+
+      listing.quantity = 2
+
+      expect(listing).not_to be_valid
+      expect(listing.errors.where(:quantity, Listing::QUANTITY_BELOW_HELD_UNITS)).to be_present
+      expect(listing.errors.full_messages).to eq([
+        "Quantity cannot be less than the 10 units on hold for a buyer. " \
+        "Release the hold first, or set it to 10 or more."
+      ])
+    end
+
+    it "maps to the machine-readable wire code the 3-locale clients localize off" do
+      listing = held_listing(total: 15, held: 10)
+      listing.quantity = 2
+      listing.validate
+
+      expect(listing.error_code).to eq("quantity_below_held_units")
+      expect(listing.error_code).to eq(Listing::QUANTITY_BELOW_HELD_UNITS_CODE)
+    end
+
+    it "allows exactly the held count, and anything above it" do
+      listing = held_listing(total: 15, held: 10)
+
+      expect(listing.tap { |l| l.quantity = 10 }).to be_valid
+      expect(listing.tap { |l| l.quantity = 11 }).to be_valid
+      expect(listing.tap { |l| l.quantity = 40 }).to be_valid
+    end
+
+    it "leaves a listing with no open hold alone" do
+      listing = create(:listing, :active, user: seller, quantity: 15)
+
+      listing.quantity = 1
+
+      expect(listing).to be_valid
+    end
+
+    it "ignores a hold that has been released" do
+      listing = held_listing(total: 15, held: 10)
+      listing.cancel_open_transaction!
+
+      expect(listing.reload.tap { |l| l.quantity = 2 }).to be_valid
+    end
+
+    it "ignores a SOLD transaction — those are sold units, not held ones" do
+      listing = create(:listing, :active, user: seller, quantity: 15)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+      listing.sold_with_buyer!(buyer_id: buyer.id, quantity: 4)
+      listing.record_units_sold!(4)
+
+      # Refused by the SF-B6 floor (4 sold), not by this one.
+      listing.quantity = 2
+      expect(listing).not_to be_valid
+      expect(listing.error_code).to eq(Listing::QUANTITY_BELOW_SOLD_UNITS_CODE)
+    end
+
+    it "never fires on a single-item listing — its floor is already 1" do
+      listing = create(:listing, :active, user: seller, quantity: 1)
+      create(:conversation, listing: listing, seller: seller, buyer: buyer)
+      listing.reserve_with_buyer!(buyer_id: buyer.id)
+      listing.reserved!
+
+      expect(listing.reload.held_units).to eq(1)
+      expect(listing.tap { |l| l.quantity = 1 }).to be_valid
+    end
+
+    it "is not consulted when `quantity` is not changing — an existing bad row stays editable" do
+      listing = held_listing(total: 15, held: 10)
+      listing.update_column(:quantity, 2) # the row this bug has been producing
+
+      listing.reload.title = "Same bags, new photo"
+
+      expect(listing).to be_valid
+      expect(listing.renew!).to be(true)
+    end
+
+    it "is not consulted on create — a brand-new listing cannot hold anything" do
+      listing = build(:listing, user: seller, quantity: 1)
+
+      expect(listing).to be_valid
+    end
+
+    describe "when the sold-units floor applies too" do
+      it "reports ONLY the held floor when the hold is higher" do
+        listing = held_listing(total: 20, held: 10, sold: 8)
+
+        listing.quantity = 5
+        listing.validate
+
+        expect(listing.errors[:quantity].size).to eq(1)
+        expect(listing.errors[:quantity].first).to include("10 units on hold")
+        expect(listing.error_code).to eq(Listing::QUANTITY_BELOW_HELD_UNITS_CODE)
+      end
+
+      it "reports ONLY the sold floor when that is higher" do
+        listing = held_listing(total: 20, held: 5, sold: 12)
+
+        listing.quantity = 6
+        listing.validate
+
+        expect(listing.errors[:quantity].size).to eq(1)
+        expect(listing.errors[:quantity].first).to include("12 units already sold")
+        expect(listing.error_code).to eq(Listing::QUANTITY_BELOW_SOLD_UNITS_CODE)
+      end
+
+      it "names a minimum that actually works — the two floors never contradict" do
+        listing = held_listing(total: 20, held: 10, sold: 8)
+
+        # The lower floor alone (8 sold) is NOT offered as a fix, because 8 is
+        # still refused by the hold.
+        listing.quantity = 8
+        expect(listing).not_to be_valid
+        expect(listing.error_code).to eq(Listing::QUANTITY_BELOW_HELD_UNITS_CODE)
+
+        listing.quantity = 10
+        expect(listing).to be_valid
+      end
     end
   end
 end

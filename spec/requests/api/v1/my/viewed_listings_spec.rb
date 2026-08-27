@@ -79,7 +79,10 @@ RSpec.describe "Api::V1::My::ViewedListings", type: :request do
       expect(ids).not_to include(sold_listing.id)
     end
 
-    it "excludes reserved listings from the response" do
+    # SF-B1 — inverted deliberately. Recently-viewed filters on
+    # `Listing.browsable`; a reserved listing is still on the market, so a buyer
+    # who looked at it must still be able to find it again in their own history.
+    it "INCLUDES reserved listings — they are still browsable (SF-B1)" do
       active_listing    = create(:listing, :active)
       reserved_listing  = create(:listing, :reserved)
 
@@ -90,7 +93,7 @@ RSpec.describe "Api::V1::My::ViewedListings", type: :request do
 
       ids = JSON.parse(response.body)["listings"].map { |l| l["id"] }
       expect(ids).to include(active_listing.id)
-      expect(ids).not_to include(reserved_listing.id)
+      expect(ids).to include(reserved_listing.id)
     end
 
     it "excludes expired listings from the response" do

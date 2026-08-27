@@ -10,7 +10,12 @@ class UserSerializer < ApplicationSerializer
     field(:firstname) { |u| u.firstname }
     field(:lastname) { |u| u.lastname }
     field(:full_name) { |u| u.full_name }
-    field(:listings_count) { |u| u.listings.active.not_expired.count }
+    # Must equal what the buyer grid under this header actually returns —
+    # `GET /listings?user_id=` runs `Listing.browsable`. Fixed once already for
+    # this exact class of bug (TASK-B903, expired listings inflating the count);
+    # SF-B1's widening of `browsable` to include reserved listings reopened it,
+    # so this now tracks `live` too.
+    field(:listings_count) { |u| u.listings.live.not_expired.count }
     # TASK-TX02 — denormalized counters (users.sold_count / users.bought_count),
     # bumped by Transaction#bump_trust_counters! on every completed sale. Plain
     # column reads: zero extra queries here, so a public-profile load AND a list
@@ -67,7 +72,11 @@ class UserSerializer < ApplicationSerializer
     # (docs/EMAIL_CONFIRMATION.md).
     field(:email_confirmed) { |u| u.confirmed_at.present? }
     # Dashboard stats for the user's own profile.
-    field(:items_active_count) { |u| u.listings.active.count }
+    # SF-B1 — `live`, matching `listings_count` above and the widened
+    # `browsable`/"Active" tab. A held listing is still one of the seller's items
+    # on sale; counting it as neither active nor anything else made the dashboard
+    # tile disagree with the tab right next to it.
+    field(:items_active_count) { |u| u.listings.live.count }
     field(:items_sold_count) { |u| u.listings.sold.count }
     # No money total: listings span currencies (AFN/USD/EUR) with no FX rate, so
     # summing them would be meaningless. We surface counts only.

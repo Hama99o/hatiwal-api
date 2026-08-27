@@ -13,7 +13,10 @@ class Conversations::StartService
     raise Error, "you have blocked this user" if @buyer.blocked?(@listing.user)
     raise Error, "you have been blocked by this user" if @listing.user.blocked?(@buyer)
 
-    raise Error, "listing is not active" unless @listing.active?
+    # SF-B1 — `live?`, not `active?`: a reserved listing is still on the market
+    # (it is back in the feed and in search), so refusing the first message on it
+    # would make the feed advertise a listing the buyer cannot reach.
+    raise Error, "listing is not available" unless @listing.live?
     raise Error, "cannot start a conversation on your own listing" if @listing.user_id == @buyer.id
     raise Error, "message cannot be blank" if @message_body.blank?
 

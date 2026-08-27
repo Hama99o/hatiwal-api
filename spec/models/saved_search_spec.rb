@@ -102,11 +102,16 @@ RSpec.describe SavedSearch, type: :model do
       expect(ss.new_matches_count).to eq(0)
     end
 
-    it "excludes reserved listings" do
+    # SF-B1 — inverted deliberately. `new_matches_count` composes on
+    # `Listing.browsable`, which now includes reserved listings: a held listing
+    # has not left the market, so a saved search that would otherwise match it
+    # must still alert the buyer (deals fall through, and that buyer is the
+    # seller's recovery path).
+    it "INCLUDES reserved listings — a held listing is still on the market (SF-B1)" do
       ss = create(:saved_search, user: user, location: nil, last_viewed_at: 2.hours.ago)
       create_listing_at(1.hour.ago, status: :reserved, user: seller, category: cat)
 
-      expect(ss.new_matches_count).to eq(0)
+      expect(ss.new_matches_count).to eq(1)
     end
 
     it "excludes expired listings" do

@@ -27,8 +27,14 @@ class TransactionSerializer < ApplicationSerializer
       multi_unit: l.multi_unit?, available_units: l.available_units }
   end
 
+  # SF-B3 — NULL for an outside-buyer sale ("sold to someone not on Hatiwal").
+  # That is a real, recorded sale with no counterparty account, so the field has
+  # to be nil-safe or the whole ledger 500s the moment one exists. Clients render
+  # their own "Buyer not on Hatiwal" label from the null.
   field(:buyer) do |t|
     b = t.buyer
+    next nil if b.nil?
+
     { id: b.id, name: b.full_name, avatar_url: b.avatar.attached? ? b.avatar.url : nil }
   end
 

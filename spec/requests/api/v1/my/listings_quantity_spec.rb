@@ -136,7 +136,11 @@ RSpec.describe "Api::V1::My::Listings quantity", type: :request do
       expect(Listing.browsable).to include(listing)
     end
 
-    it "still takes a SINGLE-item listing off the market, which is what reserving means there" do
+    # SF-B1 — the STATUS still flips for a single item (that is what "reserved"
+    # means there, and 117 mobile files read it), but the listing no longer
+    # LEAVES the market: `browsable` is `live.not_expired.not_removed`. The
+    # vanishing listing was the whole "where did my bike go?" report.
+    it "still flips a SINGLE-item listing to reserved, but keeps it in the feed (SF-B1)" do
       listing = listing_with_buyers(quantity: 1, buyers: [ buyer ])
 
       put "/api/v1/my/listings/#{listing.id}/reserve",
@@ -144,7 +148,7 @@ RSpec.describe "Api::V1::My::Listings quantity", type: :request do
 
       listing.reload
       expect(listing.status).to eq("reserved")
-      expect(Listing.browsable).not_to include(listing)
+      expect(Listing.browsable).to include(listing)
     end
   end
 
