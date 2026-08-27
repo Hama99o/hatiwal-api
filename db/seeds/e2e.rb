@@ -49,6 +49,17 @@ buyer    = e2e_user(email: "buyer@hatiwal.test",    firstname: "Ahmad",   lastna
 seller   = e2e_user(email: "seller@hatiwal.test",   firstname: "Omar",    lastname: "Noori",   city: "Kandahar",  province: "Kandahar")
 newbuyer = e2e_user(email: "newbuyer@hatiwal.test", firstname: "Fatima",  lastname: "Rahimi",  city: "Herat",     province: "Herat")
 
+# An EMPTY seller — owns nothing, ever. mode/seller_mode_my_listings_empty logs in as
+# new_seller@hatiwal.test, switches to seller mode and asserts the "You haven't posted
+# anything yet" state; the account was referenced by that flow and seeded nowhere, so the
+# login could not complete and it failed with "Element not found: profile-tab" — a
+# missing tab bar standing in for a missing account.
+#
+# It has to stay listing-less to be useful, so nothing below may give it one: buyer@ and
+# newbuyer@ each own one, which is why neither could serve here.
+new_seller = e2e_user(email: "new_seller@hatiwal.test", firstname: "Zainab", lastname: "Popal", city: "Mazar-i-Sharif", province: "Balkh")
+puts "  new_seller@hatiwal.test — empty seller, owns #{new_seller.listings.count} listing(s) (must stay 0)"
+
 # =============================================================================
 puts "=== E2E Seed: Categories (ensure electronics exists) ==="
 # =============================================================================
