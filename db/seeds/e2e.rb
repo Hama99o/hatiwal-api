@@ -95,7 +95,7 @@ puts "  categories ready"
 puts "=== E2E Seed: Seller Listings ==="
 # =============================================================================
 
-def e2e_listing(user:, title:, price:, category:, status:, description:, location:, latitude: nil, longitude: nil, quantity: 1)
+def e2e_listing(user:, title:, price:, category:, status:, description:, location:, latitude: nil, longitude: nil, quantity: 1, expires_at: nil)
   # RESET the status of a fixture that already exists, rather than leaving it wherever
   # the flows left it.
   #
@@ -126,6 +126,13 @@ def e2e_listing(user:, title:, price:, category:, status:, description:, locatio
         sold_at:      status == :sold ? 1.day.ago : nil
       )
       puts "  reset listing [#{status}] #{title}"
+    end
+    # An EXPIRY fixture has to be restored too, or it stops being expired the first time
+    # a flow renews it (listings/listing_renew_flow pushes expires_at 30 days out) and
+    # every later run of listings/expired_listing_badge finds an empty "Expired" tab.
+    if expires_at && existing.expires_at != expires_at
+      existing.update_columns(expires_at: expires_at)
+      puts "  reset expiry #{title} -> #{expires_at.to_date}"
     end
     return
   end
@@ -164,6 +171,9 @@ def e2e_listing(user:, title:, price:, category:, status:, description:, locatio
   attrs[:published_at] = rand(1..30).days.ago if %i[active reserved sold].include?(status)
   attrs[:reserved_at]  = rand(1..7).days.ago   if status == :reserved
   attrs[:sold_at]      = rand(1..14).days.ago  if status == :sold
+  # `expired` is not a status. Listing#expired? is `active? && expires_at.past?`
+  # (listing.rb:240), so an expired fixture is an ACTIVE row with a past expires_at.
+  attrs[:expires_at]   = expires_at if expires_at
 
   Listing.create!(attrs)
   puts "  created listing [#{status}] #{title}"
@@ -199,6 +209,27 @@ e2e_listing(
   status:      :active,
   description: "Single owner. 90,000 km. Full service history. AC works perfectly. Clean.",
   location:    "Kandahar, Main Road"
+)
+
+# ── Expired fixture ─────────────────────────────────────────
+# There was no expired listing at all, so My Shop's "Expired" tab counted 0 and two
+# flows could not run: listings/expired_listing_badge failed with "Element not found:
+# seller-listing-card" on an empty tab, and listings/listing_renew_flow had nothing to
+# renew.
+#
+# "expired" is NOT a status — Listing#expired? is `active? && expires_at.past?`
+# (listing.rb:240) — so this is an ACTIVE row with expires_at in the past. The reset in
+# e2e_listing restores that date, which matters because listing_renew_flow's whole
+# purpose is to push it 30 days out.
+e2e_listing(
+  user:        seller,
+  title:       "Expired Winter Coat Size L",
+  price:       1_800,
+  category:    clothes,
+  status:      :active,
+  expires_at:  3.days.ago,
+  description: "Listed a while ago and never renewed. Warm wool coat, worn twice.",
+  location:    "Kabul, Karte Naw"
 )
 
 e2e_listing(
