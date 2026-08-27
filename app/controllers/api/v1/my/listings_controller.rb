@@ -130,8 +130,19 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing, :reserve?
     txn = nil
     ActiveRecord::Base.transaction do
-      txn = @listing.reserve_with_buyer!(buyer_id: lifecycle_params[:buyer_id], final_price: lifecycle_params[:final_price])
-      @listing.reserved!
+      txn = @listing.reserve_with_buyer!(
+        buyer_id: lifecycle_params[:buyer_id],
+        final_price: lifecycle_params[:final_price]
+      )
+      # A BATCH does not leave the market because one unit is held. `reserved` is a
+      # whole-listing state and `browsable` is `active.not_expired.not_removed`, so
+      # flipping it hid all 50 packets from every buyer the moment the seller held one —
+      # reported from a device, and the seller's fair question was "how will people buy
+      # it?". Reserve is a promise about SOME units; the rest are still for sale.
+      #
+      # A single-item listing is unchanged: holding it IS taking it off the market, which
+      # is exactly what a seller means for one bike.
+      @listing.reserved! unless @listing.multi_unit?
     end
     render_lifecycle_response(txn)
   rescue ActiveRecord::RecordInvalid => e
@@ -180,7 +191,23 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
       # 15 left MUST stay `active` and browsable — flipping it to `sold` here is
       # what would have broken the feed, and it is the single most important line
       # in this feature.
-      sold_out = @listing.record_units_sold!(txn&.quantity || @listing.available_units)
+      # TWO fixes here, both reported from a device (50 in stock, one sale, "0 of 50
+      # left" and the listing retired).
+      #
+      # 1. The count must survive the BUYER-LESS path. `sold_with_buyer!` returns nil the
+      #    moment clear_buyer is set — before it ever looks at quantity — so a sale to
+      #    "someone not on Hatiwal" has no transaction to read the count off, and this
+      #    fell straight through to `available_units`.
+      # 2. The default for a BATCH is ONE unit, not the whole shelf. "I sold one" is what
+      #    a seller means when they say nothing else; "I sold all 50" is a deliberate act
+      #    and should be stated. A single-unit listing is untouched: its available_units
+      #    IS 1, so the two are the same number.
+      #
+      # This also protects clients that predate the quantity field — an old build marking
+      # a batch sold now moves one unit instead of destroying the stock.
+      requested_units = lifecycle_params[:quantity].presence&.to_i
+      default_units   = @listing.multi_unit? ? 1 : @listing.available_units
+      sold_out = @listing.record_units_sold!(txn&.quantity || requested_units || default_units)
       @listing.sold! if sold_out
       # TASK-TX02 (review fix): the legacy buyer-less path (txn is nil) never
       # touches the transactions table, so nothing else bumps the seller's

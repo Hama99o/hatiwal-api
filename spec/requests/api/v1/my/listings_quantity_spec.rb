@@ -71,17 +71,80 @@ RSpec.describe "Api::V1::My::Listings quantity", type: :request do
       expect(Listing.browsable).not_to include(listing)
     end
 
-    it "defaults to the whole remaining stock when no quantity is sent" do
-      # The mobile/web clients omit `quantity` for single-unit listings, and this
-      # is also the "sold the lot" path for multi-unit ones.
-      listing = listing_with_buyers(quantity: 5, buyers: [ buyer ])
+    it "sells ONE unit when no quantity is sent, not the whole batch" do
+      # REVERSED, and the report that reversed it: a seller with 50 in stock marked one
+      # sale to someone not on Hatiwal and the listing came back "Sold — 0 of 50 left".
+      # Defaulting to the whole shelf makes the destructive outcome the silent one, in a
+      # product with no payments and no undo. "I sold all 50" is a deliberate act and is
+      # sent explicitly; saying nothing now means one unit.
+      #
+      # This also covers clients that predate the quantity field: an old build marking a
+      # batch sold moves one unit instead of destroying the stock.
+      listing = create(:listing, user: seller, status: :active, quantity: 15)
+
+      put "/api/v1/my/listings/#{listing.id}/sold", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      listing.reload
+      expect(listing.sold_units).to eq(1)
+      expect(listing.available_units).to eq(14)
+      expect(listing.status).to eq("active")
+    end
+
+    it "sells the whole batch when the seller says so explicitly" do
+      listing = create(:listing, user: seller, status: :active, quantity: 15)
 
       put "/api/v1/my/listings/#{listing.id}/sold",
+          params: { quantity: 15 }, headers: headers, as: :json
+
+      listing.reload
+      expect(listing.available_units).to eq(0)
+      expect(listing.status).to eq("sold")
+    end
+
+    it "honours the count on a sale to someone NOT on Hatiwal" do
+      # The path that lost the stock. `sold_with_buyer!` returns nil the moment
+      # clear_buyer is set — before it looks at quantity — so there is no transaction to
+      # read the count off and the controller has to use the request's own number.
+      listing = create(:listing, user: seller, status: :active, quantity: 50)
+
+      put "/api/v1/my/listings/#{listing.id}/sold",
+          params: { clear_buyer: true, quantity: 1 }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      listing.reload
+      expect(listing.sold_units).to eq(1)
+      expect(listing.available_units).to eq(49)
+      expect(listing.status).to eq("active")
+    end
+  end
+
+  describe "reserving part of a batch" do
+    # Reported from a device, and the seller's question was the right one: "when it's
+    # reserved other people cannot buy — how will people buy it?" `reserved` is a
+    # whole-listing state and `browsable` is active-only, so holding ONE packet hid all
+    # fifty from every buyer.
+    it "keeps the listing ACTIVE and browsable, so the rest is still for sale" do
+      listing = listing_with_buyers(quantity: 50, buyers: [ buyer ])
+
+      put "/api/v1/my/listings/#{listing.id}/reserve",
+          params: { buyer_id: buyer.id }, headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      listing.reload
+      expect(listing.status).to eq("active")
+      expect(Listing.browsable).to include(listing)
+    end
+
+    it "still takes a SINGLE-item listing off the market, which is what reserving means there" do
+      listing = listing_with_buyers(quantity: 1, buyers: [ buyer ])
+
+      put "/api/v1/my/listings/#{listing.id}/reserve",
           params: { buyer_id: buyer.id }, headers: headers, as: :json
 
       listing.reload
-      expect(listing.status).to eq("sold")
-      expect(listing.sale_transactions.sole.quantity).to eq(5)
+      expect(listing.status).to eq("reserved")
+      expect(Listing.browsable).not_to include(listing)
     end
   end
 
