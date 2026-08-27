@@ -232,6 +232,29 @@ e2e_listing(
   location:    "Kabul, Karte Naw"
 )
 
+# ── Ready-to-publish draft ──────────────────────────────────
+# The publish path needs a draft that CAN be published: a photo and an exact pin
+# (getPublishBlockers, and the API agrees). This used to be "whichever draft has the
+# lowest id", which no flow can target — listings/lifecycle_publish taps the first card
+# on the Draft tab, and that is whatever a create/edit flow made most recently. It got a
+# photoless QA draft, publish was refused, and the failure read as a broken Publish
+# button ("Assertion is false: Publish this listing? is visible").
+#
+# A distinct title fixes that: flows can search for exactly this one. The pin is passed
+# here because e2e_listing leaves drafts unpinned on purpose — a draft is allowed to be
+# incomplete — and the photo block below adds this title to its targets.
+e2e_listing(
+  user:        seller,
+  title:       "Ready To Publish Draft",
+  price:       6_500,
+  category:    electronics,
+  status:      :draft,
+  latitude:    34.5553,
+  longitude:   69.2075,
+  description: "Complete draft with a photo and a pin, so the publish path is reachable.",
+  location:    "Kabul, Shar-e-Naw"
+)
+
 e2e_listing(
   user:        seller,
   title:       "Lenovo ThinkPad Laptop Core i5 8GB",
@@ -398,7 +421,10 @@ if File.exist?(E2E_PHOTO)
                          .where(status: [ :active, :reserved, :sold ])
                          .limit(6)
                          .to_a
-  publishable_draft = Listing.where(user: seller, status: :draft).order(:id).first
+  # Prefer the NAMED fixture over "lowest id". Flows have to be able to target this
+  # listing, and the lowest-id draft changes as create/edit flows add their own.
+  publishable_draft = Listing.find_by(user: seller, title: "Ready To Publish Draft") ||
+                      Listing.where(user: seller, status: :draft).order(:id).first
   photo_targets << publishable_draft if publishable_draft
 
   # ...and COORDINATES, not just a photo. `e2e_listing` sets `location` as free text
