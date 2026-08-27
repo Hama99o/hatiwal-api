@@ -317,6 +317,93 @@ e2e_listing(
   quantity:    15
 )
 
+# ── SF-QA1 (card #296) — the five SELL-FLOW fixtures ────────────────────────
+# The listings only. Their ledgers (the open hold, the sold rows, the outside
+# buyer, the review) are rebuilt further down in
+# "=== E2E Seed: Sell-flow states ===" — same split the Phone Case above already
+# uses (listing here, its conversation at "Multi-quantity conversation"), because
+# a Transaction needs a Conversation which needs a Listing.
+#
+# Created here rather than beside that section so the photo block below can see
+# them: this is a photo-first marketplace and these five are screenshotted by the
+# sell-flow QA run.
+#
+# NOT the Phone Case, and not each other: maestro/chat/place_and_release_hold.yaml
+# opens the Phone Case and asserts `composer-action-release-hold` is ABSENT
+# before it places its own hold, so the one batch that must keep 0 held units is
+# exactly the batch that was already there. Every fixture below owns its own
+# state for the same reason.
+SELL_FLOW_FIXTURE_TITLES = [
+  "Winter Gloves Wholesale Box - 15 Pairs",
+  "Solar Lantern Rechargeable - Batch of 6",
+  "School Backpack Bulk Restock - 20 Bags",
+  "Steel Thermos Flask 1L - Bulk Batch",
+  "Electric Kettle 1.8L Stainless - Bulk 10"
+].freeze
+
+# 1. Open HOLD on a live batch — 15 pairs, 10 held for one buyer.
+e2e_listing(
+  user:        seller,
+  title:       SELL_FLOW_FIXTURE_TITLES[0],
+  price:       350,
+  category:    clothes,
+  status:      :active,
+  quantity:    15,
+  description: "Box of 15 pairs, wool lined. Selling by the pair or the whole box.",
+  location:    "Kandahar, Main Road"
+)
+
+# 2. SOLD OUT — every unit accounted for by a sold ledger row.
+e2e_listing(
+  user:        seller,
+  title:       SELL_FLOW_FIXTURE_TITLES[1],
+  price:       1_200,
+  category:    electronics,
+  status:      :sold,
+  quantity:    6,
+  description: "Rechargeable solar lanterns, batch of six. USB charging, 8 hours per charge.",
+  location:    "Kabul, Karte Naw"
+)
+
+# 3. Sold out, then quantity RAISED — live again with 5 left. The owner's own
+#    bug report (SF-B6): 15 of 15 sold and edited to 20 used to stay `sold`.
+e2e_listing(
+  user:        seller,
+  title:       SELL_FLOW_FIXTURE_TITLES[2],
+  price:       600,
+  category:    clothes,
+  status:      :active,
+  quantity:    20,
+  description: "Sturdy school backpacks, two compartments. The first batch sold out and I restocked.",
+  location:    "Kabul, Shar-e-Naw"
+)
+
+# 4. Partially sold to SEVERAL buyers, one of them not on Hatiwal — the Sales
+#    ledger fixture (SF-B5). Nothing else seeds more than one sale per listing.
+e2e_listing(
+  user:        seller,
+  title:       SELL_FLOW_FIXTURE_TITLES[3],
+  price:       800,
+  category:    home,
+  status:      :active,
+  quantity:    15,
+  description: "One litre stainless steel flasks, keeps tea hot 12 hours. Selling from a batch of 15.",
+  location:    "Kandahar, Old Bazaar"
+)
+
+# 5. A sold sale that already carries a REVIEW — void/reassign must be refused
+#    (422 `sale_has_review`) while a quantity edit still goes through (SF-B4).
+e2e_listing(
+  user:        seller,
+  title:       SELL_FLOW_FIXTURE_TITLES[4],
+  price:       1_500,
+  category:    home,
+  status:      :active,
+  quantity:    10,
+  description: "1.8 litre stainless kettle, 1500W. Ten in stock, selling individually.",
+  location:    "Kandahar"
+)
+
 # TASK-K729 — dedicated fixtures for the chat "reserved/sold dead end"
 # recovery-notice flows, kept distinct from every other active listing above
 # (each already claimed by its own mutating Maestro flow) so
@@ -442,6 +529,14 @@ if File.exist?(E2E_PHOTO)
   publishable_draft = Listing.find_by(user: seller, title: "Ready To Publish Draft") ||
                       Listing.where(user: seller, status: :draft).order(:id).first
   photo_targets << publishable_draft if publishable_draft
+
+  # SF-QA1 — the five sell-flow fixtures, BY NAME. The `limit(6)` above is a
+  # fixed budget the same six listings have held since the day they were first
+  # seeded (`next if listing.images.attached?` skips them, but they still fill
+  # the six slots), so a listing added later can never win a photo through it.
+  # These five are asserted on and screenshotted by the sell-flow QA run, and a
+  # photoless card renders as the grey "no photo" box.
+  photo_targets += Listing.where(user: seller, title: SELL_FLOW_FIXTURE_TITLES).to_a
 
   # ...and COORDINATES, not just a photo. `e2e_listing` sets `location` as free text
   # ("Kandahar, City Center") and no lat/long at all, but publishing requires an
@@ -898,6 +993,306 @@ else
 end
 
 # =============================================================================
+puts "=== E2E Seed: Sell-flow states (SF-QA1 / card #296) ==="
+# =============================================================================
+# The five states the sell-flow redesign shipped (docs/SELL_FLOW_REDESIGN.md,
+# backend commit c5e155c) and NOTHING seeded — so its two headline cases could
+# not be asserted on a device at all. QA would have skipped them in silence and
+# reported a pass (hatiwal-mobile/docs/SELL_FLOW_QA_PLAN.md §4.2).
+#
+#   1. an open HOLD on a live batch      -> "N held · N available" (buyer),
+#                                           "N held for {name}" (seller),
+#                                           release-hold from the chat thread
+#   2. a SOLD-OUT batch                  -> the terminal state
+#   3. sold out, then quantity RAISED     -> the owner's own bug report (SF-B6)
+#   4. one batch, SEVERAL buyers          -> the Sales ledger (SF-B5), which had
+#                                           nothing realistic to render
+#   5. a sold sale carrying a REVIEW      -> void/reassign refused with
+#                                           `sale_has_review`, quantity edit
+#                                           still allowed (SF-B4)
+#
+# THE INVARIANTS every fixture here satisfies, because the backend now enforces
+# them and a fixture that breaks one is a state the app can never produce:
+#
+#   * sold_units <= quantity          — DB CHECK `listings_sold_units_within_quantity`
+#   * available_units >= held_units   — asserted in Listing (SF-B9)
+#   * at most ONE open (reserved) transaction per listing — partial unique index
+#     `index_transactions_on_listing_id_while_open`
+#
+# A BATCH WITH A HOLD DELIBERATELY KEEPS `status: active` (SF-B2). 15 pairs do
+# not leave the market because a buyer reserved 10 of them, so `status` is NOT
+# the signal that a hold exists — `held_units` is. Forcing fixture 1 to
+# `reserved` would seed exactly the state three of the bugs in that commit came
+# from, and `place hold`/`release hold` would then be tested against a listing
+# the app never produces.
+#
+# WHY THE SOLD ROWS AVOID buyer@hatiwal.test. A sold Transaction with a real
+# counterparty creates a PENDING REVIEW for both sides, and
+# maestro/reviews/pending_reviews_nudge.yaml ends with
+# `assertNotVisible: "Rate your recent deals"` as buyer@hatiwal.test — one extra
+# sold row against that account would leave a permanent nudge and fail a flow
+# that has nothing to do with these fixtures. So the sold rows use the synthetic
+# e2ebuyerN accounts (already seeded above for the response-rate badge, and no
+# flow logs in as them); buyer@hatiwal.test gets only the RESERVED hold, which is
+# not a completed sale and creates no pending review. newbuyer@hatiwal.test is
+# untouched by design — it is the zero-history fixture.
+
+sell_flow_buyers = {
+  "buyer"      => buyer,
+  "e2ebuyer2"  => User.find_by(email: "e2ebuyer2@hatiwal.test"),
+  "e2ebuyer3"  => User.find_by(email: "e2ebuyer3@hatiwal.test"),
+  "e2ebuyer4"  => User.find_by(email: "e2ebuyer4@hatiwal.test"),
+  "e2ebuyer5"  => User.find_by(email: "e2ebuyer5@hatiwal.test")
+}.freeze
+
+# The declared shape of each fixture's ledger. `buyer: nil` is the deliberate
+# "sold to someone not on Hatiwal" row SF-B3 made recordable.
+SELL_FLOW_LEDGERS = {
+  "Winter Gloves Wholesale Box - 15 Pairs" => {
+    quantity: 15, status: :active,
+    sales: [
+      { buyer: "buyer", units: 10, status: :reserved, days_ago: 2,
+        ask:   "I have a small shop in Kabul — can you hold 10 pairs for me until Thursday?",
+        reply: "Done, 10 pairs are held for you. The other 5 stay on sale." }
+    ]
+  },
+  "Solar Lantern Rechargeable - Batch of 6" => {
+    quantity: 6, status: :sold,
+    sales: [
+      { buyer: "e2ebuyer5", units: 6, status: :sold, days_ago: 4,
+        ask:   "Are all six still available? I want the whole batch.",
+        reply: "Yes, all six. I can meet you tomorrow morning." }
+    ]
+  },
+  "School Backpack Bulk Restock - 20 Bags" => {
+    quantity: 20, status: :active,
+    sales: [
+      { buyer: "e2ebuyer2", units: 15, status: :sold, days_ago: 6,
+        ask:   "I need 15 bags for a school. Can you do all of them?",
+        reply: "All 15 are yours. I will bring them in two trips." }
+    ]
+  },
+  "Steel Thermos Flask 1L - Bulk Batch" => {
+    quantity: 15, status: :active,
+    sales: [
+      { buyer: "e2ebuyer2", units: 2, status: :sold, days_ago: 7,
+        ask:   "Two flasks please, are they the tall ones?",
+        reply: "Yes, one litre. Two is fine." },
+      { buyer: "e2ebuyer3", units: 3, status: :sold, days_ago: 4,
+        ask:   "Do you still have three left for me?",
+        reply: "Three are ready for you." },
+      # No account on the other side — a neighbour who is not on Hatiwal. Before
+      # SF-B3 this sale was a silent no-op with no ledger row to correct.
+      #
+      # Deliberately the NEWEST row, so `Listing#current_sale` surfaces it and the
+      # seller's own card renders a sale with `buyer: nil` — the nil-safe path
+      # SF-B3 added to ListingSerializer::SALE_FIELD and SaleBuyerCard, which no
+      # fixture could reach before. The two named rows below it keep the ledger
+      # itself mixed.
+      { buyer: nil, units: 1, status: :sold, days_ago: 2 }
+    ]
+  },
+  "Electric Kettle 1.8L Stainless - Bulk 10" => {
+    quantity: 10, status: :active,
+    sales: [
+      { buyer: "e2ebuyer4", units: 3, status: :sold, days_ago: 5,
+        ask:   "Three kettles for my guesthouse — is the price the same for three?",
+        reply: "Same price each. Three it is." }
+    ]
+  }
+}.freeze
+
+# A conversation with a REAL exchange, not a bare row.
+#
+# Two reasons it cannot be message-less. `Transaction` requires the buyer to be a
+# conversation participant on the listing (`buyer_is_conversation_participant`),
+# which a bare row satisfies — but `User#compute_seller_response_stats` counts
+# every conversation from the last 90 days in the DENOMINATOR of the reply rate
+# and only a conversation with a reply in the numerator, so five empty threads
+# would have quietly cut seller@hatiwal.test's "N% reply rate" (the figure
+# browse/seller_response_rate_badge asserts) for no reason. The 20-minute reply
+# also keeps the median inside `:within_one_hour`.
+#
+# BOTH sides carry read_at. An unread INBOUND message is a permanent unread badge
+# in that account's inbox, and chat/conversation_read_status ends by asserting
+# `notVisible: unread-badge-\d+` for buyer@hatiwal.test — the exact trap the
+# multi-quantity conversation above documents at length.
+def e2e_sale_conversation(listing:, seller:, buyer:, ask:, reply:)
+  existing = Conversation.find_by(listing: listing, seller: seller, buyer: buyer)
+  return existing if existing
+
+  convo     = Conversation.create!(listing: listing, seller: seller, buyer: buyer)
+  opened_at = 3.days.ago
+
+  bm = Message.new(conversation: convo, user: buyer, kind: :text,
+                   body: ask, read_at: opened_at + 5.minutes)
+  bm.created_at = opened_at
+  bm.updated_at = opened_at
+  bm.save!
+
+  sr = Message.new(conversation: convo, user: seller, kind: :text,
+                   body: reply, read_at: opened_at + 30.minutes)
+  sr.created_at = opened_at + 20.minutes
+  sr.updated_at = sr.created_at
+  sr.save!
+
+  convo.update!(last_message_at: sr.created_at)
+  convo
+end
+
+# Rebuild ONE fixture's ledger from scratch, every seed.
+#
+# Create-if-missing is not enough here, for the same reason DISPOSABLE_LISTINGS
+# above resets its statuses: every one of these fixtures exists to be MUTATED by
+# the flow that targets it (release the hold, void a sale, raise the quantity).
+# The difference is that these are ASSERTED ON, so a drifted fixture does not
+# merely waste a run — it produces a wrong verdict about the feature. Wiping and
+# rewriting the ledger means every cycle starts from the declared shape.
+#
+# `update_columns`, not `update!`: this writes the intended END state directly.
+# `update!` would fire SF-B6's `reconcile_status_after_quantity_change`
+# (after_update on `saved_change_to_quantity?`) and flip fixture 3 straight back
+# to `sold` — the very bug that fixture exists to prove is fixed.
+def e2e_sell_flow_ledger(seller:, title:, quantity:, status:, sales:, buyers:)
+  listing = Listing.find_by(user: seller, title: title)
+  if listing.nil?
+    puts "  WARN: #{title} not found — sell-flow ledger skipped"
+    return nil
+  end
+
+  # Cascades to `reviews` (Transaction has_many :reviews, dependent: :destroy),
+  # which fixture 5 deliberately carries. The trust counters those rows bumped
+  # are recomputed from source at the end of this section, so nothing drifts
+  # across re-seeds.
+  listing.sale_transactions.destroy_all
+
+  sold      = sales.select { |s| s[:status] == :sold }
+  units     = sold.sum { |s| s[:units] }
+  oldest    = sales.map { |s| s[:days_ago] }.max
+
+  listing.update_columns(
+    quantity:     quantity,
+    sold_units:   units,
+    status:       Listing.statuses[status],
+    published_at: (oldest + 2).days.ago,
+    # A held batch stays `active`, so it has no `reserved_at` — the one known
+    # gap that commit filed rather than fixed. Left nil so the fixture matches
+    # what the app actually produces.
+    reserved_at:  nil,
+    sold_at:      status == :sold ? sold.map { |s| s[:days_ago] }.min&.days&.ago : nil,
+    # nil reads as "never expires" to `not_expired`, so these five can never
+    # drop out of `browsable` or into the seller's Expired tab mid-cycle. The
+    # expiry fixture is "Expired Winter Coat Size L" and stays the only one.
+    expires_at:   nil,
+    removed_at:   nil
+  )
+  listing.reload
+
+  sales.each do |sale|
+    sale_buyer = sale[:buyer] && buyers.fetch(sale[:buyer])
+    if sale_buyer
+      e2e_sale_conversation(
+        listing: listing, seller: seller, buyer: sale_buyer,
+        ask: sale[:ask], reply: sale[:reply]
+      )
+    end
+
+    txn = listing.sale_transactions.new(
+      seller:       seller,
+      buyer:        sale_buyer,
+      final_price:  listing.price,
+      currency:     listing.currency,
+      status:       sale[:status],
+      quantity:     sale[:units],
+      completed_at: sale[:status] == :sold ? sale[:days_ago].days.ago : nil
+    )
+    txn.created_at = sale[:days_ago].days.ago
+    txn.updated_at = txn.created_at
+    txn.save!
+  end
+
+  listing.reload
+  puts "  #{title}"
+  puts "    #{listing.status} · quantity #{listing.quantity} · sold_units #{listing.sold_units} · " \
+       "available #{listing.available_units} · held #{listing.held_units} · " \
+       "sales #{listing.sales_count} of #{listing.sale_transactions.count} row(s)"
+  listing
+end
+
+SELL_FLOW_LEDGERS.each do |title, spec|
+  e2e_sell_flow_ledger(
+    seller: seller, title: title, quantity: spec[:quantity],
+    status: spec[:status], sales: spec[:sales], buyers: sell_flow_buyers
+  )
+end
+
+# ── Fixture 5's REVIEW ───────────────────────────────────────────────────────
+# Submitted through Review#submit! rather than written straight to the column, so
+# the fixture is produced by the same path the app uses: the first review stays
+# hidden (double-blind), the second reveals BOTH and recomputes each reviewee's
+# aggregates.
+#
+# A COMPLETE PAIR, not one side. A lone review leaves the other party with a
+# pending review forever, and the pending-review nudge is asserted on elsewhere
+# (see the note at the top of this section). A pair leaves nothing pending for
+# anyone, which is also the realistic end state of a finished deal.
+reviewed_sale = Transaction.joins(:listing)
+                           .find_by(listings: { title: "Electric Kettle 1.8L Stainless - Bulk 10" },
+                                    status: :sold)
+
+if reviewed_sale.nil?
+  puts "  WARN: reviewed-sale fixture not found — review skipped"
+elsif reviewed_sale.reviews.exists?
+  puts "  reviewed sale already carries #{reviewed_sale.reviews.count} review(s)"
+else
+  Review.new(
+    sale: reviewed_sale, reviewer: reviewed_sale.buyer, reviewee: reviewed_sale.seller,
+    role: :of_seller, rating: 5, comment: "Kettles were exactly as described. Easy meetup."
+  ).submit!
+  Review.new(
+    sale: reviewed_sale, reviewer: reviewed_sale.seller, reviewee: reviewed_sale.buyer,
+    role: :of_buyer, rating: 5, comment: "Came on time and took all three. Good buyer."
+  ).submit!
+  puts "  reviewed sale ##{reviewed_sale.id} now carries a revealed double-blind pair " \
+       "(void / reassign must answer 422 sale_has_review)"
+end
+
+# ── Trust counters: recomputed, not left to the increments ────────────────────
+# `Transaction#bump_trust_counters!` fires on every sold row this section
+# creates, and the `destroy_all` above does not compensate (only
+# Transaction#void! does). Left alone, sold_count and bought_count would climb
+# by five on every single re-seed. `recompute_transaction_counters!` counts
+# DISTINCT sold listing_ids from source — the same repair
+# `bin/rails transactions:recompute_counters` performs — so the figures are
+# identical no matter how many times this file has been loaded.
+#
+# Scoped to the accounts this section touched. newbuyer@hatiwal.test is
+# deliberately absent: it is the fixture for "the stat is HIDDEN when the count
+# is 0" (maestro/profile/transaction_stats_hidden_when_zero.yaml).
+[ seller, *sell_flow_buyers.values.compact ].uniq.each(&:recompute_transaction_counters!)
+puts "  recomputed trust counters: seller sold_count=#{seller.reload.sold_count}, " \
+     "buyer bought_count=#{buyer.reload.bought_count}"
+
+# ── The invariants, checked rather than asserted in prose ────────────────────
+# Cheap, and it runs on every seed. A fixture that violates one of these is a
+# state the app can never produce, so QA measuring against it proves nothing —
+# better to fail the seed loudly here than to hand the night a fixture that lies.
+sell_flow_violations = Listing.where(user: seller, title: SELL_FLOW_LEDGERS.keys).filter_map do |l|
+  problems = []
+  problems << "sold_units #{l.sold_units} > quantity #{l.quantity}" if l.sold_units > l.quantity
+  problems << "held #{l.held_units} > available #{l.available_units}" if l.held_units > l.available_units
+  open_rows = l.sale_transactions.reserved.count
+  problems << "#{open_rows} open transactions" if open_rows > 1
+  "#{l.title}: #{problems.join(', ')}" if problems.any?
+end
+
+if sell_flow_violations.any?
+  raise "Sell-flow fixtures violate an enforced invariant:\n  #{sell_flow_violations.join("\n  ")}"
+end
+puts "  invariants OK: sold_units <= quantity, available_units >= held_units, <= 1 open hold each"
+
+
+# =============================================================================
 puts "=== E2E Seed: seller@hatiwal.test's own Buying thread (TASK-R517) ==="
 # =============================================================================
 # Every other conversation above puts seller@hatiwal.test on the SELLER side
@@ -957,6 +1352,14 @@ puts "    sold_count (trust stat): #{seller.reload.sold_count}"
 puts "  buyer@hatiwal.test    bought_count (trust stat): #{buyer.reload.bought_count}"
 puts "  newbuyer@hatiwal.test bought_count (trust stat): #{newbuyer.reload.bought_count} (should be 0 — no history fixture)"
 puts "  newbuyer@hatiwal.test — fresh account, nothing saved"
+puts ""
+puts "  Sell-flow fixtures (SF-QA1) — status · quantity · sold · available · held"
+Listing.where(user: seller, title: SELL_FLOW_LEDGERS.keys).order(:id).each do |l|
+  puts format(
+    "    %-42s %-7s q=%-3d sold=%-3d avail=%-3d held=%-3d sales=%d",
+    l.title[0, 42], l.status, l.quantity, l.sold_units, l.available_units, l.held_units, l.sales_count
+  )
+end
 puts ""
 puts "  Run E2E tests: maestro test hatiwal-mobile/maestro/"
 puts "======================================"
