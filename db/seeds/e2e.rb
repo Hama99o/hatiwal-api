@@ -269,7 +269,12 @@ e2e_listing(
 e2e_listing(
   user:        seller,
   title:       "Lenovo ThinkPad Laptop Core i5 8GB",
-  price:       38_000,
+  # 32_300, not 38_000: this listing carries the seeded price-drop history below
+  # (38 000 -> 32 300, ~15%), and the price has to be the POST-drop figure or the
+  # fixture contradicts itself — buyers saw "AFN 38,000" next to a "↓15%" badge.
+  # Kept above reserved_buyer's negotiated 32_000 so that flow still reads as a
+  # discount on the asking price.
+  price:       32_300,
   category:    electronics,
   status:      :active,
   description: "11th Gen Core i5, 8GB RAM, 256GB SSD. Excellent for work and dev. Charger included.",
