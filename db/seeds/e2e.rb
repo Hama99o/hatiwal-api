@@ -657,6 +657,38 @@ puts "  cleared #{removed_blocks} block(s) between the e2e accounts"
 removed_reports = Report.where(reporter_id: e2e_user_ids).destroy_all.size
 puts "  cleared #{removed_reports} report(s) filed by the e2e accounts"
 
+# A DISPOSABLE MULTI-UNIT listing, for the off-platform partial-sale flow
+# (maestro/seller/multi_quantity_offplatform_sale.yaml). Deliberately NOT the Phone Case
+# that multi_quantity_partial_sale draws down: two flows selling out of one batch means
+# whichever runs second asserts against a stock it did not set.
+#
+# The stock is RESTORED every seed, the same way the expiry fixture's date is. Selling
+# units is precisely what the flow does, so without this it would work exactly once.
+e2e_listing(
+  user:        seller,
+  title:       "QA Disposable offplatform_units",
+  price:       900,
+  category:    electronics,
+  status:      :active,
+  quantity:    8,
+  description: "Disposable multi-unit fixture. A flow sells SOME of it to a buyer who " \
+               "is not on Hatiwal; the stock is reset to 8 on every seed.",
+  location:    "Kabul"
+)
+offplatform_units = Listing.find_by(user: seller, title: "QA Disposable offplatform_units")
+if offplatform_units &&
+   (offplatform_units.quantity != 8 ||
+    offplatform_units.sold_units.to_i.positive? ||
+    offplatform_units.status.to_sym != :active)
+  offplatform_units.update_columns(
+    quantity:   8,
+    sold_units: 0,
+    status:     Listing.statuses[:active],
+    sold_at:    nil
+  )
+  puts "  reset multi-unit disposable -> 8 units, 0 sold, active"
+end
+
 DISPOSABLE_LISTINGS = [
   [ "lifecycle_reserve",       :active ],
   [ "lifecycle_sold",          :reserved ],
