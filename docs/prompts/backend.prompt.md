@@ -343,8 +343,11 @@ end
        record.user == user && record.active?
      end
 
+     # Selling never requires reserving first — this is the exact predicate the
+     # 2026-08-27 "Sell Flow Redesign" fixed after the UI had (wrongly) taught
+     # active -> reserved -> sold on every listing. Keep both statuses here.
      def sold?
-       record.user == user && record.reserved?
+       record.user == user && (record.active? || record.reserved?)
      end
 
      class Scope < ApplicationPolicy::Scope
@@ -613,8 +616,12 @@ end
 ## Authorization Rules
 
 - Any authenticated user can **browse** listings.
-- Only the listing owner can **edit**, **delete**, **publish**, **reserve**, or **mark sold**.
-- Any authenticated user can **start a conversation** on an active listing they do not own.
+- Only the listing owner can **edit**, **delete**, **publish**, **place/release a hold**
+  (`reserve`/`activate`), or **mark sold** — and mark sold never requires placing a hold first
+  (`sold?` allows `active?` OR `reserved?`, see the policy example above).
+- Any authenticated user can **start a conversation** on a **live** listing (`active` OR `reserved`)
+  they do not own — a reserved listing is still for sale and must stay message-able, not a dead end
+  (`ListingPolicy#start_conversation? = record.live?`, since the 2026-08-27 Sell Flow Redesign).
 - Only conversation participants can **read or send messages** in that conversation.
 - Any user can **save** any active listing.
 - Any user can **report** any listing or user (except themselves).
