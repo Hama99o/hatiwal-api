@@ -1175,9 +1175,11 @@ def e2e_sell_flow_ledger(seller:, title:, quantity:, status:, sales:, buyers:)
     sold_units:   units,
     status:       Listing.statuses[status],
     published_at: (oldest + 2).days.ago,
-    # A held batch stays `active`, so it has no `reserved_at` — the one known
-    # gap that commit filed rather than fixed. Left nil so the fixture matches
-    # what the app actually produces.
+    # Cleared here and re-derived below by `reconcile_hold_stamp!` once this
+    # fixture's ledger rows exist. SF-B10 fixed the gap this used to document:
+    # a held batch stays `active`, and `reserved_at` is now dated from the HOLD
+    # (its Transaction's created_at) rather than from the status — so a held
+    # batch DOES carry a "held since" date, and the fixture has to match.
     reserved_at:  nil,
     sold_at:      status == :sold ? sold.map { |s| s[:days_ago] }.min&.days&.ago : nil,
     # nil reads as "never expires" to `not_expired`, so these five can never
@@ -1211,11 +1213,18 @@ def e2e_sell_flow_ledger(seller:, title:, quantity:, status:, sales:, buyers:)
     txn.save!
   end
 
+  # SF-B10 — the rows above are written straight to the table, so nothing dated
+  # the hold on the way in. One call derives it from the ledger we just built
+  # (the open hold's created_at, or nil when this fixture has no hold), which is
+  # exactly what the app's own reserve/release paths do.
+  listing.reconcile_hold_stamp!
+
   listing.reload
   puts "  #{title}"
   puts "    #{listing.status} · quantity #{listing.quantity} · sold_units #{listing.sold_units} · " \
        "available #{listing.available_units} · held #{listing.held_units} · " \
-       "sales #{listing.sales_count} of #{listing.sale_transactions.count} row(s)"
+       "sales #{listing.sales_count} of #{listing.sale_transactions.count} row(s) · " \
+       "held since #{listing.reserved_at&.to_date || '—'}"
   listing
 end
 

@@ -48,12 +48,42 @@ class Api::V1::ListingsController < Api::V1::BaseController
     else
                  listings.sorted(params[:sort])
     end
-    # `sale_transactions` is eager-loaded for the base `held_units` field
-    # (SF-B2): the serializer asks every row how many units are held, and an
-    # association scope always hits the database, so without this the public feed
-    # would fire one extra query per card. Listing#open_sale reads the loaded
-    # array instead when it is present.
-    listings = listings.includes(:price_histories, :sale_transactions)
+    # TASK-API-FEEDN1 — the ONE include list the :list view actually needs, on the
+    # busiest public endpoint in the app. It is deliberately identical to
+    # #similar's list below (and to my/saved_listings, my/viewed_listings,
+    # my/hidden_listings, users/sold_listings, all of which already had it):
+    # every one of them renders the SAME :list view, so a divergent include list
+    # here is not a local tuning choice, it is a bug.
+    #
+    # This endpoint used to preload `:price_histories, :sale_transactions` only,
+    # while :list also reads `l.user` + that user's avatar blob (the `seller`
+    # field), `l.category`, and the images attachments behind `thumbnail_url` /
+    # `image_urls`. Each of those is an unloaded association read from inside a
+    # serializer block, so each cost one query PER CARD — roughly 80 extra
+    # queries on a 20-card page, on the first screen every buyer sees, over
+    # Afghan mobile networks.
+    #
+    # Field-by-field, why each entry is here (and nothing more is):
+    #   :category           -> field(:category) { CategorySerializer... }
+    #   :price_histories    -> price_drop_percent / price_dropped_at
+    #                          (Listing#recent_price_drop's loaded-array guard)
+    #   :sale_transactions  -> the base `held_units` / `sales_count` fields
+    #                          (SF-B2; Listing#open_sale's loaded-array guard)
+    #   user + avatar blob  -> field(:seller) { u.avatar.attached? ? u.avatar.url }
+    #   images + variants   -> thumbnail_url (a lazy variant URL, which reads
+    #                          blob.variable? and the variant records) + image_urls
+    #
+    # NOT preloaded on purpose: `:conversations` and `:saved_listings`. :list
+    # renders neither (`conversations_count` is :seller_list/:detailed,
+    # `saves_count` is :detailed) — preloading them here would trade one wasted
+    # query per card for two wasted table loads per page.
+    listings = listings.includes(
+      :category,
+      :price_histories,
+      :sale_transactions,
+      { user: { avatar_attachment: :blob },
+        images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+    )
 
     paginate_blue(
       ListingSerializer,

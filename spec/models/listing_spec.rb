@@ -448,7 +448,11 @@ RSpec.describe Listing, type: :model do
       expect(listing.reload.published_at).to be_within(1.second).of(original)
     end
 
-    it "sets reserved_at when becoming reserved" do
+    # SF-B10 kept this callback, narrowed to the one hold it is still the only
+    # record of: a legacy bare `PUT .../reserve` with no buyer_id writes no
+    # Transaction, so `status: reserved` is all there is to date. Every hold
+    # placed through the buyer picker is dated by #reconcile_hold_stamp! instead.
+    it "sets reserved_at when becoming reserved with no ledger row to date it" do
       listing = create(:listing, :active)
       listing.reserved!
       expect(listing.reload.reserved_at).to be_present
@@ -911,6 +915,52 @@ RSpec.describe Listing, type: :model do
 
       it "is a no-op when there is no open Transaction" do
         expect { listing.cancel_open_transaction! }.not_to raise_error
+      end
+    end
+
+    # ── SF-B10 — reserved_at is derived from the hold, in one place ───────────
+    describe "#reconcile_hold_stamp!" do
+      it "dates the listing from the open hold's created_at, never from now" do
+        txn = listing.reserve_with_buyer!(buyer_id: buyer.id)
+        # Simulate a hold placed days ago (the pre-fix rows the backfill repairs).
+        txn.update_columns(created_at: 3.days.ago)
+        listing.update_columns(reserved_at: nil)
+
+        listing.reconcile_hold_stamp!
+
+        expect(listing.reload.reserved_at.to_i).to eq(txn.reload.created_at.to_i)
+      end
+
+      it "clears the stamp when no hold is open" do
+        listing.reserve_with_buyer!(buyer_id: buyer.id)
+        listing.reconcile_hold_stamp!
+        expect(listing.reload.reserved_at).to be_present
+
+        listing.sale_transactions.destroy_all
+        listing.reconcile_hold_stamp!
+
+        expect(listing.reload.reserved_at).to be_nil
+      end
+
+      it "never reads a SOLD row as a hold" do
+        listing.reserve_with_buyer!(buyer_id: buyer.id)
+        listing.open_transaction.mark_sold!
+
+        listing.reconcile_hold_stamp!
+
+        expect(listing.reload.reserved_at).to be_nil
+      end
+
+      it "issues no write when the stamp is already correct (idempotent)" do
+        listing.reserve_with_buyer!(buyer_id: buyer.id)
+
+        writes = 0
+        ActiveSupport::Notifications.subscribed(
+          ->(*, payload) { writes += 1 if payload[:sql].to_s.start_with?("UPDATE \"listings\"") },
+          "sql.active_record"
+        ) { 3.times { listing.reconcile_hold_stamp! } }
+
+        expect(writes).to eq(0)
       end
     end
 

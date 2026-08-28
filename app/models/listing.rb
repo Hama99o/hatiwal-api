@@ -308,6 +308,18 @@ class Listing < ApplicationRecord
   private_class_method :haversine_binds
 
   before_save :set_published_at, if: -> { active? && published_at.nil? }
+  # SF-B10 — this callback is NO LONGER what dates a hold. It is the fallback for
+  # the ONE hold that has no Transaction row to date it: the legacy bare
+  # `PUT /my/listings/:id/reserve` with no `buyer_id`, where
+  # `Listing#reserve_with_buyer!` returns nil without touching the ledger and the
+  # `reserved` STATUS is the only record that a hold exists at all.
+  #
+  # Every hold placed through the buyer picker is dated by
+  # `#reconcile_hold_stamp!` from the hold's own `created_at` instead — because a
+  # multi-unit batch deliberately keeps `status: active` while it holds units
+  # (SF-B2), so this condition never fired for a batch and `reserved_at` stayed
+  # nil for the entire time units were held. That is the bug SF-B10 fixes; do not
+  # re-widen this line to try to cover it, `status` is not evidence of a hold.
   before_save :set_reserved_at,  if: -> { reserved? && reserved_at.nil? }
   before_save :set_sold_at,      if: -> { sold? && sold_at.nil? }
 
@@ -414,6 +426,60 @@ class Listing < ApplicationRecord
   # would need expiry/leak machinery this marketplace deliberately does not have.
   def held_units
     (open_sale&.quantity).to_i
+  end
+
+  # ── SF-B10: `reserved_at` is "held since", and a hold is what dates it ───────
+  #
+  # THE ROOT CAUSE, third instance. `reserved_at` was written by a `before_save`
+  # keyed on `reserved?` — i.e. it read the listing's STATUS as evidence that a
+  # hold exists. That stopped being true the day SF-B2 made a multi-unit batch
+  # deliberately keep `status: active` while it holds units ("a batch does not
+  # leave the market because one unit is held"). From then on a batch's hold was
+  # never dated: `reserved_at` stayed nil for the entire time units were held,
+  # while `reserved_at` IS shipped to clients on :seller_list and
+  # :owner_detailed — so a seller's card could render "10 held for Ahmad" with
+  # no date on it. Instances 1 and 2 of the same mistake cost a hidden 403
+  # (ListingPolicy#activate?, SF-B8) and a phantom hold on already-sold stock
+  # (#hold_closed_by_sale, SF-B9).
+  #
+  # THE COLUMN NAME IS KEPT, and its meaning is now dual — stated here because
+  # that is a deliberate choice, not an accident:
+  #   * on the WIRE it means "held since": when the hold now in place was placed,
+  #     nil when there is no hold. That is the only thing a client can do
+  #     anything with, and `held_units` / the owner-only `sale` field remain the
+  #     answer to "is there a hold at all" (never `status == "reserved"`).
+  #   * in the ADMIN dashboard (ListingDashboard) it reads as the same thing.
+  # Renaming it to `held_since` would have been clearer and would have broken
+  # `hatiwal-web`, which is NOT yet ported to the sold-first model (card 285) and
+  # whose e2e API contract asserts the key `reserved_at` on both the
+  # :seller_list and :detailed payloads. A nil value keeps that key; a removed
+  # column would not.
+  #
+  # DERIVED, NOT ACCUMULATED. The value is always the open hold's own
+  # `created_at`, or nil — so this method is idempotent, self-correcting, and
+  # order-independent: it can be called after any hold mutation, in any sequence
+  # relative to a status flip, and lands on the same answer. That is why it, and
+  # not a second status callback, is what every hold path calls. It also
+  # back-fills a batch whose hold predates this fix the first time any hold path
+  # touches it (`bin/rails listings:reconcile_hold_stamps` does the whole table).
+  #
+  # `open_transaction` (the query), never `open_sale` (the loaded array): this is
+  # a mutation path and must never date a hold from a possibly-stale in-memory
+  # copy — the same rule #open_sale's own note states.
+  #
+  # `update_columns`, not `update!`: a one-column bookkeeping write must not be
+  # refusable by a validation about an attribute it does not touch. The precedent
+  # and the measured reason are on #shrink_open_hold_to_available_units! below —
+  # and here it also matters that placing a hold on a BATCH previously issued no
+  # Listing write at all, so an `update!` would have introduced a brand-new way
+  # for a legacy row with an out-of-range column to fail an action that works
+  # today (exactly the failure class SF-B7 was about). `updated_at` is moved by
+  # hand since `update_columns` will not.
+  def reconcile_hold_stamp!
+    stamp = open_transaction&.created_at
+    return if same_instant?(stamp, reserved_at)
+
+    update_columns(reserved_at: stamp, updated_at: Time.current)
   end
 
   # SF-B5 — how many SOLD entries this listing's ledger holds (not units: a buyer
@@ -532,19 +598,33 @@ class Listing < ApplicationRecord
     units = multi_unit? ? (quantity.presence || 1).to_i.clamp(1, [ available_units, 1 ].max) : 1
 
     existing = open_transaction
-    if existing
-      existing.update!(buyer_id: buyer_id, final_price: final_price.presence || price, quantity: units)
-      existing
-    else
-      sale_transactions.create!(
-        seller_id: user_id,
-        buyer_id: buyer_id,
-        final_price: final_price.presence || price,
-        currency: currency,
-        status: :reserved,
-        quantity: units
-      )
-    end
+    hold =
+      if existing
+        existing.update!(buyer_id: buyer_id, final_price: final_price.presence || price, quantity: units)
+        existing
+      else
+        sale_transactions.create!(
+          seller_id: user_id,
+          buyer_id: buyer_id,
+          final_price: final_price.presence || price,
+          currency: currency,
+          status: :reserved,
+          quantity: units
+        )
+      end
+
+    # SF-B10 — a hold now exists, so `reserved_at` ("held since") is dated from
+    # it. This is the whole fix: the timestamp follows the HOLD, not the status.
+    # A batch keeps `status: active` here (SF-B2) and so never reached the
+    # `before_save :set_reserved_at` callback — a seller's card could render "N
+    # held for Ahmad" with no date on it for as long as the hold lasted.
+    #
+    # Advancing an EXISTING hold (moving it to another buyer, changing the units)
+    # keeps its original date, because it is the same hold and it has been in
+    # place since it was created — `reconcile_hold_stamp!` reads the row's own
+    # `created_at`, so that falls out rather than needing a branch.
+    reconcile_hold_stamp!
+    hold
   end
 
   # Create or advance the Transaction to sold when the seller marks this
@@ -594,6 +674,7 @@ class Listing < ApplicationRecord
     # this sale, and must never be silently re-attributed to whoever happened to
     # be holding it (TASK-TX02 review fix, MAJOR).
     if clear_buyer
+      # SF-B10: `cancel_open_transaction!` clears the hold's date with the hold.
       cancel_open_transaction!
       return create_sold_sale!(buyer_id: nil, final_price: final_price, units: units_for_sale(quantity))
     end
@@ -609,14 +690,21 @@ class Listing < ApplicationRecord
       # is safe whether or not this call identified one.
       existing.update!(quantity: units_for_sale(quantity, default: existing.quantity)) if multi_unit?
       existing.mark_sold!(final_price: final_price, buyer_id: buyer_id)
+      # SF-B10 — that row is a SALE now, not a hold, so it no longer dates one.
+      reconcile_hold_stamp!
       return existing
     end
 
     # `buyer_id.presence` is what makes the bare legacy call a buyer-less sale
     # rather than a validation error.
-    create_sold_sale!(
+    sale = create_sold_sale!(
       buyer_id: buyer_id.presence, final_price: final_price, units: units_for_sale(quantity)
     )
+    # SF-B10 — deliberately `reconcile`, not `clear`: on a batch, ANOTHER buyer's
+    # hold can still be open beside this sale (that is the case SF-B9 exists for),
+    # and it keeps its own date. Only a listing with no open hold left loses it.
+    reconcile_hold_stamp!
+    sale
   end
 
   # Cancel any still-open (reserved) Transaction for this listing — a no-op
@@ -627,6 +715,15 @@ class Listing < ApplicationRecord
   # review fix, MAJOR).
   def cancel_open_transaction!
     open_transaction&.destroy!
+    # SF-B10 — releasing a hold releases its date with it, so a released listing
+    # can never ship a "held since" for a hold nobody has any more. Called
+    # UNCONDITIONALLY (not only when a row was destroyed) because this is also the
+    # one funnel a legacy buyer-less hold passes through: that hold has no
+    # Transaction row, only `status: reserved` and the timestamp the `before_save`
+    # callback wrote, and #activate/#unpublish call this before flipping the
+    # status — so keying the clear on the status here would read a value that is
+    # about to change.
+    reconcile_hold_stamp!
   end
 
   # ── SF-B4: undo & edit a recorded sale ──────────────────────────────────────
@@ -987,7 +1084,12 @@ class Listing < ApplicationRecord
   def shrink_open_hold_to_available_units!
     hold = open_transaction
     return if hold.nil? || hold.quantity <= available_units
-    return hold.destroy! if available_units.zero?
+
+    if available_units.zero?
+      hold.destroy!
+      # SF-B10 — the hold is gone, so its date goes with it.
+      return reconcile_hold_stamp!
+    end
 
     hold.update_columns(quantity: available_units, updated_at: Time.current)
   end
@@ -1191,6 +1293,19 @@ class Listing < ApplicationRecord
 
   def set_reserved_at
     self.reserved_at = Time.current
+  end
+
+  # SF-B10 — whole-second comparison, deliberately. #reconcile_hold_stamp! runs
+  # on every hold-touching path and must be a no-op when nothing changed;
+  # comparing a Ruby Time against a value Postgres has round-tripped can differ
+  # in sub-second precision, which would turn an idempotent reconcile into a
+  # redundant UPDATE on every call. Two holds placed within the same second are
+  # the same hold here by construction (one open hold per listing, DB-enforced).
+  def same_instant?(one, other)
+    return other.nil? if one.nil?
+    return false if other.nil?
+
+    one.to_i == other.to_i
   end
 
   def set_sold_at

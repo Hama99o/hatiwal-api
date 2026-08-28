@@ -139,10 +139,60 @@ RSpec.describe "Api::V1::My::Listings hold quantity (SF-B2)", type: :request do
     # The N+1 this field could easily reintroduce: an association scope always
     # hits the database, so `held_units` MUST read the eager-loaded array.
     #
-    # Measured as "same rows, holds added" rather than "more rows": the public
-    # feed already carries a per-row cost for the seller/category/thumbnail
-    # fields it has always rendered, and this spec is about what THIS field adds
-    # on top — which must be nothing.
+    # STRENGTHENED (TASK-API-FEEDN1). This was written as "same rows, holds
+    # added" for a reason that no longer holds: the public feed used to preload
+    # nothing but price_histories and sale_transactions, so it carried a ~7-query
+    # per-card cost for the seller/category/thumbnail fields it has always
+    # rendered — which made a row-count-based assertion impossible here, and left
+    # this spec able to prove only that THIS field adds nothing on top.
+    #
+    # The feed's include list is now the same one every other :list endpoint uses,
+    # so the row-count assertion is available and is the stronger one: it fails if
+    # `held_units` regresses AND if anything else on the card does. Both are kept
+    # — the holds-added measurement below still isolates this field specifically,
+    # which a row-count assertion cannot.
+    it "keeps the public feed at a constant query count as held rows are added" do
+      counter = lambda do |ref, &block|
+        ActiveSupport::Notifications.subscribed(
+          lambda { |*, payload|
+            sql = payload[:sql].to_s
+            next if sql.start_with?("SAVEPOINT", "RELEASE SAVEPOINT")
+            next if sql =~ /\AUPDATE "users" SET "tokens"/
+
+            ref[0] += 1
+          },
+          "sql.active_record",
+          &block
+        )
+      end
+
+      hold_a_batch = lambda do
+        l = create(:listing, :active, user: seller, quantity: 5)
+        create(:conversation, listing: l, buyer: buyer)
+        put "/api/v1/my/listings/#{l.id}/reserve",
+            params: { buyer_id: buyer.id, quantity: 2 }, headers: headers, as: :json
+      end
+
+      3.times { hold_a_batch.call }
+      get "/api/v1/listings", as: :json # warm caches
+
+      three_rows = [ 0 ]
+      counter.call(three_rows) { get "/api/v1/listings", as: :json }
+      expect(JSON.parse(response.body)["listings"].size).to eq(3)
+
+      12.times { hold_a_batch.call }
+
+      fifteen_rows = [ 0 ]
+      counter.call(fifteen_rows) { get "/api/v1/listings", as: :json }
+      body = JSON.parse(response.body)
+      expect(body["listings"].size).to eq(15)
+      expect(body["listings"].map { |l| l["held_units"] }).to all(eq(2))
+
+      expect(fifteen_rows[0]).to eq(three_rows[0]),
+        "Expected the feed's query count to be flat in the number of held rows: " \
+        "#{three_rows[0]} queries for 3 held cards, #{fifteen_rows[0]} for 15"
+    end
+
     it "adds no query per held row to the public feed" do
       listings = Array.new(3) do
         l = create(:listing, :active, user: seller, quantity: 5)
