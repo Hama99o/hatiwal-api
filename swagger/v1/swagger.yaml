@@ -229,6 +229,100 @@ paths:
         required: true
         schema:
           type: string
+  "/api/v1/conversations/{conversation_id}/messages":
+    parameters:
+    - name: conversation_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: send a message in a conversation
+      tags:
+      - Messages
+      description: |
+        Sends a message in a conversation the caller participates in.
+
+        SF-B11 — `offer_quantity` (optional, integer) states how many UNITS an
+        offer is for. Only meaningful on `kind: "offer"` / `"offer_counter"`, and
+        only on a multi-unit listing (`listing.multi_unit`).
+
+        * **Nullable, and never defaulted to 1.** `null` means the sender said
+          nothing about how many, which is what every offer sent before this
+          field existed is; clients read `null` as one unit but must not show
+          agreed-quantity UI for it. "Absent" and "one" are different facts.
+        * **Discarded, not refused**, wherever it cannot mean anything — a
+          non-offer kind, a single-item listing, an orphaned thread whose listing
+          is gone. A single-item listing is untouched end to end: the response
+          carries `offer_quantity: null` and no new failure mode exists for it.
+        * **Refused when it exceeds `listing.available_units`** at the moment it
+          is sent: 422 with `code: "offer_quantity_above_available_units"`. Never
+          silently clamped — an offer is a proposal, and rewriting "I'll take 20"
+          into "I'll take 12" would hand both sides a number neither chose.
+        * A non-positive or fractional value is refused as an ordinary 422 with
+          no `code` (it is a client bug, not something the sender can act on).
+
+        **Reading the agreed quantity off an accepted offer:** an accept is a
+        separate message (`kind: "offer_accepted"`) whose `responds_to_id` points
+        at the offer it answers. Read `offer_amount` + `offer_quantity` off that
+        offer, then pass the quantity through to `PUT /api/v1/my/listings/:id/sold`
+        as its existing `quantity` param — no change to that endpoint.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '201':
+          description: offer for 3 of the 15 units
+        '422':
+          description: offer for more units than the listing has left
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body:
+                  type: string
+                  description: 'For offers: "amount|currency|listedPrice"'
+                kind:
+                  type: string
+                  enum:
+                  - text
+                  - meetup_proposal
+                  - meetup_accepted
+                  - meetup_declined
+                  - offer
+                  - offer_accepted
+                  - offer_declined
+                  - document
+                  - image_message
+                  - offer_counter
+                responds_to_id:
+                  type: integer
+                  nullable: true
+                  description: Message being answered — must be in the SAME conversation
+                offer_quantity:
+                  type: integer
+                  nullable: true
+                  description: SF-B11 — units this offer is for; null means unspecified
+              required:
+              - body
+        required: true
   "/api/v1/my/listings/{id}/renew":
     parameters:
     - name: id

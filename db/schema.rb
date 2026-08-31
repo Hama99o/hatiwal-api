@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_27_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_31_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -203,6 +203,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_27_000000) do
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.integer "kind", default: 0, null: false
+    t.integer "offer_quantity"
     t.datetime "read_at"
     t.bigint "responds_to_id"
     t.datetime "updated_at", null: false
@@ -213,6 +214,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_27_000000) do
     t.index ["read_at"], name: "index_messages_on_read_at"
     t.index ["responds_to_id"], name: "index_messages_on_responds_to_id"
     t.index ["user_id"], name: "index_messages_on_user_id"
+    t.check_constraint "offer_quantity IS NULL OR offer_quantity >= 1", name: "messages_offer_quantity_positive"
   end
 
   create_table "reports", force: :cascade do |t|

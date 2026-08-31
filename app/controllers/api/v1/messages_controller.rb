@@ -32,7 +32,17 @@ class Api::V1::MessagesController < Api::V1::BaseController
       SendMessagePushJob.perform_later(@message.id)     # push notification (closed app)
       render_blue(MessageSerializer, @message, view: :default, status: :created)
     else
-      render_unprocessable_entity(@message)
+      # SF-B11: `code:` carries the ONE message failure the sender has to act on
+      # — `offer_quantity_above_available_units`, when they offered for more units
+      # than the listing has left. The `errors` array is unchanged English prose
+      # (the fallback for clients that predate the code); the code is what lets a
+      # ps/fa client pin its own localized sentence under the quantity stepper
+      # instead of echoing a raw Rails string. Nil for every other validation
+      # failure — a blank body, a rejected kind, a cross-conversation
+      # `responds_to_id` — and `render_unprocessable_entity` omits the key then,
+      # so those 422s are byte-identical to what they returned before.
+      # Message#error_code owns the mapping, mirroring Listing#error_code.
+      render_unprocessable_entity(@message, code: @message.error_code)
     end
   end
 
@@ -72,8 +82,13 @@ class Api::V1::MessagesController < Api::V1::BaseController
   #   validation `kind_must_not_be_system_when_user_authored` fires and the
   #   caller receives a 422.  This avoids raising an ArgumentError on an
   #   unrecognised enum string while still rejecting the request cleanly.
+  # SF-B11 adds `:offer_quantity` to the permit list. It is accepted on every
+  # kind and then DISCARDED by the model wherever it cannot mean anything (a
+  # non-offer kind, a single-item listing) rather than refused — see
+  # `Message#discard_meaningless_offer_quantity`, which follows the rule
+  # `Listing#units_for_sale` already set.
   def safe_message_params
-    permitted = params.permit(:body, :responds_to_id)
+    permitted = params.permit(:body, :responds_to_id, :offer_quantity)
     raw_kind  = params[:kind].presence
 
     permitted[:kind] = resolved_kind(raw_kind)
