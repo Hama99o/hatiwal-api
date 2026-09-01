@@ -1,9 +1,22 @@
 # Deployment Guide
 
+> **Domains, corrected 2026-09-01.** Production is **`api.hatiwal.com`**. This
+> file still described the `nip.io` hostnames the first deploy used and hardcoded
+> the VPS IP — which also breaks the workspace rule that hosts live only in the
+> gitignored `.env.production`.
+>
+> `hatiwal.com` (Squarespace) has exactly four A records — `@`, `api`, `map`,
+> `www` — all on the VPS. Those are the only names anything here serves. The
+> `*.multimagics.com` hostnames are gone and have been removed from
+> `KAMAL_PROXY_HOST`, `ALLOWED_ORIGINS` and `CABLE_ALLOWED_ORIGINS`; a dead
+> origin in an allow-list is dead weight that outlives the person who remembers
+> why it was there.
+
+
 ## Overview
 
 Hatiwal API is deployed with **Kamal 2** (zero-downtime) to the shared OVH VPS
-`51.254.130.18`, alongside `multi_magic`, `edu_safi` and the `hatiwal_web`
+`$KAMAL_HOST`, alongside `multi_magic`, `edu_safi` and the `hatiwal_web`
 front-end. See the workspace overview: [../../DEPLOYMENT.md](../../DEPLOYMENT.md).
 
 ### Current values (source of truth: `config/deploy.yml`)
@@ -11,7 +24,7 @@ front-end. See the workspace overview: [../../DEPLOYMENT.md](../../DEPLOYMENT.md
 | | value |
 |---|---|
 | Service / image | `hatiwal_api` / `hama99o/hatiwal_api` |
-| Hostname | `api.hatiwal.51.254.130.18.nip.io` (auto-TLS) |
+| Hostname | `api.hatiwal.com` (auto-TLS) |
 | Docker network | `hatiwal_api-net` (isolated) |
 | Container port | `80` (Thruster → Puma) · healthcheck `GET /up` |
 | Postgres host port | **`127.0.0.1:5434`** (avoids multi_magic 5432 / edu_safi 5433) |
@@ -29,7 +42,7 @@ front-end. See the workspace overview: [../../DEPLOYMENT.md](../../DEPLOYMENT.md
 Internet :443
     ↓
 kamal-proxy (shared, TLS termination, routes by hostname)
-    ↓  api.hatiwal.51.254.130.18.nip.io
+    ↓  api.hatiwal.com
 hatiwal_api (Rails API · Thruster→Puma on :80)   ── network: hatiwal_api-net
     ↓
 PostgreSQL 16 (:5434) + Redis 7 (:6381)  — accessories on the same VPS
@@ -97,7 +110,7 @@ APP_DOMAIN=$(cat .env.production | grep APP_DOMAIN | cut -d= -f2)
 
 ```bash
 # One-time: create this app's isolated Docker network on the VPS
-ssh kamal@51.254.130.18 "docker network create hatiwal_api-net"
+ssh "$SSH_USER@$KAMAL_HOST" "docker network create hatiwal_api-net"
 
 # Bootstraps the server + boots accessories (Postgres + Redis) + first deploy.
 kamal setup
@@ -149,7 +162,7 @@ injects the secrets listed in `config/deploy.yml`.
 | `RAILS_MASTER_KEY` | Rails credentials master key (from `config/master.key`) |
 | `DATABASE_PASSWORD` | Postgres password (app + `db` accessory) |
 | `DEVISE_JWT_SECRET_KEY` | Secret for signing auth tokens |
-| `APP_DOMAIN` | Public API origin (e.g. `https://api.hatiwal.51.254.130.18.nip.io`) |
+| `APP_DOMAIN` | Public API origin (e.g. `https://api.hatiwal.com`) |
 | `ALLOWED_ORIGINS` | Comma-separated allowed CORS origins (optional) |
 | `ACTIVE_STORAGE_SERVICE` | `local` (default) or `amazon` |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_BUCKET` / `AWS_REGION` | S3 (only if `ACTIVE_STORAGE_SERVICE=amazon`) |
