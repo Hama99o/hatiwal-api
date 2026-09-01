@@ -169,9 +169,20 @@ class ListingSerializer < ApplicationSerializer
   end
 
   view :detailed do
-    fields :description, :category_id, :location, :latitude, :longitude,
+    # SAFETY-1: `:latitude`/`:longitude` are NOT in this list any more. This is
+    # the PUBLIC view (guests and buyers), and it shipped the seller's coordinate
+    # at six decimals — house level. They are re-declared below as the
+    # grid-snapped values; see `Listing::GRID_DEGREES` for why snapping and not
+    # an offset. `:owner_detailed` overrides them back to exact.
+    fields :description, :category_id, :location,
            :views_count, :published_at, :reserved_at, :sold_at, :updated_at, :expires_at,
            :negotiable
+    field(:latitude)  { |l| l.approximate_latitude }
+    field(:longitude) { |l| l.approximate_longitude }
+    # So a client can SAY it is approximate and draw an area instead of a pin,
+    # rather than each client hardcoding a radius and one of them forgetting.
+    field(:location_precision) { "approximate" }
+    field(:location_radius_m)  { Listing::APPROXIMATE_LOCATION_RADIUS_M }
     field(:images) { |l| l.image_urls }
     field(:image_attachments) { |l| l.image_attachments }
     field(:thumbnail_url) { |l| l.thumbnail_url }
@@ -229,6 +240,15 @@ class ListingSerializer < ApplicationSerializer
   # that stays on :detailed.
   view :owner_detailed do
     include_view :detailed
+    # SAFETY-1: the owner sees their OWN exact point — this view is only ever
+    # rendered for `my/listings`. Without these overrides the seller would
+    # inherit `:detailed`'s snapped values, so opening the edit form would drag
+    # their pin onto a grid line and save it back, destroying the real
+    # coordinate for good.
+    field(:latitude)  { |l| l.latitude }
+    field(:longitude) { |l| l.longitude }
+    field(:location_precision) { "exact" }
+    field(:location_radius_m)  { nil }
     field(:sale, &SALE_FIELD)
   end
 end

@@ -931,6 +931,50 @@ class Listing < ApplicationRecord
   end
 
   # Integer percent the price was reduced (e.g. 15 for 15% off), or nil.
+  # ── SAFETY-1: a public listing must not publish the seller's front door ────
+  #
+  # `latitude`/`longitude` are stored at six decimals — roughly 0.1m, i.e.
+  # house-level — and were shipped raw on the PUBLIC `:detailed` view, so an
+  # unauthenticated request returned a private individual's home coordinate next
+  # to their name, photos and activity history. Hatiwal sellers are private
+  # people in Afghanistan meeting strangers in person; that is a real safety
+  # exposure, acutely so for women sellers, and it sits directly against the
+  # product's own stated north star of trust and safe in-person meetings. No
+  # comparable marketplace does it (leboncoin leads with city + postcode as
+  # text and an approximate zone; Vinted and Facebook Marketplace obscure it
+  # too).
+  #
+  # SNAPPED TO A GRID, NOT OFFSET BY A VECTOR — this choice is the whole point.
+  # A stable pseudo-random offset is REVERSIBLE: these repositories are public,
+  # so anyone can read the algorithm, and anything derived from the listing id
+  # alone can be undone to recover the exact point. Even keyed with a secret it
+  # only holds until that secret leaks. Snapping DESTROYS the information: every
+  # listing in a cell collapses onto the same coordinate, and no amount of
+  # sampling or algorithm knowledge brings the original back.
+  #
+  # GRID_DEGREES = 0.005 → at Kabul's latitude (~34.5°) a cell is about 555m
+  # north-south and 458m east-west, so the published point is never more than
+  # ~360m from the true one. That lands in SAFETY-1's proposed 300-500m band
+  # while keeping the map useful for "which part of town is this in", which is
+  # the only question a buyer needs answered before they agree to meet.
+  #
+  # The OWNER still gets exact values (`:owner_detailed` overrides these), so
+  # editing a listing never silently drags the seller's own pin onto a grid line.
+  GRID_DEGREES = 0.005
+
+  def approximate_latitude
+    snap_to_grid(latitude)
+  end
+
+  def approximate_longitude
+    snap_to_grid(longitude)
+  end
+
+  # Metres a client should draw as the uncertainty circle. Deliberately a little
+  # larger than the worst-case displacement: a circle that is too tight reads as
+  # a precise claim, which is the impression this ticket exists to remove.
+  APPROXIMATE_LOCATION_RADIUS_M = 500
+
   def price_drop_percent
     drop = recent_price_drop
     return nil unless drop
@@ -996,6 +1040,14 @@ class Listing < ApplicationRecord
   end
 
   private
+
+  # Rounds to the nearest GRID_DEGREES. `nil` in, `nil` out: a listing without
+  # coordinates must not gain a phantom point at 0,0 off the coast of Africa.
+  def snap_to_grid(value)
+    return nil if value.blank?
+
+    (BigDecimal(value.to_s) / GRID_DEGREES).round * GRID_DEGREES
+  end
 
   # SF-B9 — the open hold that THIS `sold` call closes out, or nil.
   #
