@@ -306,6 +306,28 @@ e2e_listing(
 # per-unit price, the stock pill, and the buyer picker's "How many did you sell?"
 # field. Kept as the ONLY multi-unit fixture so every other flow keeps asserting
 # the single-item majority case.
+# ── SF-M11 — a multi-unit listing dedicated to the OFFER-QUANTITY flow ──────
+# Its own fixture on purpose. The Phone Case above is the canonical multi-unit
+# listing but it already carries a seeded conversation and an unread-state helper
+# (maestro/_helpers/make_phone_case_unread.yaml), and the offer-quantity flow
+# MUTATES a thread — sending an offer, accepting it, marking units sold. Sharing
+# a fixture between two mutating flows is how they start failing for each other's
+# reasons, which is why this seed already keeps the sell-flow listings apart.
+#
+# Seller-owned and `active` with NO pre-seeded conversation, so the flow can drive
+# the whole round trip from a clean thread: buyer states 3 units, seller accepts,
+# and mark-sold must open on 3 rather than 1.
+e2e_listing(
+  user:        seller,
+  title:       "Wool Socks Bulk Pack - 12 Pairs",
+  price:       250,
+  category:    clothes,
+  status:      :active,
+  description: "Twelve pairs, thick wool. Happy to sell a few pairs or the whole pack.",
+  location:    "Kandahar, Main Road",
+  quantity:    12
+)
+
 e2e_listing(
   user:        seller,
   title:       "Phone Case Silicone Clear - Wholesale",

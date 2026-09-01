@@ -64,6 +64,29 @@ namespace :db do
       ListingView.where(listing_id: listing_ids).or(ListingView.where(user_id: user_ids)).delete_all
       HiddenListing.where(listing_id: listing_ids).or(HiddenListing.where(user_id: user_ids)).delete_all
       ListingPriceHistory.where(listing_id: listing_ids).delete_all
+      # LISTING-scoped saves, not just the e2e users' own.
+      #
+      # Line ~24 already clears `SavedListing.where(user_id: user_ids)` — every
+      # save MADE BY an e2e persona. It cannot catch a save made BY SOMEONE ELSE
+      # POINTING AT an e2e listing, and that is enough to abort the whole wipe:
+      #
+      #   PG::ForeignKeyViolation: update or delete on table "listings" violates
+      #   foreign key constraint "fk_rails_63efe8ab53" on table "saved_listings"
+      #
+      # Which is exactly the failure the `saved_searches` note below already
+      # describes, from the other side of the same relationship — including the
+      # part that makes it expensive: the abort lands AFTER the listings are gone,
+      # so the database is left HALF-WIPED. The e2e fixtures vanish, the seed
+      # never runs, and every Maestro flow afterwards drives stale data while the
+      # rig still reports "seed verified" because the personas can still log in.
+      # That is what happened here: one save on listing 1076 by a non-e2e account
+      # (anyone tapping the heart while testing) silently disabled the whole rig.
+      #
+      # `.or()` on both sides, matching what ListingView and HiddenListing above
+      # already do.
+      SavedListing.where(listing_id: listing_ids)
+                  .or(SavedListing.where(user_id: user_ids))
+                  .delete_all
       Listing.where(id: listing_ids).delete_all
 
       # USER-SCOPED tables that nothing else cleans up. Missing these aborts the
