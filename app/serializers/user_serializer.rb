@@ -6,7 +6,14 @@ class UserSerializer < ApplicationSerializer
   # :public — trust-dossier shown to any authenticated user looking at a seller.
   # Must NOT include email, phone, exact coordinates, or any other PII.
   view :public do
-    fields :bio, :province, :verified
+    fields :bio, :verified
+    # Province and city are the user's OWN address, so they obey their own
+    # visibility setting. Owner request, 2026-09-02: "show option to show number
+    # and address to people or not, I mean user address not list address its
+    # important". A LISTING's location is a separate field and is unaffected — a
+    # seller hiding their home must not blank out where the item can be collected.
+    field(:province) { |u| u.show_address_publicly ? u.province : nil }
+    field(:city) { |u| u.show_address_publicly ? u.city : nil }
     field(:firstname) { |u| u.firstname }
     field(:lastname) { |u| u.lastname }
     field(:full_name) { |u| u.full_name }
@@ -58,7 +65,10 @@ class UserSerializer < ApplicationSerializer
     fields :email, :firstname, :lastname, :city,
            :phone, :bio, :province, :latitude, :longitude,
            :status, :preferred_language, :seller_mode, :preferred_theme, :verified,
-           :created_at, :deletion_scheduled_at
+           :created_at, :deletion_scheduled_at,
+           # The user's own contact details and visibility switches, so the
+           # clients can render the inputs. Only ever in :me — never :public.
+           :whatsapp_number, :show_phone_publicly, :show_address_publicly
     field(:full_name) { |u| u.full_name }
     field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
     # Whether this account's email address has been confirmed.

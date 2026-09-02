@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_31_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_02_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -352,6 +352,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_31_000000) do
     t.string "reset_password_token"
     t.integer "review_count", default: 0, null: false
     t.boolean "seller_mode", default: false, null: false
+    t.boolean "show_address_publicly", default: true, null: false
+    t.boolean "show_phone_publicly", default: true, null: false
     t.integer "sign_in_count", default: 0, null: false
     t.integer "sold_count", default: 0, null: false
     t.integer "status", default: 0, null: false
@@ -361,6 +363,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_31_000000) do
     t.string "unlock_token"
     t.datetime "updated_at", null: false
     t.boolean "verified", default: false, null: false
+    t.string "whatsapp_number"
     t.index ["avg_rating"], name: "index_users_on_avg_rating"
     t.index ["city"], name: "index_users_on_city"
     t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true

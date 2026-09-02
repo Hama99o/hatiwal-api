@@ -201,14 +201,29 @@ class ListingSerializer < ApplicationSerializer
     field(:seller) do |l, opts|
       u = l.user
       viewer = opts[:current_user]
-      # Expose phone only to an authenticated user who is not the listing owner.
-      # Guests (viewer nil) and the owner viewing their own listing both receive nil.
-      phone = viewer.present? && viewer.id != l.user_id ? u.phone : nil
+      # Expose contact details only to an authenticated user who is not the
+      # listing owner. Guests (viewer nil) and the owner viewing their own
+      # listing both receive nil.
+      #
+      # ...AND only when the seller has not turned it off. Owner request,
+      # 2026-09-02: "show option to show number and address to people or not, I
+      # mean user address not list address". Both flags default to TRUE so this
+      # does not silently withdraw a working feature from existing sellers — the
+      # new capability is being able to say no.
+      may_contact = viewer.present? && viewer.id != l.user_id
+      phone = may_contact && u.show_phone_publicly ? u.phone : nil
+      # WhatsApp rides the same switch as the phone: both reach the same person
+      # on the same handset, so hiding one while publishing the other hides
+      # nothing.
+      whatsapp = may_contact && u.show_phone_publicly ? u.whatsapp_number.presence : nil
       {
         id: l.user_id,
         name: u.full_name,
-        city: u.city,
+        # The seller's OWN city — distinct from the listing's location, which
+        # is a separate field and unaffected by this setting.
+        city: u.show_address_publicly ? u.city : nil,
         phone: phone,
+        whatsapp_number: whatsapp,
         verified: u.verified,
         avatar_url: u.avatar.attached? ? u.avatar.url : nil,
         # Rating summary so the buyer sees the seller's trust score on the

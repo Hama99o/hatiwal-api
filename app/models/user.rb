@@ -49,6 +49,14 @@ class User < ApplicationRecord
   validates :preferred_language, inclusion: { in: %w[en ps fa] }, allow_blank: true
   validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
   validates :push_token, length: { maximum: 200 }, allow_blank: true
+  # A WhatsApp number, which is often NOT the account phone (different SIM).
+  #
+  # Length only — deliberately no format check. Afghan numbers are written
+  # +93 70 …, 0093…, 070… and 70… interchangeably, and the clients normalise to
+  # digits when building the wa.me link (mobile: src/utils/whatsapp.ts). A
+  # regex here would reject numbers people actually have, and it is not the
+  # server's place to decide which spelling of a real number is allowed.
+  validates :whatsapp_number, length: { maximum: 30 }, allow_blank: true
   validate :away_until_must_be_future, if: -> { away_until.present? }
 
   # Self-deleted (anonymized) accounts are hidden from public profiles + search.
