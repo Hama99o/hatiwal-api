@@ -813,7 +813,15 @@ DISPOSABLE_LISTINGS = [
   [ "mark_sold_with_buyer",    :active ],
   [ "reserved_buyer",          :active ],
   [ "saved_listing_goes_sold", :active ],
-  [ "my_listing_detail_view",  :active ]
+  [ "my_listing_detail_view",  :active ],
+  # chat/conversation_delete SOFT-DELETES the thread it acts on, so it must own
+  # one. It previously targeted the shared "Xiaomi Redmi Note 11" thread on the
+  # grounds that a SOLD listing is safe to consume -- but deleting is not the
+  # same as consuming: `buyer_deleted_at` made that thread invisible to the
+  # buyer permanently (recorded 2026-09-01 17:54), so every later run failed on
+  # `No visible element found: "Xiaomi Redmi.*"` while the app behaved exactly
+  # as designed.
+  [ "conversation_delete",     :active ]
 ].freeze
 
 DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
@@ -866,10 +874,31 @@ DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
   # Only these two get one: an empty conversation list is what the other
   # disposables are for, and giving every fixture a conversation would change
   # what those flows see.
-  next unless %w[mark_sold_with_buyer reserved_buyer].include?(owner)
+  next unless %w[mark_sold_with_buyer reserved_buyer conversation_delete].include?(owner)
 
   listing = Listing.find_by(user: seller, title: title)
-  next if listing.nil? || Conversation.exists?(listing: listing, buyer: buyer)
+  next if listing.nil?
+
+  # UN-DELETE and UN-ARCHIVE before concluding it already exists.
+  #
+  # `Conversation.exists?` was the entire guard, so a thread a flow had SOFT-
+  # deleted counted as present and was never repaired: the row survived with
+  # `buyer_deleted_at` set, the index scope (`not_deleted_for`) hid it from the
+  # buyer, and the owning flow failed every run until someone wiped the whole
+  # database. A disposable fixture that cannot come back is not disposable --
+  # the comment above makes exactly this point about listing STATUS, and it has
+  # to hold for a conversation's delete/archive flags too.
+  existing = Conversation.find_by(listing: listing, buyer: buyer)
+  if existing
+    stale = existing.slice(:buyer_deleted_at, :seller_deleted_at,
+                           :buyer_archived_at, :seller_archived_at).compact
+    if stale.any?
+      existing.update_columns(buyer_deleted_at: nil, seller_deleted_at: nil,
+                              buyer_archived_at: nil, seller_archived_at: nil)
+      puts "  restored conversation on #{title} (cleared #{stale.keys.join(', ')})"
+    end
+    next
+  end
 
   convo = Conversation.create!(listing: listing, buyer: buyer, seller: seller)
   Message.create!(conversation: convo, user: buyer, kind: :text,
