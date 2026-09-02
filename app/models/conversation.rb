@@ -39,6 +39,41 @@ class Conversation < ApplicationRecord
   # buying" vs "conversations where I am selling". Used by the controller's
   # `role` query param so a user with 20 buyer threads and their own selling
   # threads can triage each side separately.
+  # SERVER-SIDE search across the whole inbox, not just the loaded page.
+  #
+  # Owner, 2026-09-02: "the message conversation search is not working, like it's
+  # not connected with backend, it's not search in db". He was right: the clients
+  # filtered `filterConversations` over items ALREADY in memory, so anything past
+  # the first page was unfindable, and the UI even shipped a string admitting it
+  # ("Showing results in loaded conversations only").
+  #
+  # Matches what a person would expect to search by, which is what the client
+  # filter already used: the other party's name, the listing's title, and the text
+  # of any message in the thread.
+  #
+  # LEFT joins throughout, with explicit aliases. `listing` is optional? true, and
+  # a thread with no messages yet must not vanish from its own search results;
+  # buyer and seller are both `users`, so Rails' generated aliases are not stable
+  # enough to write a WHERE against.
+  scope :matching, lambda { |term|
+    q = term.to_s.strip
+    next all if q.blank?
+
+    like = "%#{sanitize_sql_like(q)}%"
+    left_joins(:messages)
+      .joins("LEFT JOIN listings   ON listings.id  = conversations.listing_id")
+      .joins("LEFT JOIN users AS b ON b.id         = conversations.buyer_id")
+      .joins("LEFT JOIN users AS s ON s.id         = conversations.seller_id")
+      .where(
+        "listings.title ILIKE :like
+         OR b.firstname ILIKE :like OR b.lastname ILIKE :like
+         OR s.firstname ILIKE :like OR s.lastname ILIKE :like
+         OR messages.body ILIKE :like",
+        like: like
+      )
+      .distinct
+  }
+
   scope :as_buyer_for, ->(user) { where(buyer_id: user.id) }
   scope :as_seller_for, ->(user) { where(seller_id: user.id) }
 

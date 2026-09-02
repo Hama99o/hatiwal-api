@@ -24,6 +24,17 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
     base_scope = apply_role_filter(base_scope)
 
+    # ?search= — the WHOLE inbox, not just the page the client happens to hold.
+    #
+    # Owner, 2026-09-02: "the message conversation search is not working, it's
+    # not connected with backend, it's not search in db". Correct: the clients
+    # filtered already-loaded items in memory, so a match on page 3 did not
+    # exist as far as the user was concerned.
+    #
+    # Applied BEFORE ordering and pagination, so page 1 of a search is the best
+    # matches — not "the matches that happened to be on page 1 anyway".
+    base_scope = base_scope.matching(params[:search]) if params[:search].present?
+
     conversations = policy_scope(
       base_scope.ordered
                 .includes(
