@@ -12,6 +12,26 @@ class ConversationSerializer < ApplicationSerializer
     conversation.buyer_id == current_user.id ? "buyer" : "seller"
   end
 
+  # Shared by both views — and it MUST be, which is the whole point.
+  #
+  # This lived only in :list. `GET /conversations/:id` renders :detailed, so the
+  # thread screen received no `unread_count` at all — undefined, which the client
+  # reads as 0 via `?? 0`. resolveUnreadBoundaryId returns null for a count of 0,
+  # so the "Unread messages" divider (TASK-D428) could NEVER render, on any
+  # thread, in any state. Found 2026-09-02 by chat/mark_read_end_to_end, which had
+  # been failing on it long enough that I misdiagnosed it three times before
+  # rendering the serializer and seeing the key simply absent from the payload.
+  def self.unread_count_for(conversation, opts)
+    current_user = opts[:current_user]
+    return 0 unless current_user
+
+    # Use the precomputed hash when the controller passes it (avoids one COUNT
+    # per row on the index). Fall back to the model method for callers that do
+    # not provide it — which now includes `show`.
+    counts = opts[:unread_counts]
+    counts ? counts.fetch(conversation.id, 0) : conversation.unread_count_for(current_user)
+  end
+
   view :list do
     field(:viewer_role) { |c, opts| viewer_role_for(c, opts) }
     field(:listing_deleted) { |c| c.listing_deleted? }
@@ -39,19 +59,7 @@ class ConversationSerializer < ApplicationSerializer
     field(:last_message_body) { |c| lm = c.last_message; lm && !lm.deleted? ? lm.body : nil }
     field(:last_message_kind) { |c| c.last_message&.kind }
     field(:last_message_deleted) { |c| c.last_message&.deleted? || false }
-    field(:unread_count) do |c, opts|
-      current_user = opts[:current_user]
-      next 0 unless current_user
-
-      # Use the precomputed hash when the controller passes it (avoids one
-      # COUNT query per row on the index).  Fall back to the model method for
-      # callers that don't provide it (e.g. serializer unit tests).
-      if opts[:unread_counts]
-        opts[:unread_counts].fetch(c.id, 0)
-      else
-        c.unread_count_for(current_user)
-      end
-    end
+    field(:unread_count) { |c, opts| unread_count_for(c, opts) }
     field(:blocked_with_participant) do |c, opts|
       current_user = opts[:current_user]
       next false unless current_user
@@ -70,6 +78,11 @@ class ConversationSerializer < ApplicationSerializer
 
   view :detailed do
     field(:viewer_role) { |c, opts| viewer_role_for(c, opts) }
+    # The thread screen needs this to place the "Unread messages" divider: it
+    # resolves the boundary from THIS value on first load, before marking the
+    # thread read. Absent here until 2026-09-02, which is why the divider had
+    # never appeared on any thread.
+    field(:unread_count) { |c, opts| unread_count_for(c, opts) }
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c, opts|
       next nil if c.listing_deleted?
