@@ -806,6 +806,46 @@ if offplatform_units &&
   puts "  reset multi-unit disposable -> 8 units, 0 sold, active"
 end
 
+# ── The "All" button's fixture (owner request 2026-09-02) ───────────────────
+#
+# "if I have have a two hundred item and all two hundred item has been sold? …
+#  we should have a button all also, so that's how we can just help user to not
+#  top hundred time to have with this number"
+#
+# 200 units ON PURPOSE, matching the number in that request: it is the case the
+# button exists for, and reaching it with the + control would be 199 taps. A
+# smaller batch would pass the same assertions while testing nothing about why
+# the control was asked for.
+#
+# Its own listing, not the Phone Case or the offplatform batch above, for the
+# reason stated there: two flows selling out of one batch means whichever runs
+# second asserts against a stock it did not set. And SELLING OUT is exactly what
+# this flow does, so the stock is restored on every seed or it works once.
+e2e_listing(
+  user:        seller,
+  title:       "QA Disposable quantity_all",
+  price:       250,
+  category:    electronics,
+  status:      :active,
+  quantity:    200,
+  description: "Disposable 200-unit fixture. A flow marks the WHOLE batch sold via the " \
+               "quantity stepper's All button; the stock is reset to 200 on every seed.",
+  location:    "Kabul"
+)
+quantity_all = Listing.find_by(user: seller, title: "QA Disposable quantity_all")
+if quantity_all &&
+   (quantity_all.quantity != 200 ||
+    quantity_all.sold_units.to_i.positive? ||
+    quantity_all.status.to_sym != :active)
+  quantity_all.update_columns(
+    quantity:   200,
+    sold_units: 0,
+    status:     Listing.statuses[:active],
+    sold_at:    nil
+  )
+  puts "  reset quantity_all disposable -> 200 units, 0 sold, active"
+end
+
 DISPOSABLE_LISTINGS = [
   [ "lifecycle_reserve",       :active ],
   [ "lifecycle_sold",          :reserved ],
