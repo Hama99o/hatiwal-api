@@ -849,6 +849,16 @@ buyer.update_columns(seller_mode: false) if buyer.seller_mode
 seller.update_columns(seller_mode: true) unless seller.seller_mode
 puts "  seller_mode reset: buyer=false seller=true"
 
+# ...and the contact fields the QA flows write to.
+#
+# profile/contact_visibility types a WhatsApp number and SAVES it, so the next
+# run starts with the field already populated — at which point the "same as my
+# phone" shortcut correctly hides itself (it only shows while the two differ) and
+# the flow fails on an app doing the right thing. Same for the two visibility
+# switches, which that flow toggles off.
+buyer.update_columns(whatsapp_number: nil, show_phone_publicly: true, show_address_publicly: true)
+puts "  buyer contact fields reset (whatsapp cleared, both visibility switches on)"
+
 DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
   title = "QA Disposable #{owner}"
 
