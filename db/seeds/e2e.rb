@@ -833,6 +833,22 @@ DISPOSABLE_LISTINGS = [
   [ "scroll_to_latest",        :active ]
 ].freeze
 
+# RESET the QA accounts' seller_mode every seed.
+#
+# Buyer/seller mode is persisted on the USER, and Profile.tsx says so on the
+# toggle itself: "it leaks across flows and devices: one flow switching to seller
+# mode leaves every later buyer flow in seller mode, where the first tab reads
+# 'My Shop' and there is no 'Bazaar' at all".
+#
+# A flow that switches mode and then FAILS never switches back. That happened on
+# 2026-09-02: rtl/profile_quick_actions_rtl left buyer@hatiwal.test with
+# seller_mode = true, poisoning every buyer flow after it. Resetting here is the
+# same principle as restoring a disposable listing's status — a fixture that
+# cannot come back is not a fixture.
+buyer.update_columns(seller_mode: false) if buyer.seller_mode
+seller.update_columns(seller_mode: true) unless seller.seller_mode
+puts "  seller_mode reset: buyer=false seller=true"
+
 DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
   title = "QA Disposable #{owner}"
 
