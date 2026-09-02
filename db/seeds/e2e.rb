@@ -821,7 +821,16 @@ DISPOSABLE_LISTINGS = [
   # buyer permanently (recorded 2026-09-01 17:54), so every later run failed on
   # `No visible element found: "Xiaomi Redmi.*"` while the app behaved exactly
   # as designed.
-  [ "conversation_delete",     :active ]
+  [ "conversation_delete",     :active ],
+  # chat/scroll_to_latest and chat/jump_to_latest each send 6-8 messages to build
+  # a thread long enough to scroll, so they must NOT do it in a shared thread.
+  # They were using "Phone Case Silicone Clear", which six other flows depend on
+  # — and their outbound filler pushed that thread's latest INBOUND message far
+  # into the history, which is what broke chat/mark_read_end_to_end: the
+  # mark-unread helper nulls read_at on the latest inbound message, so the
+  # "Unread messages" divider ended up dozens of screens above the fold and a 20s
+  # scrollUntilVisible could never reach it.
+  [ "scroll_to_latest",        :active ]
 ].freeze
 
 DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
@@ -874,7 +883,7 @@ DISPOSABLE_LISTINGS.each_with_index do |(owner, status), i|
   # Only these two get one: an empty conversation list is what the other
   # disposables are for, and giving every fixture a conversation would change
   # what those flows see.
-  next unless %w[mark_sold_with_buyer reserved_buyer conversation_delete].include?(owner)
+  next unless %w[mark_sold_with_buyer reserved_buyer conversation_delete scroll_to_latest].include?(owner)
 
   listing = Listing.find_by(user: seller, title: title)
   next if listing.nil?
