@@ -51,3 +51,6 @@ Thumbs.db
 /public/assets
 /public/packs
 /public/packs-test
+
+# Local DB dumps (bin/db_backup) — never commit a database dump
+backups/
