@@ -74,6 +74,23 @@ class ConversationSerializer < ApplicationSerializer
         current_user.blocked?(other) || other.blocked?(current_user)
       end
     end
+    # WHO placed the block, which `blocked_with_participant` above deliberately
+    # does not say: it is the OR of both directions, because messaging is
+    # impossible either way. But UNBLOCKING is only the viewer's own block to
+    # remove (BlocksController#destroy deletes `current_user.blocked_users` and
+    # nothing else), so a client that offers "unblock" off the OR shows a button
+    # that deletes nothing, still answers 204, and leaves the block in place.
+    # That is card 312: the composer came back for a moment and then vanished.
+    field(:blocked_by_me) do |c, opts|
+      current_user = opts[:current_user]
+      next false unless current_user
+
+      other = c.other_participant(current_user)
+      # Same preloaded-set fast path as above, but only the viewer's OWN set —
+      # `blocked_ids` is who the viewer has blocked, `blocker_ids` is who has
+      # blocked the viewer, so this reads exactly one of the two.
+      opts[:blocked_ids] ? opts[:blocked_ids].include?(other.id) : current_user.blocked?(other)
+    end
   end
 
   view :detailed do
@@ -148,6 +165,14 @@ class ConversationSerializer < ApplicationSerializer
 
       other = c.other_participant(current_user)
       current_user.blocked?(other) || other.blocked?(current_user)
+    end
+    # See the :list view's note — the thread screen is the surface that actually
+    # renders the unblock control, so this is the view that most needs it.
+    field(:blocked_by_me) do |c, opts|
+      current_user = opts[:current_user]
+      next false unless current_user
+
+      current_user.blocked?(c.other_participant(current_user))
     end
   end
 end

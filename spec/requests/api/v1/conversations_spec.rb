@@ -300,6 +300,90 @@ RSpec.describe "Api::V1::Conversations", type: :request do
     end
   end
 
+  # WHY A SECOND FLAG EXISTS. `blocked_with_participant` is the OR of both
+  # directions and answers "can anyone send here?". It cannot label an unblock
+  # control, because unblocking removes only the VIEWER'S own block
+  # (BlocksController#destroy touches `current_user.blocked_users` and nothing
+  # else). A client that drove its unblock button off the OR rendered a button
+  # that deleted nothing, still received 204, and lost the composer again on the
+  # next load — card 312. These specs pin the asymmetry that makes the two
+  # fields different, so a future refactor cannot quietly collapse them again.
+  describe "blocked_by_me flag — direction of the block" do
+    let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
+
+    it "is false when neither party has blocked the other (list)" do
+      conversation
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conversation.id }
+      expect(row["blocked_by_me"]).to be false
+    end
+
+    it "is true when the viewer is the blocker (list)" do
+      create(:block, blocker: buyer, blocked: seller)
+      conversation
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conversation.id }
+      expect(row["blocked_by_me"]).to be true
+      expect(row["blocked_with_participant"]).to be true
+    end
+
+    # THE CASE THAT PRODUCED THE BUG: blocked, but not by me, so there is
+    # nothing for me to undo. The OR is true while the direction is false.
+    it "is FALSE when the other participant is the blocker, though the OR is true (list)" do
+      create(:block, blocker: seller, blocked: buyer)
+      conversation
+
+      get "/api/v1/conversations", headers: headers, as: :json
+
+      row = JSON.parse(response.body)["conversations"].find { |c| c["id"] == conversation.id }
+      expect(row["blocked_by_me"]).to be false
+      expect(row["blocked_with_participant"]).to be true
+    end
+
+    it "reports the same direction on the detailed view, where the control lives" do
+      create(:block, blocker: seller, blocked: buyer)
+
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      expect(response).to have_http_status(:ok)
+      data = JSON.parse(response.body)["conversation"]
+      expect(data["blocked_by_me"]).to be false
+      expect(data["blocked_with_participant"]).to be true
+    end
+
+    it "is true on the detailed view when the viewer is the blocker" do
+      create(:block, blocker: buyer, blocked: seller)
+
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+
+      data = JSON.parse(response.body)["conversation"]
+      expect(data["blocked_by_me"]).to be true
+    end
+
+    # The list view resolves this from preloaded id-sets and the detailed view
+    # from a direct query, so the two could drift. Asserting they AGREE is the
+    # only thing that catches a fast path that reads the wrong set — and
+    # `blocked_ids` vs `blocker_ids` are trivially easy to transpose.
+    it "agrees between the list's preloaded fast path and the detailed query" do
+      create(:block, blocker: buyer, blocked: seller)
+      conversation
+
+      get "/api/v1/conversations", headers: headers, as: :json
+      from_list = JSON.parse(response.body)["conversations"]
+                      .find { |c| c["id"] == conversation.id }["blocked_by_me"]
+
+      get "/api/v1/conversations/#{conversation.id}", headers: headers, as: :json
+      from_detail = JSON.parse(response.body)["conversation"]["blocked_by_me"]
+
+      expect(from_list).to eq(from_detail)
+      expect(from_list).to be true
+    end
+  end
+
   describe "GET /api/v1/conversations/:id" do
     let(:conversation) { create(:conversation, buyer: buyer, listing: listing) }
 
