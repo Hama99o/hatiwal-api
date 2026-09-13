@@ -138,16 +138,16 @@ SUBCATEGORIES = [
   #
   # Distinct from bags > jewelry, which is FINISHED jewellery. These are stones:
   # rough, cut, and the tools to work them.
-  { parent_slug: "gemstones", name_en: "Ruby",                 name_ps: "یاقوت",                name_fa: "یاقوت سرخ", name_ur: "قیمتی پتھر اور معدنیات",       slug: "ruby",           icon: "❤️", position: 1  },
-  { parent_slug: "gemstones", name_en: "Emerald",              name_ps: "زمرد",                 name_fa: "زمرد", name_ur: "قیمتی پتھر اور معدنیات",             slug: "emerald",        icon: "💚", position: 2  },
-  { parent_slug: "gemstones", name_en: "Lapis Lazuli",         name_ps: "لاجورد",               name_fa: "لاجورد", name_ur: "قیمتی پتھر اور معدنیات",           slug: "lapis-lazuli",   icon: "🔷", position: 3  },
-  { parent_slug: "gemstones", name_en: "Tourmaline",           name_ps: "تورمالین",             name_fa: "تورمالین", name_ur: "قیمتی پتھر اور معدنیات",         slug: "tourmaline",     icon: "🌈", position: 4  },
-  { parent_slug: "gemstones", name_en: "Sapphire",             name_ps: "نیلم",                 name_fa: "یاقوت کبود", name_ur: "قیمتی پتھر اور معدنیات",      slug: "sapphire",       icon: "💠", position: 5  },
-  { parent_slug: "gemstones", name_en: "Turquoise",            name_ps: "فیروزه",               name_fa: "فیروزه", name_ur: "قیمتی پتھر اور معدنیات",           slug: "turquoise",      icon: "🩵", position: 6  },
-  { parent_slug: "gemstones", name_en: "Quartz & Crystals",    name_ps: "کوارتز او کرسټل",     name_fa: "کوارتز و کریستال", name_ur: "قیمتی پتھر اور معدنیات", slug: "quartz",         icon: "🔮", position: 7  },
-  { parent_slug: "gemstones", name_en: "Jade & Serpentine",    name_ps: "یشم",                  name_fa: "یشم", name_ur: "قیمتی پتھر اور معدنیات",              slug: "jade",           icon: "🟢", position: 8  },
-  { parent_slug: "gemstones", name_en: "Rough & Raw Stone",    name_ps: "خامې ډبرې",           name_fa: "سنگ خام", name_ur: "قیمتی پتھر اور معدنیات",          slug: "rough-stone",    icon: "🪨", position: 9  },
-  { parent_slug: "gemstones", name_en: "Gem Tools & Supplies", name_ps: "د ډبرو وسایل",        name_fa: "ابزار سنگ‌تراشی", name_ur: "قیمتی پتھر اور معدنیات",  slug: "gem-supplies",   icon: "🛠️", position: 10 },
+  { parent_slug: "gemstones", name_en: "Ruby",                 name_ps: "یاقوت",                name_fa: "یاقوت سرخ", name_ur: "یاقوت",       slug: "ruby",           icon: "❤️", position: 1  },
+  { parent_slug: "gemstones", name_en: "Emerald",              name_ps: "زمرد",                 name_fa: "زمرد", name_ur: "زمرد",             slug: "emerald",        icon: "💚", position: 2  },
+  { parent_slug: "gemstones", name_en: "Lapis Lazuli",         name_ps: "لاجورد",               name_fa: "لاجورد", name_ur: "لاجورد",           slug: "lapis-lazuli",   icon: "🔷", position: 3  },
+  { parent_slug: "gemstones", name_en: "Tourmaline",           name_ps: "تورمالین",             name_fa: "تورمالین", name_ur: "ٹورمالین",         slug: "tourmaline",     icon: "🌈", position: 4  },
+  { parent_slug: "gemstones", name_en: "Sapphire",             name_ps: "نیلم",                 name_fa: "یاقوت کبود", name_ur: "نیلم",      slug: "sapphire",       icon: "💠", position: 5  },
+  { parent_slug: "gemstones", name_en: "Turquoise",            name_ps: "فیروزه",               name_fa: "فیروزه", name_ur: "فیروزہ",           slug: "turquoise",      icon: "🩵", position: 6  },
+  { parent_slug: "gemstones", name_en: "Quartz & Crystals",    name_ps: "کوارتز او کرسټل",     name_fa: "کوارتز و کریستال", name_ur: "کوارٹز اور کرسٹل", slug: "quartz",         icon: "🔮", position: 7  },
+  { parent_slug: "gemstones", name_en: "Jade & Serpentine",    name_ps: "یشم",                  name_fa: "یشم", name_ur: "یشب",              slug: "jade",           icon: "🟢", position: 8  },
+  { parent_slug: "gemstones", name_en: "Rough & Raw Stone",    name_ps: "خامې ډبرې",           name_fa: "سنگ خام", name_ur: "کچا پتھر",          slug: "rough-stone",    icon: "🪨", position: 9  },
+  { parent_slug: "gemstones", name_en: "Gem Tools & Supplies", name_ps: "د ډبرو وسایل",        name_fa: "ابزار سنگ‌تراشی", name_ur: "پتھر تراشی کے اوزار",  slug: "gem-supplies",   icon: "🛠️", position: 10 },
 
   # Property / Jobs / Services previously had ZERO subcategories while every other
   # top-level had between 2 and 5. They were top-level LEAVES, which both broke the
