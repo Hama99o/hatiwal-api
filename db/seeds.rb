@@ -41,10 +41,11 @@ TOP_LEVEL_CATEGORIES = [
   { name_en: "Beauty & Health",     name_ps: "ښایست او روغتیا",  name_fa: "زیبایی و بهداشت",            slug: "beauty",      icon: "💄", position: 9  },
   { name_en: "Bags & Accessories",  name_ps: "بیگونه او اکسیسوریز", name_fa: "کیف و لوازم",             slug: "bags",        icon: "👜", position: 10 },
   { name_en: "Kids & Toys",         name_ps: "د ماشومانو توکي",  name_fa: "کودک و اسباب‌بازی",          slug: "kids",        icon: "🧸", position: 11 },
-  { name_en: "Property",            name_ps: "ملکیت",              name_fa: "ملک",                        slug: "property",    icon: "🏗️", position: 12 },
-  { name_en: "Jobs",                name_ps: "دندې",               name_fa: "کار",                        slug: "jobs",        icon: "💼", position: 13 },
-  { name_en: "Services",            name_ps: "خدمتونه",            name_fa: "خدمات",                     slug: "services",    icon: "🛠️", position: 14 },
-  { name_en: "Other",               name_ps: "نور",                name_fa: "دیگر",                       slug: "other",       icon: "📦", position: 15 }
+  { name_en: "Gemstones & Minerals", name_ps: "قیمتي ډبرې او معدنیات", name_fa: "سنگ‌های قیمتی و معادن", slug: "gemstones",  icon: "💎", position: 12 },
+  { name_en: "Property",            name_ps: "ملکیت",              name_fa: "ملک",                        slug: "property",    icon: "🏗️", position: 13 },
+  { name_en: "Jobs",                name_ps: "دندې",               name_fa: "کار",                        slug: "jobs",        icon: "💼", position: 14 },
+  { name_en: "Services",            name_ps: "خدمتونه",            name_fa: "خدمات",                     slug: "services",    icon: "🛠️", position: 15 },
+  { name_en: "Other",               name_ps: "نور",                name_fa: "دیگر",                       slug: "other",       icon: "📦", position: 16 }
 ].freeze
 
 # Remove the old "Animals" top-level if it exists (it becomes a subcategory of Food)
@@ -128,7 +129,50 @@ SUBCATEGORIES = [
 
   # Kids & Toys
   { parent_slug: "kids", name_en: "Toys & Games", name_ps: "لوبوونه",        name_fa: "اسباب‌بازی",   slug: "toys",  icon: "🧸", position: 1 },
-  { parent_slug: "kids", name_en: "Baby Items",   name_ps: "د ماشوم وسایل", name_fa: "لوازم نوزاد",  slug: "baby",  icon: "🍼", position: 2 }
+  { parent_slug: "kids", name_en: "Baby Items",   name_ps: "د ماشوم وسایل", name_fa: "لوازم نوزاد",  slug: "baby",  icon: "🍼", position: 2 },
+  # Gemstones & Minerals — a real trade in BOTH countries this app serves, and
+  # previously unrepresented: sellers had to file a Jegdalek ruby or a Badakhshan
+  # lapis block under "Other". Afghanistan (Panjshir emerald, Jegdalek ruby,
+  # Badakhshan lapis, Nuristan tourmaline) and Pakistan (Swat emerald, Gilgit-
+  # Baltistan and the Peshawar stone market) both trade these at scale.
+  #
+  # Distinct from bags > jewelry, which is FINISHED jewellery. These are stones:
+  # rough, cut, and the tools to work them.
+  { parent_slug: "gemstones", name_en: "Ruby",                 name_ps: "یاقوت",                name_fa: "یاقوت سرخ",       slug: "ruby",           icon: "❤️", position: 1  },
+  { parent_slug: "gemstones", name_en: "Emerald",              name_ps: "زمرد",                 name_fa: "زمرد",             slug: "emerald",        icon: "💚", position: 2  },
+  { parent_slug: "gemstones", name_en: "Lapis Lazuli",         name_ps: "لاجورد",               name_fa: "لاجورد",           slug: "lapis-lazuli",   icon: "🔷", position: 3  },
+  { parent_slug: "gemstones", name_en: "Tourmaline",           name_ps: "تورمالین",             name_fa: "تورمالین",         slug: "tourmaline",     icon: "🌈", position: 4  },
+  { parent_slug: "gemstones", name_en: "Sapphire",             name_ps: "نیلم",                 name_fa: "یاقوت کبود",      slug: "sapphire",       icon: "💠", position: 5  },
+  { parent_slug: "gemstones", name_en: "Turquoise",            name_ps: "فیروزه",               name_fa: "فیروزه",           slug: "turquoise",      icon: "🩵", position: 6  },
+  { parent_slug: "gemstones", name_en: "Quartz & Crystals",    name_ps: "کوارتز او کرسټل",     name_fa: "کوارتز و کریستال", slug: "quartz",         icon: "🔮", position: 7  },
+  { parent_slug: "gemstones", name_en: "Jade & Serpentine",    name_ps: "یشم",                  name_fa: "یشم",              slug: "jade",           icon: "🟢", position: 8  },
+  { parent_slug: "gemstones", name_en: "Rough & Raw Stone",    name_ps: "خامې ډبرې",           name_fa: "سنگ خام",          slug: "rough-stone",    icon: "🪨", position: 9  },
+  { parent_slug: "gemstones", name_en: "Gem Tools & Supplies", name_ps: "د ډبرو وسایل",        name_fa: "ابزار سنگ‌تراشی",  slug: "gem-supplies",   icon: "🛠️", position: 10 },
+
+  # Property / Jobs / Services previously had ZERO subcategories while every other
+  # top-level had between 2 and 5. They were top-level LEAVES, which both broke the
+  # "drill in to pick a leaf" assumption the create-listing picker is built on and
+  # left three whole marketplaces with no structure at all.
+  { parent_slug: "property", name_en: "Houses for Sale",     name_ps: "د پلور کورونه",        name_fa: "خانه برای فروش",   slug: "houses-sale",    icon: "🏠", position: 1 },
+  { parent_slug: "property", name_en: "Apartments for Rent", name_ps: "د کرایې اپارتمانونه",  name_fa: "آپارتمان اجاره‌ای", slug: "apartments-rent", icon: "🏢", position: 2 },
+  { parent_slug: "property", name_en: "Land & Plots",        name_ps: "ځمکه او نمرې",         name_fa: "زمین و قطعه",      slug: "land-plots",     icon: "🗺️", position: 3 },
+  { parent_slug: "property", name_en: "Shops & Offices",     name_ps: "دوکانونه او دفترونه",  name_fa: "دکان و دفتر",      slug: "shops-offices",  icon: "🏪", position: 4 },
+  { parent_slug: "property", name_en: "Guest Houses",        name_ps: "مېلمه ځایونه",         name_fa: "مهمان‌خانه",       slug: "guest-houses",   icon: "🛏️", position: 5 },
+
+  { parent_slug: "jobs", name_en: "Full-time Jobs",         name_ps: "بشپړ وخت دندې",        name_fa: "کار تمام‌وقت",     slug: "jobs-fulltime",  icon: "💼", position: 1 },
+  { parent_slug: "jobs", name_en: "Part-time & Daily Work", name_ps: "نیم وخت او ورځنۍ",     name_fa: "پاره‌وقت و روزمزد", slug: "jobs-parttime", icon: "⏰", position: 2 },
+  { parent_slug: "jobs", name_en: "Skilled Trades",         name_ps: "مسلکي کارونه",         name_fa: "مشاغل فنی",        slug: "jobs-trades",    icon: "🔨", position: 3 },
+  { parent_slug: "jobs", name_en: "Drivers & Delivery",     name_ps: "موټر چلوونکي او رسول", name_fa: "راننده و تحویل",   slug: "jobs-drivers",   icon: "🚚", position: 4 },
+  { parent_slug: "jobs", name_en: "Teaching & Translation", name_ps: "ښوونه او ژباړه",       name_fa: "تدریس و ترجمه",    slug: "jobs-teaching",  icon: "📖", position: 5 },
+  { parent_slug: "jobs", name_en: "Office & NGO",           name_ps: "دفتر او ان جي او",     name_fa: "اداری و موسسات",   slug: "jobs-office",    icon: "🏛️", position: 6 },
+
+  { parent_slug: "services", name_en: "Repairs & Maintenance", name_ps: "ترمیم او ساتنه",      name_fa: "تعمیر و نگهداری", slug: "svc-repairs",    icon: "🔧", position: 1 },
+  { parent_slug: "services", name_en: "Construction",          name_ps: "ساختماني چارې",       name_fa: "ساخت و ساز",      slug: "svc-construction", icon: "🧱", position: 2 },
+  { parent_slug: "services", name_en: "Transport & Moving",    name_ps: "ترانسپورت او لېږد",   name_fa: "حمل و نقل",       slug: "svc-transport",  icon: "🚛", position: 3 },
+  { parent_slug: "services", name_en: "Tailoring",             name_ps: "خیاطي",                name_fa: "خیاطی",           slug: "svc-tailoring",  icon: "🧵", position: 4 },
+  { parent_slug: "services", name_en: "Beauty Services",       name_ps: "د ښایست خدمتونه",    name_fa: "خدمات زیبایی",    slug: "svc-beauty",     icon: "💅", position: 5 },
+  { parent_slug: "services", name_en: "IT & Design",           name_ps: "آی ټي او ډیزاین",    name_fa: "آی‌تی و دیزاین",  slug: "svc-it",         icon: "💻", position: 6 },
+  { parent_slug: "services", name_en: "Tutoring",              name_ps: "کورنی ښوونکی",       name_fa: "تدریس خصوصی",     slug: "svc-tutoring",   icon: "✏️", position: 7 }
 ].freeze
 
 SUBCATEGORIES.each do |attrs|
