@@ -11,6 +11,9 @@ class CategorySerializer < ApplicationSerializer
   field(:name_en) { |c| c.name_en }
   field(:name_ps) { |c| c.name_ps }
   field(:name_fa) { |c| c.name_fa }
+  # Falls back to English through name_for rather than emitting null, so a client
+  # switched to Urdu never renders a blank category label.
+  field(:name_ur) { |c| c.name_for("ur") }
 
   view :with_subcategories do
     field(:subcategories) do |c|

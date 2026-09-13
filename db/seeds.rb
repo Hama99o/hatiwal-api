@@ -30,22 +30,22 @@ end
 puts "=== Seeding Categories ==="
 
 TOP_LEVEL_CATEGORIES = [
-  { name_en: "Electronics",        name_ps: "برقی وسایل",        name_fa: "وسایل برقی",                slug: "electronics", icon: "📱", position: 1  },
-  { name_en: "Clothes & Fashion",   name_ps: "کالي او فیشن",      name_fa: "لباس و مد",                 slug: "clothes",     icon: "👗", position: 2  },
-  { name_en: "Vehicles",            name_ps: "موټرونه",            name_fa: "وسایل نقلیه",               slug: "vehicles",    icon: "🚗", position: 3  },
-  { name_en: "Home & Furniture",    name_ps: "کور او فرنیچر",     name_fa: "خانه و مبلمان",              slug: "home",        icon: "🏠", position: 4  },
-  { name_en: "Books & Education",   name_ps: "کتابونه",            name_fa: "کتاب و آموزش",              slug: "books",       icon: "📚", position: 5  },
-  { name_en: "Food & Agriculture",  name_ps: "خواړه او کرنه",     name_fa: "مواد غذایی و کشاورزی",      slug: "food",        icon: "🌾", position: 6  },
-  { name_en: "Tools & Equipment",   name_ps: "وسایل او تجهیزات",  name_fa: "ابزار و تجهیزات",           slug: "tools",       icon: "🔧", position: 7  },
-  { name_en: "Sports & Outdoors",   name_ps: "سپورت او بهرني",   name_fa: "ورزش و فضای باز",            slug: "sports",      icon: "⚽", position: 8  },
-  { name_en: "Beauty & Health",     name_ps: "ښایست او روغتیا",  name_fa: "زیبایی و بهداشت",            slug: "beauty",      icon: "💄", position: 9  },
-  { name_en: "Bags & Accessories",  name_ps: "بیگونه او اکسیسوریز", name_fa: "کیف و لوازم",             slug: "bags",        icon: "👜", position: 10 },
-  { name_en: "Kids & Toys",         name_ps: "د ماشومانو توکي",  name_fa: "کودک و اسباب‌بازی",          slug: "kids",        icon: "🧸", position: 11 },
-  { name_en: "Gemstones & Minerals", name_ps: "قیمتي ډبرې او معدنیات", name_fa: "سنگ‌های قیمتی و معادن", slug: "gemstones",  icon: "💎", position: 12 },
-  { name_en: "Property",            name_ps: "ملکیت",              name_fa: "ملک",                        slug: "property",    icon: "🏗️", position: 13 },
-  { name_en: "Jobs",                name_ps: "دندې",               name_fa: "کار",                        slug: "jobs",        icon: "💼", position: 14 },
-  { name_en: "Services",            name_ps: "خدمتونه",            name_fa: "خدمات",                     slug: "services",    icon: "🛠️", position: 15 },
-  { name_en: "Other",               name_ps: "نور",                name_fa: "دیگر",                       slug: "other",       icon: "📦", position: 16 }
+  { name_en: "Electronics",        name_ps: "برقی وسایل",        name_fa: "وسایل برقی", name_ur: "الیکٹرانکس",                slug: "electronics", icon: "📱", position: 1  },
+  { name_en: "Clothes & Fashion",   name_ps: "کالي او فیشن",      name_fa: "لباس و مد", name_ur: "کپڑے اور فیشن",                 slug: "clothes",     icon: "👗", position: 2  },
+  { name_en: "Vehicles",            name_ps: "موټرونه",            name_fa: "وسایل نقلیه", name_ur: "گاڑیاں",               slug: "vehicles",    icon: "🚗", position: 3  },
+  { name_en: "Home & Furniture",    name_ps: "کور او فرنیچر",     name_fa: "خانه و مبلمان", name_ur: "گھر اور فرنیچر",              slug: "home",        icon: "🏠", position: 4  },
+  { name_en: "Books & Education",   name_ps: "کتابونه",            name_fa: "کتاب و آموزش", name_ur: "کتابیں اور تعلیم",              slug: "books",       icon: "📚", position: 5  },
+  { name_en: "Food & Agriculture",  name_ps: "خواړه او کرنه",     name_fa: "مواد غذایی و کشاورزی", name_ur: "خوراک اور زراعت",      slug: "food",        icon: "🌾", position: 6  },
+  { name_en: "Tools & Equipment",   name_ps: "وسایل او تجهیزات",  name_fa: "ابزار و تجهیزات", name_ur: "اوزار اور سامان",           slug: "tools",       icon: "🔧", position: 7  },
+  { name_en: "Sports & Outdoors",   name_ps: "سپورت او بهرني",   name_fa: "ورزش و فضای باز", name_ur: "کھیل اور تفریح",            slug: "sports",      icon: "⚽", position: 8  },
+  { name_en: "Beauty & Health",     name_ps: "ښایست او روغتیا",  name_fa: "زیبایی و بهداشت", name_ur: "خوبصورتی اور صحت",            slug: "beauty",      icon: "💄", position: 9  },
+  { name_en: "Bags & Accessories",  name_ps: "بیگونه او اکسیسوریز", name_fa: "کیف و لوازم", name_ur: "بیگ اور لوازمات",             slug: "bags",        icon: "👜", position: 10 },
+  { name_en: "Kids & Toys",         name_ps: "د ماشومانو توکي",  name_fa: "کودک و اسباب‌بازی", name_ur: "بچے اور کھلونے",          slug: "kids",        icon: "🧸", position: 11 },
+  { name_en: "Gemstones & Minerals", name_ps: "قیمتي ډبرې او معدنیات", name_fa: "سنگ‌های قیمتی و معادن", name_ur: "قیمتی پتھر اور معدنیات", slug: "gemstones",  icon: "💎", position: 12 },
+  { name_en: "Property",            name_ps: "ملکیت",              name_fa: "ملک", name_ur: "جائیداد",                        slug: "property",    icon: "🏗️", position: 13 },
+  { name_en: "Jobs",                name_ps: "دندې",               name_fa: "کار", name_ur: "ملازمتیں",                        slug: "jobs",        icon: "💼", position: 14 },
+  { name_en: "Services",            name_ps: "خدمتونه",            name_fa: "خدمات", name_ur: "خدمات",                     slug: "services",    icon: "🛠️", position: 15 },
+  { name_en: "Other",               name_ps: "نور",                name_fa: "دیگر", name_ur: "دیگر",                       slug: "other",       icon: "📦", position: 16 }
 ].freeze
 
 # Remove the old "Animals" top-level if it exists (it becomes a subcategory of Food)
@@ -71,65 +71,65 @@ puts "  Top-level categories seeded"
 
 SUBCATEGORIES = [
   # Electronics
-  { parent_slug: "electronics", name_en: "Phones & Tablets",      name_ps: "موبایلونه او تبلیټونه", name_fa: "گوشی و تبلت",        slug: "phones",             icon: "📱", position: 1 },
-  { parent_slug: "electronics", name_en: "Computers & Laptops",   name_ps: "کمپیوترونه",            name_fa: "کامپیوتر و لپ‌تاپ", slug: "computers",          icon: "💻", position: 2 },
-  { parent_slug: "electronics", name_en: "TVs & Audio",           name_ps: "ټلویزیونونه او سوند",  name_fa: "تلویزیون و صدا",     slug: "tv-audio",           icon: "📺", position: 3 },
-  { parent_slug: "electronics", name_en: "Cameras",               name_ps: "کیمرې",                 name_fa: "دوربین",              slug: "cameras",            icon: "📷", position: 4 },
-  { parent_slug: "electronics", name_en: "Accessories",           name_ps: "اکسیسوریز",             name_fa: "لوازم جانبی",        slug: "tech-accessories",   icon: "🎧", position: 5 },
+  { parent_slug: "electronics", name_en: "Phones & Tablets",      name_ps: "موبایلونه او تبلیټونه", name_fa: "گوشی و تبلت", name_ur: "الیکٹرانکس",        slug: "phones",             icon: "📱", position: 1 },
+  { parent_slug: "electronics", name_en: "Computers & Laptops",   name_ps: "کمپیوترونه",            name_fa: "کامپیوتر و لپ‌تاپ", name_ur: "الیکٹرانکس", slug: "computers",          icon: "💻", position: 2 },
+  { parent_slug: "electronics", name_en: "TVs & Audio",           name_ps: "ټلویزیونونه او سوند",  name_fa: "تلویزیون و صدا", name_ur: "الیکٹرانکس",     slug: "tv-audio",           icon: "📺", position: 3 },
+  { parent_slug: "electronics", name_en: "Cameras",               name_ps: "کیمرې",                 name_fa: "دوربین", name_ur: "الیکٹرانکس",              slug: "cameras",            icon: "📷", position: 4 },
+  { parent_slug: "electronics", name_en: "Accessories",           name_ps: "اکسیسوریز",             name_fa: "لوازم جانبی", name_ur: "الیکٹرانکس",        slug: "tech-accessories",   icon: "🎧", position: 5 },
 
   # Clothes & Fashion
-  { parent_slug: "clothes", name_en: "Men's Clothing",        name_ps: "مردانه کالي",       name_fa: "لباس مردانه",      slug: "mens-clothing",      icon: "👔", position: 1 },
-  { parent_slug: "clothes", name_en: "Women's Clothing",      name_ps: "زنانه کالي",        name_fa: "لباس زنانه",       slug: "womens-clothing",    icon: "👗", position: 2 },
-  { parent_slug: "clothes", name_en: "Children's Clothing",   name_ps: "د اطفالو کالي",    name_fa: "لباس اطفال",       slug: "kids-clothing",      icon: "👶", position: 3 },
-  { parent_slug: "clothes", name_en: "Traditional Clothing",  name_ps: "دودیز کالي",        name_fa: "لباس سنتی",        slug: "traditional-clothing", icon: "🧕", position: 4 },
-  { parent_slug: "clothes", name_en: "Shoes",                 name_ps: "بوټان",              name_fa: "کفش",              slug: "shoes",              icon: "👟", position: 5 },
+  { parent_slug: "clothes", name_en: "Men's Clothing",        name_ps: "مردانه کالي",       name_fa: "لباس مردانه", name_ur: "کپڑے اور فیشن",      slug: "mens-clothing",      icon: "👔", position: 1 },
+  { parent_slug: "clothes", name_en: "Women's Clothing",      name_ps: "زنانه کالي",        name_fa: "لباس زنانه", name_ur: "کپڑے اور فیشن",       slug: "womens-clothing",    icon: "👗", position: 2 },
+  { parent_slug: "clothes", name_en: "Children's Clothing",   name_ps: "د اطفالو کالي",    name_fa: "لباس اطفال", name_ur: "کپڑے اور فیشن",       slug: "kids-clothing",      icon: "👶", position: 3 },
+  { parent_slug: "clothes", name_en: "Traditional Clothing",  name_ps: "دودیز کالي",        name_fa: "لباس سنتی", name_ur: "کپڑے اور فیشن",        slug: "traditional-clothing", icon: "🧕", position: 4 },
+  { parent_slug: "clothes", name_en: "Shoes",                 name_ps: "بوټان",              name_fa: "کفش", name_ur: "کپڑے اور فیشن",              slug: "shoes",              icon: "👟", position: 5 },
 
   # Vehicles
-  { parent_slug: "vehicles", name_en: "Cars",          name_ps: "موټرونه",        name_fa: "خودرو",         slug: "cars",           icon: "🚗", position: 1 },
-  { parent_slug: "vehicles", name_en: "Motorcycles",   name_ps: "موټرسایکلونه",  name_fa: "موتورسیکلت",   slug: "motorcycles",    icon: "🏍️", position: 2 },
-  { parent_slug: "vehicles", name_en: "Bicycles",      name_ps: "سایکلونه",       name_fa: "دوچرخه",        slug: "bicycles",       icon: "🚲", position: 3 },
-  { parent_slug: "vehicles", name_en: "Spare Parts",   name_ps: "پرزې",           name_fa: "قطعات",         slug: "vehicle-parts",  icon: "⚙️", position: 4 },
+  { parent_slug: "vehicles", name_en: "Cars",          name_ps: "موټرونه",        name_fa: "خودرو", name_ur: "گاڑیاں",         slug: "cars",           icon: "🚗", position: 1 },
+  { parent_slug: "vehicles", name_en: "Motorcycles",   name_ps: "موټرسایکلونه",  name_fa: "موتورسیکلت", name_ur: "گاڑیاں",   slug: "motorcycles",    icon: "🏍️", position: 2 },
+  { parent_slug: "vehicles", name_en: "Bicycles",      name_ps: "سایکلونه",       name_fa: "دوچرخه", name_ur: "گاڑیاں",        slug: "bicycles",       icon: "🚲", position: 3 },
+  { parent_slug: "vehicles", name_en: "Spare Parts",   name_ps: "پرزې",           name_fa: "قطعات", name_ur: "گاڑیاں",         slug: "vehicle-parts",  icon: "⚙️", position: 4 },
 
   # Home & Furniture
-  { parent_slug: "home", name_en: "Furniture",             name_ps: "فرنیچر",              name_fa: "مبلمان",               slug: "furniture",  icon: "🛋️", position: 1 },
-  { parent_slug: "home", name_en: "Kitchen & Appliances",  name_ps: "آشپزخانه او وسایل",  name_fa: "آشپزخانه و وسایل",    slug: "kitchen",    icon: "🍳", position: 2 },
-  { parent_slug: "home", name_en: "Bedding & Curtains",    name_ps: "بستر او پردې",        name_fa: "رختخواب و پرده",       slug: "bedding",    icon: "🛏️", position: 3 },
-  { parent_slug: "home", name_en: "Garden & Tools",        name_ps: "باغ او وسایل",        name_fa: "باغ و ابزار",          slug: "garden",     icon: "🌿", position: 4 },
+  { parent_slug: "home", name_en: "Furniture",             name_ps: "فرنیچر",              name_fa: "مبلمان", name_ur: "گھر اور فرنیچر",               slug: "furniture",  icon: "🛋️", position: 1 },
+  { parent_slug: "home", name_en: "Kitchen & Appliances",  name_ps: "آشپزخانه او وسایل",  name_fa: "آشپزخانه و وسایل", name_ur: "گھر اور فرنیچر",    slug: "kitchen",    icon: "🍳", position: 2 },
+  { parent_slug: "home", name_en: "Bedding & Curtains",    name_ps: "بستر او پردې",        name_fa: "رختخواب و پرده", name_ur: "گھر اور فرنیچر",       slug: "bedding",    icon: "🛏️", position: 3 },
+  { parent_slug: "home", name_en: "Garden & Tools",        name_ps: "باغ او وسایل",        name_fa: "باغ و ابزار", name_ur: "گھر اور فرنیچر",          slug: "garden",     icon: "🌿", position: 4 },
 
   # Books & Education
-  { parent_slug: "books", name_en: "Books",           name_ps: "کتابونه",      name_fa: "کتاب‌ها",         slug: "books-general",   icon: "📖", position: 1 },
-  { parent_slug: "books", name_en: "School Supplies", name_ps: "مکتب وسایل",  name_fa: "لوازم تحصیلی",   slug: "school-supplies", icon: "✏️", position: 2 },
+  { parent_slug: "books", name_en: "Books",           name_ps: "کتابونه",      name_fa: "کتاب‌ها", name_ur: "کتابیں اور تعلیم",         slug: "books-general",   icon: "📖", position: 1 },
+  { parent_slug: "books", name_en: "School Supplies", name_ps: "مکتب وسایل",  name_fa: "لوازم تحصیلی", name_ur: "کتابیں اور تعلیم",   slug: "school-supplies", icon: "✏️", position: 2 },
 
   # Food & Agriculture
-  { parent_slug: "food", name_en: "Food Products",       name_ps: "خوراکي توکي", name_fa: "محصولات غذایی", slug: "food-products", icon: "🥗", position: 1 },
-  { parent_slug: "food", name_en: "Agriculture & Farming", name_ps: "کرنه",      name_fa: "کشاورزی",        slug: "agriculture",   icon: "🌾", position: 2 },
-  { parent_slug: "food", name_en: "Animals & Livestock", name_ps: "حیوانات",    name_fa: "حیوانات",        slug: "livestock",     icon: "🐄", position: 3 },
+  { parent_slug: "food", name_en: "Food Products",       name_ps: "خوراکي توکي", name_fa: "محصولات غذایی", name_ur: "خوراک اور زراعت", slug: "food-products", icon: "🥗", position: 1 },
+  { parent_slug: "food", name_en: "Agriculture & Farming", name_ps: "کرنه",      name_fa: "کشاورزی", name_ur: "خوراک اور زراعت",        slug: "agriculture",   icon: "🌾", position: 2 },
+  { parent_slug: "food", name_en: "Animals & Livestock", name_ps: "حیوانات",    name_fa: "حیوانات", name_ur: "خوراک اور زراعت",        slug: "livestock",     icon: "🐄", position: 3 },
 
   # Tools & Equipment
-  { parent_slug: "tools", name_en: "Hand Tools",          name_ps: "لاسي وسایل",       name_fa: "ابزار دستی",       slug: "hand-tools",   icon: "🔨", position: 1 },
-  { parent_slug: "tools", name_en: "Power Tools",         name_ps: "بریښنایي وسایل",   name_fa: "ابزار برقی",       slug: "power-tools",  icon: "🔌", position: 2 },
-  { parent_slug: "tools", name_en: "Industrial Equipment", name_ps: "صنعتي تجهیزات",   name_fa: "تجهیزات صنعتی",   slug: "industrial",   icon: "🏭", position: 3 },
+  { parent_slug: "tools", name_en: "Hand Tools",          name_ps: "لاسي وسایل",       name_fa: "ابزار دستی", name_ur: "اوزار اور سامان",       slug: "hand-tools",   icon: "🔨", position: 1 },
+  { parent_slug: "tools", name_en: "Power Tools",         name_ps: "بریښنایي وسایل",   name_fa: "ابزار برقی", name_ur: "اوزار اور سامان",       slug: "power-tools",  icon: "🔌", position: 2 },
+  { parent_slug: "tools", name_en: "Industrial Equipment", name_ps: "صنعتي تجهیزات",   name_fa: "تجهیزات صنعتی", name_ur: "اوزار اور سامان",   slug: "industrial",   icon: "🏭", position: 3 },
 
   # Sports & Outdoors
-  { parent_slug: "sports", name_en: "Fitness Equipment", name_ps: "د فټنس وسایل", name_fa: "تجهیزات ورزشی",     slug: "fitness",       icon: "🏋️", position: 1 },
-  { parent_slug: "sports", name_en: "Cycling",           name_ps: "سایکل سواري",   name_fa: "دوچرخه‌سواری",      slug: "cycling",       icon: "🚴", position: 2 },
-  { parent_slug: "sports", name_en: "Outdoor Sports",    name_ps: "بهرنی سپورت",   name_fa: "ورزش فضای باز",     slug: "outdoor-sports", icon: "🏕️", position: 3 },
-  { parent_slug: "sports", name_en: "Team Sports",       name_ps: "ټیمي سپورت",    name_fa: "ورزش تیمی",         slug: "team-sports",   icon: "⚽", position: 4 },
+  { parent_slug: "sports", name_en: "Fitness Equipment", name_ps: "د فټنس وسایل", name_fa: "تجهیزات ورزشی", name_ur: "کھیل اور تفریح",     slug: "fitness",       icon: "🏋️", position: 1 },
+  { parent_slug: "sports", name_en: "Cycling",           name_ps: "سایکل سواري",   name_fa: "دوچرخه‌سواری", name_ur: "کھیل اور تفریح",      slug: "cycling",       icon: "🚴", position: 2 },
+  { parent_slug: "sports", name_en: "Outdoor Sports",    name_ps: "بهرنی سپورت",   name_fa: "ورزش فضای باز", name_ur: "کھیل اور تفریح",     slug: "outdoor-sports", icon: "🏕️", position: 3 },
+  { parent_slug: "sports", name_en: "Team Sports",       name_ps: "ټیمي سپورت",    name_fa: "ورزش تیمی", name_ur: "کھیل اور تفریح",         slug: "team-sports",   icon: "⚽", position: 4 },
 
   # Beauty & Health
-  { parent_slug: "beauty", name_en: "Skincare",        name_ps: "د مخ پاملرنه",         name_fa: "مراقبت پوست",       slug: "skincare",  icon: "🧴", position: 1 },
-  { parent_slug: "beauty", name_en: "Haircare",        name_ps: "د وریځو پاملرنه",      name_fa: "مراقبت مو",         slug: "haircare",  icon: "💇", position: 2 },
-  { parent_slug: "beauty", name_en: "Fragrances",      name_ps: "عطرونه",                name_fa: "عطریات",            slug: "fragrances", icon: "🌸", position: 3 },
-  { parent_slug: "beauty", name_en: "Health & Medical", name_ps: "روغتیا",              name_fa: "بهداشت و سلامت",   slug: "health",    icon: "💊", position: 4 },
+  { parent_slug: "beauty", name_en: "Skincare",        name_ps: "د مخ پاملرنه",         name_fa: "مراقبت پوست", name_ur: "خوبصورتی اور صحت",       slug: "skincare",  icon: "🧴", position: 1 },
+  { parent_slug: "beauty", name_en: "Haircare",        name_ps: "د وریځو پاملرنه",      name_fa: "مراقبت مو", name_ur: "خوبصورتی اور صحت",         slug: "haircare",  icon: "💇", position: 2 },
+  { parent_slug: "beauty", name_en: "Fragrances",      name_ps: "عطرونه",                name_fa: "عطریات", name_ur: "خوبصورتی اور صحت",            slug: "fragrances", icon: "🌸", position: 3 },
+  { parent_slug: "beauty", name_en: "Health & Medical", name_ps: "روغتیا",              name_fa: "بهداشت و سلامت", name_ur: "خوبصورتی اور صحت",   slug: "health",    icon: "💊", position: 4 },
 
   # Bags & Accessories
-  { parent_slug: "bags", name_en: "Bags & Purses", name_ps: "بیگونه",    name_fa: "کیف و کوله",  slug: "bags-purses", icon: "👜", position: 1 },
-  { parent_slug: "bags", name_en: "Watches",       name_ps: "ساعتونه",   name_fa: "ساعت",        slug: "watches",     icon: "⌚", position: 2 },
-  { parent_slug: "bags", name_en: "Jewelry",       name_ps: "زیورات",    name_fa: "جواهرات",     slug: "jewelry",     icon: "💍", position: 3 },
+  { parent_slug: "bags", name_en: "Bags & Purses", name_ps: "بیگونه",    name_fa: "کیف و کوله", name_ur: "بیگ اور لوازمات",  slug: "bags-purses", icon: "👜", position: 1 },
+  { parent_slug: "bags", name_en: "Watches",       name_ps: "ساعتونه",   name_fa: "ساعت", name_ur: "بیگ اور لوازمات",        slug: "watches",     icon: "⌚", position: 2 },
+  { parent_slug: "bags", name_en: "Jewelry",       name_ps: "زیورات",    name_fa: "جواهرات", name_ur: "بیگ اور لوازمات",     slug: "jewelry",     icon: "💍", position: 3 },
 
   # Kids & Toys
-  { parent_slug: "kids", name_en: "Toys & Games", name_ps: "لوبوونه",        name_fa: "اسباب‌بازی",   slug: "toys",  icon: "🧸", position: 1 },
-  { parent_slug: "kids", name_en: "Baby Items",   name_ps: "د ماشوم وسایل", name_fa: "لوازم نوزاد",  slug: "baby",  icon: "🍼", position: 2 },
+  { parent_slug: "kids", name_en: "Toys & Games", name_ps: "لوبوونه",        name_fa: "اسباب‌بازی", name_ur: "بچے اور کھلونے",   slug: "toys",  icon: "🧸", position: 1 },
+  { parent_slug: "kids", name_en: "Baby Items",   name_ps: "د ماشوم وسایل", name_fa: "لوازم نوزاد", name_ur: "بچے اور کھلونے",  slug: "baby",  icon: "🍼", position: 2 },
   # Gemstones & Minerals — a real trade in BOTH countries this app serves, and
   # previously unrepresented: sellers had to file a Jegdalek ruby or a Badakhshan
   # lapis block under "Other". Afghanistan (Panjshir emerald, Jegdalek ruby,
@@ -138,41 +138,41 @@ SUBCATEGORIES = [
   #
   # Distinct from bags > jewelry, which is FINISHED jewellery. These are stones:
   # rough, cut, and the tools to work them.
-  { parent_slug: "gemstones", name_en: "Ruby",                 name_ps: "یاقوت",                name_fa: "یاقوت سرخ",       slug: "ruby",           icon: "❤️", position: 1  },
-  { parent_slug: "gemstones", name_en: "Emerald",              name_ps: "زمرد",                 name_fa: "زمرد",             slug: "emerald",        icon: "💚", position: 2  },
-  { parent_slug: "gemstones", name_en: "Lapis Lazuli",         name_ps: "لاجورد",               name_fa: "لاجورد",           slug: "lapis-lazuli",   icon: "🔷", position: 3  },
-  { parent_slug: "gemstones", name_en: "Tourmaline",           name_ps: "تورمالین",             name_fa: "تورمالین",         slug: "tourmaline",     icon: "🌈", position: 4  },
-  { parent_slug: "gemstones", name_en: "Sapphire",             name_ps: "نیلم",                 name_fa: "یاقوت کبود",      slug: "sapphire",       icon: "💠", position: 5  },
-  { parent_slug: "gemstones", name_en: "Turquoise",            name_ps: "فیروزه",               name_fa: "فیروزه",           slug: "turquoise",      icon: "🩵", position: 6  },
-  { parent_slug: "gemstones", name_en: "Quartz & Crystals",    name_ps: "کوارتز او کرسټل",     name_fa: "کوارتز و کریستال", slug: "quartz",         icon: "🔮", position: 7  },
-  { parent_slug: "gemstones", name_en: "Jade & Serpentine",    name_ps: "یشم",                  name_fa: "یشم",              slug: "jade",           icon: "🟢", position: 8  },
-  { parent_slug: "gemstones", name_en: "Rough & Raw Stone",    name_ps: "خامې ډبرې",           name_fa: "سنگ خام",          slug: "rough-stone",    icon: "🪨", position: 9  },
-  { parent_slug: "gemstones", name_en: "Gem Tools & Supplies", name_ps: "د ډبرو وسایل",        name_fa: "ابزار سنگ‌تراشی",  slug: "gem-supplies",   icon: "🛠️", position: 10 },
+  { parent_slug: "gemstones", name_en: "Ruby",                 name_ps: "یاقوت",                name_fa: "یاقوت سرخ", name_ur: "قیمتی پتھر اور معدنیات",       slug: "ruby",           icon: "❤️", position: 1  },
+  { parent_slug: "gemstones", name_en: "Emerald",              name_ps: "زمرد",                 name_fa: "زمرد", name_ur: "قیمتی پتھر اور معدنیات",             slug: "emerald",        icon: "💚", position: 2  },
+  { parent_slug: "gemstones", name_en: "Lapis Lazuli",         name_ps: "لاجورد",               name_fa: "لاجورد", name_ur: "قیمتی پتھر اور معدنیات",           slug: "lapis-lazuli",   icon: "🔷", position: 3  },
+  { parent_slug: "gemstones", name_en: "Tourmaline",           name_ps: "تورمالین",             name_fa: "تورمالین", name_ur: "قیمتی پتھر اور معدنیات",         slug: "tourmaline",     icon: "🌈", position: 4  },
+  { parent_slug: "gemstones", name_en: "Sapphire",             name_ps: "نیلم",                 name_fa: "یاقوت کبود", name_ur: "قیمتی پتھر اور معدنیات",      slug: "sapphire",       icon: "💠", position: 5  },
+  { parent_slug: "gemstones", name_en: "Turquoise",            name_ps: "فیروزه",               name_fa: "فیروزه", name_ur: "قیمتی پتھر اور معدنیات",           slug: "turquoise",      icon: "🩵", position: 6  },
+  { parent_slug: "gemstones", name_en: "Quartz & Crystals",    name_ps: "کوارتز او کرسټل",     name_fa: "کوارتز و کریستال", name_ur: "قیمتی پتھر اور معدنیات", slug: "quartz",         icon: "🔮", position: 7  },
+  { parent_slug: "gemstones", name_en: "Jade & Serpentine",    name_ps: "یشم",                  name_fa: "یشم", name_ur: "قیمتی پتھر اور معدنیات",              slug: "jade",           icon: "🟢", position: 8  },
+  { parent_slug: "gemstones", name_en: "Rough & Raw Stone",    name_ps: "خامې ډبرې",           name_fa: "سنگ خام", name_ur: "قیمتی پتھر اور معدنیات",          slug: "rough-stone",    icon: "🪨", position: 9  },
+  { parent_slug: "gemstones", name_en: "Gem Tools & Supplies", name_ps: "د ډبرو وسایل",        name_fa: "ابزار سنگ‌تراشی", name_ur: "قیمتی پتھر اور معدنیات",  slug: "gem-supplies",   icon: "🛠️", position: 10 },
 
   # Property / Jobs / Services previously had ZERO subcategories while every other
   # top-level had between 2 and 5. They were top-level LEAVES, which both broke the
   # "drill in to pick a leaf" assumption the create-listing picker is built on and
   # left three whole marketplaces with no structure at all.
-  { parent_slug: "property", name_en: "Houses for Sale",     name_ps: "د پلور کورونه",        name_fa: "خانه برای فروش",   slug: "houses-sale",    icon: "🏠", position: 1 },
-  { parent_slug: "property", name_en: "Apartments for Rent", name_ps: "د کرایې اپارتمانونه",  name_fa: "آپارتمان اجاره‌ای", slug: "apartments-rent", icon: "🏢", position: 2 },
-  { parent_slug: "property", name_en: "Land & Plots",        name_ps: "ځمکه او نمرې",         name_fa: "زمین و قطعه",      slug: "land-plots",     icon: "🗺️", position: 3 },
-  { parent_slug: "property", name_en: "Shops & Offices",     name_ps: "دوکانونه او دفترونه",  name_fa: "دکان و دفتر",      slug: "shops-offices",  icon: "🏪", position: 4 },
-  { parent_slug: "property", name_en: "Guest Houses",        name_ps: "مېلمه ځایونه",         name_fa: "مهمان‌خانه",       slug: "guest-houses",   icon: "🛏️", position: 5 },
+  { parent_slug: "property", name_en: "Houses for Sale",     name_ps: "د پلور کورونه",        name_fa: "خانه برای فروش", name_ur: "جائیداد",   slug: "houses-sale",    icon: "🏠", position: 1 },
+  { parent_slug: "property", name_en: "Apartments for Rent", name_ps: "د کرایې اپارتمانونه",  name_fa: "آپارتمان اجاره‌ای", name_ur: "جائیداد", slug: "apartments-rent", icon: "🏢", position: 2 },
+  { parent_slug: "property", name_en: "Land & Plots",        name_ps: "ځمکه او نمرې",         name_fa: "زمین و قطعه", name_ur: "جائیداد",      slug: "land-plots",     icon: "🗺️", position: 3 },
+  { parent_slug: "property", name_en: "Shops & Offices",     name_ps: "دوکانونه او دفترونه",  name_fa: "دکان و دفتر", name_ur: "جائیداد",      slug: "shops-offices",  icon: "🏪", position: 4 },
+  { parent_slug: "property", name_en: "Guest Houses",        name_ps: "مېلمه ځایونه",         name_fa: "مهمان‌خانه", name_ur: "جائیداد",       slug: "guest-houses",   icon: "🛏️", position: 5 },
 
-  { parent_slug: "jobs", name_en: "Full-time Jobs",         name_ps: "بشپړ وخت دندې",        name_fa: "کار تمام‌وقت",     slug: "jobs-fulltime",  icon: "💼", position: 1 },
-  { parent_slug: "jobs", name_en: "Part-time & Daily Work", name_ps: "نیم وخت او ورځنۍ",     name_fa: "پاره‌وقت و روزمزد", slug: "jobs-parttime", icon: "⏰", position: 2 },
-  { parent_slug: "jobs", name_en: "Skilled Trades",         name_ps: "مسلکي کارونه",         name_fa: "مشاغل فنی",        slug: "jobs-trades",    icon: "🔨", position: 3 },
-  { parent_slug: "jobs", name_en: "Drivers & Delivery",     name_ps: "موټر چلوونکي او رسول", name_fa: "راننده و تحویل",   slug: "jobs-drivers",   icon: "🚚", position: 4 },
-  { parent_slug: "jobs", name_en: "Teaching & Translation", name_ps: "ښوونه او ژباړه",       name_fa: "تدریس و ترجمه",    slug: "jobs-teaching",  icon: "📖", position: 5 },
-  { parent_slug: "jobs", name_en: "Office & NGO",           name_ps: "دفتر او ان جي او",     name_fa: "اداری و موسسات",   slug: "jobs-office",    icon: "🏛️", position: 6 },
+  { parent_slug: "jobs", name_en: "Full-time Jobs",         name_ps: "بشپړ وخت دندې",        name_fa: "کار تمام‌وقت", name_ur: "ملازمتیں",     slug: "jobs-fulltime",  icon: "💼", position: 1 },
+  { parent_slug: "jobs", name_en: "Part-time & Daily Work", name_ps: "نیم وخت او ورځنۍ",     name_fa: "پاره‌وقت و روزمزد", name_ur: "ملازمتیں", slug: "jobs-parttime", icon: "⏰", position: 2 },
+  { parent_slug: "jobs", name_en: "Skilled Trades",         name_ps: "مسلکي کارونه",         name_fa: "مشاغل فنی", name_ur: "ملازمتیں",        slug: "jobs-trades",    icon: "🔨", position: 3 },
+  { parent_slug: "jobs", name_en: "Drivers & Delivery",     name_ps: "موټر چلوونکي او رسول", name_fa: "راننده و تحویل", name_ur: "ملازمتیں",   slug: "jobs-drivers",   icon: "🚚", position: 4 },
+  { parent_slug: "jobs", name_en: "Teaching & Translation", name_ps: "ښوونه او ژباړه",       name_fa: "تدریس و ترجمه", name_ur: "ملازمتیں",    slug: "jobs-teaching",  icon: "📖", position: 5 },
+  { parent_slug: "jobs", name_en: "Office & NGO",           name_ps: "دفتر او ان جي او",     name_fa: "اداری و موسسات", name_ur: "ملازمتیں",   slug: "jobs-office",    icon: "🏛️", position: 6 },
 
-  { parent_slug: "services", name_en: "Repairs & Maintenance", name_ps: "ترمیم او ساتنه",      name_fa: "تعمیر و نگهداری", slug: "svc-repairs",    icon: "🔧", position: 1 },
-  { parent_slug: "services", name_en: "Construction",          name_ps: "ساختماني چارې",       name_fa: "ساخت و ساز",      slug: "svc-construction", icon: "🧱", position: 2 },
-  { parent_slug: "services", name_en: "Transport & Moving",    name_ps: "ترانسپورت او لېږد",   name_fa: "حمل و نقل",       slug: "svc-transport",  icon: "🚛", position: 3 },
-  { parent_slug: "services", name_en: "Tailoring",             name_ps: "خیاطي",                name_fa: "خیاطی",           slug: "svc-tailoring",  icon: "🧵", position: 4 },
-  { parent_slug: "services", name_en: "Beauty Services",       name_ps: "د ښایست خدمتونه",    name_fa: "خدمات زیبایی",    slug: "svc-beauty",     icon: "💅", position: 5 },
-  { parent_slug: "services", name_en: "IT & Design",           name_ps: "آی ټي او ډیزاین",    name_fa: "آی‌تی و دیزاین",  slug: "svc-it",         icon: "💻", position: 6 },
-  { parent_slug: "services", name_en: "Tutoring",              name_ps: "کورنی ښوونکی",       name_fa: "تدریس خصوصی",     slug: "svc-tutoring",   icon: "✏️", position: 7 }
+  { parent_slug: "services", name_en: "Repairs & Maintenance", name_ps: "ترمیم او ساتنه",      name_fa: "تعمیر و نگهداری", name_ur: "خدمات", slug: "svc-repairs",    icon: "🔧", position: 1 },
+  { parent_slug: "services", name_en: "Construction",          name_ps: "ساختماني چارې",       name_fa: "ساخت و ساز", name_ur: "خدمات",      slug: "svc-construction", icon: "🧱", position: 2 },
+  { parent_slug: "services", name_en: "Transport & Moving",    name_ps: "ترانسپورت او لېږد",   name_fa: "حمل و نقل", name_ur: "خدمات",       slug: "svc-transport",  icon: "🚛", position: 3 },
+  { parent_slug: "services", name_en: "Tailoring",             name_ps: "خیاطي",                name_fa: "خیاطی", name_ur: "خدمات",           slug: "svc-tailoring",  icon: "🧵", position: 4 },
+  { parent_slug: "services", name_en: "Beauty Services",       name_ps: "د ښایست خدمتونه",    name_fa: "خدمات زیبایی", name_ur: "خدمات",    slug: "svc-beauty",     icon: "💅", position: 5 },
+  { parent_slug: "services", name_en: "IT & Design",           name_ps: "آی ټي او ډیزاین",    name_fa: "آی‌تی و دیزاین", name_ur: "خدمات",  slug: "svc-it",         icon: "💻", position: 6 },
+  { parent_slug: "services", name_en: "Tutoring",              name_ps: "کورنی ښوونکی",       name_fa: "تدریس خصوصی", name_ur: "خدمات",     slug: "svc-tutoring",   icon: "✏️", position: 7 }
 ].freeze
 
 SUBCATEGORIES.each do |attrs|

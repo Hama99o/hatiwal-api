@@ -14,6 +14,7 @@ class CategoryDashboard < Administrate::BaseDashboard
     listings: Field::HasMany,
     name_en: Field::String,
     name_fa: Field::String,
+    name_ur: Field::String,
     name_ps: Field::String,
     parent: Field::BelongsTo,
     position: Field::Number,
@@ -45,6 +46,7 @@ class CategoryDashboard < Administrate::BaseDashboard
     listings
     name_en
     name_fa
+    name_ur
     name_ps
     parent
     position
@@ -63,6 +65,7 @@ class CategoryDashboard < Administrate::BaseDashboard
     name_en
     name_ps
     name_fa
+    name_ur
     slug
     icon
     position

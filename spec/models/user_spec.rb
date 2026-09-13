@@ -28,7 +28,7 @@ RSpec.describe User, type: :model do
       expect(build(:user, preferred_language: "ru")).not_to be_valid
     end
 
-    %w[en ps fa].each do |locale|
+    %w[en ps fa ur].each do |locale|
       it "accepts preferred_language #{locale}" do
         expect(build(:user, preferred_language: locale)).to be_valid
       end

@@ -124,6 +124,21 @@ RSpec.describe Category, type: :model do
       expect(category.name_for("en")).to eq("Electronics")
     end
 
+    it "returns Urdu name for ur" do
+      category.name_ur = "الیکٹرانکس"
+      expect(category.name_for("ur")).to eq("الیکٹرانکس")
+    end
+
+    # name_ur is the only NULLABLE name column, so this fallback is the thing
+    # that keeps an Urdu client from rendering an empty category label on a row
+    # created before Urdu existed, or added by an admin who cannot write Urdu.
+    it "falls back to English for ur when name_ur is blank" do
+      expect(category.name_ur).to be_nil
+      expect(category.name_for("ur")).to eq("Electronics")
+      category.name_ur = ""
+      expect(category.name_for("ur")).to eq("Electronics")
+    end
+
     it "falls back to English for unknown locale" do
       expect(category.name_for("xx")).to eq("Electronics")
       expect(category.name_for(nil)).to eq("Electronics")

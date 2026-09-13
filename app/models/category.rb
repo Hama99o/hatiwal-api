@@ -33,6 +33,12 @@ class Category < ApplicationRecord
     case locale.to_s
     when "ps" then name_ps
     when "fa" then name_fa
+    # Urdu is the only one of the four that can be blank: name_ur is a NULLABLE
+    # column (added when Hatiwal opened to Pakistan) while the other three are
+    # NOT NULL, so a category created before Urdu existed - or added from the
+    # admin by someone who cannot write Urdu - falls back to English rather than
+    # rendering an empty chip.
+    when "ur" then name_ur.presence || name_en
     else name_en
     end
   end
