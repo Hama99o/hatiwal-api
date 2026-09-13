@@ -51,7 +51,7 @@ RSpec.describe Listing, type: :model do
       expect(listing).not_to be_persisted
     end
     it { should validate_presence_of(:currency) }
-    it { should validate_inclusion_of(:currency).in_array(%w[AFN USD EUR]) }
+    it { should validate_inclusion_of(:currency).in_array(%w[AFN PKR USD EUR]) }
     it { should validate_presence_of(:category) }
   end
 
@@ -483,7 +483,7 @@ RSpec.describe Listing, type: :model do
 
   describe "CURRENCIES constant" do
     it "includes AFN, USD, and EUR" do
-      expect(Listing::CURRENCIES).to contain_exactly("AFN", "USD", "EUR")
+      expect(Listing::CURRENCIES).to contain_exactly("AFN", "PKR", "USD", "EUR")
     end
   end
 

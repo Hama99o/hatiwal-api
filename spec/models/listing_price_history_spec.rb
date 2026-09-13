@@ -17,7 +17,7 @@ RSpec.describe ListingPriceHistory, type: :model do
     it { should validate_numericality_of(:new_price).is_greater_than(0) }
 
     it {
-      should validate_inclusion_of(:currency).in_array(%w[AFN USD EUR])
+      should validate_inclusion_of(:currency).in_array(%w[AFN PKR USD EUR])
     }
   end
 

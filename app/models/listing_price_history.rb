@@ -3,7 +3,11 @@ class ListingPriceHistory < ApplicationRecord
 
   validates :old_price, presence: true, numericality: { greater_than: 0 }
   validates :new_price, presence: true, numericality: { greater_than: 0 }
-  validates :currency, presence: true, inclusion: { in: %w[AFN USD EUR] }
+  # Derived from Listing::CURRENCIES, never a second hand-written list — this
+  # used to duplicate %w[AFN USD EUR] inline, so adding a currency in one place
+  # silently rejected it here. The lambda defers the lookup to validation time
+  # for the same load-order reason Transaction documents.
+  validates :currency, presence: true, inclusion: { in: -> { Listing::CURRENCIES } }
   validates :changed_at, presence: true
 
   # A price reduction — old > new.

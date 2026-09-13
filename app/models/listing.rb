@@ -90,7 +90,15 @@ class Listing < ApplicationRecord
   # ps + fa, so the client localizes off the code and never echoes the string.
   QUANTITY_BELOW_HELD_UNITS_CODE  = "quantity_below_held_units".freeze
   validate :quantity_covers_held_units
-  CURRENCIES = %w[AFN USD EUR].freeze
+  # AFN + PKR first: Hatiwal serves Afghanistan AND Pakistan, and a seller in
+  # either country should find their own currency at the top of the picker.
+  # USD/EUR stay for cross-border and high-value goods.
+  #
+  # There is deliberately NO FX conversion anywhere in this app — a price is
+  # stored and displayed in the currency the seller chose, full stop. Anything
+  # that compares prices across currencies (e.g. the web "see similar" band) has
+  # to opt in per currency rather than assume one.
+  CURRENCIES = %w[AFN PKR USD EUR].freeze
   validates :currency, presence: true, inclusion: { in: CURRENCIES }
   validates :category, presence: true
 
