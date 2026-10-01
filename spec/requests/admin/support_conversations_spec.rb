@@ -85,39 +85,12 @@ RSpec.describe "Admin support inbox", type: :request do
     expect(thread.reload).to be_open
   end
 
-  describe "starting a thread from the admin (SUPPORT_ADMIN_INITIATE)" do
-    let(:quiet_user) { create(:user) }
+  # Starting a thread from the admin now goes through the Messages screen and
+  # its gate: spec/requests/admin/messages_spec.rb and spec/models/support_gate_spec.rb.
 
-    it "is refused while the flag is off, and creates nothing" do
-      post admin_support_conversations_path, params: { user_id: quiet_user.id }
-
-      expect(response).to redirect_to(admin_user_path(quiet_user))
-      expect(Conversation.kind_support.where(buyer_id: quiet_user.id)).not_to exist
-    end
-
-    it "always reaches a thread the user already opened" do
-      thread # the user opened it
-
-      post admin_support_conversations_path, params: { user_id: user.id }
-
-      expect(response).to redirect_to(admin_support_conversation_path(thread))
-    end
-
-    it "creates the thread when the flag is on" do
-      allow(ENV).to receive(:fetch).and_call_original
-      allow(ENV).to receive(:fetch).with("SUPPORT_ADMIN_INITIATE", "false").and_return("true")
-
-      post admin_support_conversations_path, params: { user_id: quiet_user.id }
-
-      created = Conversation.kind_support.find_by!(buyer_id: quiet_user.id)
-      expect(response).to redirect_to(admin_support_conversation_path(created))
-      expect(AdminAuditLog.where(action: "support_start")).to exist
-    end
-  end
-
-  it "the user page links to an existing thread and hides Start while the flag is off" do
+  it "the user page links to an existing thread, and says in-app is unavailable while the flag is off" do
     get admin_user_path(create(:user))
-    expect(response.body).not_to include("Start support conversation")
+    expect(response.body).to include("In-app: not available (needs the app update with support messaging")
 
     thread
     get admin_user_path(user)

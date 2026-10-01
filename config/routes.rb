@@ -53,15 +53,17 @@ Rails.application.routes.draw do
         patch :unblock
         post :warn
       end
-      resources :emails, only: %i[new create], controller: "user_emails" do
-        collection do
-          post :preview
-          post :test
-        end
-      end
     end
     resources :user_warnings, only: [ :index, :show ]
-    resources :support_conversations, only: [ :index, :show, :create ] do
+    # One place to message one person (email / in-app / both) and see every
+    # send. Admin::SendMessage does the sending.
+    resources :messages, only: %i[index new create] do
+      collection do
+        post :preview
+        post :test
+      end
+    end
+    resources :support_conversations, only: [ :index, :show ] do
       member do
         post  :reply
         patch :close

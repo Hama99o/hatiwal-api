@@ -1,0 +1,37 @@
+<% content_for(:title) { "New message" } %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">New message</h1>
+</header>
+
+<section class="main-content__body">
+  <% if @user %>
+    <%= render "recipient" %>
+    <p style="margin:0 0 .8rem;font-size:.85rem;color:#64748b;">Nothing is sent from this page — you'll see a preview first.</p>
+    <%= render "compose_form", buttons: [ [ "Preview", preview_admin_messages_path, { class: "button" } ] ] %>
+  <% else %>
+    <%= form_with url: new_admin_message_path, method: :get, id: "recipient-search", data: { turbo: false } do %>
+      <label style="display:block;font-size:.8rem;font-weight:600;color:#475569;margin-bottom:.25rem;">Who is this for?</label>
+      <div style="display:flex;gap:.5rem;">
+        <%= search_field_tag :q, params[:q], placeholder: "Name, email or phone", autofocus: true, dir: "auto",
+              style: "flex:1;padding:.55rem .7rem;border:1px solid #cbd5e1;border-radius:8px;" %>
+        <button class="button" type="submit">Find</button>
+      </div>
+    <% end %>
+
+    <% if @results %>
+      <% if @results.any? %>
+        <ul id="recipient-results" style="list-style:none;padding:0;margin:1rem 0 0;">
+          <% @results.each do |u| %>
+            <li style="padding:.5rem .2rem;border-top:1px solid #e2e8f0;">
+              <%= link_to u.full_name.presence || "User ##{u.id}", new_admin_message_path(user_id: u.id) %>
+              <span style="color:#64748b;font-size:.85rem;"> · <%= u.email %><%= " · #{u.phone}" if u.phone.present? %> · <%= u.city %></span>
+            </li>
+          <% end %>
+        </ul>
+      <% else %>
+        <p style="color:#64748b;margin-top:1rem;">No one matches “<%= params[:q] %>”.</p>
+      <% end %>
+    <% end %>
+  <% end %>
+</section>

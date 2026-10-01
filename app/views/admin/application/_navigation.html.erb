@@ -22,6 +22,8 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/listings') ? 'active' : 'inactive'}" %>
   <%= link_to "Reports", admin_reports_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/reports') ? 'active' : 'inactive'}" %>
+  <%= link_to "Messages", admin_messages_path, id: "nav-messages",
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/messages') ? 'active' : 'inactive'}" %>
   <% awaiting = respond_to?(:support_awaiting_reply_count) ? support_awaiting_reply_count : 0 %>
   <%= link_to admin_support_conversations_path, id: "nav-support",
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/support_conversations') ? 'active' : 'inactive'}" do %>

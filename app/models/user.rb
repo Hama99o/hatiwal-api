@@ -43,6 +43,7 @@ class User < ApplicationRecord
   has_many :viewed_listings, through: :listing_views, source: :listing
   has_many :warnings, class_name: "UserWarning", dependent: :destroy
   has_many :admin_emails, class_name: AdminEmail.name, dependent: :destroy
+  has_many :admin_outreaches, class_name: AdminOutreach.name, dependent: :destroy
   has_many :reviews_written, class_name: Review.name, foreign_key: :reviewer_id, dependent: :destroy, inverse_of: :reviewer
   has_many :reviews_received, class_name: Review.name, foreign_key: :reviewee_id, dependent: :destroy, inverse_of: :reviewee
 

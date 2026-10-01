@@ -1,0 +1,51 @@
+<% content_for(:title) { "Messages" } %>
+
+<header class="main-content__header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
+  <h1 class="main-content__page-title">Messages</h1>
+  <%= link_to "New message", new_admin_message_path, class: "button", id: "new-message" %>
+</header>
+
+<section class="main-content__body">
+  <p style="margin:0 0 1rem;font-size:.85rem;color:#64748b;">
+    Everything sent to a person — by email, in the app as Hatiwal Support, or both — including replies from
+    the Support inbox. Email is sent from <%= Rails.application.config.x.mail_sender %>.
+  </p>
+
+  <% if @outreaches.any? %>
+    <table id="message-history" style="width:100%;border-collapse:collapse;font-size:.86rem;">
+      <thead>
+        <tr style="text-align:start;color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;">
+          <th style="padding:.45rem .5rem;">When</th><th style="padding:.45rem .5rem;">To</th>
+          <th style="padding:.45rem .5rem;">By</th><th style="padding:.45rem .5rem;">Message</th>
+          <th style="padding:.45rem .5rem;">What happened</th><th style="padding:.45rem .5rem;">Admin</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% @outreaches.each do |o| %>
+          <tr style="border-top:1px solid #e2e8f0;vertical-align:top;">
+            <td style="padding:.5rem;color:#64748b;white-space:nowrap;"><%= l(o.created_at, format: :short) %></td>
+            <td style="padding:.5rem;"><%= link_to o.user.full_name.presence || "User ##{o.user_id}", admin_user_path(o.user) %></td>
+            <td style="padding:.5rem;"><%= o.channels.join(" + ") %><%= " (support inbox)" if o.support_inbox? %></td>
+            <td style="padding:.5rem;" dir="auto">
+              <% if o.subject.present? %><strong><%= o.subject %></strong><br><% end %>
+              <%= o.body.truncate(140) %>
+            </td>
+            <td style="padding:.5rem;">
+              <% if (e = o.admin_email) %>
+                <div style="<%= 'color:#b91c1c;' if e.failed? %>">Email: <%= e.status %><%= ": #{e.error}" if e.failed? && e.error.present? %></div>
+              <% end %>
+              <% if o.via_in_app? %>
+                <div>In-app: in their inbox · <%= o.push_note %></div>
+              <% end %>
+              <% if o.opt_out_acknowledged? %><div style="color:#92400e;font-size:.78rem;">sent despite bulk opt-out (acknowledged)</div><% end %>
+            </td>
+            <td style="padding:.5rem;color:#64748b;"><%= o.admin_user&.email %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+    <%= paginate @outreaches %>
+  <% else %>
+    <p style="color:#64748b;">Nothing sent yet.</p>
+  <% end %>
+</section>

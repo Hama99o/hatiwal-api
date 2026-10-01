@@ -1,0 +1,47 @@
+<%# One form for every step; the draft travels with each. `buttons`: [label, path, html options]. %>
+<% sender = @sender %>
+<% chosen = Array(params[:channels]) %>
+<% if sender && sender.errors.any? %>
+  <div id="message-errors" style="margin:0 0 1rem;padding:.7rem .9rem;border:1px solid #fca5a5;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:.88rem;">
+    <%= sender.errors.to_sentence %>
+  </div>
+<% end %>
+
+<%# Session token, not the per-form one: these buttons post to other actions via formaction. %>
+<%= form_with url: preview_admin_messages_path, method: :post, data: { turbo: false }, id: "message-form",
+      authenticity_token: form_authenticity_token do |f| %>
+  <%= hidden_field_tag :user_id, @user.id %>
+
+  <fieldset style="border:0;padding:0;margin:0 0 .9rem;">
+    <legend style="font-size:.8rem;font-weight:600;color:#475569;margin-bottom:.35rem;">Send by</legend>
+    <% [ [ "email", "Email", @email_refusal ], [ "in_app", "In-app message from Hatiwal Support", @in_app_refusal ] ].each do |value, label, refusal| %>
+      <label class="channel" data-channel="<%= value %>" style="display:flex;gap:.5rem;align-items:baseline;margin:.25rem 0;<%= 'opacity:.55;' if refusal %>">
+        <%= check_box_tag "channels[]", value, chosen.include?(value) && refusal.nil?, disabled: refusal.present?, id: "channel-#{value}" %>
+        <span><%= label %><% if refusal %> <em style="font-size:.8rem;color:#64748b;">— not available: <%= refusal %></em><% end %></span>
+      </label>
+    <% end %>
+  </fieldset>
+
+  <label style="display:block;font-size:.8rem;font-weight:600;color:#475569;margin-bottom:.25rem;">Subject <span style="font-weight:400;color:#94a3b8;">(email only)</span></label>
+  <%= text_field_tag :subject, params[:subject], maxlength: AdminEmail::SUBJECT_MAX, dir: "auto",
+        style: "width:100%;padding:.55rem .7rem;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-bottom:.8rem;" %>
+
+  <label style="display:block;font-size:.8rem;font-weight:600;color:#475569;margin-bottom:.25rem;">Message</label>
+  <%= text_area_tag :body, params[:body], rows: 9, required: true, maxlength: AdminEmail::BODY_MAX, dir: "auto",
+        placeholder: "Plain text, in the user's language — Pashto, Dari and Urdu display right-to-left. The same text goes to every channel you tick.",
+        style: "width:100%;padding:.6rem .7rem;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;" %>
+
+  <% if @user.email_opt_out_at.present? %>
+    <label style="display:flex;gap:.5rem;margin-top:.6rem;font-size:.85rem;color:#92400e;">
+      <%= check_box_tag :opt_out_acknowledged, "1", params[:opt_out_acknowledged] == "1" %>
+      This email is about their account, not an announcement (they unsubscribed from bulk email).
+    </label>
+  <% end %>
+
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.9rem;align-items:center;">
+    <% buttons.each do |label, path, extra| %>
+      <%= f.button label, formaction: path, **(extra || {}) %>
+    <% end %>
+    <%= link_to "Cancel", admin_messages_path, style: "font-size:.88rem;" %>
+  </div>
+<% end %>

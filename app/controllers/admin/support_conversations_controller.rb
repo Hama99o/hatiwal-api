@@ -43,24 +43,17 @@ module Admin
                                .order(:created_at)
     end
 
+    # Through Admin::SendMessage like every admin send, so thread replies land
+    # in the same Messages history (source: support_inbox).
     def reply
-      if @conversation.closed?
-        return redirect_to admin_support_conversation_path(@conversation),
-                           alert: "This conversation is closed. Reopen it to reply."
-      end
-
-      message = @conversation.messages.new(
-        user: @conversation.seller, admin_user: current_admin_user,
-        kind: :text, body: params[:body].to_s.strip
-      )
-      if message.save
-        BroadcastMessageJob.perform_later(message.id)
-        SendMessagePushJob.perform_later(message.id)
+      sender = Admin::SendMessage.new(admin: current_admin_user, user: @conversation.buyer,
+                                      channels: %w[in_app], body: params[:body], source: :support_inbox)
+      if sender.call
         log_admin_action("support_reply", target: @conversation)
         redirect_to admin_support_conversation_path(@conversation), notice: "Reply sent."
       else
         redirect_to admin_support_conversation_path(@conversation),
-                    alert: "Reply not sent: #{message.errors.full_messages.to_sentence}"
+                    alert: "Reply not sent: #{sender.errors.to_sentence}"
       end
     end
 
@@ -74,23 +67,6 @@ module Admin
       @conversation.open!
       log_admin_action("support_reopen", target: @conversation)
       redirect_to admin_support_conversation_path(@conversation), notice: "Conversation reopened."
-    end
-
-    # Admin-initiated: open (or go to) a user's support thread from their page.
-    # An EXISTING thread is always reachable; creating one needs the gate.
-    def create
-      user = User.find(params[:user_id])
-      existing = Conversation.kind_support.find_by(buyer_id: user.id)
-      return redirect_to admin_support_conversation_path(existing) if existing
-
-      conversation = Conversation.admin_support_thread_for(user)
-      unless conversation
-        return redirect_to admin_user_path(user),
-                           alert: "Can't start a support conversation: #{Conversation.admin_message_refusal(user)}."
-      end
-
-      log_admin_action("support_start", target: conversation)
-      redirect_to admin_support_conversation_path(conversation)
     end
 
     private

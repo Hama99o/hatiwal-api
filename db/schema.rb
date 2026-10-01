@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -66,6 +66,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
     t.bigint "user_id", null: false
     t.index ["admin_user_id"], name: "index_admin_emails_on_admin_user_id"
     t.index ["user_id"], name: "index_admin_emails_on_user_id"
+  end
+
+  create_table "admin_outreaches", force: :cascade do |t|
+    t.bigint "admin_email_id"
+    t.bigint "admin_user_id", null: false
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.bigint "message_id"
+    t.boolean "opt_out_acknowledged", default: false, null: false
+    t.string "push_note"
+    t.integer "source", default: 0, null: false
+    t.string "subject"
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.boolean "via_email", default: false, null: false
+    t.boolean "via_in_app", default: false, null: false
+    t.index ["admin_email_id"], name: "index_admin_outreaches_on_admin_email_id"
+    t.index ["admin_user_id"], name: "index_admin_outreaches_on_admin_user_id"
+    t.index ["created_at"], name: "index_admin_outreaches_on_created_at"
+    t.index ["message_id"], name: "index_admin_outreaches_on_message_id"
+    t.index ["user_id"], name: "index_admin_outreaches_on_user_id"
   end
 
   create_table "admin_users", force: :cascade do |t|
@@ -348,6 +369,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
     t.datetime "deleted_at"
     t.datetime "deletion_scheduled_at"
     t.string "email"
+    t.datetime "email_opt_out_at"
     t.string "encrypted_password", default: "", null: false
     t.integer "failed_attempts", default: 0, null: false
     t.string "firstname", default: "", null: false
@@ -411,6 +433,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
   add_foreign_key "admin_audit_logs", "admin_users"
   add_foreign_key "admin_emails", "admin_users"
   add_foreign_key "admin_emails", "users"
+  add_foreign_key "admin_outreaches", "admin_emails"
+  add_foreign_key "admin_outreaches", "admin_users"
+  add_foreign_key "admin_outreaches", "messages"
+  add_foreign_key "admin_outreaches", "users"
   add_foreign_key "blocks", "users", column: "blocked_id"
   add_foreign_key "blocks", "users", column: "blocker_id"
   add_foreign_key "categories", "categories", column: "parent_id", on_delete: :restrict

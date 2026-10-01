@@ -63,52 +63,37 @@
   <% end %>
 </section>
 
-<% emails = page.resource.admin_emails.includes(:admin_user).recent.limit(10) %>
-<section id="user-email" style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #bae6fd;border-radius:12px;background:#f0f9ff;">
-  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#075985;">✉️ Email</h2>
-  <% if page.resource.emailable? %>
-    <%= link_to "Write an email", new_admin_user_email_path(page.resource), class: "button", id: "write-email" %>
-  <% else %>
-    <p style="margin:0;color:#075985;font-size:.85rem;">This user can't be emailed: <%= page.resource.email_refusal_reason %>.</p>
-  <% end %>
+<% outreaches = page.resource.admin_outreaches.includes(:admin_email, :admin_user).recent.limit(10) %>
+<% support_thread = Conversation.kind_support.find_by(buyer_id: page.resource.id) %>
+<section id="user-messages" style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;">
+  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#3730a3;">💬 Messages</h2>
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;">
+    <%= link_to "Message this user", new_admin_message_path(user_id: page.resource.id), class: "button", id: "message-user" %>
+    <% if support_thread %>
+      <%= link_to "Open support conversation", admin_support_conversation_path(support_thread) %>
+    <% end %>
+  </div>
+  <p style="margin:.6rem 0 0;font-size:.82rem;color:#3730a3;">
+    Email: <%= page.resource.emailable? ? "available" : "not available (#{page.resource.email_refusal_reason})" %> ·
+    In-app: <%= Conversation.admin_can_message?(page.resource) ? "available" : "not available (#{Conversation.admin_message_refusal(page.resource)})" %>
+  </p>
 
-  <% if emails.any? %>
-    <table id="email-history" style="width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.9rem;">
-      <thead>
-        <tr style="text-align:start;color:#64748b;font-size:.72rem;text-transform:uppercase;">
-          <th style="padding:.35rem .5rem;">Subject</th><th style="padding:.35rem .5rem;">Status</th>
-          <th style="padding:.35rem .5rem;">By</th><th style="padding:.35rem .5rem;">When</th>
-        </tr>
-      </thead>
+  <% if outreaches.any? %>
+    <table id="user-message-history" style="width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.9rem;">
       <tbody>
-        <% emails.each do |e| %>
-          <tr style="border-top:1px solid #e0f2fe;">
-            <td style="padding:.4rem .5rem;" dir="auto"><%= e.subject %></td>
-            <td style="padding:.4rem .5rem;<%= 'color:#b91c1c;' if e.failed? %>">
-              <%= e.status %><%= ": #{e.error}" if e.failed? && e.error.present? %>
+        <% outreaches.each do |o| %>
+          <tr style="border-top:1px solid #e0e7ff;">
+            <td style="padding:.4rem .5rem;color:#64748b;white-space:nowrap;"><%= l(o.created_at, format: :short) %></td>
+            <td style="padding:.4rem .5rem;"><%= o.channels.join(" + ") %></td>
+            <td style="padding:.4rem .5rem;" dir="auto"><%= o.subject.presence || o.body.truncate(60) %></td>
+            <td style="padding:.4rem .5rem;<%= 'color:#b91c1c;' if o.admin_email&.failed? %>">
+              <%= [ ("email #{o.admin_email.status}" if o.admin_email), ("in-app · #{o.push_note}" if o.via_in_app?) ].compact.join(" · ") %>
             </td>
-            <td style="padding:.4rem .5rem;"><%= e.admin_user&.email %></td>
-            <td style="padding:.4rem .5rem;color:#64748b;"><%= l(e.sent_at || e.created_at, format: :short) %></td>
           </tr>
         <% end %>
       </tbody>
     </table>
-  <% end %>
-</section>
-
-<% support_thread = Conversation.kind_support.find_by(buyer_id: page.resource.id) %>
-<section id="user-support" style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;">
-  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#3730a3;">💬 Support</h2>
-  <% if support_thread %>
-    <%= link_to "Open support conversation", admin_support_conversation_path(support_thread), class: "button" %>
-  <% elsif Conversation.admin_can_message?(page.resource) %>
-    <%= button_to "Start support conversation", admin_support_conversations_path(user_id: page.resource.id),
-          method: :post, data: { turbo: false }, class: "button" %>
-  <% else %>
-    <p style="margin:0;color:#3730a3;font-size:.85rem;">
-      This user hasn't contacted support. Starting a conversation from here is turned off
-      until the app update with support messaging is live.
-    </p>
+    <%= link_to "All messages", admin_messages_path, style: "font-size:.82rem;" %>
   <% end %>
 </section>
 
