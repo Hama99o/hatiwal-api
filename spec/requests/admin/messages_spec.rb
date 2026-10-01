@@ -6,7 +6,10 @@ RSpec.describe "Admin Messages", type: :request do
 
   let(:admin) { create(:admin_user, password: "changeme123!") }
   let(:user)  { create(:user, firstname: "Zarmina", lastname: "Khan", email: "zarmina@example.com", phone: "0700123456") }
-  let(:draft) { { user_id: user.id, channels: %w[email], subject: "About your listing", body: "سلام — ستاسو اعلان تایید شو." } }
+  let(:draft) do
+    { user_id: user.id, channels: %w[email], fallback_locale: "en",
+      content: { "en" => { "subject" => "About your listing", "body" => "سلام — ستاسو اعلان تایید شو." } } }
+  end
 
   before do
     sign_in admin, scope: :admin_user
@@ -86,6 +89,26 @@ RSpec.describe "Admin Messages", type: :request do
     expect(response).to have_http_status(:unprocessable_content)
     expect(Conversation.kind_support.count).to eq(0)
     expect(AdminOutreach.count).to eq(0)
+  end
+
+  it "shows all four language boxes, marks the recipient's own, and makes subjects follow Email" do
+    user.update!(preferred_language: "ps")
+
+    get new_admin_message_path(user_id: user.id)
+
+    %w[en ps fa ur].each { |loc| expect(response.body).to include(%(data-locale="#{loc}")) }
+    expect(response.body).to include("Zarmina reads Pashto: this box is what Zarmina gets.")
+    expect(response.body).to include("var followChannel = true;")
+  end
+
+  it "previews the version THIS person gets" do
+    user.update!(preferred_language: "ps")
+    both = draft[:content].merge("ps" => { "subject" => "ستاسو اعلان", "body" => "پښتو متن" })
+
+    post preview_admin_messages_path, params: draft.merge(content: both)
+
+    expect(response.body[%r{<p id="version-note".*?</p>}m]).to include("Pashto").and include("their language")
+    expect(CGI.unescapeHTML(response.body[/<iframe id="email-preview"[^>]*srcdoc="([^"]*)"/, 1])).to include("پښتو متن")
   end
 
   it "records Support-inbox replies in the same history" do

@@ -72,6 +72,10 @@ change reaches it.
 - `config.x.mail_sender` (in `config/application.rb`) = the SMTP username =
   `infohama99o@gmail.com`. The owner chose this. hatiwal.com has SPF `-all`,
   DMARC reject and no MX, so don't reintroduce `noreply@hatiwal.com`.
+- **After a migration, restart the dev container.** The running server keeps
+  stale column info for any model whose FILE didn't change: a new
+  `admin_outreaches.locale` raised `unknown attribute 'locale'` in the browser
+  while every spec passed (test DB). It caused a 500 for hatiwal-91 the same day.
 - **Changes to `config/application.rb` need a container restart.** The dev
   server once ran with an empty `mail_sender` for hours (the allowlist
   showed `{}` and refused everyone, which is failing safe). New asset

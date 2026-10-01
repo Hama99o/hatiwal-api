@@ -6,8 +6,10 @@ RSpec.describe Admin::SendMessage do
   let(:admin) { create(:admin_user) }
   let(:user)  { create(:user, push_token: "ExponentPushToken[u]") }
 
-  def sender(**opts)
-    described_class.new(admin: admin, user: user, body: "سلام، ستاسو حساب تایید شو.", subject: "Your account", **opts)
+  let(:content) { { "en" => { "subject" => "Your account", "body" => "سلام، ستاسو حساب تایید شو." } } }
+
+  def sender(content: self.content, **opts)
+    described_class.new(admin: admin, user: user, content: content, **opts)
   end
 
   def flag(on)
@@ -77,7 +79,53 @@ RSpec.describe Admin::SendMessage do
   end
 
   it "refuses an email without a subject, and an unknown channel does nothing" do
-    expect(described_class.new(admin: admin, user: user, body: "x", channels: %w[email]).valid?).to be(false)
+    no_subject = { "en" => { "body" => "x" } }
+    expect(sender(content: no_subject, channels: %w[email]).valid?).to be(false)
     expect(sender(channels: %w[sms]).valid?).to be(false)
+  end
+
+  describe "language versions" do
+    let(:user) { create(:user, preferred_language: "ps", push_token: "ExponentPushToken[u]") }
+    let(:both) do
+      { "en" => { "subject" => "Hello", "body" => "English text" },
+        "ps" => { "subject" => "سلام", "body" => "پښتو متن" } }
+    end
+
+    it "gives the person their own language's version, and records which" do
+      s = sender(content: both, channels: %w[email])
+      s.call
+
+      expect(s.outreach).to have_attributes(locale: "ps", subject: "سلام", body: "پښتو متن")
+      expect(s.outreach.admin_email).to have_attributes(locale: "ps", subject: "سلام")
+    end
+
+    it "falls back to the chosen fallback when their language is empty" do
+      s = sender(content: both.slice("en"), channels: %w[email])
+      expect(s.locale).to eq("en")
+      expect(s.body).to eq("English text")
+    end
+
+    it "requires the fallback version to be written" do
+      s = sender(content: both.slice("ps"), fallback_locale: "en", channels: %w[email])
+      expect(s.valid?).to be(false)
+      expect(s.errors.join).to include("Write the English version")
+    end
+
+    # In-app messages have no subject: a body alone is a complete version.
+    it "in-app needs no subject" do
+      flag(true)
+      s = sender(content: { "ps" => { "body" => "پښتو" } }, fallback_locale: "ps", channels: %w[in_app])
+
+      expect(s.call).to be(true)
+      expect(s.outreach).to have_attributes(subject: nil, body: "پښتو", locale: "ps")
+    end
+
+    it "an in-app body is capped at the chat message limit" do
+      flag(true)
+      long = { "en" => { "body" => "x" * (Message::BODY_MAX + 1) } }
+      s = sender(content: long, channels: %w[in_app])
+      expect(s.valid?).to be(false)
+      expect(s.errors.join).to include("#{Message::BODY_MAX} characters")
+    end
   end
 end

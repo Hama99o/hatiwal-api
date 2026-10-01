@@ -9,28 +9,45 @@
 class Admin::SendMessage
   CHANNELS = %w[email in_app].freeze
 
-  attr_reader :errors, :outreach
+  attr_reader :errors, :outreach, :languages
 
-  def initialize(admin:, user:, channels:, body:, subject: nil, source: :compose, opt_out_acknowledged: false)
+  # content: { "en" => { "subject", "body" }, "ps" => {…}, … } — the person
+  # gets the version in their preferred_language, else `fallback_locale`.
+  # A subject is part of a version only when emailing (in-app has none).
+  def initialize(admin:, user:, channels:, content:, fallback_locale: "en", source: :compose, opt_out_acknowledged: false)
     @admin = admin
     @user = user
     @channels = Array(channels).map(&:to_s) & CHANNELS
-    @subject = subject.to_s.strip
-    @body = body.to_s.strip
+    @languages = Admin::LanguageVersions.new(content, fallback: fallback_locale, subject: email?)
     @source = source
     @opt_out_acknowledged = ActiveModel::Type::Boolean.new.cast(opt_out_acknowledged) || false
     @errors = []
   end
 
+  # A support-thread reply: one body, written for this person, in their language.
+  def self.reply(admin:, user:, body:)
+    locale = user.preferred_language.presence_in(Admin::LanguageVersions::LOCALES) || "en"
+    new(admin: admin, user: user, channels: %w[in_app], content: { locale => { "body" => body } },
+        fallback_locale: locale, source: :support_inbox)
+  end
+
   def email? = @channels.include?("email")
   def in_app? = @channels.include?("in_app")
+
+  # The version THIS person gets, and its language.
+  def locale = @languages.locale_for(@user.preferred_language)
+  def subject = @languages.for(@user.preferred_language)&.dig("subject").to_s
+  def body = @languages.for(@user.preferred_language)&.dig("body").to_s
 
   # Validates without writing anything — the compose/preview steps use it.
   def valid?
     @errors = []
     @errors << "Choose at least one channel." if @channels.empty?
-    @errors << "Write a message." if @body.blank?
-    @errors << "Message is too long (#{AdminEmail::BODY_MAX} characters max)." if @body.length > AdminEmail::BODY_MAX
+    if (missing = @languages.fallback_error)
+      @errors << missing
+    else
+      @errors << "Message is too long (#{body_max} characters max)." if body.length > body_max
+    end
     validate_email if email?
     validate_in_app if in_app?
     @errors.empty?
@@ -43,8 +60,8 @@ class Admin::SendMessage
       email = create_email if email?
       message = create_in_app_message if in_app?
       @outreach = AdminOutreach.create!(
-        admin_user: @admin, user: @user, via_email: email?, via_in_app: in_app?,
-        subject: (@subject if email?), body: @body, admin_email: email, message: message,
+        admin_user: @admin, user: @user, via_email: email?, via_in_app: in_app?, locale: locale,
+        subject: (subject if email?), body: body, admin_email: email, message: message,
         push_note: (push_note if in_app?), source: @source, opt_out_acknowledged: opted_out? && @opt_out_acknowledged
       )
     end
@@ -66,8 +83,7 @@ class Admin::SendMessage
 
   def validate_email
     @errors << "Email: #{@user.email_refusal_reason}." unless @user.emailable?
-    @errors << "Email needs a subject." if @subject.blank?
-    @errors << "Subject is too long (#{AdminEmail::SUBJECT_MAX} characters max)." if @subject.length > AdminEmail::SUBJECT_MAX
+    @errors << "Subject is too long (#{AdminEmail::SUBJECT_MAX} characters max)." if subject.length > AdminEmail::SUBJECT_MAX
     return unless opted_out? && !@opt_out_acknowledged
 
     @errors << "This user unsubscribed from bulk email. Tick the box to confirm this one-to-one email is about their account."
@@ -80,8 +96,12 @@ class Admin::SendMessage
     @errors << "In-app: the support conversation is closed. Reopen it first." if thread&.closed?
   end
 
+  # An in-app message is a chat Message (1000 chars); email allows more. When
+  # both are ticked, the stricter limit applies to the shared text.
+  def body_max = in_app? ? Message::BODY_MAX : AdminEmail::BODY_MAX
+
   def create_email
-    AdminEmail.create!(user: @user, admin_user: @admin, subject: @subject, body: @body)
+    AdminEmail.create!(user: @user, admin_user: @admin, subject: subject, body: body, locale: locale)
   end
 
   def create_in_app_message
@@ -91,7 +111,7 @@ class Admin::SendMessage
     # back the whole send rather than deliver half of it.
     raise ArgumentError, "support gate refused user #{@user.id}" unless thread
 
-    thread.messages.create!(user: thread.seller, admin_user: @admin, kind: :text, body: @body)
+    thread.messages.create!(user: thread.seller, admin_user: @admin, kind: :text, body: body)
   end
 
   def deliver

@@ -22,16 +22,11 @@
     <% end %>
   </fieldset>
 
-  <div class="ad-field">
-    <label class="ad-label" for="subject">Subject <span class="ad-label__hint">(email only)</span></label>
-    <%= text_field_tag :subject, params[:subject], maxlength: AdminEmail::SUBJECT_MAX, dir: "auto", class: "ad-input" %>
-  </div>
-
-  <div class="ad-field">
-    <label class="ad-label" for="body">Message</label>
-    <%= text_area_tag :body, params[:body], rows: 9, required: true, maxlength: AdminEmail::BODY_MAX, dir: "auto", class: "ad-textarea",
-          placeholder: "Plain text, in the user's language — Pashto, Dari and Urdu display right-to-left. The same text goes to every channel you tick." %>
-  </div>
+  <% reader = @user.preferred_language.presence %>
+  <% counts = Admin::LanguageVersions::LOCALES.index_with { |l| l == reader ? 1 : 0 } %>
+  <%= render "admin/application/language_versions", counts: counts, raw: @raw_content,
+             fallback: @fallback_locale, follow_channel: true,
+             highlight: [ reader, @user.firstname.presence || "This user" ] %>
 
   <% if @user.email_opt_out_at.present? %>
     <label class="ad-check ad-check--warning">

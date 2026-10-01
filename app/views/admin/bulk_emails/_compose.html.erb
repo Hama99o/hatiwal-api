@@ -1,7 +1,6 @@
 <%# All four language versions at once. Each box says how many recipients read
     that language, and — when it's empty — exactly what they will get instead. %>
 <% by_lang = @audience.by_language %>
-<% names = AdminBulkEmail::LANGUAGE_NAMES %>
 <% if @bulk.errors.any? %>
   <div id="bulk-errors" class="ad-callout ad-callout--danger">
     <%= @bulk.errors.full_messages.to_sentence %>
@@ -12,32 +11,8 @@
       authenticity_token: form_authenticity_token do |f| %>
   <% admin_filter_values.compact.each do |k, v| %><%= hidden_field_tag k, v %><% end %>
 
-  <label class="ad-inline-select">
-    <strong>Fallback language</strong> — for everyone whose language box is empty:
-    <%= select_tag :fallback_locale, options_for_select(AdminBulkEmail::LOCALES.map { |l| [ names[l], l ] }, @bulk.fallback_locale),
-          id: "fallback-locale", class: "ad-select" %>
-  </label>
-  <% if by_lang["other"].positive? %>
-    <p class="ad-note ad-step"><%= by_lang["other"] %> recipient(s) have no language set and always get the fallback.</p>
-  <% end %>
-
-  <div class="ad-lang-grid">
-    <% AdminBulkEmail::LOCALES.each do |loc| %>
-      <% rtl = %w[ps fa ur].include?(loc) %>
-      <fieldset class="bulk-lang ad-lang" data-locale="<%= loc %>" data-count="<%= by_lang[loc] %>">
-        <legend>
-          <%= names[loc] %> — <span class="lang-count"><%= by_lang[loc] %></span> recipient<%= "s" unless by_lang[loc] == 1 %>
-          <%# The inline display is STATE, not styling: the script below toggles it. %>
-          <span class="fallback-badge ad-lang__badge"<% unless loc == @bulk.fallback_locale %> style="display:none;"<% end %>>(fallback)</span>
-        </legend>
-        <%= text_field_tag "content[#{loc}][subject]", @raw_content.dig(loc, "subject"), placeholder: "Subject",
-              dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::SUBJECT_MAX, class: "bulk-subject ad-input" %>
-        <%= text_area_tag "content[#{loc}][body]", @raw_content.dig(loc, "body"), rows: 6, placeholder: "Message",
-              dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::BODY_MAX, class: "bulk-body ad-textarea" %>
-        <p class="fallback-warning ad-lang__warn"></p>
-      </fieldset>
-    <% end %>
-  </div>
+  <%= render "admin/application/language_versions", counts: by_lang, raw: @raw_content,
+             fallback: @bulk.fallback_locale, follow_channel: false, highlight: nil %>
 
   <div class="ad-actions ad-gap-top">
     <% buttons.each do |label, path, extra| %>
@@ -46,30 +21,3 @@
     <%= link_to "Cancel", admin_messages_path, class: "ad-link" %>
   </div>
 <% end %>
-
-<%# Live: a box with recipients and no text says, right there, who gets what instead. %>
-<script>
-  (function () {
-    var names = <%= raw AdminBulkEmail::LANGUAGE_NAMES.to_json %>;
-    var fb = document.getElementById("fallback-locale");
-    function filled(set) {
-      return set.querySelector(".bulk-subject").value.trim() !== "" && set.querySelector(".bulk-body").value.trim() !== "";
-    }
-    function refresh() {
-      document.querySelectorAll(".bulk-lang").forEach(function (set) {
-        var loc = set.dataset.locale, n = parseInt(set.dataset.count, 10), w = set.querySelector(".fallback-warning");
-        set.querySelector(".fallback-badge").style.display = loc === fb.value ? "" : "none";
-        if (loc === fb.value) {
-          w.textContent = filled(set) ? "" : "Required: this is the fallback version.";
-        } else if (n > 0 && !filled(set)) {
-          w.textContent = "Empty: these " + n + " will receive the " + names[fb.value] + " version.";
-        } else {
-          w.textContent = "";
-        }
-      });
-    }
-    document.getElementById("bulk-form").addEventListener("input", refresh);
-    fb.addEventListener("change", refresh);
-    refresh();
-  })();
-</script>

@@ -10,8 +10,14 @@
 <section class="ad-card">
   <%= render "recipient" %>
 
+  <% names = Admin::LanguageVersions::NAMES %>
+  <p id="version-note" class="ad-note ad-step">
+    <%= @user.firstname.presence || "This user" %> gets the <strong><%= names[@sender.locale] %></strong> version<%=
+      @sender.locale == @user.preferred_language ? " (their language)" : " (fallback — no #{names[@user.preferred_language] || 'own-language'} version written)" %>.
+  </p>
+
   <% if @sender.email? && @rendered %>
-    <h2 class="ad-preview-label">Email — <span dir="auto"><%= params[:subject] %></span></h2>
+    <h2 class="ad-preview-label">Email — <span dir="auto"><%= @sender.subject %></span></h2>
     <%# The exact HTML the user will receive, escaped into srcdoc and sandboxed. %>
     <iframe id="email-preview" title="Email preview" sandbox srcdoc="<%= @rendered %>"
             class="ad-preview-frame"></iframe>
@@ -19,7 +25,7 @@
 
   <% if @sender.in_app? %>
     <h2 class="ad-preview-label">In the app, from Hatiwal Support</h2>
-    <div id="in-app-preview" dir="auto" class="ad-bubble ad-bubble--preview ad-bubble__body"><%= params[:body] %></div>
+    <div id="in-app-preview" dir="auto" class="ad-bubble ad-bubble--preview ad-bubble__body"><%= @sender.body %></div>
     <p class="ad-note ad-step">Push: <%= @sender.push_note %></p>
   <% end %>
 

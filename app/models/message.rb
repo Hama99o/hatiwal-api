@@ -24,7 +24,9 @@ class Message < ApplicationRecord
     offer offer_accepted offer_declined document image_message offer_counter
   ].freeze
 
-  validates :body, presence: true, length: { maximum: 1000 }
+  BODY_MAX = 1000
+
+  validates :body, presence: true, length: { maximum: BODY_MAX }
 
   # Chat attachments were unvalidated: `attachment` accepted any file of any
   # size. Documents are allowed as well as images because the :document message

@@ -46,8 +46,7 @@ module Admin
     # Through Admin::SendMessage like every admin send, so thread replies land
     # in the same Messages history (source: support_inbox).
     def reply
-      sender = Admin::SendMessage.new(admin: current_admin_user, user: @conversation.buyer,
-                                      channels: %w[in_app], body: params[:body], source: :support_inbox)
+      sender = Admin::SendMessage.reply(admin: current_admin_user, user: @conversation.buyer, body: params[:body])
       if sender.call
         log_admin_action("support_reply", target: @conversation)
         redirect_to admin_support_conversation_path(@conversation), notice: "Reply sent."

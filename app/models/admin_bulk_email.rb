@@ -7,23 +7,17 @@ class AdminBulkEmail < ApplicationRecord
   # sending → finished, or paused at the daily cap (resumable), or stopped.
   enum :status, { sending: 0, paused_daily_limit: 1, stopped: 2, finished: 3 }
 
-  LOCALES = User::SUPPORTED_LANGUAGES
-  LANGUAGE_NAMES = { "en" => "English", "ps" => "Pashto", "fa" => "Dari", "ur" => "Urdu" }.freeze
+  LOCALES = Admin::LanguageVersions::LOCALES
+  LANGUAGE_NAMES = Admin::LanguageVersions::NAMES
 
   validates :fallback_locale, inclusion: { in: LOCALES }
   validate :fallback_has_content
 
   scope :recent, -> { order(created_at: :desc) }
 
-  # { "en" => { "subject" => "...", "body" => "..." }, ... } with only filled
-  # languages kept: a language counts only when BOTH subject and body exist.
+  # Only languages with BOTH subject and body (email needs a subject).
   def self.normalize_content(raw)
-    LOCALES.each_with_object({}) do |loc, acc|
-      entry = (raw || {})[loc] || {}
-      subject = entry["subject"].to_s.strip
-      body = entry["body"].to_s.strip
-      acc[loc] = { "subject" => subject, "body" => body } if subject.present? && body.present?
-    end
+    Admin::LanguageVersions.new(raw, fallback: "en", subject: true).versions
   end
 
   def filled_locales = content.keys

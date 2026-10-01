@@ -43,7 +43,7 @@ module Admin
 
       if @sender.email?
         AdminMessageMailer.direct(draft_email, to: current_admin_user.email).deliver_now
-        log_admin_action("message_test", target: @user, details: params[:subject])
+        log_admin_action("message_test", target: @user, details: @sender.subject)
         flash.now[:notice] = "Test email sent to #{current_admin_user.email}. In-app messages have no test."
       else
         flash.now[:alert] = "Only the email can be tested. There is no admin app to receive an in-app test."
@@ -69,6 +69,9 @@ module Admin
     private
 
     def set_recipient
+      raw = params.fetch(:content, {}).permit(Admin::LanguageVersions::LOCALES.index_with { %i[subject body] }).to_h
+      @raw_content = raw
+      @fallback_locale = params[:fallback_locale].presence_in(Admin::LanguageVersions::LOCALES) || "en"
       @user = User.members.find_by(id: params[:user_id]) if params[:user_id].present?
       return unless @user
 
@@ -87,13 +90,14 @@ module Admin
 
     def build_sender
       Admin::SendMessage.new(admin: current_admin_user, user: @user, channels: params[:channels],
-                             subject: params[:subject], body: params[:body],
+                             content: @raw_content, fallback_locale: @fallback_locale,
                              opt_out_acknowledged: params[:opt_out_acknowledged])
     end
 
+    # The version THIS user gets, as an unsaved email for preview/test.
     def draft_email
-      AdminEmail.new(user: @user, admin_user: current_admin_user,
-                     subject: params[:subject].to_s.strip, body: params[:body].to_s.strip)
+      AdminEmail.new(user: @user, admin_user: current_admin_user, locale: @sender.locale,
+                     subject: @sender.subject, body: @sender.body)
     end
 
     # A plain String: Mail hands back an html_safe SafeBuffer, which ERB would
