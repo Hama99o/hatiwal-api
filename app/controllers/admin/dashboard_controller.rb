@@ -31,6 +31,8 @@ module Admin
                           .group(:last_app_platform, :last_app_version).count
                           .sort_by { |(platform, version), _| [ platform.to_s, Gem::Version.new(version) ] }.reverse
       @legacy_clients = User.on_legacy_client_since(since).count
+      # Whether pushes can reach each platform at all — see push_reach_since.
+      @push_reach = User.push_reach_since(since)
 
       # Growth: new users / new listings per week, month or year (?period=),
       # bucketed on Kabul time with Saturday weeks — see Admin::GrowthSeries.

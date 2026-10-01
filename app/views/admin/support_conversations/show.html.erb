@@ -22,6 +22,12 @@
     <%= user.email %> · language: <%= user.preferred_language.presence || "—" %> ·
     status: <%= @conversation.status %>
   </p>
+  <% if user.push_token.blank? %>
+    <p id="support-no-push" style="margin:0 0 1rem;padding:.6rem .8rem;border:1px solid #fcd34d;border-radius:8px;background:#fffbeb;color:#92400e;font-size:.85rem;">
+      This user can't receive push notifications (no push token<%= " — Android builds have no Firebase yet" if user.last_app_platform == "android" %>).
+      Your reply will reach them only when they next open the app.
+    </p>
+  <% end %>
 
   <div id="support-thread" style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:1.5rem;">
     <% @messages.each do |m| %>

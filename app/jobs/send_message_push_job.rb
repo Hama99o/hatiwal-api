@@ -28,7 +28,17 @@ class SendMessagePushJob < ApplicationJob
     return unless sender && [ conversation.buyer_id, conversation.seller_id ].include?(sender.id)
 
     recipient = conversation.other_participant(sender)
-    return if recipient.nil? || recipient.push_token.blank?
+    return if recipient.nil?
+    if recipient.push_token.blank?
+      # Normally silent: plenty of users have no token. But a Support reply is
+      # an admin waiting on someone, and returning quietly made "can never be
+      # notified" look identical to "notified". Half of the doubled silence in
+      # docs/PUSH_NOTIFICATIONS.md; the admin thread page shows it too.
+      if sender.support_account?
+        Rails.logger.warn("[push] Support reply #{message.id} not pushed: user #{recipient.id} has no push token")
+      end
+      return
+    end
     return if recipient.account_blocked?
     return if recipient.blocked?(sender) || sender.blocked?(recipient)
 

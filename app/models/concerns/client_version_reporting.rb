@@ -32,6 +32,22 @@ module ClientVersionReporting
   included do
     scope :on_legacy_client_since, ->(time) { where(legacy_client_seen_at: time..) }
     scope :reported_version_since, ->(time) { where(last_app_version_at: time..) }
+    scope :with_push_token, -> { where.not(push_token: [ nil, "" ]) }
+  end
+
+  class_methods do
+    # Can a push actually reach the people using each platform? For users
+    # whose app reported its platform since `time`: how many there are and
+    # how many hold a push token. EVERY platform is listed, zeros included:
+    # Android was never set up with Firebase, so its tokens never registered,
+    # and a panel that only lists platforms it has rows for would hide exactly
+    # that zero (docs/PUSH_NOTIFICATIONS.md).
+    def push_reach_since(time)
+      seen = reported_version_since(time)
+      totals = seen.group(:last_app_platform).count
+      reachable = seen.with_push_token.group(:last_app_platform).count
+      PLATFORMS.index_with { |p| { users: totals.fetch(p, 0), with_token: reachable.fetch(p, 0) } }
+    end
   end
 
   # Never raises: a bad header must not fail the request it rode in on.

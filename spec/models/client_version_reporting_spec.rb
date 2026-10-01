@@ -46,4 +46,20 @@ RSpec.describe ClientVersionReporting do
     user.record_client!(version: "1.2.0", platform: "ios", user_agent: okhttp, now: now + 2.hours)
     expect(user.reload.last_app_version_at).to eq(now + 2.hours)
   end
+
+  describe ".push_reach_since" do
+    it "lists every platform with users and token holders, zeros included" do
+      create(:user, last_app_platform: "ios", last_app_version: "1.1.0", last_app_version_at: now, push_token: "ExponentPushToken[a]")
+      create(:user, last_app_platform: "ios", last_app_version: "1.1.0", last_app_version_at: now)
+      create(:user, last_app_platform: "android", last_app_version: "1.1.0", last_app_version_at: now)
+
+      reach = User.push_reach_since(now - 1.day)
+
+      expect(reach).to eq("ios" => { users: 2, with_token: 1 }, "android" => { users: 1, with_token: 0 })
+    end
+
+    it "still lists a platform nobody reported, as zero of zero" do
+      expect(User.push_reach_since(now - 1.day)["android"]).to eq(users: 0, with_token: 0)
+    end
+  end
 end

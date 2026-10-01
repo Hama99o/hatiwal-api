@@ -81,6 +81,19 @@ RSpec.describe SendMessagePushJob, type: :job do
     expected.each { |locale, title| expect(I18n.t("push.support.title", locale: locale)).to eq(title) }
   end
 
+  # A Support reply that can never be delivered must not look like a sent one.
+  it "logs a Support reply that can't be pushed because the user has no token" do
+    user = create(:user, push_token: nil)
+    thread = Conversation.support_thread_for!(user)
+    reply = create(:message, conversation: thread, user: User.support_account!, body: "Hello")
+    allow(Rails.logger).to receive(:warn)
+
+    expect(Notifications::ExpoPushService).not_to receive(:deliver)
+    described_class.perform_now(reply.id)
+
+    expect(Rails.logger).to have_received(:warn).with(/Support reply #{reply.id} not pushed: user #{user.id} has no push token/)
+  end
+
   it "skips when the recipient has no push token" do
     seller.update!(push_token: nil)
     msg = create(:message, conversation: conversation, user: buyer, kind: :text, body: "hi")

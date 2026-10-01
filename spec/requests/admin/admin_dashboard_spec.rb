@@ -341,6 +341,19 @@ RSpec.describe "Admin dashboard", type: :request do
     end
   end
 
+  describe "push reach panel" do
+    before { sign_in admin, scope: :admin_user }
+
+    it "shows the Android zero, in red, when Android users hold no tokens" do
+      create(:user, last_app_platform: "android", last_app_version: "1.1.0", last_app_version_at: 1.day.ago)
+
+      get admin_root_path
+
+      card = response.body[%r{<div class="dash-card" data-platform="android".*?</div>\s*</div>}m]
+      expect(card).to include("0 <span").and include("of 1").and include("#fef2f2")
+    end
+  end
+
   describe "growth charts" do
     before { sign_in admin, scope: :admin_user }
 

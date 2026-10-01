@@ -41,6 +41,14 @@ RSpec.describe "Admin support inbox", type: :request do
     expect(response).to have_http_status(:ok)
   end
 
+  it "warns the admin when the user can't receive push notifications" do
+    user.update!(push_token: nil, last_app_platform: "android")
+
+    get admin_support_conversation_path(thread)
+
+    expect(response.body).to include('id="support-no-push"').and include("no Firebase")
+  end
+
   it "marks the user's messages read when an admin opens the thread" do
     msg = user_says("help")
 

@@ -67,6 +67,22 @@
     Check the first number before switching on anything an old build can't show
     (e.g. <code>SUPPORT_ADMIN_INITIATE</code>). Someone using two phones can be counted twice.
   </p>
+
+  <h2 style="margin-top:1.5rem;">Push notifications — can they reach people?</h2>
+  <div class="dash-grid" id="push-reach">
+    <% @push_reach.each do |platform, r| %>
+      <% dead = r[:users].positive? && r[:with_token].zero? %>
+      <div class="dash-card" data-platform="<%= platform %>" style="<%= 'border-color:#fca5a5;background:#fef2f2;' if dead %>">
+        <div class="num" style="<%= 'color:#b91c1c;' if dead %>"><%= r[:with_token] %> <span style="font-size:1rem;color:#64748b;">of <%= r[:users] %></span></div>
+        <div class="label"><%= platform == "ios" ? "iPhone" : "Android" %> users who can receive pushes</div>
+      </div>
+    <% end %>
+  </div>
+  <p style="font-size:.8rem;color:#64748b;margin:.25rem 0 0;">
+    Users whose app reported its platform in the last 30 days, and how many hold a push token.
+    Red means nobody on that platform can get a notification — on Android, that is Firebase not
+    being configured in the app build (docs/PUSH_NOTIFICATIONS.md).
+  </p>
 </section>
 
 <section class="dash-section" id="growth">
