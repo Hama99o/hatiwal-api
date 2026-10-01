@@ -31,7 +31,8 @@
   <section id="user-messages" class="ad-panel ad-panel--brand">
     <div class="ad-panel__head"><h2 class="ad-panel__title">Messages</h2></div>
     <div class="ad-actions">
-      <%= link_to "Message this user", new_admin_message_path(user_id: user.id), class: "button", id: "message-user" %>
+      <%= link_to "Send mail", new_admin_message_path(user_id: page.resource.id, mode: "email"), class: "button", id: "message-user" %>
+    <%= link_to "Send message", new_admin_message_path(user_id: page.resource.id, mode: "in_app"), class: "button", id: "message-user-in-app" %>
       <% if support_thread %>
         <%= link_to "Open support conversation", admin_support_conversation_path(support_thread), class: "button button--alt" %>
       <% end %>

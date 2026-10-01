@@ -65,6 +65,10 @@ class Admin::BulkAudience
     in_app_recipients.where.not(push_token: [ nil, "" ]).where.not(id: muted).count
   end
 
+  # Recipients who haven't reported a new app version — on v1.0.4 the message
+  # arrives but the Support chat looks like a removed-listing chat. Shown, never blocking.
+  def in_app_old_app_count = in_app_recipients.where(last_app_version: nil).count
+
   def in_app_by_language
     counts = in_app_recipients.group(:preferred_language).count
     AdminBulkEmail::LOCALES.index_with { |loc| counts.fetch(loc, 0) }

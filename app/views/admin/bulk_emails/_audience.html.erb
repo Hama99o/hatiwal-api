@@ -20,9 +20,12 @@
   <div id="audience-in-app" class="ad-gap-top">
     <strong>In-app:</strong>
     <span id="in-app-reach"><%= @audience.in_app_recipients_count %> can receive in-app · <%= @audience.in_app_blocked_count %> can't</span>
-    (no support thread yet — needs the app update with support messaging, SUPPORT_ADMIN_INITIATE)
+    <% if @audience.in_app_blocked_count.positive? %>(no support thread yet — needs SUPPORT_ADMIN_INITIATE)<% end %>
     <% if @audience.in_app_cooled_count.positive? %>
       · <%= @audience.in_app_cooled_count %> got a broadcast in the last <%= AdminBulkEmail::IN_APP_COOLDOWN.inspect %>, excluded
+    <% end %>
+    <% if @audience.in_app_old_app_count.positive? %>
+      · <span id="in-app-old-app"><%= @audience.in_app_old_app_count %> haven't used the new app yet (on v1.0.4 it arrives in a chat that may look like a removed listing)</span>
     <% end %>
     <% if @audience.in_app_muted_count.positive? %>
       · <%= @audience.in_app_muted_count %> archived Support: delivered quietly, no push

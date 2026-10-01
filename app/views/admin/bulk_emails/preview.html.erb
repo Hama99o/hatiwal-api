@@ -10,7 +10,7 @@
 
 <header class="ad-page-header">
   <div>
-    <h1 class="ad-page-header__title main-content__page-title">Preview — bulk message (<%= @bulk.channels.join(" + ") %>)</h1>
+    <h1 class="ad-page-header__title main-content__page-title">Preview — <%= bulk_title.downcase %> (<%= @bulk.channels.join(" + ") %>)</h1>
     <p class="ad-page-header__subtitle">Exactly what each language group gets. Nothing has been sent yet.</p>
   </div>
 </header>
@@ -40,7 +40,7 @@
            dir="<%= %w[ps fa ur].include?(loc) ? "rtl" : "ltr" %>"><%= @bulk.content.dig(loc, "body") %></div>
     <% end %>
     <p class="ad-note ad-step" id="in-app-push-choice">
-      Push: <%= @bulk.push? ? "on — #{@audience.in_app_push_reachable_count} of #{in_app_n} can receive one" : "off (not chosen)" %>.
+      Push: sent to everyone who can receive one — <%= @audience.in_app_push_reachable_count %> of <%= in_app_n %>.
     </p>
   <% end %>
 
@@ -54,8 +54,8 @@
         authenticity_token: form_authenticity_token, class: "ad-confirm" do |f| %>
     <% admin_filter_values.compact.each do |k, v| %><%= hidden_field_tag k, v %><% end %>
     <%= hidden_field_tag :fallback_locale, @bulk.fallback_locale %>
+    <% if @mode %><%= hidden_field_tag :mode, @mode, id: nil %><% end %>
     <% @bulk.channels.each do |c| %><%= hidden_field_tag "channels[]", c == "Email" ? "email" : "in_app", id: nil %><% end %>
-    <% if @bulk.push? %><%= hidden_field_tag :push, "1" %><% end %>
     <% AdminBulkEmail::LOCALES.each do |loc| %>
       <%= hidden_field_tag "content[#{loc}][subject]", @raw_content.dig(loc, "subject") %>
       <%= hidden_field_tag "content[#{loc}][body]", @raw_content.dig(loc, "body") %>

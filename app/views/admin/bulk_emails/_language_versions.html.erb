@@ -8,8 +8,8 @@
       counts          { "en" => n, "ps" => n, …, "other" => n } readers per language
       raw             the submitted content, to refill the boxes
       fallback        the chosen fallback locale
-      follow_channel  true: subject boxes show only while #channel-email is ticked
-                      (in-app messages have no subject); false: always shown
+      subjects        :always (bulk mail), :never (bulk message — no subject), or
+                      :follow (shown only while #channel-email is ticked)
       counts_by_channel  optional { "email"/"in_app"/"both" => counts } — the box
                       counts switch live with the ticked channels
 
@@ -37,10 +37,12 @@
         <%# The inline display is STATE, not styling: the script below toggles it. %>
         <span class="fallback-badge ad-lang__badge"<% unless loc == fallback %> style="display:none;"<% end %>>(fallback)</span>
       </legend>
-      <div class="lang-subject">
-        <%= text_field_tag "content[#{loc}][subject]", raw.dig(loc, "subject"), placeholder: "Subject (email)",
-              dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::SUBJECT_MAX, class: "bulk-subject ad-input" %>
-      </div>
+      <% unless subjects == :never %>
+        <div class="lang-subject">
+          <%= text_field_tag "content[#{loc}][subject]", raw.dig(loc, "subject"), placeholder: "Subject (email)",
+                dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::SUBJECT_MAX, class: "bulk-subject ad-input" %>
+        </div>
+      <% end %>
       <%= text_area_tag "content[#{loc}][body]", raw.dig(loc, "body"), rows: 6, placeholder: "Message",
             dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::BODY_MAX, class: "bulk-body ad-textarea" %>
       <p class="fallback-warning ad-lang__warn"></p>
@@ -53,17 +55,19 @@
 <script>
   (function () {
     var names = <%= raw Admin::LanguageVersions::NAMES.to_json %>;
-    var followChannel = <%= follow_channel ? "true" : "false" %>;
+    var subjectsMode = "<%= subjects %>";
     var fb = document.getElementById("fallback-locale");
     var form = fb.closest("form");
     function subjectsOn() {
-      if (!followChannel) return true;
+      if (subjectsMode === "always") return true;
+      if (subjectsMode === "never") return false;
       var email = document.getElementById("channel-email");
       return !!(email && email.checked);
     }
     function filled(set) {
       var bodyOk = set.querySelector(".bulk-body").value.trim() !== "";
-      return bodyOk && (!subjectsOn() || set.querySelector(".bulk-subject").value.trim() !== "");
+      var subject = set.querySelector(".bulk-subject");
+      return bodyOk && (!subjectsOn() || (subject && subject.value.trim() !== ""));
     }
     function channelKey() {
       var e = document.getElementById("channel-email"), a = document.getElementById("channel-in_app");

@@ -18,6 +18,9 @@ module Admin
 
     before_action :load_draft, only: %i[new preview test create]
     before_action :set_bulk, only: %i[show stop resume]
+    helper_method :bulk_title
+
+    def bulk_title = { "email" => "Send bulk mail", "in_app" => "Send bulk message" }.fetch(@mode, "Bulk message")
 
     def new; end
 
@@ -115,13 +118,16 @@ module Admin
       @audience = Admin::BulkAudience.new(apply_admin_filters(User.all))
       raw = params.fetch(:content, {}).permit(AdminBulkEmail::LOCALES.index_with { %i[subject body] }).to_h
       @raw_content = raw
-      # The first visit (no form posted yet) defaults to email, as before.
-      channels = params.key?(:channels) ? Array(params[:channels]) : %w[email]
+      # "Send bulk mail" / "Send bulk message" fix the channel (mode); without a
+      # mode the email/in-app choice is shown, defaulting to email.
+      @mode = params[:mode].presence_in(Admin::MessagesController::MODES)
+      channels = @mode ? [ @mode ] : Array(params.fetch(:channels, %w[email]))
       via_email = channels.include?("email")
       @bulk = AdminBulkEmail.new(admin_user: current_admin_user,
                                  via_email: via_email, via_in_app: channels.include?("in_app"),
-                                 # A broadcast push is chosen deliberately each time; off otherwise.
-                                 push: channels.include?("in_app") && params[:push] == "1",
+                                 # Owner: a message always goes with a push notification; whoever
+                                 # can't receive one simply doesn't get it.
+                                 push: channels.include?("in_app"),
                                  content: AdminBulkEmail.normalize_content(raw, subject: via_email),
                                  fallback_locale: params[:fallback_locale].presence_in(AdminBulkEmail::LOCALES) || "en",
                                  segment: admin_filter_summary.presence || "All users",
@@ -159,7 +165,7 @@ module Admin
       return if in_app_recipients.none? { |u| u.push_token.present? }
 
       raise Admin::MailQuota::DevRecipientNotAllowed,
-            "development won't send a broadcast push to devices (recipients hold push tokens); untick push"
+            "development won't send a broadcast push to devices (recipients hold push tokens); narrow the segment to users without one"
     end
 
     # A throwaway row for rendering: never saved, never sent to a real user.

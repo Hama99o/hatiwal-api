@@ -13,7 +13,10 @@ module Admin
   class MessagesController < Admin::ApplicationController
     SEARCH_LIMIT = 10
 
+    helper_method :mode_title
+
     before_action :set_recipient, only: %i[new preview test create]
+    before_action -> { @mode = params[:mode].presence_in(MODES) }, only: :index
 
     # One history: one-to-one sends and bulk emails, newest first.
     HISTORY_LIMIT = 100
@@ -70,7 +73,17 @@ module Admin
 
     private
 
+    # The four Messages buttons: Send mail / Send message (here) and their bulk
+    # twins (BulkEmailsController). A mode fixes the channel: "email" is one
+    # box plus a subject; "in_app" is one box, no subject (owner: "for message
+    # we did not need subject"). No mode = the email/in-app/both choice.
+    MODES = %w[email in_app].freeze
+    TITLES = { "email" => "Send mail", "in_app" => "Send message" }.freeze
+
+    def mode_title = TITLES.fetch(@mode, "New message")
+
     def set_recipient
+      @mode = params[:mode].presence_in(MODES)
       @user = User.members.find_by(id: params[:user_id]) if params[:user_id].present?
       return unless @user
 
@@ -92,7 +105,7 @@ module Admin
     end
 
     def build_sender
-      Admin::SendMessage.new(admin: current_admin_user, user: @user, channels: params[:channels],
+      Admin::SendMessage.new(admin: current_admin_user, user: @user, channels: @mode ? [ @mode ] : params[:channels],
                              content: @raw_content, fallback_locale: @fallback_locale,
                              opt_out_acknowledged: params[:opt_out_acknowledged])
     end

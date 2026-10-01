@@ -16,26 +16,38 @@
       authenticity_token: form_authenticity_token do |f| %>
   <% admin_filter_values.compact.each do |k, v| %><%= hidden_field_tag k, v %><% end %>
 
-  <fieldset class="ad-checks">
-    <legend>Send by</legend>
-    <label class="channel" data-channel="email">
-      <%= check_box_tag "channels[]", "email", @bulk.via_email?, id: "channel-email" %>
-      <span>Email — <%= @audience.recipients_count %> can receive</span>
-    </label>
-    <label class="channel" data-channel="in_app">
-      <%= check_box_tag "channels[]", "in_app", @bulk.via_in_app?, id: "channel-in_app" %>
-      <span>In-app message from Hatiwal Support — <%= @audience.in_app_recipients_count %> can receive · <%= @audience.in_app_blocked_count %> can't</span>
-    </label>
-    <%# A broadcast push lights up every phone at once: OFF unless chosen, each time. %>
-    <label class="ad-check" id="bulk-push-row">
-      <%= check_box_tag :push, "1", @bulk.push?, id: "bulk-push" %>
-      <span>Also send a push notification (in-app only) — <%= @audience.in_app_push_reachable_count %> of
-        <%= @audience.in_app_recipients_count %> can receive one. Off unless you tick it.</span>
-    </label>
-  </fieldset>
+  <% if @mode %>
+    <%# A fixed channel: no choice to make, and the push option only for messages. %>
+    <%= hidden_field_tag :mode, @mode %>
+    <% if @mode == "in_app" %>
+      <p class="ad-note" id="bulk-push-row">
+        A push notification goes with it to everyone who can receive one —
+        <%= @audience.in_app_push_reachable_count %> of <%= @audience.in_app_recipients_count %>. The rest see it when they next open the app.
+      </p>
+    <% end %>
+  <% else %>
+    <fieldset class="ad-checks">
+      <legend>Send by</legend>
+      <label class="channel" data-channel="email">
+        <%= check_box_tag "channels[]", "email", @bulk.via_email?, id: "channel-email" %>
+        <span>Email — <%= @audience.recipients_count %> can receive</span>
+      </label>
+      <label class="channel" data-channel="in_app">
+        <%= check_box_tag "channels[]", "in_app", @bulk.via_in_app?, id: "channel-in_app" %>
+        <span>In-app message from Hatiwal Support — <%= @audience.in_app_recipients_count %> can receive · <%= @audience.in_app_blocked_count %> can't</span>
+      </label>
+      <%# A broadcast push lights up every phone at once: OFF unless chosen, each time. %>
+      <p class="ad-note" id="bulk-push-row">
+        A push notification goes with it to everyone who can receive one —
+        <%= @audience.in_app_push_reachable_count %> of <%= @audience.in_app_recipients_count %>. The rest see it when they next open the app.
+      </p>
+    </fieldset>
+  <% end %>
 
   <%= render "language_versions", counts: by_channel[@bulk.via_email? && @bulk.via_in_app? ? "both" : (@bulk.via_in_app? ? "in_app" : "email")],
-             counts_by_channel: by_channel, raw: @raw_content, fallback: @bulk.fallback_locale, follow_channel: true %>
+             counts_by_channel: (@mode ? nil : by_channel), raw: @raw_content, fallback: @bulk.fallback_locale,
+             # Mail: subjects always. Message: never (messages have no subject). No mode: follow the Email box.
+             subjects: { "email" => :always, "in_app" => :never }.fetch(@mode, :follow) %>
 
   <div class="ad-actions ad-gap-top">
     <% buttons.each do |label, path, extra| %>

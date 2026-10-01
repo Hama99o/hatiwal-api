@@ -31,7 +31,7 @@
     <% if @bulk.via_in_app? %>
       <span id="bulk-in-app-status">In-app: <%= ia["sent"].to_i %> delivered · <%= ia["skipped"].to_i %> refused by the gate ·
       <%= ia["failed"].to_i %> failed · <%= ia["queued"].to_i + ia["sending"].to_i %> waiting · <%= ia["cancelled"].to_i %> cancelled.</span>
-      Push <%= @bulk.push? ? "on" : "off" %>.
+      Push <%= @bulk.push? ? "on (everyone who can receive one)" : "off" %>.
     <% end %>
     — <%= pluralize(@bulk.recipients_count, "person", plural: "people") %>
 </p>

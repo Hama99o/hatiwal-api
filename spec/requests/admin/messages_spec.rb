@@ -132,4 +132,53 @@ RSpec.describe "Admin Messages", type: :request do
   ensure
     ActionController::Base.allow_forgery_protection = false
   end
+
+  describe "the four buttons" do
+    it "shows Send mail / Send message / Send bulk mail / Send bulk message" do
+      get admin_messages_path
+
+      %w[send-mail send-message send-bulk-mail send-bulk-message].each { |id| expect(response.body).to include(%(id="#{id}")) }
+    end
+
+    it "Send mail: one box with a subject, no channel choice" do
+      get new_admin_message_path(user_id: user.id, mode: "email")
+
+      expect(response.body).to include(">Send mail</h1>").and include('name="subject"')
+      expect(response.body).not_to include('id="channel-in_app"')
+    end
+
+    # Owner: "for message we did not need subject".
+    it "Send message: one box, NO subject, no channel choice" do
+      get new_admin_message_path(user_id: user.id, mode: "in_app")
+
+      expect(response.body).to include(">Send message</h1>")
+      expect(response.body).not_to include('name="subject"')
+      expect(response.body).not_to include('id="channel-email"')
+    end
+
+    it "keeps the mode through search and the recipient link" do
+      user
+      get new_admin_message_path(mode: "in_app", q: "Zarmina")
+
+      expect(response.body).to include("mode=in_app")
+    end
+
+    it "Send message sends in-app only, even if channels[] is tampered" do
+      Conversation.support_thread_for!(user)
+
+      post admin_messages_path, params: { user_id: user.id, mode: "in_app", channels: %w[email in_app],
+                                          body: "سلام", send: "1" }
+
+      expect(AdminOutreach.last).to have_attributes(via_in_app: true, via_email: false)
+    end
+
+    it "says, without blocking, when the user hasn't used the new app yet" do
+      Conversation.support_thread_for!(user)
+
+      get new_admin_message_path(user_id: user.id, mode: "in_app")
+
+      expect(response.body).to include('id="old-app-note"')
+      expect(response.body).not_to include('id="mode-refusal"')
+    end
+  end
 end

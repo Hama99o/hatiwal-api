@@ -12,15 +12,24 @@
       authenticity_token: form_authenticity_token do |f| %>
   <%= hidden_field_tag :user_id, @user.id %>
 
-  <fieldset class="ad-checks">
-    <legend>Send by</legend>
-    <% [ [ "email", "Email", @email_refusal ], [ "in_app", "In-app message from Hatiwal Support", @in_app_refusal ] ].each do |value, label, refusal| %>
-      <label class="channel" data-channel="<%= value %>">
-        <%= check_box_tag "channels[]", value, chosen.include?(value) && refusal.nil?, disabled: refusal.present?, id: "channel-#{value}" %>
-        <span><%= label %><% if refusal %> <em class="ad-check__why">— not available: <%= refusal %></em><% end %></span>
-      </label>
+  <% if @mode %>
+    <%# A fixed channel (Send mail / Send message): no choice to make here. %>
+    <%= hidden_field_tag :mode, @mode %>
+    <% refusal = @mode == "email" ? @email_refusal : @in_app_refusal %>
+    <% if refusal %>
+      <p class="ad-callout ad-callout--danger" id="mode-refusal">Can't send <%= @mode == "email" ? "an email" : "a message" %> to this user: <%= refusal %>.</p>
     <% end %>
-  </fieldset>
+  <% else %>
+    <fieldset class="ad-checks">
+      <legend>Send by</legend>
+      <% [ [ "email", "Email", @email_refusal ], [ "in_app", "In-app message from Hatiwal Support", @in_app_refusal ] ].each do |value, label, refusal| %>
+        <label class="channel" data-channel="<%= value %>">
+          <%= check_box_tag "channels[]", value, chosen.include?(value) && refusal.nil?, disabled: refusal.present?, id: "channel-#{value}" %>
+          <span><%= label %><% if refusal %> <em class="ad-check__why">— not available: <%= refusal %></em><% end %></span>
+        </label>
+      <% end %>
+    </fieldset>
+  <% end %>
 
   <%# ONE box for one known person, written in their language. No fallback:
       with a single recipient there is nobody else to fall back for. (Bulk has
@@ -36,10 +45,12 @@
     <% end %>
   </p>
 
+  <% unless @mode == "in_app" %>
   <div class="ad-field lang-subject">
     <label class="ad-label" for="subject">Subject <span class="ad-label__hint">(email)</span></label>
     <%= text_field_tag :subject, params[:subject], maxlength: AdminEmail::SUBJECT_MAX, dir: (rtl ? "rtl" : "auto"), class: "ad-input" %>
   </div>
+  <% end %>
 
   <div class="ad-field">
     <label class="ad-label" for="body">Message</label>
@@ -47,7 +58,7 @@
           dir: (rtl ? "rtl" : "auto"), class: "ad-textarea" %>
   </div>
 
-  <% if @user.email_opt_out_at.present? %>
+  <% if @user.email_opt_out_at.present? && @mode != "in_app" %>
     <label class="ad-check ad-check--warning">
       <%= check_box_tag :opt_out_acknowledged, "1", params[:opt_out_acknowledged] == "1" %>
       This email is about their account, not an announcement (they unsubscribed from bulk email).
@@ -67,8 +78,9 @@
   (function () {
     var email = document.getElementById("channel-email");
     var subject = document.querySelector("#message-form .lang-subject");
-    function sync() { subject.style.display = email && email.checked ? "" : "none"; }
-    if (email) email.addEventListener("change", sync);
+    if (!subject || !email) return; // a fixed mode: the subject is decided server-side
+    function sync() { subject.style.display = email.checked ? "" : "none"; }
+    email.addEventListener("change", sync);
     sync();
   })();
 </script>

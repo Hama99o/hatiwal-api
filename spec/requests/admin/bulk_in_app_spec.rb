@@ -16,6 +16,9 @@ RSpec.describe "Admin bulk message — in-app", type: :request do
   let(:draft)   { { city: "Kabul", channels: %w[in_app], fallback_locale: "en", content: content } }
 
   before do
+    # Pushes really fire now (owner: always with a notification); never hit Expo.
+    allow(Notifications::ExpoPushService).to receive(:deliver)
+      .and_return(Notifications::ExpoPushService::Result.new(ok: true, error: nil, details: nil))
     sign_in admin, scope: :admin_user
     Conversation.support_thread_for!(with_thread) # user-opened = on the new app
     Conversation.support_thread_for!(also_thread)
@@ -65,15 +68,10 @@ RSpec.describe "Admin bulk message — in-app", type: :request do
     expect(Conversation.kind_support.where(buyer_id: without_thread.id)).not_to exist
   end
 
-  it "push is OFF unless chosen" do
-    expect { send_it }.not_to have_enqueued_job(SendMessagePushJob)
-    expect(AdminBulkInAppDelivery.pluck(:push_note).uniq).to eq([ "no push (not chosen)" ])
-  end
-
-  it "with push chosen, pushes only those who can receive one" do
-    allow(Notifications::ExpoPushService).to receive(:deliver)
-      .and_return(Notifications::ExpoPushService::Result.new(ok: true, error: nil, details: nil))
-    send_it(draft.merge(push: "1"))
+  # Owner: a message always goes with a push; whoever can't receive one
+  # simply doesn't get it.
+  it "always pushes everyone who can receive one, and notes who can't" do
+    send_it
 
     notes = AdminBulkInAppDelivery.all.to_h { |d| [ d.user_id, d.push_note ] }
     expect(notes[with_thread.id]).to eq("push sent")
@@ -85,7 +83,7 @@ RSpec.describe "Admin bulk message — in-app", type: :request do
     thread = Conversation.kind_support.find_by(buyer_id: with_thread.id)
     thread.archive_for!(with_thread)
 
-    send_it(draft.merge(push: "1"))
+    send_it
 
     expect(thread.reload.archived_for?(with_thread)).to be(true)
     expect(AdminBulkInAppDelivery.find_by(user: with_thread).push_note).to eq("no push: archived Support")
@@ -137,7 +135,7 @@ RSpec.describe "Admin bulk message — in-app", type: :request do
   it "development refuses a broadcast push to devices holding a token" do
     allow(Rails.env).to receive(:development?).and_return(true)
 
-    post admin_bulk_emails_path, params: draft.merge(push: "1", confirm_count: 2)
+    post admin_bulk_emails_path, params: draft.merge(confirm_count: 2)
 
     expect(AdminBulkEmail.count).to eq(0)
     expect(CGI.unescapeHTML(response.body)).to include("won't send a broadcast push")
@@ -150,5 +148,28 @@ RSpec.describe "Admin bulk message — in-app", type: :request do
          params: draft.merge(channels: %w[email in_app], content: { "en" => { "subject" => "Hi", "body" => "Hello" } })
 
     expect(response.body).to include('data-expected="3"')
+  end
+
+  describe "Send bulk mail / Send bulk message" do
+    it "Send bulk message: four language boxes, NO subjects, push option" do
+      get new_admin_bulk_email_path(city: "Kabul", mode: "in_app")
+
+      expect(response.body).to include(">Send bulk message</h1>").and include("A push notification goes with it")
+      expect(response.body.scan('class="bulk-lang').size).to eq(4)
+      expect(response.body).not_to include("content[en][subject]")
+    end
+
+    it "Send bulk mail: four language boxes WITH subjects, no push option" do
+      get new_admin_bulk_email_path(city: "Kabul", mode: "email")
+
+      expect(response.body).to include(">Send bulk mail</h1>").and include("content[en][subject]")
+      expect(response.body).not_to include("A push notification goes with it")
+    end
+
+    it "the Users list offers both, carrying its filters" do
+      get admin_users_path(city: "Kabul")
+
+      expect(response.body).to include("mode=email").and include("mode=in_app").and include('id="message-these-users"')
+    end
   end
 end

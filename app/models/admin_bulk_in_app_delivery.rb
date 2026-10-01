@@ -41,8 +41,9 @@ class AdminBulkInAppDelivery < ApplicationRecord
 
   private
 
-  # A broadcast push lights up every phone at once: only when chosen, never
-  # to someone who archived Support, and honestly reported when impossible.
+  # Every message goes with a push (owner's rule), except to someone who
+  # archived Support — archiving is how a user opts out of announcements — and
+  # it's reported honestly when impossible (no token).
   def push_decision(muted)
     return "no push (not chosen)" unless admin_bulk_email.push?
     return "no push: archived Support" if muted

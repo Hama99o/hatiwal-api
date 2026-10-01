@@ -10,8 +10,12 @@
     </p>
   </div>
   <div class="ad-actions">
-    <%= link_to "New message", new_admin_message_path, class: "button", id: "new-message" %>
-    <%= link_to "Bulk message", new_admin_bulk_email_path, class: "button button--alt", id: "new-bulk-email" %>
+    <%# The four ways to reach people. Single sends are one box; bulk sends
+        have the four-language versions; messages never have a subject. %>
+    <%= link_to "Send mail", new_admin_message_path(mode: "email"), class: "button", id: "send-mail" %>
+    <%= link_to "Send message", new_admin_message_path(mode: "in_app"), class: "button", id: "send-message" %>
+    <%= link_to "Send bulk mail", new_admin_bulk_email_path(mode: "email"), class: "button button--alt", id: "send-bulk-mail" %>
+    <%= link_to "Send bulk message", new_admin_bulk_email_path(mode: "in_app"), class: "button button--alt", id: "send-bulk-message" %>
   </div>
 </header>
 
