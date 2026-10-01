@@ -49,6 +49,11 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
     end
   end
 
+  def open_support_id
+    post "/api/v1/support_conversation", headers: headers
+    JSON.parse(response.body).dig("conversation", "id")
+  end
+
   describe "behaviour" do
     def open_support
       post "/api/v1/support_conversation", headers: headers
@@ -129,6 +134,72 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
       }
 
       expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  describe "archiving and deleting a support thread" do
+    let(:support) { User.support_account! }
+
+    def inbox_ids(params = {})
+      get "/api/v1/conversations", params: params, headers: headers
+      JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+    end
+
+    def support_reply(thread, body = "We're on it")
+      create(:message, conversation: thread, user: support, body: body)
+    end
+
+    it "brings an archived thread back when Support replies, still UNREAD" do
+      thread = Conversation.find(open_support_id)
+      put "/api/v1/conversations/#{thread.id}/archive", headers: headers
+      expect(inbox_ids).not_to include(thread.id)
+
+      support_reply(thread)
+
+      expect(inbox_ids).to include(thread.id)
+      get "/api/v1/conversations/#{thread.id}", headers: headers
+      expect(JSON.parse(response.body)["conversation"]["unread_count"]).to eq(1)
+    end
+
+    it "brings it back when the USER writes into an archived thread too" do
+      thread = Conversation.find(open_support_id)
+      thread.archive_for!(user)
+
+      create(:message, conversation: thread, user: user, body: "one more thing")
+
+      expect(thread.reload.archived_for?(user)).to be(false)
+    end
+
+    it "brings a DELETED thread back on a new message, and on Contact support" do
+      thread = Conversation.find(open_support_id)
+      delete "/api/v1/conversations/#{thread.id}", headers: headers
+      expect(inbox_ids).not_to include(thread.id)
+
+      support_reply(thread)
+      expect(inbox_ids).to include(thread.id)
+
+      thread.delete_for!(user)
+      expect(open_support_id).to eq(thread.id)
+      expect(inbox_ids).to include(thread.id)
+    end
+
+    it "never hides the thread from the admin, archived or deleted" do
+      thread = Conversation.find(open_support_id)
+      thread.archive_for!(user)
+
+      expect(Conversation.kind_support).to include(thread)
+    end
+
+    # Pins today's behaviour so resurfacing can't spread to listing threads by
+    # accident — changing that is a separate decision.
+    it "leaves an archived LISTING thread archived when the other side replies" do
+      seller = create(:user)
+      convo = create(:conversation, buyer: user, listing: create(:listing, :active, user: seller))
+      convo.archive_for!(user)
+
+      create(:message, conversation: convo, user: seller, body: "still available")
+
+      expect(convo.reload.archived_for?(user)).to be(true)
     end
   end
 

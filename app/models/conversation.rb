@@ -244,10 +244,37 @@ class Conversation < ApplicationRecord
   # has) or by an admin when SUPPORT_ADMIN_INITIATE is on — see
   # docs/SUPPORT_MESSAGING.md for why that distinction is the safety.
   def self.support_thread_for!(user)
-    kind_support.find_by(buyer_id: user.id) ||
-      create!(kind: :support, buyer: user, seller: User.support_account!)
+    existing = kind_support.find_by(buyer_id: user.id)
+    # Asking for support again brings a thread the user archived or deleted
+    # back into their inbox. Otherwise "Contact support" would return a thread
+    # their inbox hides.
+    return existing.tap(&:resurface_support_thread!) if existing
+
+    create!(kind: :support, buyer: user, seller: User.support_account!)
   rescue ActiveRecord::RecordNotUnique
     kind_support.find_by!(buyer_id: user.id)
+  end
+
+  # A support thread the user archived or deleted comes back when anything new
+  # happens in it, from either side. Archive and delete are per side, so this
+  # never affected the admin, who reads every support thread regardless.
+  #
+  # It deliberately does NOT touch read state: a thread that returns already
+  # marked read is one the user never opens. The new message stays unread.
+  #
+  # SUPPORT ONLY. Listing threads keep today's behaviour (an archived thread
+  # stays archived when the other side replies). Changing that for everyone is
+  # a separate decision — see docs/SUPPORT_MESSAGING.md, "Archived threads".
+  def resurface_support_thread!
+    return unless kind_support?
+
+    # Straight to the database, not "if self[column].present?": the instance
+    # in hand is often stale (loaded before the user archived), and trusting
+    # it left an archived thread hidden. One UPDATE per support message.
+    shown = { buyer_archived_at: nil, buyer_deleted_at: nil, seller_archived_at: nil, seller_deleted_at: nil }
+    self.class.where(id: id).update_all(shown)
+    shown.each_key { |column| self[column] = nil }
+    clear_attribute_changes(shown.keys)
   end
 
   private

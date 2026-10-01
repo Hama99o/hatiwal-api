@@ -79,6 +79,35 @@ To turn it on, the variable has to reach the container:
 
 Without steps 1–3 it stays off. That is the safe default.
 
+## Archived threads
+
+A user can archive or delete their support thread. Neither affects the admin:
+both are per side (`buyer_*` columns, and the user is always the buyer), and
+the admin inbox filters on neither. **Any new message in the thread, from
+either side, brings it back** into the user's inbox, still unread. So does
+tapping "Contact support" again (`Conversation#resurface_support_thread!`).
+
+### Finding: the same gap exists for every conversation, live today
+
+Listing threads do **not** do this. Nothing un-archives a conversation except
+the explicit `PUT /conversations/:id/unarchive`. In the shipped app today:
+
+1. a buyer archives a thread;
+2. the seller replies;
+3. the inbox still hides it (`not_archived_for` needs `buyer_archived_at IS NULL`);
+4. **but `SendMessagePushJob` does not check archive state, so the buyer still
+   gets a push for a message they then cannot find** in the inbox.
+
+A notification that points at a thread not in the inbox is worse than none. On
+a marketplace, a buyer can miss a seller's answer and neither side knows why.
+
+**Owner's decision, not made here.** Extending resurfacing to listing threads
+is additive to the API, but it is a visible behaviour change for every user,
+v1.0.4 included: threads they archived would start reappearing when the other
+side writes. The options are support only (as now), or all conversations. A
+spec pins listing threads to today's behaviour, so the change can't happen by
+accident.
+
 ## Deploy findings (not specific to this feature)
 
 - **Migrations run at boot only because of a string comparison.**

@@ -161,6 +161,7 @@ class Message < ApplicationRecord
 
   def update_conversation_last_message_at
     conversation.update_column(:last_message_at, created_at)
+    conversation.resurface_support_thread!
   end
 
   # The listing this offer is about, or nil when the conversation's listing has

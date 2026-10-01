@@ -29,6 +29,18 @@ RSpec.describe "Admin support inbox", type: :request do
     expect(response.body.index("Zarmina Khan")).to be < response.body.index("Answered")
   end
 
+  # Archive is per side; the user archiving must not touch the admin's view.
+  it "still lists and opens a thread the user archived" do
+    user_says("help")
+    thread.archive_for!(user)
+
+    get admin_support_conversations_path
+    expect(response.body).to include("Zarmina Khan")
+
+    get admin_support_conversation_path(thread)
+    expect(response).to have_http_status(:ok)
+  end
+
   it "marks the user's messages read when an admin opens the thread" do
     msg = user_says("help")
 
