@@ -75,6 +75,15 @@
       <div class="dash-card" data-platform="<%= platform %>" style="<%= 'border-color:#fca5a5;background:#fef2f2;' if dead %>">
         <div class="num" style="<%= 'color:#b91c1c;' if dead %>"><%= r[:with_token] %> <span style="font-size:1rem;color:#64748b;">of <%= r[:users] %></span></div>
         <div class="label"><%= platform == "ios" ? "iPhone" : "Android" %> users who can receive pushes</div>
+        <% if r[:reasons].any? %>
+          <div class="push-reasons" style="margin-top:.5rem;font-size:.75rem;color:#7f1d1d;">
+            <div style="font-weight:600;margin-bottom:.15rem;">Why, as the apps report it:</div>
+            <%# Client-supplied text: output-escaped by ERB, never raw / html_safe. %>
+            <% r[:reasons].each do |reason, count| %>
+              <div style="word-break:break-word;"><code><%= reason %></code> × <%= count %></div>
+            <% end %>
+          </div>
+        <% end %>
       </div>
     <% end %>
   </div>

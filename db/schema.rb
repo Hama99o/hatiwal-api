@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -369,6 +369,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_140000) do
     t.string "preferred_theme", default: "system"
     t.string "provider", default: "email", null: false
     t.string "province"
+    t.string "push_registration_error", limit: 300
+    t.datetime "push_registration_error_at"
     t.string "push_token"
     t.datetime "remember_created_at"
     t.datetime "reset_password_sent_at"

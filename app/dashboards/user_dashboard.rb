@@ -32,6 +32,8 @@ class UserDashboard < Administrate::BaseDashboard
     last_app_platform: Field::String,
     last_app_version_at: Field::DateTime,
     legacy_client_seen_at: Field::DateTime,
+    push_registration_error: Field::String,
+    push_registration_error_at: Field::DateTime,
     created_at: Field::DateTime,
     updated_at: Field::DateTime
   }.freeze
@@ -68,6 +70,8 @@ class UserDashboard < Administrate::BaseDashboard
     last_app_platform
     last_app_version_at
     legacy_client_seen_at
+    push_registration_error
+    push_registration_error_at
     listings
     filed_reports
     created_at

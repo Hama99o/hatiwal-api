@@ -30,4 +30,22 @@ RSpec.describe "Client version reporting", type: :request do
 
     expect(response).to have_http_status(:ok)
   end
+
+  describe "PUT /me push_registration_error" do
+    it "stores why the app couldn't register for push" do
+      put "/api/v1/users/me", headers: headers,
+                              params: { user: { push_registration_error: "token: Default FirebaseApp is not initialized" } }
+
+      expect(response).to have_http_status(:ok)
+      expect(user.reload.push_registration_error).to eq("token: Default FirebaseApp is not initialized")
+    end
+
+    it "caps a huge or hostile value instead of rejecting the request" do
+      put "/api/v1/users/me", headers: headers,
+                              params: { user: { push_registration_error: "<script>alert(1)</script>#{'A' * 5000}" } }
+
+      expect(response).to have_http_status(:ok)
+      expect(user.reload.push_registration_error.length).to eq(ClientVersionReporting::PUSH_ERROR_MAX)
+    end
+  end
 end

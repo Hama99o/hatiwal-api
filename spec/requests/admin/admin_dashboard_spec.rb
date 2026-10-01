@@ -354,6 +354,21 @@ RSpec.describe "Admin dashboard", type: :request do
     end
   end
 
+  describe "push failure reasons" do
+    before { sign_in admin, scope: :admin_user }
+
+    it "says WHY a platform can't get pushes, escaped" do
+      create(:user, last_app_platform: "android", last_app_version: "1.1.0", last_app_version_at: 1.day.ago,
+                    push_registration_error: "token: Default FirebaseApp is not initialized <script>x</script>")
+
+      get admin_root_path
+
+      card = response.body[%r{<div class="dash-card" data-platform="android".*?</code> × 1}m]
+      expect(card).to include("token: Default FirebaseApp is not initialized &lt;script&gt;x&lt;/script&gt;")
+      expect(response.body).not_to include("<script>x</script>")
+    end
+  end
+
   describe "growth charts" do
     before { sign_in admin, scope: :admin_user }
 

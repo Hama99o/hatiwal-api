@@ -29,7 +29,14 @@ module ClientVersionReporting
   # every authenticated request and must not become a write per request.
   WRITE_INTERVAL = 1.hour
 
+  # A client-supplied string on a public endpoint: cap it, and keep it to one
+  # printable line (a stack trace or control characters stay out of the admin).
+  PUSH_ERROR_MAX = 300
+
   included do
+    # A token arriving means registration works now — the old reason is stale.
+    before_save :clear_push_registration_error, if: -> { will_save_change_to_push_token? && push_token.present? }
+
     scope :on_legacy_client_since, ->(time) { where(legacy_client_seen_at: time..) }
     scope :reported_version_since, ->(time) { where(last_app_version_at: time..) }
     scope :with_push_token, -> { where.not(push_token: [ nil, "" ]) }
@@ -42,12 +49,28 @@ module ClientVersionReporting
     # Android was never set up with Firebase, so its tokens never registered,
     # and a panel that only lists platforms it has rows for would hide exactly
     # that zero (docs/PUSH_NOTIFICATIONS.md).
-    def push_reach_since(time)
+    #
+    # `reasons`: what the apps WITHOUT a token reported as the cause, most
+    # common first — so the panel says why, not just that.
+    def push_reach_since(time, reasons_limit: 3)
       seen = reported_version_since(time)
       totals = seen.group(:last_app_platform).count
       reachable = seen.with_push_token.group(:last_app_platform).count
-      PLATFORMS.index_with { |p| { users: totals.fetch(p, 0), with_token: reachable.fetch(p, 0) } }
+      PLATFORMS.index_with do |p|
+        reasons = seen.where(last_app_platform: p, push_token: [ nil, "" ])
+                      .where.not(push_registration_error: nil)
+                      .group(:push_registration_error).order(count_all: :desc).limit(reasons_limit).count
+        { users: totals.fetch(p, 0), with_token: reachable.fetch(p, 0), reasons: reasons }
+      end
     end
+  end
+
+  # Reported by the app when getting a push token failed ("<stage>: <message>").
+  # Overwrites the previous one and stamps when; blank clears it.
+  def push_registration_error=(value)
+    text = value.to_s.gsub(/[[:cntrl:]]+/, " ").squish.truncate(PUSH_ERROR_MAX)
+    super(text.presence)
+    self.push_registration_error_at = text.present? ? Time.current : nil
   end
 
   # Never raises: a bad header must not fail the request it rode in on.
@@ -63,6 +86,10 @@ module ClientVersionReporting
   end
 
   private
+
+  def clear_push_registration_error
+    self.push_registration_error = nil
+  end
 
   def record_reported_client(version, platform, now)
     unchanged = last_app_version == version && last_app_platform == platform

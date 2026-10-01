@@ -55,11 +55,46 @@ RSpec.describe ClientVersionReporting do
 
       reach = User.push_reach_since(now - 1.day)
 
-      expect(reach).to eq("ios" => { users: 2, with_token: 1 }, "android" => { users: 1, with_token: 0 })
+      expect(reach).to eq("ios" => { users: 2, with_token: 1, reasons: {} }, "android" => { users: 1, with_token: 0, reasons: {} })
     end
 
     it "still lists a platform nobody reported, as zero of zero" do
-      expect(User.push_reach_since(now - 1.day)["android"]).to eq(users: 0, with_token: 0)
+      expect(User.push_reach_since(now - 1.day)["android"]).to eq(users: 0, with_token: 0, reasons: {})
     end
+  end
+
+  describe "#push_registration_error=" do
+    it "stores one capped, single-line reason with a timestamp" do
+      user.update!(push_registration_error: "token:\n Default FirebaseApp\tis not initialized" + ("x" * 1000))
+
+      expect(user.push_registration_error).to start_with("token: Default FirebaseApp is not initialized")
+      expect(user.push_registration_error.length).to eq(ClientVersionReporting::PUSH_ERROR_MAX)
+      expect(user.push_registration_error).not_to match(/[[:cntrl:]]/)
+      expect(user.push_registration_error_at).to be_present
+    end
+
+    it "is cleared by a blank report, and by a token finally registering" do
+      user.update!(push_registration_error: "token: boom")
+      user.update!(push_token: "ExponentPushToken[ok]")
+      expect(user.reload).to have_attributes(push_registration_error: nil, push_registration_error_at: nil)
+
+      user.update!(push_registration_error: "permission: denied")
+      user.update!(push_registration_error: "")
+      expect(user.reload.push_registration_error).to be_nil
+    end
+  end
+
+  it "reports the most common reasons for platforms without tokens" do
+    2.times do
+      create(:user, last_app_platform: "android", last_app_version: "1.1.0", last_app_version_at: now,
+                    push_registration_error: "token: Default FirebaseApp is not initialized")
+    end
+    create(:user, last_app_platform: "android", last_app_version: "1.1.0", last_app_version_at: now,
+                  push_registration_error: "permission: denied")
+
+    reasons = User.push_reach_since(now - 1.day)["android"][:reasons]
+
+    expect(reasons.first).to eq([ "token: Default FirebaseApp is not initialized", 2 ])
+    expect(reasons.size).to eq(2)
   end
 end

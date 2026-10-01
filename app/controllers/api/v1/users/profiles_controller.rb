@@ -42,6 +42,9 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
       :city, :province, :latitude, :longitude,
       :preferred_language, :seller_mode, :preferred_theme, :avatar,
       :push_token, :away_until,
+      # Why the app could NOT get a push token, when it couldn't — shown on the
+      # admin dashboard (ClientVersionReporting). Capped and normalized there.
+      :push_registration_error,
       # Contact details and their visibility (owner request, 2026-09-02).
       :whatsapp_number, :show_phone_publicly, :show_address_publicly
     )
