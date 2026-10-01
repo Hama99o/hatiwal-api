@@ -73,6 +73,42 @@ class User < ApplicationRecord
     "#{firstname} #{lastname}".strip
   end
 
+  # The single "Hatiwal Support" account that support threads are held with.
+  # Admin replies are posted AS this user (Message#admin_user records who wrote
+  # them). Created on first use rather than by a migration or seed: the account
+  # on its own is invisible to every client, and creating it never creates a
+  # conversation.
+  #
+  # `verified: true` is DELIBERATE, so clients render the verified badge on
+  # Support. The email uses the reserved `.invalid` TLD: this account never
+  # signs in and must never be sent mail. The password is random and discarded.
+  SUPPORT_ACCOUNT_EMAIL = "support@hatiwal.invalid".freeze
+
+  # Declared for the same reason as Conversation's `kind`: SendMessagePushJob
+  # asks `support_account?` on EVERY push, so if this column were missing
+  # (code ahead of its migration) every chat push would fail. Declared, it
+  # reads false.
+  attribute :support_account, :boolean, default: false
+
+  def self.support_account!
+    find_by(support_account: true) || create_support_account!
+  end
+
+  def self.create_support_account!
+    password = SecureRandom.base58(32)
+    user = new(firstname: "Hatiwal", lastname: "Support", email: SUPPORT_ACCOUNT_EMAIL,
+               password: password, password_confirmation: password,
+               verified: true, support_account: true)
+    user.skip_confirmation!
+    user.save!
+    user
+  rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid
+    # Lost a race with a concurrent first use: the partial unique index (or the
+    # email uniqueness check) means the other request created it.
+    find_by!(support_account: true)
+  end
+  private_class_method :create_support_account!
+
   # Refresh the denormalized rating aggregates from this user's VISIBLE reviews
   # (as reviewee). Called only when a review is revealed, so feeds never sum
   # reviews per row. update_columns skips validations/callbacks by design.
