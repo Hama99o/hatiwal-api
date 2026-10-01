@@ -1,5 +1,8 @@
-<%# All four language versions of one admin message, used by one-to-one
-    Messages and bulk alike (Admin::LanguageVersions).
+<%# All four language versions of a BULK message (Admin::LanguageVersions).
+    Bulk only: its audience is a mix of languages, so a fallback means
+    something. One-to-one Messages has ONE box in the recipient's language —
+    owner: "for one user we dont need 4 … for bulk user we need lang system".
+    Do not reuse this for a single recipient.
 
     Locals:
       counts          { "en" => n, "ps" => n, …, "other" => n } readers per language
@@ -7,21 +10,16 @@
       fallback        the chosen fallback locale
       follow_channel  true: subject boxes show only while #channel-email is ticked
                       (in-app messages have no subject); false: always shown
-      highlight       optional [locale, first_name] — "Zarmina reads Pashto: this
-                      box is what she gets" (one-to-one)
 
     Class names (.bulk-lang/.bulk-subject/.bulk-body/.fallback-warning/
     .fallback-badge, #fallback-locale) are read by the script below and specs. %>
 <% names = Admin::LanguageVersions::NAMES %>
-<% hl_locale, hl_name = highlight %>
 <label class="ad-inline-select">
   <strong>Fallback language</strong> — for anyone whose language box is empty:
   <%= select_tag :fallback_locale, options_for_select(Admin::LanguageVersions::LOCALES.map { |l| [ names[l], l ] }, fallback),
         id: "fallback-locale", class: "ad-select" %>
 </label>
-<% if hl_name && !Admin::LanguageVersions::LOCALES.include?(hl_locale) %>
-  <p class="ad-note ad-step" id="reader-note"><%= hl_name %> has no language set, so gets the fallback version.</p>
-<% elsif !hl_name && counts["other"].to_i.positive? %>
+<% if counts["other"].to_i.positive? %>
   <p class="ad-note ad-step"><%= counts["other"] %> recipient(s) have no language set and always get the fallback.</p>
 <% end %>
 
@@ -35,9 +33,6 @@
         <%# The inline display is STATE, not styling: the script below toggles it. %>
         <span class="fallback-badge ad-lang__badge"<% unless loc == fallback %> style="display:none;"<% end %>>(fallback)</span>
       </legend>
-      <% if hl_name && loc == hl_locale %>
-        <p class="reader-mark ad-lang__reader"><%= hl_name %> reads <%= names[loc] %>: this box is what <%= hl_name %> gets.</p>
-      <% end %>
       <div class="lang-subject">
         <%= text_field_tag "content[#{loc}][subject]", raw.dig(loc, "subject"), placeholder: "Subject (email)",
               dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::SUBJECT_MAX, class: "bulk-subject ad-input" %>

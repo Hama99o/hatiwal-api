@@ -22,11 +22,30 @@
     <% end %>
   </fieldset>
 
-  <% reader = @user.preferred_language.presence %>
-  <% counts = Admin::LanguageVersions::LOCALES.index_with { |l| l == reader ? 1 : 0 } %>
-  <%= render "admin/application/language_versions", counts: counts, raw: @raw_content,
-             fallback: @fallback_locale, follow_channel: true,
-             highlight: [ reader, @user.firstname.presence || "This user" ] %>
+  <%# ONE box for one known person, written in their language. No fallback:
+      with a single recipient there is nobody else to fall back for. (Bulk has
+      the four-language system — bulk_emails/_language_versions.) %>
+  <% names = Admin::LanguageVersions::NAMES %>
+  <% reader = @user.preferred_language.presence_in(Admin::LanguageVersions::LOCALES) %>
+  <% rtl = %w[ps fa ur].include?(reader) %>
+  <p class="reader-mark ad-lang__reader">
+    <% if reader %>
+      <%= @user.firstname.presence || "This user" %> reads <%= names[reader] %>: write in <%= names[reader] %> — this box is what they get.
+    <% else %>
+      <%= @user.firstname.presence || "This user" %> has no language set.
+    <% end %>
+  </p>
+
+  <div class="ad-field lang-subject">
+    <label class="ad-label" for="subject">Subject <span class="ad-label__hint">(email)</span></label>
+    <%= text_field_tag :subject, params[:subject], maxlength: AdminEmail::SUBJECT_MAX, dir: (rtl ? "rtl" : "auto"), class: "ad-input" %>
+  </div>
+
+  <div class="ad-field">
+    <label class="ad-label" for="body">Message</label>
+    <%= text_area_tag :body, params[:body], rows: 9, required: true, maxlength: AdminEmail::BODY_MAX,
+          dir: (rtl ? "rtl" : "auto"), class: "ad-textarea" %>
+  </div>
 
   <% if @user.email_opt_out_at.present? %>
     <label class="ad-check ad-check--warning">
@@ -42,3 +61,14 @@
     <%= link_to "Cancel", admin_messages_path, class: "ad-link" %>
   </div>
 <% end %>
+
+<%# Subject belongs to email only: shown while Email is ticked, hidden otherwise. %>
+<script>
+  (function () {
+    var email = document.getElementById("channel-email");
+    var subject = document.querySelector("#message-form .lang-subject");
+    function sync() { subject.style.display = email && email.checked ? "" : "none"; }
+    if (email) email.addEventListener("change", sync);
+    sync();
+  })();
+</script>

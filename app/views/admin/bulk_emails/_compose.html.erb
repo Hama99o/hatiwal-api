@@ -11,8 +11,8 @@
       authenticity_token: form_authenticity_token do |f| %>
   <% admin_filter_values.compact.each do |k, v| %><%= hidden_field_tag k, v %><% end %>
 
-  <%= render "admin/application/language_versions", counts: by_lang, raw: @raw_content,
-             fallback: @bulk.fallback_locale, follow_channel: false, highlight: nil %>
+  <%= render "language_versions", counts: by_lang, raw: @raw_content,
+             fallback: @bulk.fallback_locale, follow_channel: false %>
 
   <div class="ad-actions ad-gap-top">
     <% buttons.each do |label, path, extra| %>

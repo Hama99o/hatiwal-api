@@ -69,11 +69,12 @@ module Admin
     private
 
     def set_recipient
-      raw = params.fetch(:content, {}).permit(Admin::LanguageVersions::LOCALES.index_with { %i[subject body] }).to_h
-      @raw_content = raw
-      @fallback_locale = params[:fallback_locale].presence_in(Admin::LanguageVersions::LOCALES) || "en"
       @user = User.members.find_by(id: params[:user_id]) if params[:user_id].present?
       return unless @user
+
+      # One box, in the recipient's own language: that IS the version they get.
+      @fallback_locale = @user.preferred_language.presence_in(Admin::LanguageVersions::LOCALES) || "en"
+      @raw_content = { @fallback_locale => { "subject" => params[:subject], "body" => params[:body] } }
 
       # What each channel can't do for this user — shown greyed with the reason.
       @email_refusal = @user.email_refusal_reason

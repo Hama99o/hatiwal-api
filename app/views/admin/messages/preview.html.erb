@@ -10,11 +10,6 @@
 <section class="ad-card">
   <%= render "recipient" %>
 
-  <% names = Admin::LanguageVersions::NAMES %>
-  <p id="version-note" class="ad-note ad-step">
-    <%= @user.firstname.presence || "This user" %> gets the <strong><%= names[@sender.locale] %></strong> version<%=
-      @sender.locale == @user.preferred_language ? " (their language)" : " (fallback — no #{names[@user.preferred_language] || 'own-language'} version written)" %>.
-  </p>
 
   <% if @sender.email? && @rendered %>
     <h2 class="ad-preview-label">Email — <span dir="auto"><%= @sender.subject %></span></h2>

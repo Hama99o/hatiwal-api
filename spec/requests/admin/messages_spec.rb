@@ -6,10 +6,7 @@ RSpec.describe "Admin Messages", type: :request do
 
   let(:admin) { create(:admin_user, password: "changeme123!") }
   let(:user)  { create(:user, firstname: "Zarmina", lastname: "Khan", email: "zarmina@example.com", phone: "0700123456") }
-  let(:draft) do
-    { user_id: user.id, channels: %w[email], fallback_locale: "en",
-      content: { "en" => { "subject" => "About your listing", "body" => "سلام — ستاسو اعلان تایید شو." } } }
-  end
+  let(:draft) { { user_id: user.id, channels: %w[email], subject: "About your listing", body: "سلام — ستاسو اعلان تایید شو." } }
 
   before do
     sign_in admin, scope: :admin_user
@@ -91,24 +88,27 @@ RSpec.describe "Admin Messages", type: :request do
     expect(AdminOutreach.count).to eq(0)
   end
 
-  it "shows all four language boxes, marks the recipient's own, and makes subjects follow Email" do
+  # Owner: "for one user we dont need 4". One known reader, one box in their
+  # language, no fallback; the four-language system is bulk-only.
+  it "has ONE message box, says which language to write in, and no fallback" do
     user.update!(preferred_language: "ps")
 
     get new_admin_message_path(user_id: user.id)
 
-    %w[en ps fa ur].each { |loc| expect(response.body).to include(%(data-locale="#{loc}")) }
-    expect(response.body).to include("Zarmina reads Pashto: this box is what Zarmina gets.")
-    expect(response.body).to include("var followChannel = true;")
+    expect(response.body).to include("Zarmina reads Pashto: write in Pashto")
+    expect(response.body.scan('name="body"').size).to eq(1)
+    expect(response.body).not_to include("fallback-locale")
+    expect(response.body).not_to include('data-locale="en"')
+    expect(response.body[/<textarea[^>]*name="body"[^>]*>/]).to include('dir="rtl"')
   end
 
-  it "previews the version THIS person gets" do
+  it "delivers the one box as the recipient's own language, with no subject for in-app" do
     user.update!(preferred_language: "ps")
-    both = draft[:content].merge("ps" => { "subject" => "ستاسو اعلان", "body" => "پښتو متن" })
+    Conversation.support_thread_for!(user)
 
-    post preview_admin_messages_path, params: draft.merge(content: both)
+    post admin_messages_path, params: { user_id: user.id, channels: %w[in_app], body: "پښتو متن", send: "1" }
 
-    expect(response.body[%r{<p id="version-note".*?</p>}m]).to include("Pashto").and include("their language")
-    expect(CGI.unescapeHTML(response.body[/<iframe id="email-preview"[^>]*srcdoc="([^"]*)"/, 1])).to include("پښتو متن")
+    expect(AdminOutreach.last).to have_attributes(locale: "ps", subject: nil, body: "پښتو متن")
   end
 
   it "records Support-inbox replies in the same history" do
