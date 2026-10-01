@@ -81,7 +81,7 @@
     </nav>
   </div>
   <p style="font-size:.78rem;color:#64748b;margin:.1rem 0 .75rem;">
-    Counted on Kabul time (UTC+04:30)<%= "; weeks start on Saturday" if @growth_period == "week" %>.
+    Counted on Kabul time (UTC+04:30)<%= "; weeks start on Saturday, and each bar is labelled with the Saturday its week begins" if @growth_period == "week" %>.
     The current <%= @growth_period %> is still in progress.
   </p>
   <div class="dash-charts">
@@ -91,13 +91,13 @@
         Sign-ups as they happened, including accounts deleted since
         (<%= @new_users_since_deleted %> of these).
       </p>
-      <%= column_chart @new_users, height: "260px", colors: ["#6366f1"], download: true,
-            id: "chart-new-users", discrete: @growth_period == "year" %>
+      <%= column_chart Admin::GrowthSeries.labelled(@new_users, @growth_period), height: "260px",
+            colors: ["#6366f1"], download: true, id: "chart-new-users", discrete: true %>
     </div>
     <div>
       <h3 style="font-size:.85rem;color:#475569;margin:0 0 .4rem;">New listings — <%= @new_listings.values.sum %> in this range</h3>
-      <%= column_chart @new_listings, height: "260px", colors: ["#10b981"], download: true,
-            id: "chart-new-listings", discrete: @growth_period == "year" %>
+      <%= column_chart Admin::GrowthSeries.labelled(@new_listings, @growth_period), height: "260px",
+            colors: ["#10b981"], download: true, id: "chart-new-listings", discrete: true %>
     </div>
   </div>
 </section>

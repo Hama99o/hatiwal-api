@@ -34,6 +34,33 @@ RSpec.describe Admin::GrowthSeries do
     expect(described_class.for(User.members, "year").size).to eq(5)
   end
 
+  describe ".labelled" do
+    it "labels weeks, months and years in English" do
+      expect(described_class.label(Date.new(2026, 7, 4), "week")).to eq("4 Jul")
+      expect(described_class.label(Date.new(2026, 7, 1), "month")).to eq("Jul 2026")
+      expect(described_class.label(Date.new(2026, 1, 1), "year")).to eq("2026")
+    end
+
+    # The Friday 21:00 UTC signup is Saturday in Kabul: its label must name the
+    # Kabul week, i.e. the label comes from the same bucket as the count.
+    it "labels the Kabul bucket, not the UTC day" do
+      create(:user, created_at: Time.utc(2026, 9, 4, 21, 0)) # Kabul: Sat 5 Sep 01:30
+
+      series = described_class.labelled(described_class.for(User.members, "week"), "week")
+
+      expect(series["5 Sep"]).to eq(1)
+      expect(series["29 Aug"]).to eq(0)
+    end
+
+    it "keeps every bucket, in order" do
+      series = described_class.labelled(described_class.for(User.members, "month"), "month")
+
+      expect(series.size).to eq(12)
+      expect(series.keys.last).to eq("Sep 2026")
+      expect(series.keys.first).to eq("Oct 2025")
+    end
+  end
+
   it "falls back to weekly for an unknown period" do
     expect(described_class.normalize("decade")).to eq("week")
     expect(described_class.normalize(nil)).to eq("week")

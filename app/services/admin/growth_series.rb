@@ -33,4 +33,27 @@ class Admin::GrowthSeries
     options[:week_start] = WEEK_START if period == "week"
     relation.group_by_period(period, column, **options).count
   end
+
+  # The same series keyed by a human label: "26 Sep" (the Saturday the week
+  # starts on), "Oct 2026", "2026". Not "Week of 26 Sep": twelve of those do not
+  # fit under a half-width chart and Chart.js cuts every one to "Week of …";
+  # the dashboard note says what the date means instead. The keys are plain Dates that Groupdate already bucketed on Kabul
+  # time, so formatting the Date itself keeps the label on the same day as
+  # the count. Never go through a Time here: that brings a zone back in, and a
+  # UTC label beside a Kabul count is the bug these charts were built to fix.
+  # Strings also stop Chartkick re-parsing the dates in the viewer's browser
+  # zone. English on purpose: the admin is an English surface (strftime month
+  # names do not follow I18n).
+  def self.labelled(series, period)
+    period = normalize(period)
+    series.transform_keys { |date| label(date, period) }
+  end
+
+  def self.label(date, period)
+    case normalize(period)
+    when "week" then date.strftime("%-d %b")
+    when "month" then date.strftime("%b %Y")
+    else date.year.to_s
+    end
+  end
 end
