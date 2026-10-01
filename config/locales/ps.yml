@@ -12,3 +12,14 @@ ps:
     # inbox row match — the brand spelling is the owner's call; change both.
     support:
       title: "د هتیوال ملاتړ"
+  # Public unsubscribe page and bulk email footer (UnsubscribesController).
+  unsubscribe:
+    title: "د هتیوال له برېښنالیکونو ګډون لغوه کړئ"
+    question: "آیا غواړئ د هتیوال اعلاني برېښنالیکونه نور تاسو ته رانشي؟ ستاسو د حساب په اړه پیغامونه به بیا هم درته رسېږي."
+    confirm: "ګډون لغوه کړئ"
+    done: "ستاسو ګډون لغوه شو"
+    done_detail: "نور به د هتیوال اعلاني برېښنالیکونه تاسو ته رانشي."
+    undo: "بېرته — برېښنالیکونه راته رالېږئ"
+    undone: "تاسو بېرته ګډون وکړ"
+    email_footer: "له دې برېښنالیکونو ګډون لغوه کړئ"
+    invalid: "This unsubscribe link isn't valid."

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="<%= @user.preferred_language.presence || "en" %>">
+<html lang="<%= @admin_email.locale.presence || @user.preferred_language.presence || "en" %>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -24,6 +24,9 @@
           <tr>
             <td align="center" style="padding-top:20px;font-size:12px;color:#9ca3af;">
               Hatiwal — buy and sell locally. You can reply to this email.
+              <% if @unsubscribe_url %>
+                <br><a href="<%= @unsubscribe_url %>" style="color:#9ca3af;"><%= I18n.t("unsubscribe.email_footer", locale: @admin_email.locale.presence || "en") %></a>
+              <% end %>
             </td>
           </tr>
         </table>

@@ -38,27 +38,49 @@ longer read anywhere.
 
 ## Limits of the current sender
 
-Gmail allows about **500 recipients a day**, and bulk mail from a personal
-Gmail account is filtered as spam far more often. That is fine for
-transactional mail and one-to-one admin emails. It rules out broadcasts.
+Gmail allows ~**500 recipients a day** from a free account. `Admin::MailQuota`
+caps admin email at **450 per rolling 24h** (headroom for account mail, which
+is not counted) and is the one place to change when the sender changes.
 
-## Broadcast email: designed, deliberately NOT built
+## Admin → Messages (built 2026-10-01)
 
-A broadcast needs a real sender first (above). It is a provider decision before
-it is a code task. When that exists, this is what it requires:
+**One-to-one** (`/admin/messages/new`): pick a person (search by name, email or
+phone), tick Email / In-app from Hatiwal Support / both, write once, preview,
+test-to-me (email), confirm, send. `Admin::SendMessage` is the only send path
+(Support-thread replies use it too) and validates every channel before writing
+anything. In-app goes through the support gate (`Conversation.admin_can_message?`,
+docs/SUPPORT_MESSAGING.md). One history (`AdminOutreach`) for everything.
 
-- **Audience:** the admin user filter bar (`Admin::Filterable`: status,
-  language, city, joined…) defines the segment. Show the exact recipient count
-  before anything is sent.
-- **Consent:** confirmed addresses only, and exclude `users.email_opt_out_at`
-  (a new column).
-- **Unsubscribe:** a signed one-click link in every message, plus
-  `List-Unsubscribe` and `List-Unsubscribe-Post` headers (required by Gmail and
-  Yahoo for bulk senders). It lands on a public page that needs no login.
-- **Language:** optional body per locale (en/ps/fa/ur), falling back to en.
-- **Can't unsend:** preview, send-test-to-me, then a confirm that makes the
-  admin type the recipient count. Send in rate-limited batches from a job, with
-  live sent/failed counts and a Stop button.
-- **Record:** one row per broadcast and per recipient, so a failure is visible
-  and nobody is mailed twice by a retry.
-- **Off by default:** behind a flag until the sender exists.
+**Bulk** (`/admin/bulk_emails/new`, or "Email these users" on the Users list),
+email only:
+
+- **Audience = the Users-list filters** (`Admin::UserFilterSet`, the same code),
+  so the list shown is exactly who receives. Real members only, **confirmed**
+  addresses only, **unsubscribed excluded automatically**; every exclusion is
+  counted on screen ("58 match · 21 unconfirmed · 0 unsubscribed · … → 37 will
+  receive").
+- **All four languages at once** (en/ps/fa/ur), each box showing how many
+  recipients read it and — when empty — "Empty: these N will receive the
+  {fallback} version". The **fallback language is chosen** (default English) and
+  must be written. Each user gets only their `preferred_language` version.
+- **Can't-unsend safeguards:** preview of every written language, a test of each
+  to the admin (with a dead unsubscribe link), and Send stays disabled until the
+  admin types the recipient count — checked again server-side against a FRESH
+  count, so a segment that changed since preview is refused.
+- **Snapshot at confirm:** one `AdminEmail` per recipient with their version, so
+  what was approved is what sends.
+- **Sending** (`AdminBulkEmailJob`): batches of 10 a minute; each row claimed
+  atomically (`queued → sending`) before SMTP, so a crashed or duplicated run
+  never mails anyone twice; a row stuck `sending` is marked failed
+  ("interrupted"), never re-sent; **Stop** cancels the rest; at the daily cap it
+  **pauses** (resumable) instead of letting Gmail reject mid-run.
+- **Unsubscribe:** every bulk email has a footer link and `List-Unsubscribe` +
+  `List-Unsubscribe-Post` (RFC 8058) headers → a public no-login page in the
+  user's language (`UnsubscribesController`, signed non-expiring token), with an
+  **undo**. Opted-out users get a warning, not a block, on one-to-one email (it
+  is about their account), and the admin's acknowledgement is recorded.
+- **Development:** dev SMTP sends real mail, so in development admin email may
+  only go to the mail account itself; anything else **raises** (`MailQuota.
+  assert_dev_recipient_allowed!`) — at confirm and again per row.
+
+Not built: in-app bulk, open/click tracking.

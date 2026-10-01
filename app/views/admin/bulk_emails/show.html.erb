@@ -1,0 +1,55 @@
+<% content_for(:title) { "Bulk email ##{@bulk.id}" } %>
+<% c = @counts %>
+<% names = AdminBulkEmail::LANGUAGE_NAMES %>
+
+<header class="main-content__header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+  <h1 class="main-content__page-title">Bulk email — <span dir="auto"><%= @bulk.content.dig(@bulk.fallback_locale, "subject") %></span></h1>
+  <div style="display:flex;gap:.5rem;">
+    <%= link_to "← Messages", admin_messages_path %>
+    <% if @bulk.sending? %>
+      <%= button_to "Stop", stop_admin_bulk_email_path(@bulk), method: :patch, data: { turbo: false, confirm: "Stop? Anyone not yet sent to won't get it." }, class: "button button--danger", id: "bulk-stop" %>
+    <% end %>
+    <% if (@bulk.paused_daily_limit? || @bulk.sending?) && @bulk.remaining? %>
+      <%= button_to "Resume", resume_admin_bulk_email_path(@bulk), method: :patch, data: { turbo: false }, class: "button button--alt", id: "bulk-resume" %>
+    <% end %>
+  </div>
+</header>
+
+<section class="main-content__body">
+  <p id="bulk-status" style="margin:0 0 .8rem;font-size:.95rem;">
+    <strong><%= @bulk.status.humanize %></strong> ·
+    <%= c["sent"].to_i %> sent · <%= c["failed"].to_i %> failed · <%= c["queued"].to_i + c["sending"].to_i %> waiting ·
+    <%= c["cancelled"].to_i %> cancelled — of <%= @bulk.recipients_count %>
+  </p>
+  <p style="margin:0 0 1rem;font-size:.85rem;color:#64748b;">
+    Segment: <%= @bulk.segment %> · languages written: <%= @bulk.filled_locales.map { |l| names[l] }.join(", ") %>
+    (fallback <%= names[@bulk.fallback_locale] %>) · by <%= @bulk.admin_user.email %> · <%= l(@bulk.created_at, format: :short) %>
+  </p>
+  <% if @bulk.paused_daily_limit? %>
+    <p style="padding:.6rem .8rem;border:1px solid #fcd34d;border-radius:8px;background:#fffbeb;color:#92400e;">
+      Paused at the daily limit (<%= Admin::MailQuota::DAILY_LIMIT %> in 24 hours) so the sender isn't rejected mid-run.
+      <% if (room = Admin::MailQuota.room_at) %>Room again from <%= l(room, format: :short) %>; then press Resume.<% end %>
+    </p>
+  <% end %>
+
+  <table id="bulk-recipients" style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="text-align:start;color:#64748b;font-size:.72rem;text-transform:uppercase;">
+      <th style="padding:.4rem .5rem;">Recipient</th><th style="padding:.4rem .5rem;">Language</th>
+      <th style="padding:.4rem .5rem;">Status</th><th style="padding:.4rem .5rem;">When</th></tr></thead>
+    <tbody>
+      <% @rows.each do |r| %>
+        <tr style="border-top:1px solid #e2e8f0;">
+          <td style="padding:.4rem .5rem;"><%= link_to r.user.full_name.presence || r.user.email, admin_user_path(r.user) %></td>
+          <td style="padding:.4rem .5rem;"><%= names[r.locale] %></td>
+          <td style="padding:.4rem .5rem;<%= 'color:#b91c1c;' if r.failed? %>"><%= r.status %><%= ": #{r.error}" if r.failed? && r.error.present? %></td>
+          <td style="padding:.4rem .5rem;color:#64748b;"><%= r.sent_at ? l(r.sent_at, format: :short) : "—" %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+  <%= paginate @rows %>
+</section>
+
+<% if @bulk.sending? %>
+  <script>setTimeout(function () { if (document.visibilityState === "visible") location.reload(); }, 10000);</script>
+<% end %>

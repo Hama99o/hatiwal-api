@@ -16,3 +16,14 @@ ur:
     # inbox row match — the brand spelling is the owner's call; change both.
     support:
       title: "ہتیوال سپورٹ"
+  # Public unsubscribe page and bulk email footer (UnsubscribesController).
+  unsubscribe:
+    title: "ہتیوال کی ای میلز سے ان سبسکرائب کریں"
+    question: "کیا آپ ہتیوال کی اعلانی ای میلز مزید وصول نہیں کرنا چاہتے؟ آپ کے اکاؤنٹ سے متعلق پیغامات پھر بھی آپ کو ملیں گے۔"
+    confirm: "ان سبسکرائب کریں"
+    done: "آپ ان سبسکرائب ہو گئے ہیں"
+    done_detail: "اب آپ کو ہتیوال کی اعلانی ای میلز نہیں ملیں گی۔"
+    undo: "واپس — ای میلز ملتی رہیں"
+    undone: "آپ دوبارہ سبسکرائب ہو گئے"
+    email_footer: "ان ای میلز سے ان سبسکرائب کریں"
+    invalid: "This unsubscribe link isn't valid."

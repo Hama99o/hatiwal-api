@@ -63,6 +63,17 @@ Rails.application.routes.draw do
         post :test
       end
     end
+    # Bulk email to a filtered segment of users (email only).
+    resources :bulk_emails, only: %i[new create show] do
+      collection do
+        post :preview
+        post :test
+      end
+      member do
+        patch :stop
+        patch :resume
+      end
+    end
     resources :support_conversations, only: [ :index, :show ] do
       member do
         post  :reply
@@ -76,6 +87,14 @@ Rails.application.routes.draw do
 
     root to: "dashboard#index"
   end
+  # Public, no-login unsubscribe from bulk email (UnsubscribesController). The
+  # token is a signed user id; POST is also the RFC 8058 one-click target.
+  constraints token: %r{[^/]+} do
+    get  "unsubscribe/:token",      to: "unsubscribes#show",   as: :unsubscribe
+    post "unsubscribe/:token",      to: "unsubscribes#create"
+    post "unsubscribe/:token/undo", to: "unsubscribes#undo",   as: :undo_unsubscribe
+  end
+
   # Unique cable path so it doesn't collide with other Rails apps on the same Redis
   mount ActionCable.server => "/hatiwal-cable"
 

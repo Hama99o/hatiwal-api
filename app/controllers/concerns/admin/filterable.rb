@@ -76,8 +76,15 @@ module Admin
 
     # The active filters in words ("Status: active · City: Kabul"), for records
     # that must say which segment they were sent to (bulk email history).
+    # Uses each filter's own label ("Joined", not the column "created").
     def admin_filter_summary
-      admin_filter_values.filter_map { |k, v| "#{k.to_s.humanize}: #{v}" if v.present? }.join(" · ")
+      admin_filters.filter_map do |f|
+        case f[:type]
+        when :date_range then range_words(f[:label], params[:"#{f[:name]}_from"], params[:"#{f[:name]}_to"], "from", "to")
+        when :number_range then range_words(f[:label], params[:"#{f[:name]}_min"], params[:"#{f[:name]}_max"], "≥", "≤")
+        else "#{f[:label]}: #{params[f[:name]]}" if params[f[:name]].present?
+        end
+      end.join(" · ")
     end
 
     private
@@ -162,6 +169,11 @@ module Admin
     def resolve_options(filter)
       opts = filter[:options]
       opts.respond_to?(:call) ? opts.call : Array(opts)
+    end
+
+    def range_words(label, low, high, low_word, high_word)
+      parts = [ ("#{low_word} #{low}" if low.present?), ("#{high_word} #{high}" if high.present?) ].compact
+      "#{label} #{parts.join(' ')}" if parts.any?
     end
 
     def parse_date(value)

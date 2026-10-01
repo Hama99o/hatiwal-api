@@ -2,3 +2,6 @@
 
 --
 Hatiwal — buy and sell locally. You can reply to this email.
+<% if @unsubscribe_url %>
+<%= I18n.t("unsubscribe.email_footer", locale: @admin_email.locale.presence || "en") %>: <%= @unsubscribe_url %>
+<% end %>

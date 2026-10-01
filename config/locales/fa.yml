@@ -10,3 +10,14 @@ fa:
     # English; the title is shown by the OS, so it is localized here).
     support:
       title: "پشتیبانی هتیوال"
+  # Public unsubscribe page and bulk email footer (UnsubscribesController).
+  unsubscribe:
+    title: "لغو اشتراک ایمیل‌های هتیوال"
+    question: "آیا می‌خواهید دیگر ایمیل‌های اطلاع‌رسانی هتیوال را دریافت نکنید؟ پیام‌های مربوط به حساب شما همچنان ارسال می‌شود."
+    confirm: "لغو اشتراک"
+    done: "اشتراک شما لغو شد"
+    done_detail: "دیگر ایمیل‌های اطلاع‌رسانی هتیوال برای شما ارسال نمی‌شود."
+    undo: "بازگشت — ایمیل‌ها را دریافت کنم"
+    undone: "دوباره مشترک شدید"
+    email_footer: "لغو اشتراک این ایمیل‌ها"
+    invalid: "This unsubscribe link isn't valid."

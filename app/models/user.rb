@@ -108,6 +108,11 @@ class User < ApplicationRecord
     "a placeholder address" if email.end_with?(".invalid")
   end
 
+  # Signed, non-expiring id for the one-click unsubscribe link (RFC 8058 links
+  # must keep working). The page offers an undo, since anyone holding a
+  # forwarded email could otherwise opt this user out for good.
+  UNSUBSCRIBE_PURPOSE = :email_unsubscribe
+
   # Real people: everyone except the Support account, which would otherwise be
   # counted as a new signup in the growth charts.
   scope :members, -> { where(support_account: false) }

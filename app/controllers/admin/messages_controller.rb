@@ -15,9 +15,14 @@ module Admin
 
     before_action :set_recipient, only: %i[new preview test create]
 
+    # One history: one-to-one sends and bulk emails, newest first.
+    HISTORY_LIMIT = 100
+
     def index
-      @outreaches = AdminOutreach.includes(:user, :admin_user, :admin_email, :message)
-                                 .recent.page(params[:page]).per(25)
+      outreaches = AdminOutreach.includes(:user, :admin_user, :admin_email, :message).recent.limit(HISTORY_LIMIT)
+      bulks = AdminBulkEmail.includes(:admin_user).recent.limit(HISTORY_LIMIT)
+      @entries = (outreaches.to_a + bulks.to_a).sort_by(&:created_at).reverse.first(HISTORY_LIMIT)
+      @bulk_counts = AdminEmail.where(admin_bulk_email_id: bulks.map(&:id)).group(:admin_bulk_email_id, :status).count
     end
 
     def new

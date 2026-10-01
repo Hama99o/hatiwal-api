@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -54,16 +54,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
     t.index ["target_type", "target_id"], name: "index_admin_audit_logs_on_target_type_and_target_id"
   end
 
+  create_table "admin_bulk_emails", force: :cascade do |t|
+    t.bigint "admin_user_id", null: false
+    t.jsonb "content", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.string "fallback_locale", default: "en", null: false
+    t.jsonb "filter_params", default: {}, null: false
+    t.datetime "finished_at"
+    t.integer "recipients_count", default: 0, null: false
+    t.string "segment"
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["admin_user_id"], name: "index_admin_bulk_emails_on_admin_user_id"
+  end
+
   create_table "admin_emails", force: :cascade do |t|
+    t.bigint "admin_bulk_email_id"
     t.bigint "admin_user_id", null: false
     t.text "body", null: false
     t.datetime "created_at", null: false
     t.text "error"
+    t.string "locale"
     t.datetime "sent_at"
     t.integer "status", default: 0, null: false
     t.string "subject", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.index ["admin_bulk_email_id"], name: "index_admin_emails_on_admin_bulk_email_id"
     t.index ["admin_user_id"], name: "index_admin_emails_on_admin_user_id"
     t.index ["user_id"], name: "index_admin_emails_on_user_id"
   end
@@ -431,6 +448,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_160000) do
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "admin_audit_logs", "admin_users"
+  add_foreign_key "admin_bulk_emails", "admin_users"
+  add_foreign_key "admin_emails", "admin_bulk_emails"
   add_foreign_key "admin_emails", "admin_users"
   add_foreign_key "admin_emails", "users"
   add_foreign_key "admin_outreaches", "admin_emails"

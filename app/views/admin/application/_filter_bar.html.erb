@@ -67,6 +67,11 @@
         <% if admin_filters_active? %>
           <%= link_to "Clear", request.path, class: "filter-bar__clear" %>
         <% end %>
+        <% if controller_name == "users" %>
+          <%# Same filters, same relation: the list shown is exactly who would receive. %>
+          <%= link_to "Email these users", new_admin_bulk_email_path(admin_filter_values.compact), id: "email-these-users",
+                class: "filter-bar__clear" %>
+        <% end %>
       </div>
     <% end %>
   </section>

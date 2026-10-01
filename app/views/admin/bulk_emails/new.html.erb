@@ -1,0 +1,18 @@
+<% content_for(:title) { "Bulk email" } %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Bulk email</h1>
+</header>
+
+<section class="main-content__body">
+  <p style="margin:0 0 .6rem;font-size:.85rem;color:#64748b;">
+    1. Choose who it goes to — the same filters as the Users list. Do this first: applying filters reloads the page.
+  </p>
+  <%= render "admin/application/filter_bar" %>
+  <%= render "audience" %>
+  <p style="margin:0 0 .6rem;font-size:.85rem;color:#64748b;">
+    2. Write it. Each person gets the version in their language; empty languages get the fallback.
+    Nothing is sent from this page — you'll see a preview first.
+  </p>
+  <%= render "compose", buttons: [ [ "Preview", preview_admin_bulk_emails_path, { class: "button" } ] ] %>
+</section>

@@ -64,3 +64,14 @@ en:
       invalid_file_type: "has an unsupported file type (%{content_type})"
       file_too_large: "is larger than the %{limit} limit"
       too_many_files: "cannot have more than %{count} files"
+  # Public unsubscribe page and bulk email footer (UnsubscribesController).
+  unsubscribe:
+    title: "Unsubscribe from Hatiwal emails"
+    question: "Stop receiving announcement emails from Hatiwal? Messages about your own account will still reach you."
+    confirm: "Unsubscribe"
+    done: "You're unsubscribed"
+    done_detail: "You won't receive announcement emails from Hatiwal any more."
+    undo: "Undo — keep receiving emails"
+    undone: "You're subscribed again"
+    email_footer: "Unsubscribe from these emails"
+    invalid: "This unsubscribe link isn't valid."

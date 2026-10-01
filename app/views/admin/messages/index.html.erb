@@ -2,16 +2,20 @@
 
 <header class="main-content__header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
   <h1 class="main-content__page-title">Messages</h1>
-  <%= link_to "New message", new_admin_message_path, class: "button", id: "new-message" %>
+  <div style="display:flex;gap:.5rem;">
+    <%= link_to "New message", new_admin_message_path, class: "button", id: "new-message" %>
+    <%= link_to "Bulk email", new_admin_bulk_email_path, class: "button button--alt", id: "new-bulk-email" %>
+  </div>
 </header>
 
 <section class="main-content__body">
   <p style="margin:0 0 1rem;font-size:.85rem;color:#64748b;">
-    Everything sent to a person — by email, in the app as Hatiwal Support, or both — including replies from
-    the Support inbox. Email is sent from <%= Rails.application.config.x.mail_sender %>.
+    Everything sent — to one person by email, in the app as Hatiwal Support, or both (including replies from
+    the Support inbox), and bulk emails to a segment. Email is sent from <%= Rails.application.config.x.mail_sender %>.
+    Latest <%= Admin::MessagesController::HISTORY_LIMIT %>.
   </p>
 
-  <% if @outreaches.any? %>
+  <% if @entries.any? %>
     <table id="message-history" style="width:100%;border-collapse:collapse;font-size:.86rem;">
       <thead>
         <tr style="text-align:start;color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;">
@@ -21,7 +25,20 @@
         </tr>
       </thead>
       <tbody>
-        <% @outreaches.each do |o| %>
+        <% @entries.each do |o| %>
+          <% if o.is_a?(AdminBulkEmail) %>
+            <%# group(:status).count keys by the enum NAME ("sent"), not its integer. %>
+            <% n = ->(st) { @bulk_counts[[ o.id, st.to_s ]].to_i } %>
+            <tr class="bulk-row" style="border-top:1px solid #e2e8f0;vertical-align:top;background:#fafaff;">
+              <td style="padding:.5rem;color:#64748b;white-space:nowrap;"><%= l(o.created_at, format: :short) %></td>
+              <td style="padding:.5rem;"><%= link_to pluralize(o.recipients_count, "person", plural: "people"), admin_bulk_email_path(o) %><br><span style="font-size:.78rem;color:#64748b;"><%= o.segment %></span></td>
+              <td style="padding:.5rem;">Bulk email<br><span style="font-size:.78rem;color:#64748b;"><%= o.filled_locales.join(" · ") %></span></td>
+              <td style="padding:.5rem;" dir="auto"><strong><%= o.content.dig(o.fallback_locale, "subject") %></strong><br><%= o.content.dig(o.fallback_locale, "body").to_s.truncate(120) %></td>
+              <td style="padding:.5rem;"><%= o.status.humanize %>: <%= n.(:sent) %> sent · <%= n.(:failed) %> failed · <%= n.(:queued) + n.(:sending) %> waiting<%= " · #{n.(:cancelled)} cancelled" if n.(:cancelled).positive? %></td>
+              <td style="padding:.5rem;color:#64748b;"><%= o.admin_user&.email %></td>
+            </tr>
+            <% next %>
+          <% end %>
           <tr style="border-top:1px solid #e2e8f0;vertical-align:top;">
             <td style="padding:.5rem;color:#64748b;white-space:nowrap;"><%= l(o.created_at, format: :short) %></td>
             <td style="padding:.5rem;"><%= link_to o.user.full_name.presence || "User ##{o.user_id}", admin_user_path(o.user) %></td>
@@ -44,7 +61,6 @@
         <% end %>
       </tbody>
     </table>
-    <%= paginate @outreaches %>
   <% else %>
     <p style="color:#64748b;">Nothing sent yet.</p>
   <% end %>

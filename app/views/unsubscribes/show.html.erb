@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="<%= @locale %>" dir="<%= %w[ps fa ur].include?(@locale) ? "rtl" : "ltr" %>">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= t("unsubscribe.title", locale: @locale) %> — Hatiwal</title>
+  <%= csrf_meta_tags %>
+</head>
+<body style="margin:0;background:#f4f4f7;font-family:'Helvetica Neue',Helvetica,Arial,'Noto Sans Arabic',sans-serif;color:#1f2937;">
+  <main style="max-width:480px;margin:48px auto;padding:32px 28px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+    <p style="margin:0 0 16px;font-weight:700;font-size:20px;color:#12224F;">Hatiwal</p>
+    <% if @user.email_opt_out_at %>
+      <h1 id="unsubscribed" style="font-size:18px;margin:0 0 8px;"><%= t("unsubscribe.done", locale: @locale) %></h1>
+      <p style="color:#6b7280;font-size:14px;"><%= t("unsubscribe.done_detail", locale: @locale) %></p>
+      <%= button_to t("unsubscribe.undo", locale: @locale), undo_unsubscribe_path(token: params[:token]), id: "undo",
+            style: "margin-top:12px;padding:10px 16px;border:1px solid #12224F;background:#fff;color:#12224F;border-radius:8px;cursor:pointer;" %>
+    <% else %>
+      <h1 style="font-size:18px;margin:0 0 8px;"><%= t(@undone ? "unsubscribe.undone" : "unsubscribe.title", locale: @locale) %></h1>
+      <p style="color:#6b7280;font-size:14px;"><%= t("unsubscribe.question", locale: @locale) %></p>
+      <%= button_to t("unsubscribe.confirm", locale: @locale), unsubscribe_path(token: params[:token]), id: "unsubscribe",
+            style: "margin-top:12px;padding:10px 16px;border:0;background:#12224F;color:#fff;border-radius:8px;cursor:pointer;" %>
+    <% end %>
+  </main>
+</body>
+</html>
