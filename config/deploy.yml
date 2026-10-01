@@ -47,6 +47,10 @@ env:
     - WEB_RESET_URL
     - ADMIN_PASSWORD
     - ALLOWED_ORIGINS
+    # Admin may start in-app Support messages with anyone (owner, 2026-10-01:
+    # "we should able to send message" — a message waits in the chat whatever
+    # app they have). Value lives in .env.production; see docs/SUPPORT_MESSAGING.md.
+    - SUPPORT_ADMIN_INITIATE
     # Sensitive tokens (Google OAuth, Postmark) are in config/credentials.yml.enc — not env vars
   clear:
     DATABASE_HOST: hatiwal_api-db

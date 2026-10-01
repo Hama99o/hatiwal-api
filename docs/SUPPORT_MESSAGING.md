@@ -64,7 +64,19 @@ reach it is a support thread, and that is controlled by **who creates one**:
 **Known limit, not solved:** a user who updates, opens support, and then also
 uses v1.0.4 on a second device sees that thread there as a removed-listing chat.
 
-### Turning on admin-initiated threads
+### Admin-initiated threads: ON (owner's decision, 2026-10-01)
+
+The owner turned it on: "we dont care if they have app or not its a message …
+we should able to send message". A message is not a notification — it waits in
+the chat until they next open the app. A v1.0.4 user still receives it; their
+Support chat may look like a removed-listing chat, and the admin compose screen
+says so ("hasn't used the new app yet") without blocking. The gate
+(`Conversation.admin_can_message?`), its structural guard spec and the
+per-recipient re-check all stay: the flag is one of the gate's conditions, not
+a reason to remove it. It is wired in `.env.production`, `.kamal/secrets` and
+`config/deploy.yml` `env.secret`.
+
+### Turning on admin-initiated threads (how it was done)
 
 Only once most users are on the new app. The mobile app sends `X-App-Version` /
 `X-App-Platform` from `658b9c6` on; a request without them is v1.0.4 or older.
