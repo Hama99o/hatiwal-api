@@ -47,7 +47,7 @@ RSpec.describe "Admin bulk email", type: :request do
   it "won't send unless the typed number matches a FRESH recipient count" do
     post admin_bulk_emails_path, params: draft.merge(confirm_count: 3)
     expect(AdminBulkEmail.count).to eq(0)
-    expect(response.body).to include("Type the number of recipients (2)")
+    expect(response.body).to include("Type the number of people (2)")
   end
 
   it "refuses up front when the send would exceed the daily limit" do

@@ -120,6 +120,20 @@ change reaches it.
   Undo is on the same token. Test and preview copies get the dummy token
   `test-copy`, so an admin can't opt out a real person by clicking one.
 
+## In-app bulk
+
+- `AdminBulkInAppDelivery#deliver!` claims, **re-checks the gate per
+  recipient** (`admin_support_thread_for`), posts with `message.broadcast =
+  true`, and decides push. The structural guard spec now scans `app/models`
+  too (exempting only `conversation.rb`), because this delivery lives there.
+- `Message#broadcast` is an in-memory flag: a broadcast does NOT resurface an
+  archived thread; a personal reply does. That split is the consent model —
+  archiving Support is how a user says "no announcements".
+- The confirm number is **people reached across the chosen channels**, each
+  counted once (`BulkAudience#reached`).
+- One-to-one is ONE box (the recipient's language). The four-box partial is
+  `bulk_emails/_language_versions`, bulk-only — don't reuse it for one person.
+
 ## Push
 
 - **Android has never received a push:** Firebase was never configured in
@@ -140,7 +154,8 @@ change reaches it.
 | Email-a-user: real send, forced 535 failure recorded | Bulk daily-cap pause |
 | Messages screen: in-app send, greyed channel with reason, push warning | Messages screen: a real email send (same job as the proven one) |
 | Bulk: dev guard refuses, segment from Users list, language warnings, typed count, 1 real send in Pashto | "Send a test to me" live (the dev admin's address has no MX) |
-| Unsubscribe: page, one-click POST without CSRF, undo | |
+| Unsubscribe: page, one-click POST without CSRF, undo | In-app bulk with push ON to a real device |
+| In-app bulk: honest counts, gate per recipient, Pashto delivered, 7-day cooldown | Gate flipping mid-run (specced: recorded `skipped`) |
 
 ## Styling
 

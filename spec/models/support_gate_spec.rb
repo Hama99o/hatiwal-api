@@ -45,8 +45,11 @@ RSpec.describe "Support gate (admin side)" do
   # admin feature, which would put a "removed listing" chat in front of v1.0.4
   # users. Admin code must go through Conversation.admin_support_thread_for.
   # Do not delete this because it "only greps": that is the point.
-  it "no admin controller, job, mailer or service calls the ungated support_thread_for!" do
-    offenders = Dir[Rails.root.join("app/{controllers/admin,jobs,mailers,services}/**/*.rb")].select do |file|
+  it "no admin controller, job, mailer, service or model calls the ungated support_thread_for!" do
+    # Models too: bulk in-app delivery lives in one (AdminBulkInAppDelivery).
+    # conversation.rb is where it is DEFINED; that is the only exemption.
+    files = Dir[Rails.root.join("app/{controllers/admin,jobs,mailers,services,models}/**/*.rb")]
+    offenders = (files - [ Rails.root.join("app/models/conversation.rb").to_s ]).select do |file|
       File.read(file).include?("support_thread_for!")
     end
 

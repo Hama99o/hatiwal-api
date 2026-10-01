@@ -1,18 +1,41 @@
-<%# All four language versions at once. Each box says how many recipients read
-    that language, and — when it's empty — exactly what they will get instead. %>
-<% by_lang = @audience.by_language %>
+<%# Channels, then the four language versions. Each language box shows how
+    many of the people the TICKED channels reach read it (the script in
+    _language_versions switches between the per-channel counts). %>
 <% if @bulk.errors.any? %>
   <div id="bulk-errors" class="ad-callout ad-callout--danger">
     <%= @bulk.errors.full_messages.to_sentence %>
   </div>
 <% end %>
+<% by_channel = {
+     "email"  => @audience.reached_by_language(email: true, in_app: false),
+     "in_app" => @audience.reached_by_language(email: false, in_app: true),
+     "both"   => @audience.reached_by_language(email: true, in_app: true)
+   } %>
 
 <%= form_with url: preview_admin_bulk_emails_path, method: :post, data: { turbo: false }, id: "bulk-form",
       authenticity_token: form_authenticity_token do |f| %>
   <% admin_filter_values.compact.each do |k, v| %><%= hidden_field_tag k, v %><% end %>
 
-  <%= render "language_versions", counts: by_lang, raw: @raw_content,
-             fallback: @bulk.fallback_locale, follow_channel: false %>
+  <fieldset class="ad-checks">
+    <legend>Send by</legend>
+    <label class="channel" data-channel="email">
+      <%= check_box_tag "channels[]", "email", @bulk.via_email?, id: "channel-email" %>
+      <span>Email — <%= @audience.recipients_count %> can receive</span>
+    </label>
+    <label class="channel" data-channel="in_app">
+      <%= check_box_tag "channels[]", "in_app", @bulk.via_in_app?, id: "channel-in_app" %>
+      <span>In-app message from Hatiwal Support — <%= @audience.in_app_recipients_count %> can receive · <%= @audience.in_app_blocked_count %> can't</span>
+    </label>
+    <%# A broadcast push lights up every phone at once: OFF unless chosen, each time. %>
+    <label class="ad-check" id="bulk-push-row">
+      <%= check_box_tag :push, "1", @bulk.push?, id: "bulk-push" %>
+      <span>Also send a push notification (in-app only) — <%= @audience.in_app_push_reachable_count %> of
+        <%= @audience.in_app_recipients_count %> can receive one. Off unless you tick it.</span>
+    </label>
+  </fieldset>
+
+  <%= render "language_versions", counts: by_channel[@bulk.via_email? && @bulk.via_in_app? ? "both" : (@bulk.via_in_app? ? "in_app" : "email")],
+             counts_by_channel: by_channel, raw: @raw_content, fallback: @bulk.fallback_locale, follow_channel: true %>
 
   <div class="ad-actions ad-gap-top">
     <% buttons.each do |label, path, extra| %>

@@ -1,4 +1,5 @@
-# Bulk email to a filtered segment of users (docs/EMAIL.md). Email only.
+# Bulk MESSAGE to a filtered segment of users (docs/EMAIL.md): email and/or
+# in-app from Hatiwal Support.
 #
 # The audience is the SAME filter set as the users index (Admin::UserFilterSet),
 # applied by the same code, so the segment listed there is the segment that
@@ -28,6 +29,10 @@ module Admin
 
     def test
       return render(:new, status: :unprocessable_content) unless @bulk.valid?
+      unless @bulk.via_email?
+        flash.now[:alert] = "Only email can be tested. There is no admin app to receive an in-app test."
+        return preview_again
+      end
 
       Admin::MailQuota.assert_dev_recipient_allowed!(current_admin_user.email)
       @bulk.filled_locales.each do |loc|
@@ -44,26 +49,31 @@ module Admin
     def create
       return render(:new, status: :unprocessable_content) unless @bulk.valid?
 
-      count = @audience.recipients_count
+      # People reached across the chosen channels (counted once) — re-computed
+      # NOW, so a segment that changed since preview is refused.
+      count = reached_count
       if params[:confirm_count].to_i != count
-        flash.now[:alert] = "Type the number of recipients (#{count}) to send. " \
+        flash.now[:alert] = "Type the number of people (#{count}) to send. " \
                             "If you typed the number shown earlier, the segment has changed since — check it again."
         return preview_again
       end
       if count.zero?
-        flash.now[:alert] = "Nobody in this segment can receive it."
+        flash.now[:alert] = "Nobody in this segment can receive it on the chosen channel(s)."
         return preview_again
       end
-      if count > Admin::MailQuota.remaining
-        flash.now[:alert] = quota_refusal(count)
+      email_recipients = @bulk.via_email? ? @audience.recipients.to_a : []
+      in_app_recipients = @bulk.via_in_app? ? @audience.in_app_recipients.to_a : []
+      if email_recipients.size > Admin::MailQuota.remaining
+        flash.now[:alert] = quota_refusal(email_recipients.size)
         return preview_again
       end
-      recipients = @audience.recipients.to_a
-      recipients.each { |u| Admin::MailQuota.assert_dev_recipient_allowed!(u.email) }
+      email_recipients.each { |u| Admin::MailQuota.assert_dev_recipient_allowed!(u.email) }
+      assert_dev_push_safe!(in_app_recipients)
 
-      snapshot!(recipients)
+      snapshot!(email_recipients, in_app_recipients)
       AdminBulkEmailJob.perform_later(@bulk.id)
-      log_admin_action("bulk_email", target: @bulk, details: "#{count} recipients · #{@bulk.segment}")
+      log_admin_action("bulk_message", target: @bulk,
+                                       details: "#{@bulk.channels.join(' + ')} · #{count} people · #{@bulk.segment}")
       redirect_to admin_bulk_email_path(@bulk), notice: "Sending to #{helpers.pluralize(count, 'person', plural: 'people')}."
     rescue Admin::MailQuota::DevRecipientNotAllowed => e
       flash.now[:alert] = "Refused, nothing sent: #{e.message}"
@@ -73,11 +83,14 @@ module Admin
     def show
       @rows = @bulk.admin_emails.includes(:user).order(:id).page(params[:page]).per(50)
       @counts = @bulk.counts
+      @in_app_rows = @bulk.in_app_deliveries.includes(:user).order(:id).limit(200)
+      @in_app_counts = @bulk.in_app_counts
     end
 
     def stop
       @bulk.update!(status: :stopped)
-      cancelled = @bulk.admin_emails.queued.update_all(status: AdminEmail.statuses[:cancelled])
+      cancelled = @bulk.admin_emails.queued.update_all(status: AdminEmail.statuses[:cancelled]) +
+                  @bulk.in_app_deliveries.queued.update_all(status: AdminBulkInAppDelivery.statuses[:cancelled])
       log_admin_action("bulk_email_stop", target: @bulk, details: "#{cancelled} not sent")
       redirect_to admin_bulk_email_path(@bulk), notice: "Stopped. #{cancelled} not sent."
     end
@@ -102,8 +115,14 @@ module Admin
       @audience = Admin::BulkAudience.new(apply_admin_filters(User.all))
       raw = params.fetch(:content, {}).permit(AdminBulkEmail::LOCALES.index_with { %i[subject body] }).to_h
       @raw_content = raw
+      # The first visit (no form posted yet) defaults to email, as before.
+      channels = params.key?(:channels) ? Array(params[:channels]) : %w[email]
+      via_email = channels.include?("email")
       @bulk = AdminBulkEmail.new(admin_user: current_admin_user,
-                                 content: AdminBulkEmail.normalize_content(raw),
+                                 via_email: via_email, via_in_app: channels.include?("in_app"),
+                                 # A broadcast push is chosen deliberately each time; off otherwise.
+                                 push: channels.include?("in_app") && params[:push] == "1",
+                                 content: AdminBulkEmail.normalize_content(raw, subject: via_email),
                                  fallback_locale: params[:fallback_locale].presence_in(AdminBulkEmail::LOCALES) || "en",
                                  segment: admin_filter_summary.presence || "All users",
                                  filter_params: admin_filter_values.compact)
@@ -113,18 +132,34 @@ module Admin
       @bulk = AdminBulkEmail.find(params[:id])
     end
 
-    # One row per recipient, each with the version for their language — what
-    # the admin approved is exactly what sends.
-    def snapshot!(recipients)
+    def reached_count = @audience.reached(email: @bulk.via_email?, in_app: @bulk.via_in_app?).size
+
+    # One row per recipient per channel, each with the version for their
+    # language — what the admin approved is exactly what sends.
+    def snapshot!(email_recipients, in_app_recipients)
       AdminBulkEmail.transaction do
-        @bulk.recipients_count = recipients.size
+        @bulk.recipients_count = reached_count
         @bulk.save!
-        recipients.each do |user|
+        email_recipients.each do |user|
           loc = @bulk.locale_for(user.preferred_language)
           @bulk.admin_emails.create!(user: user, admin_user: current_admin_user, locale: loc,
                                      subject: @bulk.content[loc]["subject"], body: @bulk.content[loc]["body"])
         end
+        in_app_recipients.each do |user|
+          loc = @bulk.locale_for(user.preferred_language)
+          @bulk.in_app_deliveries.create!(user: user, locale: loc, body: @bulk.content[loc]["body"])
+        end
       end
+    end
+
+    # Development: a broadcast PUSH would reach real phones holding a token in
+    # this database. Refuse loudly rather than light them up from dev.
+    def assert_dev_push_safe!(in_app_recipients)
+      return unless Rails.env.development? && @bulk.push?
+      return if in_app_recipients.none? { |u| u.push_token.present? }
+
+      raise Admin::MailQuota::DevRecipientNotAllowed,
+            "development won't send a broadcast push to devices (recipients hold push tokens); untick push"
     end
 
     # A throwaway row for rendering: never saved, never sent to a real user.
@@ -134,6 +169,8 @@ module Admin
     end
 
     def rendered_html(loc)
+      return nil unless @bulk.via_email?
+
       html = AdminMessageMailer.bulk(draft_row(loc), to: "preview@invalid").html_part&.body&.decoded
       html && String.new(html) # plain String: escaped into srcdoc like any value
     end

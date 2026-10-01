@@ -23,6 +23,8 @@ module Admin
       bulks = AdminBulkEmail.includes(:admin_user).recent.limit(HISTORY_LIMIT)
       @entries = (outreaches.to_a + bulks.to_a).sort_by(&:created_at).reverse.first(HISTORY_LIMIT)
       @bulk_counts = AdminEmail.where(admin_bulk_email_id: bulks.map(&:id)).group(:admin_bulk_email_id, :status).count
+      @bulk_in_app_counts = AdminBulkInAppDelivery.where(admin_bulk_email_id: bulks.map(&:id))
+                                                  .group(:admin_bulk_email_id, :status).count
     end
 
     def new

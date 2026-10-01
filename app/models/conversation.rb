@@ -262,6 +262,12 @@ class Conversation < ApplicationRecord
   # messaging can open one, so they are on it — or SUPPORT_ADMIN_INITIATE is on
   # (most users have updated). Otherwise a v1.0.4 user would get it as a
   # "removed listing" chat. The ONE place this is decided; views only reflect it.
+  # The user archived or deleted their side of this thread — for a broadcast,
+  # that means "no announcements, please" (Message#update_conversation_last_message_at).
+  def muted_by_buyer?
+    buyer_archived_at.present? || buyer_deleted_at.present?
+  end
+
   def self.admin_initiate_enabled?
     ActiveModel::Type::Boolean.new.cast(ENV.fetch("SUPPORT_ADMIN_INITIATE", "false"))
   end

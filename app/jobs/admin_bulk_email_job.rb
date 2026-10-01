@@ -1,4 +1,4 @@
-# Sends a bulk email in batches (docs/EMAIL.md).
+# Sends a bulk message — email and/or in-app — in batches (docs/EMAIL.md).
 #
 # Each run sends up to BATCH rows still `queued`, then re-enqueues itself after
 # PAUSE — that is the rate limit. Every row is claimed atomically by
@@ -30,6 +30,13 @@ class AdminBulkEmailJob < ApplicationJob
       end
       row.deliver!
     end
+    # In-app: no mail quota (nothing goes through Gmail), same batching, and
+    # each delivery re-checks the support gate itself.
+    bulk.in_app_deliveries.queued.order(:id).limit(BATCH).each do |row|
+      return if bulk.reload.stopped?
+
+      row.deliver!
+    end
 
     if bulk.remaining?
       self.class.set(wait: PAUSE).perform_later(bulk.id)
@@ -41,8 +48,10 @@ class AdminBulkEmailJob < ApplicationJob
   private
 
   def mark_interrupted(bulk)
+    error = "interrupted mid-send; not retried because it may already have been delivered"
     bulk.admin_emails.sending.where(updated_at: ...STUCK_AFTER.ago)
-        .update_all(status: AdminEmail.statuses[:failed],
-                    error: "interrupted mid-send; not retried because it may already have been delivered")
+        .update_all(status: AdminEmail.statuses[:failed], error: error)
+    bulk.in_app_deliveries.sending.where(updated_at: ...STUCK_AFTER.ago)
+        .update_all(status: AdminBulkInAppDelivery.statuses[:failed], error: error)
   end
 end

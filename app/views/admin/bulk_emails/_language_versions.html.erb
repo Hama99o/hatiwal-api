@@ -10,6 +10,8 @@
       fallback        the chosen fallback locale
       follow_channel  true: subject boxes show only while #channel-email is ticked
                       (in-app messages have no subject); false: always shown
+      counts_by_channel  optional { "email"/"in_app"/"both" => counts } — the box
+                      counts switch live with the ticked channels
 
     Class names (.bulk-lang/.bulk-subject/.bulk-body/.fallback-warning/
     .fallback-badge, #fallback-locale) are read by the script below and specs. %>
@@ -27,7 +29,9 @@
   <% Admin::LanguageVersions::LOCALES.each do |loc| %>
     <% rtl = %w[ps fa ur].include?(loc) %>
     <% n = counts[loc].to_i %>
-    <fieldset class="bulk-lang ad-lang" data-locale="<%= loc %>" data-count="<%= n %>">
+    <% per = (local_assigns[:counts_by_channel] || {}).transform_values { |c| c[loc].to_i } %>
+    <fieldset class="bulk-lang ad-lang" data-locale="<%= loc %>" data-count="<%= n %>"
+              data-count-email="<%= per["email"] %>" data-count-in-app="<%= per["in_app"] %>" data-count-both="<%= per["both"] %>">
       <legend>
         <%= names[loc] %> — <span class="lang-count"><%= n %></span> recipient<%= "s" unless n == 1 %>
         <%# The inline display is STATE, not styling: the script below toggles it. %>
@@ -61,10 +65,21 @@
       var bodyOk = set.querySelector(".bulk-body").value.trim() !== "";
       return bodyOk && (!subjectsOn() || set.querySelector(".bulk-subject").value.trim() !== "");
     }
+    function channelKey() {
+      var e = document.getElementById("channel-email"), a = document.getElementById("channel-in_app");
+      if (!e || !a) return null;
+      return e.checked && a.checked ? "Both" : (a.checked ? "InApp" : "Email");
+    }
     function refresh() {
-      var on = subjectsOn();
+      var on = subjectsOn(), key = channelKey();
+      var push = document.getElementById("bulk-push-row"), inApp = document.getElementById("channel-in_app");
+      if (push && inApp) push.style.display = inApp.checked ? "" : "none";
       document.querySelectorAll(".lang-subject").forEach(function (el) { el.style.display = on ? "" : "none"; });
       document.querySelectorAll(".bulk-lang").forEach(function (set) {
+        if (key && set.dataset["count" + key] !== undefined && set.dataset["count" + key] !== "") {
+          set.dataset.count = set.dataset["count" + key];
+          set.querySelector(".lang-count").textContent = set.dataset.count;
+        }
         var loc = set.dataset.locale, n = parseInt(set.dataset.count, 10), w = set.querySelector(".fallback-warning");
         set.querySelector(".fallback-badge").style.display = loc === fb.value ? "" : "none";
         if (loc === fb.value) {

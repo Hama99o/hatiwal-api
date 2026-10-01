@@ -83,4 +83,31 @@ email only:
   only go to the mail account itself; anything else **raises** (`MailQuota.
   assert_dev_recipient_allowed!`) — at confirm and again per row.
 
-Not built: in-app bulk, open/click tracking.
+### In-app bulk ("Bulk message", built 2026-10-01)
+
+Tick **In-app** (alone or with Email) on the bulk screen: a message from
+Hatiwal Support is posted into each recipient's support thread, in their
+language. A Support thread has **no unsubscribe**, so the restraints are:
+
+- **The gate, per recipient**: only users who already have a support thread
+  (or everyone, once `SUPPORT_ADMIN_INITIATE` is on). Counted before sending
+  ("3 can receive in-app · 37 can't") and **re-checked per delivery at send
+  time** — a refused one is recorded `skipped`, never given a thread.
+- **Archive = mute for broadcasts.** A broadcast is delivered into an archived
+  thread quietly: it stays archived and gets no push. A *personal* reply still
+  brings it back. (`Message#broadcast`; do not merge the two rules.)
+- **Push off unless chosen**, each time, with "N of M can receive one" beside
+  the box; "N of M can't receive a push" is always shown.
+- **One broadcast per person per 7 days** (`AdminBulkEmail::IN_APP_COOLDOWN`);
+  recent recipients are excluded and counted.
+- **Plain text, ≤ 1000 chars** (a chat message).
+- **The confirm says it**: "They can't unsubscribe from it — only archive
+  Support."
+- No Gmail quota (nothing goes through Gmail). In development a broadcast
+  **push** is refused if any recipient holds a token.
+
+One-to-one Messages is one box in the recipient's language; the four-language
+system is bulk-only (owner: "for one user we dont need 4").
+
+Not built: a per-user "mute announcements" toggle (needs mobile UI — archive
+covers it), open/click tracking.

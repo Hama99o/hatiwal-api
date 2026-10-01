@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -61,11 +61,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
     t.string "fallback_locale", default: "en", null: false
     t.jsonb "filter_params", default: {}, null: false
     t.datetime "finished_at"
+    t.boolean "push", default: false, null: false
     t.integer "recipients_count", default: 0, null: false
     t.string "segment"
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
+    t.boolean "via_email", default: true, null: false
+    t.boolean "via_in_app", default: false, null: false
     t.index ["admin_user_id"], name: "index_admin_bulk_emails_on_admin_user_id"
+  end
+
+  create_table "admin_bulk_in_app_deliveries", force: :cascade do |t|
+    t.bigint "admin_bulk_email_id", null: false
+    t.text "body", null: false
+    t.datetime "created_at", null: false
+    t.text "error"
+    t.string "locale"
+    t.bigint "message_id"
+    t.string "push_note"
+    t.datetime "sent_at"
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["admin_bulk_email_id"], name: "index_admin_bulk_in_app_deliveries_on_admin_bulk_email_id"
+    t.index ["message_id"], name: "index_admin_bulk_in_app_deliveries_on_message_id"
+    t.index ["user_id", "sent_at"], name: "index_admin_bulk_in_app_deliveries_on_user_id_and_sent_at"
+    t.index ["user_id"], name: "index_admin_bulk_in_app_deliveries_on_user_id"
   end
 
   create_table "admin_emails", force: :cascade do |t|
@@ -450,6 +471,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_180000) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "admin_audit_logs", "admin_users"
   add_foreign_key "admin_bulk_emails", "admin_users"
+  add_foreign_key "admin_bulk_in_app_deliveries", "admin_bulk_emails"
+  add_foreign_key "admin_bulk_in_app_deliveries", "messages"
+  add_foreign_key "admin_bulk_in_app_deliveries", "users"
   add_foreign_key "admin_emails", "admin_bulk_emails"
   add_foreign_key "admin_emails", "admin_users"
   add_foreign_key "admin_emails", "users"

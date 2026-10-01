@@ -98,6 +98,10 @@ class Message < ApplicationRecord
 
   after_create :update_conversation_last_message_at
 
+  # Set (in memory, never stored) on a BROADCAST — one in-app bulk message
+  # posted into many users' Support threads. See update_conversation_last_message_at.
+  attr_accessor :broadcast
+
   def read?
     read_at.present?
   end
@@ -161,9 +165,15 @@ class Message < ApplicationRecord
     end
   end
 
+  # A new message brings an archived/deleted support thread back — EXCEPT a
+  # broadcast. Two different things, and the distinction is the whole feature:
+  # someone who archived Support still wants the ANSWER to the question they
+  # asked (a personal reply resurfaces the thread), but archiving is how they
+  # say they don't want ANNOUNCEMENTS (a broadcast is delivered into the thread
+  # quietly and leaves it archived). Do not merge these into one rule.
   def update_conversation_last_message_at
     conversation.update_column(:last_message_at, created_at)
-    conversation.resurface_support_thread!
+    conversation.resurface_support_thread! unless broadcast
   end
 
   # The listing this offer is about, or nil when the conversation's listing has

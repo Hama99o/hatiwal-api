@@ -30,6 +30,63 @@ class Admin::BulkAudience
                            .merge("other" => counts.except(*AdminBulkEmail::LOCALES).values.sum)
   end
 
+  # ── In-app (no email confirmation needed; the gate decides) ──────────────
+  # Every member in the segment who isn't deleted.
+  def in_app_base = @matched.where(deleted_at: nil)
+
+  # Passes the support gate (has a thread already, or SUPPORT_ADMIN_INITIATE).
+  def in_app_allowed
+    return in_app_base if Conversation.admin_initiate_enabled?
+
+    in_app_base.where(id: Conversation.kind_support.select(:buyer_id))
+  end
+
+  def in_app_blocked_count = in_app_base.count - in_app_allowed.count
+
+  # Got an in-app broadcast within the cooldown — excluded, and counted.
+  def in_app_recent_ids
+    AdminBulkInAppDelivery.recent_sent(AdminBulkEmail::IN_APP_COOLDOWN.ago).select(:user_id)
+  end
+
+  def in_app_cooled_count = in_app_allowed.where(id: in_app_recent_ids).count
+
+  def in_app_recipients = in_app_allowed.where.not(id: in_app_recent_ids)
+  def in_app_recipients_count = in_app_recipients.count
+
+  # Archived/deleted Support: delivered quietly, never pushed.
+  def in_app_muted_count
+    in_app_recipients.where(id: Conversation.kind_support.where("buyer_archived_at IS NOT NULL OR buyer_deleted_at IS NOT NULL")
+                                                       .select(:buyer_id)).count
+  end
+
+  # Could get a push at all (holds a token and hasn't muted Support).
+  def in_app_push_reachable_count
+    muted = Conversation.kind_support.where("buyer_archived_at IS NOT NULL OR buyer_deleted_at IS NOT NULL").select(:buyer_id)
+    in_app_recipients.where.not(push_token: [ nil, "" ]).where.not(id: muted).count
+  end
+
+  def in_app_by_language
+    counts = in_app_recipients.group(:preferred_language).count
+    AdminBulkEmail::LOCALES.index_with { |loc| counts.fetch(loc, 0) }
+                           .merge("other" => counts.except(*AdminBulkEmail::LOCALES).values.sum)
+  end
+
+  # Readers per language among the people the chosen channels reach.
+  def reached_by_language(email:, in_app:)
+    counts = User.where(id: reached(email: email, in_app: in_app)).group(:preferred_language).count
+    AdminBulkEmail::LOCALES.index_with { |loc| counts.fetch(loc, 0) }
+                           .merge("other" => counts.except(*AdminBulkEmail::LOCALES).values.sum)
+  end
+
+  # People reached by the chosen channels (someone on both counts once) —
+  # the number the admin types to confirm.
+  def reached(email:, in_app:)
+    ids = []
+    ids |= recipients.pluck(:id) if email
+    ids |= in_app_recipients.pluck(:id) if in_app
+    ids
+  end
+
   private
 
   # Confirmed and not opted out.

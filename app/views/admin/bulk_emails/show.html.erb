@@ -1,10 +1,10 @@
-<% content_for(:title) { "Bulk email ##{@bulk.id}" } %>
+<% content_for(:title) { "Bulk message ##{@bulk.id}" } %>
 <% c = @counts %>
 <% names = AdminBulkEmail::LANGUAGE_NAMES %>
 
 <header class="ad-page-header">
   <div>
-    <h1 class="ad-page-header__title main-content__page-title">Bulk email — <span dir="auto"><%= @bulk.content.dig(@bulk.fallback_locale, "subject") %></span></h1>
+    <h1 class="ad-page-header__title main-content__page-title">Bulk message (<%= @bulk.channels.join(" + ") %>) — <span dir="auto"><%= @bulk.content.dig(@bulk.fallback_locale, "subject").presence || @bulk.content.dig(@bulk.fallback_locale, "body").to_s.truncate(60) %></span></h1>
     <p class="ad-page-header__subtitle">
       Segment: <%= @bulk.segment %> · languages written: <%= @bulk.filled_locales.map { |l| names[l] }.join(", ") %>
       (fallback <%= names[@bulk.fallback_locale] %>) · by <%= @bulk.admin_user.email %> · <%= l(@bulk.created_at, format: :short) %>
@@ -21,10 +21,19 @@
   </div>
 </header>
 
+<% ia = @in_app_counts %>
 <p id="bulk-status" class="ad-callout">
     <span class="ad-badge ad-badge--brand"><%= @bulk.status.humanize %></span>
-    <%= c["sent"].to_i %> sent · <%= c["failed"].to_i %> failed · <%= c["queued"].to_i + c["sending"].to_i %> waiting ·
-    <%= c["cancelled"].to_i %> cancelled — of <%= @bulk.recipients_count %>
+    <% if @bulk.via_email? %>
+      Email: <%= c["sent"].to_i %> sent · <%= c["failed"].to_i %> failed · <%= c["queued"].to_i + c["sending"].to_i %> waiting ·
+      <%= c["cancelled"].to_i %> cancelled.
+    <% end %>
+    <% if @bulk.via_in_app? %>
+      <span id="bulk-in-app-status">In-app: <%= ia["sent"].to_i %> delivered · <%= ia["skipped"].to_i %> refused by the gate ·
+      <%= ia["failed"].to_i %> failed · <%= ia["queued"].to_i + ia["sending"].to_i %> waiting · <%= ia["cancelled"].to_i %> cancelled.</span>
+      Push <%= @bulk.push? ? "on" : "off" %>.
+    <% end %>
+    — <%= pluralize(@bulk.recipients_count, "person", plural: "people") %>
 </p>
 <% if @bulk.paused_daily_limit? %>
     <p class="ad-callout ad-callout--warning">
@@ -51,6 +60,24 @@
   </table>
   <%= paginate @rows %>
 </section>
+
+<% if @bulk.via_in_app? %>
+  <h2 class="ad-section__title ad-gap-top">In-app deliveries</h2>
+  <table id="bulk-in-app-recipients" class="ad-table">
+    <thead><tr><th>Recipient</th><th>Language</th><th>Status</th><th>Push</th><th>When</th></tr></thead>
+    <tbody>
+      <% @in_app_rows.each do |r| %>
+        <tr>
+          <td><%= link_to r.user.full_name.presence || r.user.email, admin_user_path(r.user) %></td>
+          <td><%= names[r.locale] %></td>
+          <td><%= r.status %><%= ": #{r.error}" if r.error.present? %></td>
+          <td><%= r.push_note %></td>
+          <td><%= r.sent_at ? l(r.sent_at, format: :short) : "—" %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
 
 <% if @bulk.sending? %>
   <script>setTimeout(function () { if (document.visibilityState === "visible") location.reload(); }, 10000);</script>

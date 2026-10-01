@@ -11,7 +11,7 @@
   </div>
   <div class="ad-actions">
     <%= link_to "New message", new_admin_message_path, class: "button", id: "new-message" %>
-    <%= link_to "Bulk email", new_admin_bulk_email_path, class: "button button--alt", id: "new-bulk-email" %>
+    <%= link_to "Bulk message", new_admin_bulk_email_path, class: "button button--alt", id: "new-bulk-email" %>
   </div>
 </header>
 
@@ -34,9 +34,13 @@
             <tr class="bulk-row">
               <td class="ad-nowrap ad-text-muted"><%= l(o.created_at, format: :short) %></td>
               <td><%= link_to pluralize(o.recipients_count, "person", plural: "people"), admin_bulk_email_path(o) %><span class="ad-sub"><%= o.segment %></span></td>
-              <td><span class="ad-badge ad-badge--brand ad-badge--plain">Bulk email</span><span class="ad-sub"><%= o.filled_locales.join(" · ") %></span></td>
+              <td><span class="ad-badge ad-badge--brand ad-badge--plain">Bulk <%= o.channels.join(" + ").downcase %></span><span class="ad-sub"><%= o.filled_locales.join(" · ") %></span></td>
               <td dir="auto"><strong><%= o.content.dig(o.fallback_locale, "subject") %></strong><br><%= o.content.dig(o.fallback_locale, "body").to_s.truncate(120) %></td>
-              <td><%= o.status.humanize %>: <%= n.(:sent) %> sent · <%= n.(:failed) %> failed · <%= n.(:queued) + n.(:sending) %> waiting<%= " · #{n.(:cancelled)} cancelled" if n.(:cancelled).positive? %></td>
+              <% ia = ->(st) { @bulk_in_app_counts[[ o.id, st.to_s ]].to_i } %>
+              <td><%= o.status.humanize %>:
+                <% if o.via_email? %>email <%= n.(:sent) %> sent · <%= n.(:failed) %> failed · <%= n.(:queued) + n.(:sending) %> waiting<%= " · #{n.(:cancelled)} cancelled" if n.(:cancelled).positive? %><% end %>
+                <% if o.via_in_app? %><%= " · " if o.via_email? %>in-app <%= ia.(:sent) %> delivered · <%= ia.(:skipped) %> refused<%= " · #{ia.(:failed)} failed" if ia.(:failed).positive? %><% end %>
+              </td>
               <td class="ad-text-muted"><%= o.admin_user&.email %></td>
             </tr>
             <% next %>
