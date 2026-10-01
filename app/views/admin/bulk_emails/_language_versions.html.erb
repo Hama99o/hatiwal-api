@@ -16,36 +16,36 @@
     Class names (.bulk-lang/.bulk-subject/.bulk-body/.fallback-warning/
     .fallback-badge, #fallback-locale) are read by the script below and specs. %>
 <% names = Admin::LanguageVersions::NAMES %>
-<label class="ad-inline-select">
+<label class="hw-inline-select">
   <strong>Fallback language</strong> — for anyone whose language box is empty:
   <%= select_tag :fallback_locale, options_for_select(Admin::LanguageVersions::LOCALES.map { |l| [ names[l], l ] }, fallback),
-        id: "fallback-locale", class: "ad-select" %>
+        id: "fallback-locale", class: "hw-select" %>
 </label>
 <% if counts["other"].to_i.positive? %>
-  <p class="ad-note ad-step"><%= counts["other"] %> recipient(s) have no language set and always get the fallback.</p>
+  <p class="hw-note hw-step"><%= counts["other"] %> recipient(s) have no language set and always get the fallback.</p>
 <% end %>
 
-<div class="ad-lang-grid">
+<div class="hw-lang-grid">
   <% Admin::LanguageVersions::LOCALES.each do |loc| %>
     <% rtl = %w[ps fa ur].include?(loc) %>
     <% n = counts[loc].to_i %>
     <% per = (local_assigns[:counts_by_channel] || {}).transform_values { |c| c[loc].to_i } %>
-    <fieldset class="bulk-lang ad-lang" data-locale="<%= loc %>" data-count="<%= n %>"
+    <fieldset class="bulk-lang hw-lang" data-locale="<%= loc %>" data-count="<%= n %>"
               data-count-email="<%= per["email"] %>" data-count-in-app="<%= per["in_app"] %>" data-count-both="<%= per["both"] %>">
       <legend>
         <%= names[loc] %> — <span class="lang-count"><%= n %></span> recipient<%= "s" unless n == 1 %>
         <%# The inline display is STATE, not styling: the script below toggles it. %>
-        <span class="fallback-badge ad-lang__badge"<% unless loc == fallback %> style="display:none;"<% end %>>(fallback)</span>
+        <span class="fallback-badge hw-lang__badge"<% unless loc == fallback %> style="display:none;"<% end %>>(fallback)</span>
       </legend>
       <% unless subjects == :never %>
         <div class="lang-subject">
           <%= text_field_tag "content[#{loc}][subject]", raw.dig(loc, "subject"), placeholder: "Subject (email)",
-                dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::SUBJECT_MAX, class: "bulk-subject ad-input" %>
+                dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::SUBJECT_MAX, class: "bulk-subject hw-input" %>
         </div>
       <% end %>
       <%= text_area_tag "content[#{loc}][body]", raw.dig(loc, "body"), rows: 6, placeholder: "Message",
-            dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::BODY_MAX, class: "bulk-body ad-textarea" %>
-      <p class="fallback-warning ad-lang__warn"></p>
+            dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::BODY_MAX, class: "bulk-body hw-textarea" %>
+      <p class="fallback-warning hw-lang__warn"></p>
     </fieldset>
   <% end %>
 </div>

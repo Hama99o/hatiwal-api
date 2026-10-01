@@ -17,41 +17,41 @@
 %>
 
 <% content_for(:header_middle) do %>
-  <span class="ad-badges">
-    <span class="ad-badge <%= user.account_blocked? ? 'ad-badge--danger' : 'ad-badge--success' %>"><%= user.status.to_s.humanize %></span>
-    <% if user.verified? %><span class="ad-badge ad-badge--brand">Verified</span><% end %>
-    <% if user.seller_mode? %><span class="ad-badge ad-badge--gold">Seller</span><% end %>
-    <% if active_count.positive? %><span class="ad-badge ad-badge--warning"><%= active_count %>/<%= threshold %> warnings</span><% end %>
-    <% if reports.any? %><span class="ad-badge ad-badge--warning"><%= pluralize(reports.size, "report") %></span><% end %>
+  <span class="hw-badges">
+    <span class="hw-badge <%= user.account_blocked? ? 'hw-badge--danger' : 'hw-badge--success' %>"><%= user.status.to_s.humanize %></span>
+    <% if user.verified? %><span class="hw-badge hw-badge--brand">Verified</span><% end %>
+    <% if user.seller_mode? %><span class="hw-badge hw-badge--gold">Seller</span><% end %>
+    <% if active_count.positive? %><span class="hw-badge hw-badge--warning"><%= active_count %>/<%= threshold %> warnings</span><% end %>
+    <% if reports.any? %><span class="hw-badge hw-badge--warning"><%= pluralize(reports.size, "report") %></span><% end %>
   </span>
 <% end %>
 
 <% content_for(:before_main) do %>
-<div class="ad-panels">
-  <section id="user-messages" class="ad-panel ad-panel--brand">
-    <div class="ad-panel__head"><h2 class="ad-panel__title">Messages</h2></div>
-    <div class="ad-actions">
+<div class="hw-panels">
+  <section id="user-messages" class="hw-panel hw-panel--brand">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Messages</h2></div>
+    <div class="hw-actions">
       <%= link_to "Send mail", new_admin_message_path(user_id: page.resource.id, mode: "email"), class: "button", id: "message-user" %>
     <%= link_to "Send message", new_admin_message_path(user_id: page.resource.id, mode: "in_app"), class: "button", id: "message-user-in-app" %>
       <% if support_thread %>
         <%= link_to "Open support conversation", admin_support_conversation_path(support_thread), class: "button button--alt" %>
       <% end %>
     </div>
-    <p class="ad-kv">
+    <p class="hw-kv">
       <span>Email: <%= user.emailable? ? "available" : "not available (#{user.email_refusal_reason})" %></span>
       <span>In-app: <%= Conversation.admin_can_message?(user) ? "available" : "not available (#{Conversation.admin_message_refusal(user)})" %></span>
     </p>
 
     <% if outreaches.any? %>
-      <div class="ad-table-wrap ad-gap-top">
-        <table id="user-message-history" class="ad-table">
+      <div class="hw-table-wrap hw-gap-top">
+        <table id="user-message-history" class="hw-table">
           <tbody>
             <% outreaches.each do |o| %>
               <tr>
-                <td class="ad-nowrap ad-text-muted"><%= l(o.created_at, format: :short) %></td>
-                <td class="ad-nowrap"><%= o.channels.join(" + ") %></td>
+                <td class="hw-nowrap hw-text-muted"><%= l(o.created_at, format: :short) %></td>
+                <td class="hw-nowrap"><%= o.channels.join(" + ") %></td>
                 <td dir="auto"><%= o.subject.presence || o.body.truncate(60) %></td>
-                <td class="<%= 'ad-text-danger' if o.admin_email&.failed? %>">
+                <td class="<%= 'hw-text-danger' if o.admin_email&.failed? %>">
                   <%= [ ("email #{o.admin_email.status}" if o.admin_email), ("in-app · #{o.push_note}" if o.via_in_app?) ].compact.join(" · ") %>
                 </td>
               </tr>
@@ -59,43 +59,43 @@
           </tbody>
         </table>
       </div>
-      <%= link_to "All messages →", admin_messages_path, class: "ad-link" %>
+      <%= link_to "All messages →", admin_messages_path, class: "hw-link" %>
     <% end %>
   </section>
 
-  <section class="ad-panel ad-panel--warning">
-    <div class="ad-panel__head">
-      <h2 class="ad-panel__title">Warnings — <%= active_count %> of <%= threshold %> active</h2>
+  <section class="hw-panel hw-panel--warning">
+    <div class="hw-panel__head">
+      <h2 class="hw-panel__title">Warnings — <%= active_count %> of <%= threshold %> active</h2>
     </div>
-    <p class="ad-panel__text ad-panel__text--muted">
+    <p class="hw-panel__text hw-panel__text--muted">
       Each warning is active for <%= UserWarning::ACTIVE_PERIOD.inspect %> then decays.
       Reaching <%= threshold %> active warnings auto-suspends the user (lifts automatically as warnings expire).
     </p>
 
     <% unless user.account_blocked? %>
-      <%= form_with url: warn_admin_user_path(user), method: :post, data: { turbo: false }, class: "ad-form-row" do |f| %>
-        <%= f.select :category, UserWarning.categories.keys.map { |c| [ c.humanize, c ] }, {}, class: "ad-select" %>
-        <%= f.text_field :reason, placeholder: "Reason (shown to the user)", class: "ad-input", dir: "auto" %>
+      <%= form_with url: warn_admin_user_path(user), method: :post, data: { turbo: false }, class: "hw-form-row" do |f| %>
+        <%= f.select :category, UserWarning.categories.keys.map { |c| [ c.humanize, c ] }, {}, class: "hw-select" %>
+        <%= f.text_field :reason, placeholder: "Reason (shown to the user)", class: "hw-input", dir: "auto" %>
         <%= f.submit "Issue warning", class: "button",
               data: { confirm: "Issue a warning to #{user.full_name}?" } %>
       <% end %>
     <% end %>
 
     <% if warnings.any? %>
-      <div class="ad-table-wrap">
-        <table class="ad-table">
+      <div class="hw-table-wrap">
+        <table class="hw-table">
           <thead><tr><th>Category</th><th>Reason</th><th>Issued</th><th>Status</th></tr></thead>
           <tbody>
             <% warnings.each do |w| %>
               <tr>
-                <td class="ad-nowrap"><%= w.category.to_s.humanize %></td>
+                <td class="hw-nowrap"><%= w.category.to_s.humanize %></td>
                 <td dir="auto"><%= w.reason %></td>
-                <td class="ad-nowrap"><%= w.created_at.strftime("%Y-%m-%d") %></td>
+                <td class="hw-nowrap"><%= w.created_at.strftime("%Y-%m-%d") %></td>
                 <td>
                   <% if w.active? %>
-                    <span class="ad-badge ad-badge--warning">active → expires <%= w.expires_at.strftime("%Y-%m-%d") %></span>
+                    <span class="hw-badge hw-badge--warning">active → expires <%= w.expires_at.strftime("%Y-%m-%d") %></span>
                   <% else %>
-                    <span class="ad-badge ad-badge--plain">expired</span>
+                    <span class="hw-badge hw-badge--plain">expired</span>
                   <% end %>
                 </td>
               </tr>
@@ -104,15 +104,15 @@
         </table>
       </div>
     <% else %>
-      <p class="ad-empty">No warnings yet.</p>
+      <p class="hw-empty">No warnings yet.</p>
     <% end %>
   </section>
 
-  <section class="ad-panel">
-    <div class="ad-panel__head"><h2 class="ad-panel__title">Reports against this user (<%= reports.size %>)</h2></div>
+  <section class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Reports against this user (<%= reports.size %>)</h2></div>
     <% if reports.any? %>
-      <div class="ad-table-wrap">
-        <table class="ad-table">
+      <div class="hw-table-wrap">
+        <table class="hw-table">
           <thead><tr><th>Report</th><th>What</th><th>Reason</th><th>Status</th></tr></thead>
           <tbody>
             <% reports.each do |r| %>
@@ -126,54 +126,54 @@
                   <% end %>
                 </td>
                 <td><%= r.reason.to_s.humanize %></td>
-                <td><span class="ad-badge <%= r.status.to_s == 'pending' ? 'ad-badge--warning' : 'ad-badge--plain' %>"><%= r.status %></span></td>
+                <td><span class="hw-badge <%= r.status.to_s == 'pending' ? 'hw-badge--warning' : 'hw-badge--plain' %>"><%= r.status %></span></td>
               </tr>
             <% end %>
           </tbody>
         </table>
       </div>
     <% else %>
-      <p class="ad-empty">No reports against this user.</p>
+      <p class="hw-empty">No reports against this user.</p>
     <% end %>
   </section>
 
-  <section class="ad-panel">
-    <div class="ad-panel__head"><h2 class="ad-panel__title">Block relationships</h2></div>
-    <p class="ad-panel__text ad-panel__text--muted">
+  <section class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Block relationships</h2></div>
+    <p class="hw-panel__text hw-panel__text--muted">
       User-to-user blocks (a privacy tool between members — separate from an admin ban).
     </p>
-    <div class="ad-split">
+    <div class="hw-split">
       <div>
         <strong>Has blocked (<%= blocked.size %>)</strong>
         <% if blocked.any? %>
-          <ul class="ad-list">
+          <ul class="hw-list">
             <% blocked.each do |u| %>
               <li dir="auto"><%= link_to(u.full_name.presence || "User ##{u.id}", [ namespace, u ]) %></li>
             <% end %>
           </ul>
         <% else %>
-          <p class="ad-empty">None</p>
+          <p class="hw-empty">None</p>
         <% end %>
       </div>
       <div>
         <strong>Blocked by (<%= blocked_by.size %>)</strong>
         <% if blocked_by.any? %>
-          <ul class="ad-list">
+          <ul class="hw-list">
             <% blocked_by.each do |u| %>
               <li dir="auto"><%= link_to(u.full_name.presence || "User ##{u.id}", [ namespace, u ]) %></li>
             <% end %>
           </ul>
         <% else %>
-          <p class="ad-empty">None</p>
+          <p class="hw-empty">None</p>
         <% end %>
       </div>
     </div>
   </section>
 
-  <section class="ad-panel ad-panel--danger ad-panel--wide">
-    <div class="ad-panel__head"><h2 class="ad-panel__title">Account moderation</h2></div>
+  <section class="hw-panel hw-panel--danger hw-panel--wide">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Account moderation</h2></div>
     <% if user.account_blocked? %>
-      <div class="ad-callout ad-callout--danger">
+      <div class="hw-callout hw-callout--danger">
         This account is <strong><%= user.status.upcase %></strong> — the user
         cannot log in and is told they are blocked.
         <% if user.block_reason.present? %>
@@ -183,19 +183,19 @@
       <%= button_to "Unblock user", unblock_admin_user_path(user),
             method: :patch, data: { turbo: false }, class: "button" %>
     <% else %>
-      <p class="ad-panel__text">
+      <p class="hw-panel__text">
         Blocking bans this user from the whole app immediately (use for severe cases —
         warnings are the gradual path). They’ll see the reason you enter below.
       </p>
-      <%= form_with url: block_admin_user_path(user), method: :patch, data: { turbo: false }, class: "ad-form-row" do |f| %>
-        <%= f.text_field :block_reason, placeholder: "Reason shown to the user (optional)", class: "ad-input", dir: "auto" %>
+      <%= form_with url: block_admin_user_path(user), method: :patch, data: { turbo: false }, class: "hw-form-row" do |f| %>
+        <%= f.text_field :block_reason, placeholder: "Reason shown to the user (optional)", class: "hw-input", dir: "auto" %>
         <%= f.submit "Block user", class: "button button--danger",
               data: { confirm: "Block #{user.full_name}? They will be signed out and told they are blocked." } %>
       <% end %>
     <% end %>
   </section>
 </div>
-<h2 class="ad-section__title ad-record-title">All fields</h2>
+<h2 class="hw-section__title hw-record-title">All fields</h2>
 <% end %>
 
 <%= render template: "administrate/application/show", locals: { page: page } %>

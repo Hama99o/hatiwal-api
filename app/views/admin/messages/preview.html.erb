@@ -1,27 +1,27 @@
 <% content_for(:title) { "Preview message" } %>
 
-<header class="ad-page-header">
+<header class="hw-page-header">
   <div>
-    <h1 class="ad-page-header__title main-content__page-title">Preview</h1>
-    <p class="ad-page-header__subtitle">Exactly what they'll get. Nothing has been sent yet.</p>
+    <h1 class="hw-page-header__title main-content__page-title">Preview</h1>
+    <p class="hw-page-header__subtitle">Exactly what they'll get. Nothing has been sent yet.</p>
   </div>
 </header>
 
-<section class="ad-card">
+<section class="hw-card">
   <%= render "recipient" %>
 
 
   <% if @sender.email? && @rendered %>
-    <h2 class="ad-preview-label">Email — <span dir="auto"><%= @sender.subject %></span></h2>
+    <h2 class="hw-preview-label">Email — <span dir="auto"><%= @sender.subject %></span></h2>
     <%# The exact HTML the user will receive, escaped into srcdoc and sandboxed. %>
     <iframe id="email-preview" title="Email preview" sandbox srcdoc="<%= @rendered %>"
-            class="ad-preview-frame"></iframe>
+            class="hw-preview-frame"></iframe>
   <% end %>
 
   <% if @sender.in_app? %>
-    <h2 class="ad-preview-label">In the app, from Hatiwal Support</h2>
-    <div id="in-app-preview" dir="auto" class="ad-bubble ad-bubble--preview ad-bubble__body"><%= @sender.body %></div>
-    <p class="ad-note ad-step">Push: <%= @sender.push_note %></p>
+    <h2 class="hw-preview-label">In the app, from Hatiwal Support</h2>
+    <div id="in-app-preview" dir="auto" class="hw-bubble hw-bubble--preview hw-bubble__body"><%= @sender.body %></div>
+    <p class="hw-note hw-step">Push: <%= @sender.push_note %></p>
   <% end %>
 
   <% channels = [ ("email" if @sender.email?), ("in the app" if @sender.in_app?) ].compact.join(" and ") %>

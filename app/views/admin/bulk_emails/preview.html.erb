@@ -8,10 +8,10 @@
                      .map { |l| "#{by_lang[l]} #{names[l]}" } %>
 <% fallback_note << "#{by_lang['other']} with no language set" if by_lang["other"].positive? %>
 
-<header class="ad-page-header">
+<header class="hw-page-header">
   <div>
-    <h1 class="ad-page-header__title main-content__page-title">Preview — <%= bulk_title.downcase %> (<%= @bulk.channels.join(" + ") %>)</h1>
-    <p class="ad-page-header__subtitle">Exactly what each language group gets. Nothing has been sent yet.</p>
+    <h1 class="hw-page-header__title main-content__page-title">Preview — <%= bulk_title.downcase %> (<%= @bulk.channels.join(" + ") %>)</h1>
+    <p class="hw-page-header__subtitle">Exactly what each language group gets. Nothing has been sent yet.</p>
   </div>
 </header>
 
@@ -19,27 +19,27 @@
   <%= render "audience" %>
 
   <% if fallback_note.any? %>
-    <p id="fallback-summary" class="ad-callout ad-callout--warning">
+    <p id="fallback-summary" class="hw-callout hw-callout--warning">
       <%= fallback_note.to_sentence %> recipient(s) will receive the <strong><%= names[@bulk.fallback_locale] %></strong> version.
     </p>
   <% end %>
 
   <% (@rendered || {}).compact.each do |loc, html| %>
-    <h2 class="ad-preview-label">
+    <h2 class="hw-preview-label">
       <%= names[loc] %> — <%= @bulk.locale_for(loc) == loc ? by_lang[loc] : 0 %> own<%= " + fallback recipients" if loc == @bulk.fallback_locale %>
       · <span dir="auto"><%= @bulk.content.dig(loc, "subject") %></span>
     </h2>
     <iframe class="bulk-preview" data-locale="<%= loc %>" title="<%= names[loc] %> preview" sandbox srcdoc="<%= html %>"
-            class="ad-preview-frame ad-preview-frame--short"></iframe>
+            class="hw-preview-frame hw-preview-frame--short"></iframe>
   <% end %>
 
   <% if @bulk.via_in_app? %>
     <% @bulk.filled_locales.each do |loc| %>
-      <h2 class="ad-preview-label">In the app, from Hatiwal Support — <%= names[loc] %></h2>
-      <div class="in-app-bulk-preview ad-bubble ad-bubble--preview ad-bubble__body" data-locale="<%= loc %>"
+      <h2 class="hw-preview-label">In the app, from Hatiwal Support — <%= names[loc] %></h2>
+      <div class="in-app-bulk-preview hw-bubble hw-bubble--preview hw-bubble__body" data-locale="<%= loc %>"
            dir="<%= %w[ps fa ur].include?(loc) ? "rtl" : "ltr" %>"><%= @bulk.content.dig(loc, "body") %></div>
     <% end %>
-    <p class="ad-note ad-step" id="in-app-push-choice">
+    <p class="hw-note hw-step" id="in-app-push-choice">
       Push: sent to everyone who can receive one — <%= @audience.in_app_push_reachable_count %> of <%= in_app_n %>.
     </p>
   <% end %>
@@ -51,7 +51,7 @@
 
   <%# Sending: type the number. "Send to 38 people" is a different decision from "send to 3". %>
   <%= form_with url: admin_bulk_emails_path, method: :post, data: { turbo: false }, id: "bulk-send-form",
-        authenticity_token: form_authenticity_token, class: "ad-confirm" do |f| %>
+        authenticity_token: form_authenticity_token, class: "hw-confirm" do |f| %>
     <% admin_filter_values.compact.each do |k, v| %><%= hidden_field_tag k, v %><% end %>
     <%= hidden_field_tag :fallback_locale, @bulk.fallback_locale %>
     <% if @mode %><%= hidden_field_tag :mode, @mode, id: nil %><% end %>
@@ -67,8 +67,8 @@
       <% end %>
       Type <%= count %> to send.
     </label>
-    <div class="ad-form-row">
-      <%= number_field_tag :confirm_count, nil, id: "confirm-count", min: 0, autocomplete: "off", class: "ad-input" %>
+    <div class="hw-form-row">
+      <%= number_field_tag :confirm_count, nil, id: "confirm-count", min: 0, autocomplete: "off", class: "hw-input" %>
       <%= f.submit "Send to #{count} people", id: "bulk-send", class: "button button--danger", disabled: true, data: { expected: count } %>
     </div>
   <% end %>

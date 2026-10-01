@@ -2,7 +2,7 @@
 <% sender = @sender %>
 <% chosen = Array(params[:channels]) %>
 <% if sender && sender.errors.any? %>
-  <div id="message-errors" class="ad-callout ad-callout--danger">
+  <div id="message-errors" class="hw-callout hw-callout--danger">
     <%= sender.errors.to_sentence %>
   </div>
 <% end %>
@@ -17,15 +17,15 @@
     <%= hidden_field_tag :mode, @mode %>
     <% refusal = @mode == "email" ? @email_refusal : @in_app_refusal %>
     <% if refusal %>
-      <p class="ad-callout ad-callout--danger" id="mode-refusal">Can't send <%= @mode == "email" ? "an email" : "a message" %> to this user: <%= refusal %>.</p>
+      <p class="hw-callout hw-callout--danger" id="mode-refusal">Can't send <%= @mode == "email" ? "an email" : "a message" %> to this user: <%= refusal %>.</p>
     <% end %>
   <% else %>
-    <fieldset class="ad-checks">
+    <fieldset class="hw-checks">
       <legend>Send by</legend>
       <% [ [ "email", "Email", @email_refusal ], [ "in_app", "In-app message from Hatiwal Support", @in_app_refusal ] ].each do |value, label, refusal| %>
         <label class="channel" data-channel="<%= value %>">
           <%= check_box_tag "channels[]", value, chosen.include?(value) && refusal.nil?, disabled: refusal.present?, id: "channel-#{value}" %>
-          <span><%= label %><% if refusal %> <em class="ad-check__why">— not available: <%= refusal %></em><% end %></span>
+          <span><%= label %><% if refusal %> <em class="hw-check__why">— not available: <%= refusal %></em><% end %></span>
         </label>
       <% end %>
     </fieldset>
@@ -37,7 +37,7 @@
   <% names = Admin::LanguageVersions::NAMES %>
   <% reader = @user.preferred_language.presence_in(Admin::LanguageVersions::LOCALES) %>
   <% rtl = %w[ps fa ur].include?(reader) %>
-  <p class="reader-mark ad-lang__reader">
+  <p class="reader-mark hw-lang__reader">
     <% if reader %>
       <%= @user.firstname.presence || "This user" %> reads <%= names[reader] %>: write in <%= names[reader] %> — this box is what they get.
     <% else %>
@@ -46,30 +46,30 @@
   </p>
 
   <% unless @mode == "in_app" %>
-  <div class="ad-field lang-subject">
-    <label class="ad-label" for="subject">Subject <span class="ad-label__hint">(email)</span></label>
-    <%= text_field_tag :subject, params[:subject], maxlength: AdminEmail::SUBJECT_MAX, dir: (rtl ? "rtl" : "auto"), class: "ad-input" %>
+  <div class="hw-field lang-subject">
+    <label class="hw-label" for="subject">Subject <span class="hw-label__hint">(email)</span></label>
+    <%= text_field_tag :subject, params[:subject], maxlength: AdminEmail::SUBJECT_MAX, dir: (rtl ? "rtl" : "auto"), class: "hw-input" %>
   </div>
   <% end %>
 
-  <div class="ad-field">
-    <label class="ad-label" for="body">Message</label>
+  <div class="hw-field">
+    <label class="hw-label" for="body">Message</label>
     <%= text_area_tag :body, params[:body], rows: 9, required: true, maxlength: AdminEmail::BODY_MAX,
-          dir: (rtl ? "rtl" : "auto"), class: "ad-textarea" %>
+          dir: (rtl ? "rtl" : "auto"), class: "hw-textarea" %>
   </div>
 
   <% if @user.email_opt_out_at.present? && @mode != "in_app" %>
-    <label class="ad-check ad-check--warning">
+    <label class="hw-check hw-check--warning">
       <%= check_box_tag :opt_out_acknowledged, "1", params[:opt_out_acknowledged] == "1" %>
       This email is about their account, not an announcement (they unsubscribed from bulk email).
     </label>
   <% end %>
 
-  <div class="ad-actions ad-gap-top">
+  <div class="hw-actions hw-gap-top">
     <% buttons.each do |label, path, extra| %>
       <%= f.button label, formaction: path, **(extra || {}) %>
     <% end %>
-    <%= link_to "Cancel", admin_messages_path, class: "ad-link" %>
+    <%= link_to "Cancel", admin_messages_path, class: "hw-link" %>
   </div>
 <% end %>
 

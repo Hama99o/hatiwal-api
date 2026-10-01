@@ -1,40 +1,40 @@
 <% content_for(:title) { mode_title } %>
 
-<header class="ad-page-header">
+<header class="hw-page-header">
   <div>
-    <h1 class="ad-page-header__title main-content__page-title"><%= mode_title %></h1>
-    <p class="ad-page-header__subtitle"><%= { "email" => "An email to one person.", "in_app" => "A message from Hatiwal Support in one person's app — no subject." }.fetch(@mode, "To one person, by email, in the app as Hatiwal Support, or both.") %></p>
+    <h1 class="hw-page-header__title main-content__page-title"><%= mode_title %></h1>
+    <p class="hw-page-header__subtitle"><%= { "email" => "An email to one person.", "in_app" => "A message from Hatiwal Support in one person's app — no subject." }.fetch(@mode, "To one person, by email, in the app as Hatiwal Support, or both.") %></p>
   </div>
   <%= link_to "← Messages", admin_messages_path, class: "button button--alt" %>
 </header>
 
-<section class="ad-card">
+<section class="hw-card">
   <% if @user %>
     <%= render "recipient" %>
-    <p class="ad-note ad-step">Nothing is sent from this page — you'll see a preview first.</p>
+    <p class="hw-note hw-step">Nothing is sent from this page — you'll see a preview first.</p>
     <%= render "compose_form", buttons: [ [ "Preview", preview_admin_messages_path, { class: "button" } ] ] %>
   <% else %>
     <%= form_with url: new_admin_message_path, method: :get, id: "recipient-search", data: { turbo: false } do %>
       <% if @mode %><%= hidden_field_tag :mode, @mode %><% end %>
-      <label class="ad-label" for="q">Who is this for?</label>
-      <div class="ad-search">
-        <%= search_field_tag :q, params[:q], placeholder: "Name, email or phone", autofocus: true, dir: "auto", class: "ad-input" %>
+      <label class="hw-label" for="q">Who is this for?</label>
+      <div class="hw-search">
+        <%= search_field_tag :q, params[:q], placeholder: "Name, email or phone", autofocus: true, dir: "auto", class: "hw-input" %>
         <button class="button" type="submit">Find</button>
       </div>
     <% end %>
 
     <% if @results %>
       <% if @results.any? %>
-        <ul id="recipient-results" class="ad-results">
+        <ul id="recipient-results" class="hw-results">
           <% @results.each do |u| %>
             <li>
               <%= link_to u.full_name.presence || "User ##{u.id}", new_admin_message_path(user_id: u.id, mode: @mode), dir: "auto" %>
-              <span class="ad-text-muted"> · <%= u.email %><%= " · #{u.phone}" if u.phone.present? %> · <%= u.city %></span>
+              <span class="hw-text-muted"> · <%= u.email %><%= " · #{u.phone}" if u.phone.present? %> · <%= u.city %></span>
             </li>
           <% end %>
         </ul>
       <% else %>
-        <p class="ad-empty ad-gap-top">No one matches “<%= params[:q] %>”.</p>
+        <p class="hw-empty hw-gap-top">No one matches “<%= params[:q] %>”.</p>
       <% end %>
     <% end %>
   <% end %>

@@ -2,7 +2,7 @@
     many of the people the TICKED channels reach read it (the script in
     _language_versions switches between the per-channel counts). %>
 <% if @bulk.errors.any? %>
-  <div id="bulk-errors" class="ad-callout ad-callout--danger">
+  <div id="bulk-errors" class="hw-callout hw-callout--danger">
     <%= @bulk.errors.full_messages.to_sentence %>
   </div>
 <% end %>
@@ -20,13 +20,13 @@
     <%# A fixed channel: no choice to make, and the push option only for messages. %>
     <%= hidden_field_tag :mode, @mode %>
     <% if @mode == "in_app" %>
-      <p class="ad-note" id="bulk-push-row">
+      <p class="hw-note" id="bulk-push-row">
         A push notification goes with it to everyone who can receive one —
         <%= @audience.in_app_push_reachable_count %> of <%= @audience.in_app_recipients_count %>. The rest see it when they next open the app.
       </p>
     <% end %>
   <% else %>
-    <fieldset class="ad-checks">
+    <fieldset class="hw-checks">
       <legend>Send by</legend>
       <label class="channel" data-channel="email">
         <%= check_box_tag "channels[]", "email", @bulk.via_email?, id: "channel-email" %>
@@ -37,7 +37,7 @@
         <span>In-app message from Hatiwal Support — <%= @audience.in_app_recipients_count %> can receive · <%= @audience.in_app_blocked_count %> can't</span>
       </label>
       <%# A broadcast push lights up every phone at once: OFF unless chosen, each time. %>
-      <p class="ad-note" id="bulk-push-row">
+      <p class="hw-note" id="bulk-push-row">
         A push notification goes with it to everyone who can receive one —
         <%= @audience.in_app_push_reachable_count %> of <%= @audience.in_app_recipients_count %>. The rest see it when they next open the app.
       </p>
@@ -49,10 +49,10 @@
              # Mail: subjects always. Message: never (messages have no subject). No mode: follow the Email box.
              subjects: { "email" => :always, "in_app" => :never }.fetch(@mode, :follow) %>
 
-  <div class="ad-actions ad-gap-top">
+  <div class="hw-actions hw-gap-top">
     <% buttons.each do |label, path, extra| %>
       <%= f.button label, formaction: path, **(extra || {}) %>
     <% end %>
-    <%= link_to "Cancel", admin_messages_path, class: "ad-link" %>
+    <%= link_to "Cancel", admin_messages_path, class: "hw-link" %>
   </div>
 <% end %>

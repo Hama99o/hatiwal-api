@@ -1,21 +1,21 @@
 <% content_for(:title) { bulk_title } %>
 
-<header class="ad-page-header">
+<header class="hw-page-header">
   <div>
-    <h1 class="ad-page-header__title main-content__page-title"><%= bulk_title %></h1>
-    <p class="ad-page-header__subtitle"><%= { "email" => "One email", "in_app" => "One in-app message from Hatiwal Support" }.fetch(@mode, "One message") %> to a segment, in each person's language.</p>
+    <h1 class="hw-page-header__title main-content__page-title"><%= bulk_title %></h1>
+    <p class="hw-page-header__subtitle"><%= { "email" => "One email", "in_app" => "One in-app message from Hatiwal Support" }.fetch(@mode, "One message") %> to a segment, in each person's language.</p>
   </div>
   <%= link_to "← Messages", admin_messages_path, class: "button button--alt" %>
 </header>
 
 <section>
-  <p class="ad-step">
-    <span class="ad-step__n">1</span>Choose who it goes to — the same filters as the Users list. Do this first: applying filters reloads the page.
+  <p class="hw-step">
+    <span class="hw-step__n">1</span>Choose who it goes to — the same filters as the Users list. Do this first: applying filters reloads the page.
   </p>
   <%= render "admin/application/filter_bar" %>
   <%= render "audience" %>
-  <p class="ad-step">
-    <span class="ad-step__n">2</span>Write it. Each person gets the version in their language; empty languages get the fallback.
+  <p class="hw-step">
+    <span class="hw-step__n">2</span>Write it. Each person gets the version in their language; empty languages get the fallback.
     Nothing is sent from this page — you'll see a preview first.
   </p>
   <%= render "compose", buttons: [ [ "Preview", preview_admin_bulk_emails_path, { class: "button" } ] ] %>

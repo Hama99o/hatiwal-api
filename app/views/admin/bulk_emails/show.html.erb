@@ -2,15 +2,15 @@
 <% c = @counts %>
 <% names = AdminBulkEmail::LANGUAGE_NAMES %>
 
-<header class="ad-page-header">
+<header class="hw-page-header">
   <div>
-    <h1 class="ad-page-header__title main-content__page-title">Bulk message (<%= @bulk.channels.join(" + ") %>) — <span dir="auto"><%= @bulk.content.dig(@bulk.fallback_locale, "subject").presence || @bulk.content.dig(@bulk.fallback_locale, "body").to_s.truncate(60) %></span></h1>
-    <p class="ad-page-header__subtitle">
+    <h1 class="hw-page-header__title main-content__page-title">Bulk message (<%= @bulk.channels.join(" + ") %>) — <span dir="auto"><%= @bulk.content.dig(@bulk.fallback_locale, "subject").presence || @bulk.content.dig(@bulk.fallback_locale, "body").to_s.truncate(60) %></span></h1>
+    <p class="hw-page-header__subtitle">
       Segment: <%= @bulk.segment %> · languages written: <%= @bulk.filled_locales.map { |l| names[l] }.join(", ") %>
       (fallback <%= names[@bulk.fallback_locale] %>) · by <%= @bulk.admin_user.email %> · <%= l(@bulk.created_at, format: :short) %>
     </p>
   </div>
-  <div class="ad-actions">
+  <div class="hw-actions">
     <%= link_to "← Messages", admin_messages_path, class: "button button--alt" %>
     <% if @bulk.sending? %>
       <%= button_to "Stop", stop_admin_bulk_email_path(@bulk), method: :patch, data: { turbo: false, confirm: "Stop? Anyone not yet sent to won't get it." }, class: "button button--danger", id: "bulk-stop" %>
@@ -22,8 +22,8 @@
 </header>
 
 <% ia = @in_app_counts %>
-<p id="bulk-status" class="ad-callout">
-    <span class="ad-badge ad-badge--brand"><%= @bulk.status.humanize %></span>
+<p id="bulk-status" class="hw-callout">
+    <span class="hw-badge hw-badge--brand"><%= @bulk.status.humanize %></span>
     <% if @bulk.via_email? %>
       Email: <%= c["sent"].to_i %> sent · <%= c["failed"].to_i %> failed · <%= c["queued"].to_i + c["sending"].to_i %> waiting ·
       <%= c["cancelled"].to_i %> cancelled.
@@ -36,7 +36,7 @@
     — <%= pluralize(@bulk.recipients_count, "person", plural: "people") %>
 </p>
 <% if @bulk.paused_daily_limit? %>
-    <p class="ad-callout ad-callout--warning">
+    <p class="hw-callout hw-callout--warning">
       Paused at the daily limit (<%= Admin::MailQuota::DAILY_LIMIT %> in 24 hours) so the sender isn't rejected mid-run.
       <% if (room = Admin::MailQuota.room_at) %>Room again from <%= l(room, format: :short) %>; then press Resume.<% end %>
     </p>
@@ -52,8 +52,8 @@
         <tr>
           <td dir="auto"><%= link_to r.user.full_name.presence || r.user.email, admin_user_path(r.user) %></td>
           <td><%= names[r.locale] %></td>
-          <td class="<%= 'ad-text-danger' if r.failed? %>"><%= r.status %><%= ": #{r.error}" if r.failed? && r.error.present? %></td>
-          <td class="ad-nowrap ad-text-muted"><%= r.sent_at ? l(r.sent_at, format: :short) : "—" %></td>
+          <td class="<%= 'hw-text-danger' if r.failed? %>"><%= r.status %><%= ": #{r.error}" if r.failed? && r.error.present? %></td>
+          <td class="hw-nowrap hw-text-muted"><%= r.sent_at ? l(r.sent_at, format: :short) : "—" %></td>
         </tr>
       <% end %>
     </tbody>
@@ -62,8 +62,8 @@
 </section>
 
 <% if @bulk.via_in_app? %>
-  <h2 class="ad-section__title ad-gap-top">In-app deliveries</h2>
-  <table id="bulk-in-app-recipients" class="ad-table">
+  <h2 class="hw-section__title hw-gap-top">In-app deliveries</h2>
+  <table id="bulk-in-app-recipients" class="hw-table">
     <thead><tr><th>Recipient</th><th>Language</th><th>Status</th><th>Push</th><th>When</th></tr></thead>
     <tbody>
       <% @in_app_rows.each do |r| %>

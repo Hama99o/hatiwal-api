@@ -37,7 +37,7 @@ RSpec.describe "Admin bulk message — in-app", type: :request do
     get new_admin_bulk_email_path(city: "Kabul")
 
     expect(response.body[%r{<span id="in-app-reach">.*?</span>}m]).to include("2 can receive in-app · 1 can't")
-    expect(response.body[%r{<div class="ad-note" id="in-app-push-reach">.*?</div>}m]).to include("1 of 2 can't receive a push")
+    expect(response.body[%r{<div class="hw-note" id="in-app-push-reach">.*?</div>}m]).to include("1 of 2 can't receive a push")
   end
 
   it "the gate is per recipient: sends to those with a thread, never creates one for the rest" do

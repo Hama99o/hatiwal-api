@@ -8,21 +8,21 @@
   target = report.reportable
   is_listing = target.is_a?(Listing)
   is_user = target.is_a?(User)
-  status_tone = { "pending" => "ad-badge--warning", "resolved" => "ad-badge--success" }.fetch(report.status.to_s, "")
+  status_tone = { "pending" => "hw-badge--warning", "resolved" => "hw-badge--success" }.fetch(report.status.to_s, "")
 %>
 
 <% content_for(:header_middle) do %>
-  <span class="ad-badges"><span class="ad-badge <%= status_tone %>"><%= report.status.to_s.humanize %></span></span>
+  <span class="hw-badges"><span class="hw-badge <%= status_tone %>"><%= report.status.to_s.humanize %></span></span>
 <% end %>
 
 <% content_for(:before_main) do %>
-<div class="ad-panels">
-  <section class="ad-panel ad-panel--brand ad-panel--wide">
-    <div class="ad-panel__head">
-      <h2 class="ad-panel__title">Triage — report #<%= report.id %> (<%= report.status %>)</h2>
+<div class="hw-panels">
+  <section class="hw-panel hw-panel--brand hw-panel--wide">
+    <div class="hw-panel__head">
+      <h2 class="hw-panel__title">Triage — report #<%= report.id %> (<%= report.status %>)</h2>
     </div>
 
-    <div class="ad-callout">
+    <div class="hw-callout">
       <strong>Reason:</strong> <%= report.reason.to_s.humanize %>
       <% if report.description.present? %><br><strong>Details:</strong> <span dir="auto"><%= report.description %></span><% end %>
       <br><strong>Reported:</strong>
@@ -36,7 +36,7 @@
       <% end %>
     </div>
 
-    <div class="ad-actions">
+    <div class="hw-actions">
       <% if is_listing && !target.removed? %>
         <%= button_to "Take down listing & resolve", take_down_target_admin_report_path(report),
               method: :patch, data: { turbo: false, confirm: "Take down “#{target.title}” and resolve this report?" },
@@ -59,10 +59,10 @@
       <% end %>
     </div>
 
-    <p class="ad-note">For a permanent ban, open the user above and use the block panel.</p>
+    <p class="hw-note">For a permanent ban, open the user above and use the block panel.</p>
   </section>
 </div>
-<h2 class="ad-section__title ad-record-title">All fields</h2>
+<h2 class="hw-section__title hw-record-title">All fields</h2>
 <% end %>
 
 <%= render template: "administrate/application/show", locals: { page: page } %>

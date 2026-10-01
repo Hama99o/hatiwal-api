@@ -6,20 +6,20 @@
 <% listing = page.resource %>
 
 <% content_for(:header_middle) do %>
-  <span class="ad-badges">
+  <span class="hw-badges">
     <% if listing.removed? %>
-      <span class="ad-badge ad-badge--danger">Taken down</span>
+      <span class="hw-badge hw-badge--danger">Taken down</span>
     <% end %>
-    <span class="ad-badge <%= { 'active' => 'ad-badge--brand', 'reserved' => 'ad-badge--gold', 'sold' => 'ad-badge--success' }.fetch(listing.status.to_s, '') %>"><%= listing.status.to_s.humanize %></span>
+    <span class="hw-badge <%= { 'active' => 'hw-badge--brand', 'reserved' => 'hw-badge--gold', 'sold' => 'hw-badge--success' }.fetch(listing.status.to_s, '') %>"><%= listing.status.to_s.humanize %></span>
   </span>
 <% end %>
 
 <% content_for(:before_main) do %>
-<div class="ad-panels">
-  <section class="ad-panel ad-panel--danger ad-panel--wide">
-    <div class="ad-panel__head"><h2 class="ad-panel__title">Listing moderation</h2></div>
+<div class="hw-panels">
+  <section class="hw-panel hw-panel--danger hw-panel--wide">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Listing moderation</h2></div>
     <% if listing.removed? %>
-      <div class="ad-callout ad-callout--danger">
+      <div class="hw-callout hw-callout--danger">
         This listing was <strong>taken down</strong> on <%= listing.removed_at.strftime("%Y-%m-%d") %> —
         it is hidden from buyers.
         <% if listing.removed_reason.present? %>
@@ -29,19 +29,19 @@
       <%= button_to "Restore listing", restore_admin_listing_path(listing),
             method: :patch, data: { turbo: false }, class: "button" %>
     <% else %>
-      <p class="ad-panel__text">
+      <p class="hw-panel__text">
         Take down a spam/illegal/prohibited listing — it disappears from the buyer
         feed and detail page immediately (the record is kept).
       </p>
-      <%= form_with url: take_down_admin_listing_path(listing), method: :patch, data: { turbo: false }, class: "ad-form-row" do |f| %>
-        <%= f.text_field :removed_reason, placeholder: "Reason (optional)", class: "ad-input", dir: "auto" %>
+      <%= form_with url: take_down_admin_listing_path(listing), method: :patch, data: { turbo: false }, class: "hw-form-row" do |f| %>
+        <%= f.text_field :removed_reason, placeholder: "Reason (optional)", class: "hw-input", dir: "auto" %>
         <%= f.submit "Take down listing", class: "button button--danger",
               data: { confirm: "Take down “#{listing.title}”?" } %>
       <% end %>
     <% end %>
   </section>
 </div>
-<h2 class="ad-section__title ad-record-title">All fields</h2>
+<h2 class="hw-section__title hw-record-title">All fields</h2>
 <% end %>
 
 <%= render template: "administrate/application/show", locals: { page: page } %>

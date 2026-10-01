@@ -1,24 +1,24 @@
 <%# Who this goes to, and what each channel can and can't do for them — shown
     BEFORE writing, so nothing is learned only after sending. %>
-<div id="recipient" class="ad-callout ad-recipient">
+<div id="recipient" class="hw-callout hw-recipient">
   <strong><%= link_to @user.full_name.presence || "User ##{@user.id}", admin_user_path(@user), dir: "auto" %></strong>
   · <%= @user.email %> · language: <%= @user.preferred_language.presence || "—" %>
-  · <%= link_to "change", new_admin_message_path(mode: @mode), class: "ad-link" %>
+  · <%= link_to "change", new_admin_message_path(mode: @mode), class: "hw-link" %>
   <% if @user.push_token.blank? %>
-    <p id="no-push-warning" class="ad-callout ad-callout--warning">
+    <p id="no-push-warning" class="hw-callout hw-callout--warning">
       ⚠️ This user can't receive push notifications<%= " (#{@user.push_registration_error})" if @user.push_registration_error.present? %>.
       An in-app message will only be seen when they next open the app.
     </p>
   <% end %>
   <% if @mode != "email" && @in_app_refusal.nil? && @user.last_app_version.blank? %>
     <%# Informs, never blocks: a message waits in the chat whatever app they have. %>
-    <p id="old-app-note" class="ad-note ad-step">
+    <p id="old-app-note" class="hw-note hw-step">
       ℹ️ This user hasn't used the new app version yet. On the old app (v1.0.4) the message still arrives, but the
       Support chat may look like a removed-listing chat. They can still read and answer it.
     </p>
   <% end %>
   <% if @user.email_opt_out_at.present? %>
-    <p id="opt-out-warning" class="ad-callout ad-callout--warning">
+    <p id="opt-out-warning" class="hw-callout hw-callout--warning">
       ⚠️ Unsubscribed from bulk email on <%= l(@user.email_opt_out_at.to_date) %>. A one-to-one email about their
       account is still allowed — you'll be asked to confirm.
     </p>

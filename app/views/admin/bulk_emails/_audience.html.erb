@@ -1,23 +1,23 @@
 <%# Who receives — and who doesn't, and why, per channel. Nothing is excluded
     silently, and the in-app numbers are shown even when they're embarrassing:
     they are what a broadcast actually achieves today. %>
-<div id="bulk-audience" class="ad-callout">
+<div id="bulk-audience" class="hw-callout">
   <div><strong>Segment:</strong> <%= @bulk.segment %> — <%= @audience.matched_count %> match</div>
 
-  <div id="audience-email" class="ad-gap-top">
+  <div id="audience-email" class="hw-gap-top">
     <strong>Email:</strong>
     <%= @audience.unconfirmed_count %> unconfirmed
     · <%= @audience.opted_out_count %> unsubscribed
     · <%= @audience.unreachable_count %> deleted or placeholder
-    → <strong id="recipient-count" class="ad-badge ad-badge--brand"><%= @audience.recipients_count %> will receive</strong>
-    <div class="ad-note">
+    → <strong id="recipient-count" class="hw-badge hw-badge--brand"><%= @audience.recipients_count %> will receive</strong>
+    <div class="hw-note">
       Only confirmed addresses get bulk email: unconfirmed ones bounce, and bounces get the sender throttled.
       Sent from <%= Rails.application.config.x.mail_sender %> ·
       <%= Admin::MailQuota.remaining %> of <%= Admin::MailQuota::DAILY_LIMIT %> sends left in the last 24 hours.
     </div>
   </div>
 
-  <div id="audience-in-app" class="ad-gap-top">
+  <div id="audience-in-app" class="hw-gap-top">
     <strong>In-app:</strong>
     <span id="in-app-reach"><%= @audience.in_app_recipients_count %> can receive in-app · <%= @audience.in_app_blocked_count %> can't</span>
     <% if @audience.in_app_blocked_count.positive? %>(no support thread yet — needs SUPPORT_ADMIN_INITIATE)<% end %>
@@ -33,7 +33,7 @@
     <% n = @audience.in_app_recipients_count %>
     <% no_push = n - @audience.in_app_push_reachable_count %>
     <% if n.positive? %>
-      <div class="ad-note" id="in-app-push-reach">
+      <div class="hw-note" id="in-app-push-reach">
         <%= no_push %> of <%= n %> can't receive a push notification; they'll see it when they next open the app.
       </div>
     <% end %>

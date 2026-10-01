@@ -79,8 +79,8 @@ RSpec.describe "Admin dashboard", type: :request do
       create(:user, deleted_at: 1.hour.ago)
 
       get admin_root_path(period: "month")
-      chart = response.body[%r{<h3 class="ad-card__title">New users</h3>.*?id="chart-new-users"}m]
-      expect(chart).to include('<p class="ad-card__headline">2</p>')
+      chart = response.body[%r{<h3 class="hw-card__title">New users</h3>.*?id="chart-new-users"}m]
+      expect(chart).to include('<p class="hw-card__headline">2</p>')
         .and include("including accounts deleted since").and include("(1 of these)")
     end
 
@@ -335,10 +335,10 @@ RSpec.describe "Admin dashboard", type: :request do
       get admin_root_path
 
       expect(response).to have_http_status(:ok)
-      section = response.body[/<section class="ad-section" id="app-versions">.*?<\/section>/m]
+      section = response.body[/<section class="hw-section" id="app-versions">.*?<\/section>/m]
       legacy = section[%r{data-metric="legacy-clients">.*?</div>}m]
       expect(legacy).to include("On v1.0.4 or older")
-      expect(legacy[%r{<span class="ad-metric__value">(\d+)</span>}, 1]).to eq("1")
+      expect(legacy[%r{<span class="hw-metric__value">(\d+)</span>}, 1]).to eq("1")
       expect(section).to include("v1.1.0 · android")
     end
   end
@@ -351,10 +351,10 @@ RSpec.describe "Admin dashboard", type: :request do
 
       get admin_root_path
 
-      card = response.body[%r{<div class="ad-tile[^"]*" data-platform="android".*?</span></span>}m]
-      expect(card).to include("ad-tile--danger").and include("0 <span").and include("of 1")
+      card = response.body[%r{<div class="hw-tile[^"]*" data-platform="android".*?</span></span>}m]
+      expect(card).to include("hw-tile--danger").and include("0 <span").and include("of 1")
       # ...and it is raised above everything else, linking down to the reasons.
-      expect(response.body[%r{<div class="ad-alerts" id="attention">.*?<section}m])
+      expect(response.body[%r{<div class="hw-alerts" id="attention">.*?<section}m])
         .to include("Android users can't receive push notifications").and include('href="#push-reach"')
     end
   end
@@ -368,7 +368,7 @@ RSpec.describe "Admin dashboard", type: :request do
 
       get admin_root_path
 
-      card = response.body[%r{<div class="ad-tile[^"]*" data-platform="android".*?</code> × 1}m]
+      card = response.body[%r{<div class="hw-tile[^"]*" data-platform="android".*?</code> × 1}m]
       expect(card).to include("token: Default FirebaseApp is not initialized &lt;script&gt;x&lt;/script&gt;")
       expect(response.body).not_to include("<script>x</script>")
     end
