@@ -3,7 +3,7 @@
 <% by_lang = @audience.by_language %>
 <% names = AdminBulkEmail::LANGUAGE_NAMES %>
 <% if @bulk.errors.any? %>
-  <div id="bulk-errors" style="margin:0 0 1rem;padding:.7rem .9rem;border:1px solid #fca5a5;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:.88rem;">
+  <div id="bulk-errors" class="ad-callout ad-callout--danger">
     <%= @bulk.errors.full_messages.to_sentence %>
   </div>
 <% end %>
@@ -12,40 +12,38 @@
       authenticity_token: form_authenticity_token do |f| %>
   <% admin_filter_values.compact.each do |k, v| %><%= hidden_field_tag k, v %><% end %>
 
-  <label style="display:flex;gap:.5rem;align-items:center;margin:0 0 1rem;font-size:.9rem;">
+  <label class="ad-inline-select">
     <strong>Fallback language</strong> — for everyone whose language box is empty:
     <%= select_tag :fallback_locale, options_for_select(AdminBulkEmail::LOCALES.map { |l| [ names[l], l ] }, @bulk.fallback_locale),
-          id: "fallback-locale", style: "padding:.35rem .5rem;border:1px solid #cbd5e1;border-radius:6px;" %>
+          id: "fallback-locale", class: "ad-select" %>
   </label>
   <% if by_lang["other"].positive? %>
-    <p style="margin:-.5rem 0 1rem;font-size:.8rem;color:#64748b;"><%= by_lang["other"] %> recipient(s) have no language set and always get the fallback.</p>
+    <p class="ad-note ad-step"><%= by_lang["other"] %> recipient(s) have no language set and always get the fallback.</p>
   <% end %>
 
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;">
+  <div class="ad-lang-grid">
     <% AdminBulkEmail::LOCALES.each do |loc| %>
       <% rtl = %w[ps fa ur].include?(loc) %>
-      <fieldset class="bulk-lang" data-locale="<%= loc %>" data-count="<%= by_lang[loc] %>"
-                style="border:1px solid #e2e8f0;border-radius:10px;padding:.8rem 1rem;margin:0;">
-        <legend style="padding:0 .3rem;font-weight:600;">
+      <fieldset class="bulk-lang ad-lang" data-locale="<%= loc %>" data-count="<%= by_lang[loc] %>">
+        <legend>
           <%= names[loc] %> — <span class="lang-count"><%= by_lang[loc] %></span> recipient<%= "s" unless by_lang[loc] == 1 %>
-          <span class="fallback-badge" style="font-size:.72rem;color:#92400e;<%= 'display:none;' unless loc == @bulk.fallback_locale %>">(fallback)</span>
+          <%# The inline display is STATE, not styling: the script below toggles it. %>
+          <span class="fallback-badge ad-lang__badge"<% unless loc == @bulk.fallback_locale %> style="display:none;"<% end %>>(fallback)</span>
         </legend>
         <%= text_field_tag "content[#{loc}][subject]", @raw_content.dig(loc, "subject"), placeholder: "Subject",
-              dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::SUBJECT_MAX, class: "bulk-subject",
-              style: "width:100%;padding:.5rem .6rem;border:1px solid #cbd5e1;border-radius:7px;box-sizing:border-box;margin-bottom:.5rem;" %>
+              dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::SUBJECT_MAX, class: "bulk-subject ad-input" %>
         <%= text_area_tag "content[#{loc}][body]", @raw_content.dig(loc, "body"), rows: 6, placeholder: "Message",
-              dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::BODY_MAX, class: "bulk-body",
-              style: "width:100%;padding:.55rem .6rem;border:1px solid #cbd5e1;border-radius:7px;box-sizing:border-box;" %>
-        <p class="fallback-warning" style="margin:.4rem 0 0;font-size:.8rem;color:#b45309;"></p>
+              dir: (rtl ? "rtl" : "ltr"), maxlength: AdminEmail::BODY_MAX, class: "bulk-body ad-textarea" %>
+        <p class="fallback-warning ad-lang__warn"></p>
       </fieldset>
     <% end %>
   </div>
 
-  <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1rem;align-items:center;">
+  <div class="ad-actions ad-gap-top">
     <% buttons.each do |label, path, extra| %>
       <%= f.button label, formaction: path, **(extra || {}) %>
     <% end %>
-    <%= link_to "Cancel", admin_messages_path, style: "font-size:.88rem;" %>
+    <%= link_to "Cancel", admin_messages_path, class: "ad-link" %>
   </div>
 <% end %>
 

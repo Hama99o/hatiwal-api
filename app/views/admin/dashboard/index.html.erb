@@ -8,129 +8,180 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartkick@5/dist/chartkick.min.js"></script>
+<%# Charts in the page's own type and colours (docs/design/ADMIN_DESIGN.md). %>
+<script>
+  if (window.Chart) {
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.color = "#64748b";
+    Chart.defaults.borderColor = "#eef1f6";
+  }
+</script>
 
-<style>
-  .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin: 1rem 0 2rem; }
-  .dash-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.1rem 1.25rem; }
-  .dash-card .num { font-size: 1.9rem; font-weight: 700; line-height: 1.1; }
-  .dash-card .label { font-size: .8rem; color: #64748b; margin-top: .25rem; }
-  .dash-section { margin-bottom: 2.5rem; }
-  .dash-section h2 { font-size: 1rem; color: #334155; margin: 0 0 .75rem; }
-  .dash-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-  @media (max-width: 900px) { .dash-charts { grid-template-columns: 1fr; } }
-  .growth-period { padding: .25rem .65rem; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; text-decoration: none; }
-  .growth-period--active { background: #6366f1; border-color: #6366f1; color: #fff; }
-</style>
+<%
+  # Chart colours = the brand tokens in admin.css. Listing statuses keep one
+  # meaning everywhere: lapis = live, gold = held, green = sold, grey = draft.
+  status_colors = { "active" => "#12224f", "reserved" => "#e8b23a", "sold" => "#15803d", "draft" => "#a3adbf" }
+  dead_platforms = @push_reach.select { |_, r| r[:users].positive? && r[:with_token].zero? }
+  period_cfg = Admin::GrowthSeries::PERIODS[@growth_period]
+  # Solid bars with rounded ends (Chartkick's default is a translucent fill,
+  # which turns the lapis grey).
+  bar_style = { borderWidth: 0, borderRadius: 4, maxBarThickness: 36 }
+%>
 
-<header class="main-content__header">
-  <h1 class="main-content__page-title">Dashboard</h1>
+<header class="ad-page-header">
+  <div>
+    <h1 class="ad-page-header__title main-content__page-title">Dashboard</h1>
+    <p class="ad-page-header__subtitle">How the marketplace is doing, on Kabul time.</p>
+  </div>
 </header>
 
-<section class="dash-section">
-  <h2>Users</h2>
-  <div class="dash-grid">
-    <div class="dash-card"><div class="num"><%= @stats[:users_total] %></div><div class="label">Total users</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:users_sellers] %></div><div class="label">Sellers</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:users_verified] %></div><div class="label">Verified</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:users_active] %></div><div class="label">Active</div></div>
-  </div>
-</section>
-
-<section class="dash-section">
-  <h2>Listings &amp; reports</h2>
-  <div class="dash-grid">
-    <div class="dash-card"><div class="num"><%= @stats[:listings_total] %></div><div class="label">Total listings</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:listings_active] %></div><div class="label">Active</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:listings_reserved] %></div><div class="label">Reserved</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:listings_sold] %></div><div class="label">Sold</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:listings_draft] %></div><div class="label">Drafts</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:reports_pending] %></div><div class="label">Pending reports</div></div>
-    <div class="dash-card"><div class="num"><%= @stats[:categories_total] %></div><div class="label">Categories</div></div>
-  </div>
-</section>
-
-<section class="dash-section" id="app-versions">
-  <h2>App versions (users seen in the last 30 days)</h2>
-  <div class="dash-grid">
-    <div class="dash-card">
-      <div class="num"><%= @legacy_clients %></div>
-      <div class="label">On v1.0.4 or older (app sends no version)</div>
-    </div>
-    <% @app_versions.each do |(platform, version), count| %>
-      <div class="dash-card">
-        <div class="num"><%= count %></div>
-        <div class="label">v<%= version %> · <%= platform.presence || "unknown platform" %></div>
+<%# Needs attention: the things to act on, before any number. Each item only
+    appears when it is true, and links to where it is dealt with. %>
+<% if @stats[:reports_pending].positive? || dead_platforms.any? %>
+  <div class="ad-alerts" id="attention">
+    <% if @stats[:reports_pending].positive? %>
+      <div class="ad-alert ad-alert--warning">
+        <span class="ad-alert__dot"></span>
+        <div class="ad-alert__body">
+          <span class="ad-alert__title"><%= pluralize(@stats[:reports_pending], "report") %> waiting for review.</span>
+        </div>
+        <%= link_to "Review", admin_reports_path %>
+      </div>
+    <% end %>
+    <% dead_platforms.each do |platform, r| %>
+      <div class="ad-alert ad-alert--danger">
+        <span class="ad-alert__dot"></span>
+        <div class="ad-alert__body">
+          <span class="ad-alert__title"><%= platform == "ios" ? "iPhone" : "Android" %> users can't receive push notifications</span>
+          — 0 of <%= r[:users] %> hold a push token.
+        </div>
+        <a href="#push-reach">Why</a>
       </div>
     <% end %>
   </div>
-  <p style="font-size:.8rem;color:#64748b;margin:.25rem 0 0;">
-    Check the first number before switching on anything an old build can't show
-    (e.g. <code>SUPPORT_ADMIN_INITIATE</code>). Someone using two phones can be counted twice.
-  </p>
+<% end %>
 
-  <h2 style="margin-top:1.5rem;">Push notifications — can they reach people?</h2>
-  <div class="dash-grid" id="push-reach">
-    <% @push_reach.each do |platform, r| %>
-      <% dead = r[:users].positive? && r[:with_token].zero? %>
-      <div class="dash-card" data-platform="<%= platform %>" style="<%= 'border-color:#fca5a5;background:#fef2f2;' if dead %>">
-        <div class="num" style="<%= 'color:#b91c1c;' if dead %>"><%= r[:with_token] %> <span style="font-size:1rem;color:#64748b;">of <%= r[:users] %></span></div>
-        <div class="label"><%= platform == "ios" ? "iPhone" : "Android" %> users who can receive pushes</div>
-        <% if r[:reasons].any? %>
-          <div class="push-reasons" style="margin-top:.5rem;font-size:.75rem;color:#7f1d1d;">
-            <div style="font-weight:600;margin-bottom:.15rem;">Why, as the apps report it:</div>
-            <%# Client-supplied text: output-escaped by ERB, never raw / html_safe. %>
-            <% r[:reasons].each do |reason, count| %>
-              <div style="word-break:break-word;"><code><%= reason %></code> × <%= count %></div>
-            <% end %>
-          </div>
-        <% end %>
-      </div>
-    <% end %>
+<section class="ad-section">
+  <div class="ad-section__head"><h2 class="ad-section__title">Users</h2></div>
+  <div class="ad-metrics">
+    <div class="ad-metric ad-metric--primary"><span class="ad-metric__label">Total users</span><span class="ad-metric__value"><%= @stats[:users_total] %></span></div>
+    <div class="ad-metric"><span class="ad-metric__label">Active</span><span class="ad-metric__value"><%= @stats[:users_active] %></span></div>
+    <div class="ad-metric"><span class="ad-metric__label">Verified</span><span class="ad-metric__value"><%= @stats[:users_verified] %></span></div>
+    <div class="ad-metric"><span class="ad-metric__label">Sellers</span><span class="ad-metric__value"><%= @stats[:users_sellers] %></span></div>
   </div>
-  <p style="font-size:.8rem;color:#64748b;margin:.25rem 0 0;">
-    Users whose app reported its platform in the last 30 days, and how many hold a push token.
-    Red means nobody on that platform can get a notification — on Android, that is Firebase not
-    being configured in the app build (docs/PUSH_NOTIFICATIONS.md).
-  </p>
 </section>
 
-<section class="dash-section" id="growth">
-  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;">
-    <h2>Growth — <%= Admin::GrowthSeries::PERIODS[@growth_period][:label].downcase %></h2>
-    <nav aria-label="Growth period" style="display:flex;gap:.35rem;font-size:.85rem;">
-      <% Admin::GrowthSeries::PERIODS.each do |key, cfg| %>
+<section class="ad-section">
+  <div class="ad-section__head"><h2 class="ad-section__title">Listings &amp; moderation</h2></div>
+  <div class="ad-metrics">
+    <div class="ad-metric ad-metric--primary"><span class="ad-metric__label">Total listings</span><span class="ad-metric__value"><%= @stats[:listings_total] %></span></div>
+    <div class="ad-metric"><span class="ad-metric__label">Active</span><span class="ad-metric__value"><%= @stats[:listings_active] %></span></div>
+    <div class="ad-metric"><span class="ad-metric__label">Reserved</span><span class="ad-metric__value"><%= @stats[:listings_reserved] %></span></div>
+    <div class="ad-metric"><span class="ad-metric__label">Sold</span><span class="ad-metric__value"><%= @stats[:listings_sold] %></span></div>
+    <div class="ad-metric"><span class="ad-metric__label">Drafts</span><span class="ad-metric__value"><%= @stats[:listings_draft] %></span></div>
+    <div class="ad-metric<%= ' ad-metric--attention' if @stats[:reports_pending].positive? %>"><span class="ad-metric__label">Pending reports</span><span class="ad-metric__value"><%= @stats[:reports_pending] %></span></div>
+    <div class="ad-metric"><span class="ad-metric__label">Categories</span><span class="ad-metric__value"><%= @stats[:categories_total] %></span></div>
+  </div>
+</section>
+
+<section class="ad-section" id="growth">
+  <div class="ad-section__head">
+    <h2 class="ad-section__title">Growth — <%= period_cfg[:label].downcase %></h2>
+    <nav class="ad-segmented" aria-label="Growth period">
+      <% Admin::GrowthSeries::PERIODS.each_key do |key| %>
         <%= link_to key.capitalize, admin_root_path(period: key, anchor: "growth"),
               class: "growth-period#{' growth-period--active' if key == @growth_period}",
               "aria-current": (key == @growth_period ? "page" : nil) %>
       <% end %>
     </nav>
   </div>
-  <p style="font-size:.78rem;color:#64748b;margin:.1rem 0 .75rem;">
+  <div class="ad-grid-2">
+    <div class="ad-card">
+      <h3 class="ad-card__title">New users</h3>
+      <p class="ad-card__headline"><%= @new_users.values.sum %></p>
+      <p class="ad-card__sub">
+        In this range. Sign-ups as they happened, including accounts deleted since
+        (<%= @new_users_since_deleted %> of these).
+      </p>
+      <%= column_chart Admin::GrowthSeries.labelled(@new_users, @growth_period), height: "240px",
+            colors: ["#12224f"], dataset: bar_style.merge(backgroundColor: "#12224f"), download: true, id: "chart-new-users", discrete: true %>
+    </div>
+    <div class="ad-card">
+      <h3 class="ad-card__title">New listings</h3>
+      <p class="ad-card__headline"><%= @new_listings.values.sum %></p>
+      <p class="ad-card__sub">In this range.</p>
+      <%= column_chart Admin::GrowthSeries.labelled(@new_listings, @growth_period), height: "240px",
+            colors: ["#e8b23a"], dataset: bar_style.merge(backgroundColor: "#e8b23a"), download: true, id: "chart-new-listings", discrete: true %>
+    </div>
+  </div>
+  <p class="ad-note">
     Counted on Kabul time (UTC+04:30)<%= "; weeks start on Saturday, and each bar is labelled with the Saturday its week begins" if @growth_period == "week" %>.
     The current <%= @growth_period %> is still in progress.
   </p>
-  <div class="dash-charts">
-    <div>
-      <h3 style="font-size:.85rem;color:#475569;margin:0 0 .4rem;">New users — <%= @new_users.values.sum %> in this range</h3>
-      <p style="font-size:.75rem;color:#64748b;margin:-.25rem 0 .4rem;">
-        Sign-ups as they happened, including accounts deleted since
-        (<%= @new_users_since_deleted %> of these).
-      </p>
-      <%= column_chart Admin::GrowthSeries.labelled(@new_users, @growth_period), height: "260px",
-            colors: ["#6366f1"], download: true, id: "chart-new-users", discrete: true %>
+</section>
+
+<section class="ad-section">
+  <div class="ad-section__head"><h2 class="ad-section__title">Composition</h2></div>
+  <div class="ad-grid-2">
+    <div class="ad-card">
+      <h3 class="ad-card__title">Listings by status</h3>
+      <p class="ad-card__sub">Every listing, whatever its status.</p>
+      <%= pie_chart @listings_by_status, height: "240px", donut: true, legend: "bottom",
+            colors: @listings_by_status.keys.map { |k| status_colors.fetch(k.to_s, "#64748b") } %>
     </div>
-    <div>
-      <h3 style="font-size:.85rem;color:#475569;margin:0 0 .4rem;">New listings — <%= @new_listings.values.sum %> in this range</h3>
-      <%= column_chart Admin::GrowthSeries.labelled(@new_listings, @growth_period), height: "260px",
-            colors: ["#10b981"], download: true, id: "chart-new-listings", discrete: true %>
+    <div class="ad-card">
+      <h3 class="ad-card__title">Top categories</h3>
+      <p class="ad-card__sub">The 8 categories with the most listings.</p>
+      <%= bar_chart @top_categories, height: "240px", colors: ["#3a63d6"], dataset: bar_style.merge(backgroundColor: "#3a63d6") %>
     </div>
   </div>
 </section>
 
-<section class="dash-section">
-  <h2>Composition</h2>
-  <div class="dash-charts">
-    <div><%= pie_chart @listings_by_status, height: "260px" %></div>
-    <div><%= column_chart @top_categories, height: "260px", colors: ["#f59e0b"] %></div>
+<%# Technical health: which builds are out there, and whether pushes reach them.
+    Last, because it is read before a release, not every morning. %>
+<section class="ad-section" id="app-versions">
+  <div class="ad-section__head"><h2 class="ad-section__title">App versions <span class="ad-metric__of">· users seen in the last 30 days</span></h2></div>
+  <div class="ad-grid-auto">
+    <div class="ad-tile" data-metric="legacy-clients">
+      <span class="ad-metric__label">On v1.0.4 or older (app sends no version)</span>
+      <span class="ad-metric__value"><%= @legacy_clients %></span>
+    </div>
+    <% @app_versions.each do |(platform, version), count| %>
+      <div class="ad-tile">
+        <span class="ad-metric__label">v<%= version %> · <%= platform.presence || "unknown platform" %></span>
+        <span class="ad-metric__value"><%= count %></span>
+      </div>
+    <% end %>
   </div>
+  <p class="ad-note">
+    Check the first number before switching on anything an old build can't show
+    (e.g. <code>SUPPORT_ADMIN_INITIATE</code>). Someone using two phones can be counted twice.
+  </p>
+</section>
+
+<section class="ad-section" id="push-reach">
+  <div class="ad-section__head"><h2 class="ad-section__title">Push notifications — can they reach people?</h2></div>
+  <div class="ad-grid-2">
+    <% @push_reach.each do |platform, r| %>
+      <% dead = r[:users].positive? && r[:with_token].zero? %>
+      <div class="ad-tile<%= ' ad-tile--danger' if dead %>" data-platform="<%= platform %>">
+        <span class="ad-metric__label"><%= platform == "ios" ? "iPhone" : "Android" %> users who can receive pushes</span>
+        <span class="ad-metric__value"><%= r[:with_token] %> <span class="ad-metric__of">of <%= r[:users] %></span></span>
+        <% if r[:reasons].any? %>
+          <div class="ad-reasons">
+            <div class="ad-reasons__title">Why, as the apps report it:</div>
+            <%# Client-supplied text: output-escaped by ERB, never raw / html_safe. %>
+            <% r[:reasons].each do |reason, count| %>
+              <div class="ad-reasons__item"><code><%= reason %></code> × <%= count %></div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+  <p class="ad-note">
+    Users whose app reported its platform in the last 30 days, and how many hold a push token.
+    Red means nobody on that platform can get a notification — on Android, that is Firebase not
+    being configured in the app build (docs/PUSH_NOTIFICATIONS.md).
+  </p>
 </section>

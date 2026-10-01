@@ -1,14 +1,14 @@
 <%# Who receives — and who doesn't, and why. Nothing is excluded silently. %>
-<div id="bulk-audience" style="margin:0 0 1rem;padding:.8rem 1rem;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font-size:.9rem;">
+<div id="bulk-audience" class="ad-callout">
   <div><strong>Segment:</strong> <%= @bulk.segment %></div>
-  <div style="margin-top:.35rem;">
+  <div class="ad-gap-top">
     <%= @audience.matched_count %> match
     · <%= @audience.unconfirmed_count %> unconfirmed email
     · <%= @audience.opted_out_count %> unsubscribed
     · <%= @audience.unreachable_count %> deleted or placeholder
-    → <strong id="recipient-count" style="font-size:1.05rem;"><%= @audience.recipients_count %> will receive</strong>
+    → <strong id="recipient-count" class="ad-badge ad-badge--brand"><%= @audience.recipients_count %> will receive</strong>
   </div>
-  <div style="margin-top:.35rem;color:#64748b;font-size:.8rem;">
+  <div class="ad-note">
     Only confirmed addresses get bulk email: unconfirmed ones bounce, and bounces get the sender throttled.
     Sent from <%= Rails.application.config.x.mail_sender %> ·
     <%= Admin::MailQuota.remaining %> of <%= Admin::MailQuota::DAILY_LIMIT %> sends left in the last 24 hours.

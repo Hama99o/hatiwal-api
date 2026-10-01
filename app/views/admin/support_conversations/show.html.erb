@@ -1,12 +1,18 @@
 <% user = @conversation.buyer %>
 <% content_for(:title) { "Support — #{user.full_name}" } %>
 
-<header class="main-content__header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-  <h1 class="main-content__page-title">
-    Support — <%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user) %>
-  </h1>
-  <div style="display:flex;gap:.5rem;align-items:center;">
-    <%= link_to "← All support", admin_support_conversations_path %>
+<header class="ad-page-header">
+  <div>
+    <h1 class="ad-page-header__title main-content__page-title">
+      Support — <%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto" %>
+    </h1>
+    <p class="ad-page-header__subtitle">
+      <%= user.email %> · language: <%= user.preferred_language.presence || "—" %> ·
+      <span class="ad-badge <%= @conversation.open? ? 'ad-badge--success' : 'ad-badge--plain' %>"><%= @conversation.status %></span>
+    </p>
+  </div>
+  <div class="ad-actions">
+    <%= link_to "← All support", admin_support_conversations_path, class: "button button--alt" %>
     <% if @conversation.open? %>
       <%= button_to "Close", close_admin_support_conversation_path(@conversation), method: :patch,
             data: { turbo: false }, class: "button button--alt" %>
@@ -17,55 +23,51 @@
   </div>
 </header>
 
-<section class="main-content__body">
-  <p style="margin:0 0 1rem;font-size:.85rem;color:#64748b;">
-    <%= user.email %> · language: <%= user.preferred_language.presence || "—" %> ·
-    status: <%= @conversation.status %>
+<% if user.push_token.blank? %>
+  <p id="support-no-push" class="ad-callout ad-callout--warning">
+    This user can't receive push notifications (no push token<%= " — Android builds have no Firebase yet" if user.last_app_platform == "android" %>).
+    Your reply will reach them only when they next open the app.
   </p>
-  <% if user.push_token.blank? %>
-    <p id="support-no-push" style="margin:0 0 1rem;padding:.6rem .8rem;border:1px solid #fcd34d;border-radius:8px;background:#fffbeb;color:#92400e;font-size:.85rem;">
-      This user can't receive push notifications (no push token<%= " — Android builds have no Firebase yet" if user.last_app_platform == "android" %>).
-      Your reply will reach them only when they next open the app.
-    </p>
-  <% end %>
+<% end %>
 
-  <div id="support-thread" style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:1.5rem;">
+<section class="ad-card">
+  <div id="support-thread" class="ad-thread">
     <% @messages.each do |m| %>
       <% from_support = m.user_id == @conversation.seller_id %>
-      <div style="max-width:70%;padding:.6rem .8rem;border-radius:10px;<%= from_support ? 'align-self:flex-end;background:#eef2ff;border:1px solid #c7d2fe;' : 'align-self:flex-start;background:#fff;border:1px solid #e2e8f0;' %>">
+      <div class="ad-bubble<%= ' ad-bubble--support' if from_support %>">
         <% if m.deleted? %>
-          <em style="color:#94a3b8;">Message deleted</em>
+          <em class="ad-bubble__deleted">Message deleted</em>
         <% else %>
-          <div style="white-space:pre-wrap;" dir="auto"><%= m.body %></div>
+          <div class="ad-bubble__body" dir="auto"><%= m.body %></div>
           <% if m.attachment.attached? %>
-            <div style="margin-top:.35rem;"><%= link_to "📎 #{m.attachment.filename}", rails_blob_path(m.attachment, disposition: "inline"), target: "_blank", rel: "noopener" %></div>
+            <div class="ad-gap-top"><%= link_to "📎 #{m.attachment.filename}", rails_blob_path(m.attachment, disposition: "inline"), target: "_blank", rel: "noopener" %></div>
           <% end %>
         <% end %>
-        <div style="margin-top:.3rem;font-size:.72rem;color:#94a3b8;">
+        <div class="ad-bubble__meta">
           <%= from_support ? "Support#{" · #{m.admin_user.email}" if m.admin_user}" : user.full_name %>
           · <%= l(m.created_at, format: :short) %>
         </div>
       </div>
     <% end %>
     <% if @messages.empty? %>
-      <p style="color:#64748b;">No messages yet.</p>
+      <p class="ad-empty">No messages yet.</p>
     <% end %>
   </div>
 
   <% if @conversation.open? %>
     <%= form_with url: reply_admin_support_conversation_path(@conversation), method: :post,
-          data: { turbo: false }, id: "support-reply" do |f| %>
-      <%= f.text_area :body, rows: 4, required: true, maxlength: 1000, dir: "auto",
-            placeholder: "Reply as Hatiwal Support — the user gets it in the app and as a push.",
-            style: "width:100%;padding:.6rem .7rem;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;" %>
-      <div style="margin-top:.5rem;"><%= f.submit "Send reply", class: "button" %></div>
+          data: { turbo: false }, id: "support-reply", class: "ad-composer" do |f| %>
+      <%= f.text_area :body, rows: 4, required: true, maxlength: 1000, dir: "auto", class: "ad-textarea",
+            placeholder: "Reply as Hatiwal Support — the user gets it in the app and as a push." %>
+      <div class="ad-composer__bar">
+        <p id="support-refresh-note" class="ad-note"></p>
+        <%= f.submit "Send reply", class: "button" %>
+      </div>
     <% end %>
   <% else %>
-    <p style="color:#64748b;">This conversation is closed — the user can't reply. Reopen it to continue.</p>
+    <p class="ad-empty">This conversation is closed — the user can't reply. Reopen it to continue.</p>
   <% end %>
 </section>
-
-<p id="support-refresh-note" style="font-size:.75rem;color:#94a3b8;margin:.5rem 0 0;"></p>
 
 <%# Bring in the user's new messages every few seconds — but NEVER while the
     admin has typed something: a reload would throw the draft away. Plain

@@ -1,17 +1,17 @@
 <%# Who this goes to, and what each channel can and can't do for them — shown
     BEFORE writing, so nothing is learned only after sending. %>
-<div id="recipient" style="margin:0 0 1rem;padding:.8rem 1rem;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;font-size:.88rem;">
-  <strong><%= link_to @user.full_name.presence || "User ##{@user.id}", admin_user_path(@user) %></strong>
+<div id="recipient" class="ad-callout ad-recipient">
+  <strong><%= link_to @user.full_name.presence || "User ##{@user.id}", admin_user_path(@user), dir: "auto" %></strong>
   · <%= @user.email %> · language: <%= @user.preferred_language.presence || "—" %>
-  · <%= link_to "change", new_admin_message_path, style: "font-size:.8rem;" %>
+  · <%= link_to "change", new_admin_message_path, class: "ad-link" %>
   <% if @user.push_token.blank? %>
-    <p id="no-push-warning" style="margin:.5rem 0 0;color:#92400e;">
+    <p id="no-push-warning" class="ad-callout ad-callout--warning">
       ⚠️ This user can't receive push notifications<%= " (#{@user.push_registration_error})" if @user.push_registration_error.present? %>.
       An in-app message will only be seen when they next open the app.
     </p>
   <% end %>
   <% if @user.email_opt_out_at.present? %>
-    <p id="opt-out-warning" style="margin:.5rem 0 0;color:#92400e;">
+    <p id="opt-out-warning" class="ad-callout ad-callout--warning">
       ⚠️ Unsubscribed from bulk email on <%= l(@user.email_opt_out_at.to_date) %>. A one-to-one email about their
       account is still allowed — you'll be asked to confirm.
     </p>

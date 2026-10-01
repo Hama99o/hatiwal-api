@@ -1,59 +1,68 @@
-<%# Triage panel on top of the default Administrate report show page: see what
-    was reported and act on it (take down listing / warn user) in one click,
-    resolving the report at the same time. %>
+<%# A report's admin page: Administrate's header with the report's status
+    beside it, then the triage panel — see what was reported and act on it
+    (take down listing / warn user) in one click, resolving the report at the
+    same time — then every field. The panel sits in :before_main. %>
 
 <%
   report = page.resource
   target = report.reportable
   is_listing = target.is_a?(Listing)
   is_user = target.is_a?(User)
+  status_tone = { "pending" => "ad-badge--warning", "resolved" => "ad-badge--success" }.fetch(report.status.to_s, "")
 %>
 
-<section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #93c5fd;border-radius:12px;background:#eff6ff;">
-  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#1e40af;">🛡️ Triage — report #<%= report.id %> (<%= report.status %>)</h2>
+<% content_for(:header_middle) do %>
+  <span class="ad-badges"><span class="ad-badge <%= status_tone %>"><%= report.status.to_s.humanize %></span></span>
+<% end %>
 
-  <p style="margin:0 0 .25rem;color:#1e3a8a;">
-    <strong>Reason:</strong> <%= report.reason.to_s.humanize %>
-    <% if report.description.present? %><br><strong>Details:</strong> <%= report.description %><% end %>
-  </p>
-  <p style="margin:0 0 .9rem;color:#1e3a8a;">
-    <strong>Reported:</strong>
-    <% if is_listing %>
-      Listing — <%= link_to(target.title.presence || "Listing ##{target.id}", [ namespace, target ]) %>
-      (seller: <%= target.user.full_name %>)<%= " — already taken down" if target.removed? %>
-    <% elsif is_user %>
-      User — <%= link_to(target.full_name.presence || "User ##{target.id}", [ namespace, target ]) %>
-    <% else %>
-      <%= target&.class&.name %> ##<%= target&.id %>
-    <% end %>
-  </p>
+<% content_for(:before_main) do %>
+<div class="ad-panels">
+  <section class="ad-panel ad-panel--brand ad-panel--wide">
+    <div class="ad-panel__head">
+      <h2 class="ad-panel__title">Triage — report #<%= report.id %> (<%= report.status %>)</h2>
+    </div>
 
-  <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;">
-    <% if is_listing && !target.removed? %>
-      <%= button_to "Take down listing & resolve", take_down_target_admin_report_path(report),
-            method: :patch, data: { turbo: false, confirm: "Take down “#{target.title}” and resolve this report?" },
-            class: "button button--danger" %>
-    <% end %>
+    <div class="ad-callout">
+      <strong>Reason:</strong> <%= report.reason.to_s.humanize %>
+      <% if report.description.present? %><br><strong>Details:</strong> <span dir="auto"><%= report.description %></span><% end %>
+      <br><strong>Reported:</strong>
+      <% if is_listing %>
+        Listing — <%= link_to(target.title.presence || "Listing ##{target.id}", [ namespace, target ], dir: "auto") %>
+        (seller: <span dir="auto"><%= target.user.full_name %></span>)<%= " — already taken down" if target.removed? %>
+      <% elsif is_user %>
+        User — <%= link_to(target.full_name.presence || "User ##{target.id}", [ namespace, target ], dir: "auto") %>
+      <% else %>
+        <%= target&.class&.name %> ##<%= target&.id %>
+      <% end %>
+    </div>
 
-    <% if is_listing || is_user %>
-      <%= button_to(is_listing ? "Warn seller & resolve" : "Warn user & resolve",
-            warn_target_admin_report_path(report),
-            method: :patch, data: { turbo: false }, class: "button") %>
-    <% end %>
+    <div class="ad-actions">
+      <% if is_listing && !target.removed? %>
+        <%= button_to "Take down listing & resolve", take_down_target_admin_report_path(report),
+              method: :patch, data: { turbo: false, confirm: "Take down “#{target.title}” and resolve this report?" },
+              class: "button button--danger" %>
+      <% end %>
 
-    <% unless report.resolved? %>
-      <%= button_to "Mark resolved", resolve_admin_report_path(report),
-            method: :patch, data: { turbo: false }, class: "button" %>
-    <% end %>
-    <% unless report.dismissed? %>
-      <%= button_to "Dismiss", dismiss_admin_report_path(report),
-            method: :patch, data: { turbo: false }, class: "button button--alt" %>
-    <% end %>
-  </div>
+      <% if is_listing || is_user %>
+        <%= button_to(is_listing ? "Warn seller & resolve" : "Warn user & resolve",
+              warn_target_admin_report_path(report),
+              method: :patch, data: { turbo: false }, class: "button") %>
+      <% end %>
 
-  <p style="margin:.75rem 0 0;color:#1e3a8a;font-size:.8rem;">
-    For a permanent ban, open the user above and use the block panel.
-  </p>
-</section>
+      <% unless report.resolved? %>
+        <%= button_to "Mark resolved", resolve_admin_report_path(report),
+              method: :patch, data: { turbo: false }, class: "button" %>
+      <% end %>
+      <% unless report.dismissed? %>
+        <%= button_to "Dismiss", dismiss_admin_report_path(report),
+              method: :patch, data: { turbo: false }, class: "button button--alt" %>
+      <% end %>
+    </div>
+
+    <p class="ad-note">For a permanent ban, open the user above and use the block panel.</p>
+  </section>
+</div>
+<h2 class="ad-section__title ad-record-title">All fields</h2>
+<% end %>
 
 <%= render template: "administrate/application/show", locals: { page: page } %>

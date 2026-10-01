@@ -1,201 +1,200 @@
-<%# Moderation controls on top of the default Administrate user show page:
-    1) a warnings/strike panel (issue a warning, see history)
-    2) a block/unblock panel (severe, immediate)
-    Then the default show. %>
+<%# A user's admin page: Administrate's header (name + Edit/Destroy) with the
+    account's status badges beside the name, then one panel per job —
+    message, warn, block, reports, block relationships — then every field.
+    Panels go in Administrate's :before_main hook so they sit between the
+    header and the fields. Styling: app/assets/stylesheets/admin.css. %>
 
 <%
-  warnings = page.resource.warnings.recent
-  active_count = page.resource.active_warnings_count
+  user = page.resource
+  warnings = user.warnings.recent
+  active_count = user.active_warnings_count
   threshold = User::WARNING_BLOCK_THRESHOLD
+  outreaches = user.admin_outreaches.includes(:admin_email, :admin_user).recent.limit(10)
+  support_thread = Conversation.kind_support.find_by(buyer_id: user.id)
+  reports = user.reports_against
+  blocked = user.blocked_users
+  blocked_by = user.blocking_users
 %>
 
-<section style="margin:0 0 1.25rem;padding:1.25rem 1.5rem;border:1px solid #fcd34d;border-radius:12px;background:#fffbeb;">
-  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#92400e;">
-    ⚠️ Warnings — <%= active_count %> of <%= threshold %> active
-  </h2>
-  <p style="margin:0 0 .9rem;color:#92400e;font-size:.85rem;">
-    Each warning is active for <%= UserWarning::ACTIVE_PERIOD.inspect %> then decays.
-    Reaching <%= threshold %> active warnings auto-suspends the user (lifts automatically as warnings expire).
-  </p>
+<% content_for(:header_middle) do %>
+  <span class="ad-badges">
+    <span class="ad-badge <%= user.account_blocked? ? 'ad-badge--danger' : 'ad-badge--success' %>"><%= user.status.to_s.humanize %></span>
+    <% if user.verified? %><span class="ad-badge ad-badge--brand">Verified</span><% end %>
+    <% if user.seller_mode? %><span class="ad-badge ad-badge--gold">Seller</span><% end %>
+    <% if active_count.positive? %><span class="ad-badge ad-badge--warning"><%= active_count %>/<%= threshold %> warnings</span><% end %>
+    <% if reports.any? %><span class="ad-badge ad-badge--warning"><%= pluralize(reports.size, "report") %></span><% end %>
+  </span>
+<% end %>
 
-  <% unless page.resource.account_blocked? %>
-    <%= form_with url: warn_admin_user_path(page.resource), method: :post,
-          data: { turbo: false },
-          style: "display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;" do |f| %>
-      <%= f.select :category, UserWarning.categories.keys.map { |c| [ c.humanize, c ] },
-            {}, style: "padding:.5rem;border:1px solid #cbd5e1;border-radius:6px;" %>
-      <%= f.text_field :reason, placeholder: "Reason (shown to the user)",
-            style: "flex:1;min-width:240px;padding:.55rem .7rem;border:1px solid #cbd5e1;border-radius:6px;" %>
-      <%= f.submit "Issue warning", class: "button",
-            data: { confirm: "Issue a warning to #{page.resource.full_name}?" } %>
-    <% end %>
-  <% end %>
-
-  <% if warnings.any? %>
-    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
-      <thead>
-        <tr style="text-align:left;color:#92400e;">
-          <th style="padding:.35rem .5rem;">Category</th>
-          <th style="padding:.35rem .5rem;">Reason</th>
-          <th style="padding:.35rem .5rem;">Issued</th>
-          <th style="padding:.35rem .5rem;">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% warnings.each do |w| %>
-          <tr style="border-top:1px solid #fde68a;">
-            <td style="padding:.35rem .5rem;"><%= w.category.to_s.humanize %></td>
-            <td style="padding:.35rem .5rem;"><%= w.reason %></td>
-            <td style="padding:.35rem .5rem;"><%= w.created_at.strftime("%Y-%m-%d") %></td>
-            <td style="padding:.35rem .5rem;">
-              <% if w.active? %>
-                <span style="color:#b45309;font-weight:600;">active → expires <%= w.expires_at.strftime("%Y-%m-%d") %></span>
-              <% else %>
-                <span style="color:#9ca3af;">expired</span>
-              <% end %>
-            </td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  <% else %>
-    <p style="margin:0;color:#92400e;font-size:.85rem;">No warnings yet.</p>
-  <% end %>
-</section>
-
-<% outreaches = page.resource.admin_outreaches.includes(:admin_email, :admin_user).recent.limit(10) %>
-<% support_thread = Conversation.kind_support.find_by(buyer_id: page.resource.id) %>
-<section id="user-messages" style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;">
-  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#3730a3;">💬 Messages</h2>
-  <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;">
-    <%= link_to "Message this user", new_admin_message_path(user_id: page.resource.id), class: "button", id: "message-user" %>
-    <% if support_thread %>
-      <%= link_to "Open support conversation", admin_support_conversation_path(support_thread) %>
-    <% end %>
-  </div>
-  <p style="margin:.6rem 0 0;font-size:.82rem;color:#3730a3;">
-    Email: <%= page.resource.emailable? ? "available" : "not available (#{page.resource.email_refusal_reason})" %> ·
-    In-app: <%= Conversation.admin_can_message?(page.resource) ? "available" : "not available (#{Conversation.admin_message_refusal(page.resource)})" %>
-  </p>
-
-  <% if outreaches.any? %>
-    <table id="user-message-history" style="width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.9rem;">
-      <tbody>
-        <% outreaches.each do |o| %>
-          <tr style="border-top:1px solid #e0e7ff;">
-            <td style="padding:.4rem .5rem;color:#64748b;white-space:nowrap;"><%= l(o.created_at, format: :short) %></td>
-            <td style="padding:.4rem .5rem;"><%= o.channels.join(" + ") %></td>
-            <td style="padding:.4rem .5rem;" dir="auto"><%= o.subject.presence || o.body.truncate(60) %></td>
-            <td style="padding:.4rem .5rem;<%= 'color:#b91c1c;' if o.admin_email&.failed? %>">
-              <%= [ ("email #{o.admin_email.status}" if o.admin_email), ("in-app · #{o.push_note}" if o.via_in_app?) ].compact.join(" · ") %>
-            </td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-    <%= link_to "All messages", admin_messages_path, style: "font-size:.82rem;" %>
-  <% end %>
-</section>
-
-<section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;">
-  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#991b1b;">🚫 Account moderation</h2>
-
-  <% if page.resource.account_blocked? %>
-    <p style="margin:0 0 .9rem;color:#7f1d1d;">
-      This account is <strong><%= page.resource.status.upcase %></strong> — the user
-      cannot log in and is told they are blocked.
-      <% if page.resource.block_reason.present? %>
-        <br>Reason given: <em><%= page.resource.block_reason %></em>
-      <% end %>
-    </p>
-    <%= button_to "Unblock user", unblock_admin_user_path(page.resource),
-          method: :patch, data: { turbo: false }, class: "button" %>
-  <% else %>
-    <p style="margin:0 0 .9rem;color:#7f1d1d;">
-      Blocking bans this user from the whole app immediately (use for severe cases —
-      warnings are the gradual path). They’ll see the reason you enter below.
-    </p>
-    <%= form_with url: block_admin_user_path(page.resource), method: :patch,
-          data: { turbo: false },
-          style: "display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;" do |f| %>
-      <%= f.text_field :block_reason, placeholder: "Reason shown to the user (optional)",
-            style: "flex:1;min-width:260px;padding:.55rem .7rem;border:1px solid #cbd5e1;border-radius:6px;" %>
-      <%= f.submit "Block user", class: "button button--danger",
-            data: { confirm: "Block #{page.resource.full_name}? They will be signed out and told they are blocked." } %>
-    <% end %>
-  <% end %>
-</section>
-
-<% reports = page.resource.reports_against %>
-<section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #fdba74;border-radius:12px;background:#fff7ed;">
-  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#9a3412;">📣 Reports against this user (<%= reports.size %>)</h2>
-  <% if reports.any? %>
-    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
-      <thead>
-        <tr style="text-align:left;color:#9a3412;">
-          <th style="padding:.35rem .5rem;">Report</th>
-          <th style="padding:.35rem .5rem;">What</th>
-          <th style="padding:.35rem .5rem;">Reason</th>
-          <th style="padding:.35rem .5rem;">Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% reports.each do |r| %>
-          <tr style="border-top:1px solid #fed7aa;">
-            <td style="padding:.35rem .5rem;"><%= link_to "##{r.id}", [ namespace, r ] %></td>
-            <td style="padding:.35rem .5rem;">
-              <% if r.reportable.is_a?(Listing) %>
-                Listing: <%= link_to(r.reportable.title.presence || "##{r.reportable_id}", [ namespace, r.reportable ]) %>
-              <% else %>
-                This user
-              <% end %>
-            </td>
-            <td style="padding:.35rem .5rem;"><%= r.reason.to_s.humanize %></td>
-            <td style="padding:.35rem .5rem;"><%= r.status %></td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
-  <% else %>
-    <p style="margin:0;color:#9a3412;font-size:.85rem;">No reports against this user.</p>
-  <% end %>
-</section>
-
-<%
-  blocked = page.resource.blocked_users
-  blocked_by = page.resource.blocking_users
-%>
-<section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc;">
-  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#334155;">🚷 Block relationships</h2>
-  <p style="margin:0 0 .75rem;color:#64748b;font-size:.85rem;">
-    User-to-user blocks (a privacy tool between members — separate from an admin ban).
-  </p>
-  <div style="display:flex;gap:2rem;flex-wrap:wrap;">
-    <div>
-      <strong style="color:#334155;">Has blocked (<%= blocked.size %>)</strong>
-      <% if blocked.any? %>
-        <ul style="margin:.35rem 0 0;padding-inline-start:1.1rem;color:#475569;font-size:.85rem;">
-          <% blocked.each do |u| %>
-            <li><%= link_to(u.full_name.presence || "User ##{u.id}", [ namespace, u ]) %></li>
-          <% end %>
-        </ul>
-      <% else %>
-        <p style="margin:.35rem 0 0;color:#94a3b8;font-size:.85rem;">None</p>
+<% content_for(:before_main) do %>
+<div class="ad-panels">
+  <section id="user-messages" class="ad-panel ad-panel--brand">
+    <div class="ad-panel__head"><h2 class="ad-panel__title">Messages</h2></div>
+    <div class="ad-actions">
+      <%= link_to "Message this user", new_admin_message_path(user_id: user.id), class: "button", id: "message-user" %>
+      <% if support_thread %>
+        <%= link_to "Open support conversation", admin_support_conversation_path(support_thread), class: "button button--alt" %>
       <% end %>
     </div>
-    <div>
-      <strong style="color:#334155;">Blocked by (<%= blocked_by.size %>)</strong>
-      <% if blocked_by.any? %>
-        <ul style="margin:.35rem 0 0;padding-inline-start:1.1rem;color:#475569;font-size:.85rem;">
-          <% blocked_by.each do |u| %>
-            <li><%= link_to(u.full_name.presence || "User ##{u.id}", [ namespace, u ]) %></li>
-          <% end %>
-        </ul>
-      <% else %>
-        <p style="margin:.35rem 0 0;color:#94a3b8;font-size:.85rem;">None</p>
-      <% end %>
+    <p class="ad-kv">
+      <span>Email: <%= user.emailable? ? "available" : "not available (#{user.email_refusal_reason})" %></span>
+      <span>In-app: <%= Conversation.admin_can_message?(user) ? "available" : "not available (#{Conversation.admin_message_refusal(user)})" %></span>
+    </p>
+
+    <% if outreaches.any? %>
+      <div class="ad-table-wrap ad-gap-top">
+        <table id="user-message-history" class="ad-table">
+          <tbody>
+            <% outreaches.each do |o| %>
+              <tr>
+                <td class="ad-nowrap ad-text-muted"><%= l(o.created_at, format: :short) %></td>
+                <td class="ad-nowrap"><%= o.channels.join(" + ") %></td>
+                <td dir="auto"><%= o.subject.presence || o.body.truncate(60) %></td>
+                <td class="<%= 'ad-text-danger' if o.admin_email&.failed? %>">
+                  <%= [ ("email #{o.admin_email.status}" if o.admin_email), ("in-app · #{o.push_note}" if o.via_in_app?) ].compact.join(" · ") %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+      <%= link_to "All messages →", admin_messages_path, class: "ad-link" %>
+    <% end %>
+  </section>
+
+  <section class="ad-panel ad-panel--warning">
+    <div class="ad-panel__head">
+      <h2 class="ad-panel__title">Warnings — <%= active_count %> of <%= threshold %> active</h2>
     </div>
-  </div>
-</section>
+    <p class="ad-panel__text ad-panel__text--muted">
+      Each warning is active for <%= UserWarning::ACTIVE_PERIOD.inspect %> then decays.
+      Reaching <%= threshold %> active warnings auto-suspends the user (lifts automatically as warnings expire).
+    </p>
+
+    <% unless user.account_blocked? %>
+      <%= form_with url: warn_admin_user_path(user), method: :post, data: { turbo: false }, class: "ad-form-row" do |f| %>
+        <%= f.select :category, UserWarning.categories.keys.map { |c| [ c.humanize, c ] }, {}, class: "ad-select" %>
+        <%= f.text_field :reason, placeholder: "Reason (shown to the user)", class: "ad-input", dir: "auto" %>
+        <%= f.submit "Issue warning", class: "button",
+              data: { confirm: "Issue a warning to #{user.full_name}?" } %>
+      <% end %>
+    <% end %>
+
+    <% if warnings.any? %>
+      <div class="ad-table-wrap">
+        <table class="ad-table">
+          <thead><tr><th>Category</th><th>Reason</th><th>Issued</th><th>Status</th></tr></thead>
+          <tbody>
+            <% warnings.each do |w| %>
+              <tr>
+                <td class="ad-nowrap"><%= w.category.to_s.humanize %></td>
+                <td dir="auto"><%= w.reason %></td>
+                <td class="ad-nowrap"><%= w.created_at.strftime("%Y-%m-%d") %></td>
+                <td>
+                  <% if w.active? %>
+                    <span class="ad-badge ad-badge--warning">active → expires <%= w.expires_at.strftime("%Y-%m-%d") %></span>
+                  <% else %>
+                    <span class="ad-badge ad-badge--plain">expired</span>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <p class="ad-empty">No warnings yet.</p>
+    <% end %>
+  </section>
+
+  <section class="ad-panel">
+    <div class="ad-panel__head"><h2 class="ad-panel__title">Reports against this user (<%= reports.size %>)</h2></div>
+    <% if reports.any? %>
+      <div class="ad-table-wrap">
+        <table class="ad-table">
+          <thead><tr><th>Report</th><th>What</th><th>Reason</th><th>Status</th></tr></thead>
+          <tbody>
+            <% reports.each do |r| %>
+              <tr>
+                <td><%= link_to "##{r.id}", [ namespace, r ] %></td>
+                <td dir="auto">
+                  <% if r.reportable.is_a?(Listing) %>
+                    Listing: <%= link_to(r.reportable.title.presence || "##{r.reportable_id}", [ namespace, r.reportable ]) %>
+                  <% else %>
+                    This user
+                  <% end %>
+                </td>
+                <td><%= r.reason.to_s.humanize %></td>
+                <td><span class="ad-badge <%= r.status.to_s == 'pending' ? 'ad-badge--warning' : 'ad-badge--plain' %>"><%= r.status %></span></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% else %>
+      <p class="ad-empty">No reports against this user.</p>
+    <% end %>
+  </section>
+
+  <section class="ad-panel">
+    <div class="ad-panel__head"><h2 class="ad-panel__title">Block relationships</h2></div>
+    <p class="ad-panel__text ad-panel__text--muted">
+      User-to-user blocks (a privacy tool between members — separate from an admin ban).
+    </p>
+    <div class="ad-split">
+      <div>
+        <strong>Has blocked (<%= blocked.size %>)</strong>
+        <% if blocked.any? %>
+          <ul class="ad-list">
+            <% blocked.each do |u| %>
+              <li dir="auto"><%= link_to(u.full_name.presence || "User ##{u.id}", [ namespace, u ]) %></li>
+            <% end %>
+          </ul>
+        <% else %>
+          <p class="ad-empty">None</p>
+        <% end %>
+      </div>
+      <div>
+        <strong>Blocked by (<%= blocked_by.size %>)</strong>
+        <% if blocked_by.any? %>
+          <ul class="ad-list">
+            <% blocked_by.each do |u| %>
+              <li dir="auto"><%= link_to(u.full_name.presence || "User ##{u.id}", [ namespace, u ]) %></li>
+            <% end %>
+          </ul>
+        <% else %>
+          <p class="ad-empty">None</p>
+        <% end %>
+      </div>
+    </div>
+  </section>
+
+  <section class="ad-panel ad-panel--danger ad-panel--wide">
+    <div class="ad-panel__head"><h2 class="ad-panel__title">Account moderation</h2></div>
+    <% if user.account_blocked? %>
+      <div class="ad-callout ad-callout--danger">
+        This account is <strong><%= user.status.upcase %></strong> — the user
+        cannot log in and is told they are blocked.
+        <% if user.block_reason.present? %>
+          <br>Reason given: <em dir="auto"><%= user.block_reason %></em>
+        <% end %>
+      </div>
+      <%= button_to "Unblock user", unblock_admin_user_path(user),
+            method: :patch, data: { turbo: false }, class: "button" %>
+    <% else %>
+      <p class="ad-panel__text">
+        Blocking bans this user from the whole app immediately (use for severe cases —
+        warnings are the gradual path). They’ll see the reason you enter below.
+      </p>
+      <%= form_with url: block_admin_user_path(user), method: :patch, data: { turbo: false }, class: "ad-form-row" do |f| %>
+        <%= f.text_field :block_reason, placeholder: "Reason shown to the user (optional)", class: "ad-input", dir: "auto" %>
+        <%= f.submit "Block user", class: "button button--danger",
+              data: { confirm: "Block #{user.full_name}? They will be signed out and told they are blocked." } %>
+      <% end %>
+    <% end %>
+  </section>
+</div>
+<h2 class="ad-section__title ad-record-title">All fields</h2>
+<% end %>
 
 <%= render template: "administrate/application/show", locals: { page: page } %>

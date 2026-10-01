@@ -17,14 +17,16 @@ By default, it renders:
 <head>
   <meta charset="utf-8">
   <meta name="ROBOTS" content="NOODP">
-  <meta name="viewport" content="initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>
     <%= content_for(:title) %> - <%= application_title %>
   </title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="alternate icon" href="/favicon.ico">
   <%= render "stylesheet" %>
-  <%= render "theme" %>
+  <%# The admin's one stylesheet (app/assets/stylesheets/admin.css), after
+      Administrate's so it wins the cascade. %>
+  <%= stylesheet_link_tag "admin", "data-turbo-track": "reload" %>
   <%= csrf_meta_tags %>
   <%= csp_meta_tag if defined?(csp_meta_tag) %>
   <%= render "javascript" %>

@@ -8,10 +8,9 @@ signed-in admin, and a logout button.
 %>
 
 <nav class="navigation">
-  <div class="navigation__brand"
-       style="display:flex;align-items:center;gap:.6rem;padding:.25rem 0 1.25rem;font-weight:700;font-size:1.05rem;">
+  <div class="navigation__brand">
     <%= render "admin/application/logo", size: 34 %>
-    <span>Hatiwal <span style="opacity:.55;font-weight:500;">Admin</span></span>
+    <span>Hatiwal <span class="navigation__brand-sub">Admin</span></span>
   </div>
 
   <%= link_to "Dashboard", admin_root_path,
@@ -44,8 +43,8 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--inactive" %>
 
   <% if respond_to?(:current_admin_user) && current_admin_user %>
-    <div class="navigation__account" style="margin-top:auto;padding-top:1rem;">
-      <p style="font-size:0.75rem;opacity:0.7;margin:0 0 0.25rem;"><%= current_admin_user.email %></p>
+    <div class="navigation__account">
+      <p class="navigation__email"><%= current_admin_user.email %></p>
       <%= button_to "Log out", destroy_admin_user_session_path, method: :delete,
             class: "button button--alt button--nav" %>
     </div>

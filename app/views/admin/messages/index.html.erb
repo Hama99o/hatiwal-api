@@ -1,27 +1,29 @@
 <% content_for(:title) { "Messages" } %>
 
-<header class="main-content__header" style="display:flex;justify-content:space-between;align-items:center;gap:1rem;">
-  <h1 class="main-content__page-title">Messages</h1>
-  <div style="display:flex;gap:.5rem;">
+<header class="ad-page-header">
+  <div>
+    <h1 class="ad-page-header__title main-content__page-title">Messages</h1>
+    <p class="ad-page-header__subtitle">
+      Everything sent — to one person by email, in the app as Hatiwal Support, or both (including replies from
+      the Support inbox), and bulk emails to a segment. Email is sent from <%= Rails.application.config.x.mail_sender %>.
+      Latest <%= Admin::MessagesController::HISTORY_LIMIT %>.
+    </p>
+  </div>
+  <div class="ad-actions">
     <%= link_to "New message", new_admin_message_path, class: "button", id: "new-message" %>
     <%= link_to "Bulk email", new_admin_bulk_email_path, class: "button button--alt", id: "new-bulk-email" %>
   </div>
 </header>
 
-<section class="main-content__body">
-  <p style="margin:0 0 1rem;font-size:.85rem;color:#64748b;">
-    Everything sent — to one person by email, in the app as Hatiwal Support, or both (including replies from
-    the Support inbox), and bulk emails to a segment. Email is sent from <%= Rails.application.config.x.mail_sender %>.
-    Latest <%= Admin::MessagesController::HISTORY_LIMIT %>.
-  </p>
+<section class="main-content__body main-content__body--flush">
 
   <% if @entries.any? %>
-    <table id="message-history" style="width:100%;border-collapse:collapse;font-size:.86rem;">
+    <table id="message-history">
       <thead>
-        <tr style="text-align:start;color:#64748b;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;">
-          <th style="padding:.45rem .5rem;">When</th><th style="padding:.45rem .5rem;">To</th>
-          <th style="padding:.45rem .5rem;">By</th><th style="padding:.45rem .5rem;">Message</th>
-          <th style="padding:.45rem .5rem;">What happened</th><th style="padding:.45rem .5rem;">Admin</th>
+        <tr>
+          <th>When</th><th>To</th>
+          <th>By</th><th>Message</th>
+          <th>What happened</th><th>Admin</th>
         </tr>
       </thead>
       <tbody>
@@ -29,39 +31,39 @@
           <% if o.is_a?(AdminBulkEmail) %>
             <%# group(:status).count keys by the enum NAME ("sent"), not its integer. %>
             <% n = ->(st) { @bulk_counts[[ o.id, st.to_s ]].to_i } %>
-            <tr class="bulk-row" style="border-top:1px solid #e2e8f0;vertical-align:top;background:#fafaff;">
-              <td style="padding:.5rem;color:#64748b;white-space:nowrap;"><%= l(o.created_at, format: :short) %></td>
-              <td style="padding:.5rem;"><%= link_to pluralize(o.recipients_count, "person", plural: "people"), admin_bulk_email_path(o) %><br><span style="font-size:.78rem;color:#64748b;"><%= o.segment %></span></td>
-              <td style="padding:.5rem;">Bulk email<br><span style="font-size:.78rem;color:#64748b;"><%= o.filled_locales.join(" · ") %></span></td>
-              <td style="padding:.5rem;" dir="auto"><strong><%= o.content.dig(o.fallback_locale, "subject") %></strong><br><%= o.content.dig(o.fallback_locale, "body").to_s.truncate(120) %></td>
-              <td style="padding:.5rem;"><%= o.status.humanize %>: <%= n.(:sent) %> sent · <%= n.(:failed) %> failed · <%= n.(:queued) + n.(:sending) %> waiting<%= " · #{n.(:cancelled)} cancelled" if n.(:cancelled).positive? %></td>
-              <td style="padding:.5rem;color:#64748b;"><%= o.admin_user&.email %></td>
+            <tr class="bulk-row">
+              <td class="ad-nowrap ad-text-muted"><%= l(o.created_at, format: :short) %></td>
+              <td><%= link_to pluralize(o.recipients_count, "person", plural: "people"), admin_bulk_email_path(o) %><span class="ad-sub"><%= o.segment %></span></td>
+              <td><span class="ad-badge ad-badge--brand ad-badge--plain">Bulk email</span><span class="ad-sub"><%= o.filled_locales.join(" · ") %></span></td>
+              <td dir="auto"><strong><%= o.content.dig(o.fallback_locale, "subject") %></strong><br><%= o.content.dig(o.fallback_locale, "body").to_s.truncate(120) %></td>
+              <td><%= o.status.humanize %>: <%= n.(:sent) %> sent · <%= n.(:failed) %> failed · <%= n.(:queued) + n.(:sending) %> waiting<%= " · #{n.(:cancelled)} cancelled" if n.(:cancelled).positive? %></td>
+              <td class="ad-text-muted"><%= o.admin_user&.email %></td>
             </tr>
             <% next %>
           <% end %>
-          <tr style="border-top:1px solid #e2e8f0;vertical-align:top;">
-            <td style="padding:.5rem;color:#64748b;white-space:nowrap;"><%= l(o.created_at, format: :short) %></td>
-            <td style="padding:.5rem;"><%= link_to o.user.full_name.presence || "User ##{o.user_id}", admin_user_path(o.user) %></td>
-            <td style="padding:.5rem;"><%= o.channels.join(" + ") %><%= " (support inbox)" if o.support_inbox? %></td>
-            <td style="padding:.5rem;" dir="auto">
+          <tr>
+            <td class="ad-nowrap ad-text-muted"><%= l(o.created_at, format: :short) %></td>
+            <td dir="auto"><%= link_to o.user.full_name.presence || "User ##{o.user_id}", admin_user_path(o.user) %></td>
+            <td><%= o.channels.join(" + ") %><%= " (support inbox)" if o.support_inbox? %></td>
+            <td dir="auto">
               <% if o.subject.present? %><strong><%= o.subject %></strong><br><% end %>
               <%= o.body.truncate(140) %>
             </td>
-            <td style="padding:.5rem;">
+            <td>
               <% if (e = o.admin_email) %>
-                <div style="<%= 'color:#b91c1c;' if e.failed? %>">Email: <%= e.status %><%= ": #{e.error}" if e.failed? && e.error.present? %></div>
+                <div class="<%= 'ad-text-danger' if e.failed? %>">Email: <%= e.status %><%= ": #{e.error}" if e.failed? && e.error.present? %></div>
               <% end %>
               <% if o.via_in_app? %>
                 <div>In-app: in their inbox · <%= o.push_note %></div>
               <% end %>
-              <% if o.opt_out_acknowledged? %><div style="color:#92400e;font-size:.78rem;">sent despite bulk opt-out (acknowledged)</div><% end %>
+              <% if o.opt_out_acknowledged? %><div class="ad-sub">sent despite bulk opt-out (acknowledged)</div><% end %>
             </td>
-            <td style="padding:.5rem;color:#64748b;"><%= o.admin_user&.email %></td>
+            <td class="ad-text-muted"><%= o.admin_user&.email %></td>
           </tr>
         <% end %>
       </tbody>
     </table>
   <% else %>
-    <p style="color:#64748b;">Nothing sent yet.</p>
+    <p class="ad-empty ad-pad">Nothing sent yet.</p>
   <% end %>
 </section>
