@@ -97,5 +97,16 @@ module HatiwalApi
       authentication:       :plain,
       enable_starttls_auto: true
     }
+
+    # Who every email is FROM, and where replies go: the Gmail account above.
+    #
+    # Gmail can only send as the account it is signed in with. The old default,
+    # noreply@hatiwal.com, worked only because Gmail silently rewrote it to this
+    # account — hatiwal.com's DNS authorises NO sender (SPF "-all", DMARC
+    # p=reject) and has no MX, so a hatiwal.com From would be rejected and a
+    # hatiwal.com reply would bounce. Reading it from the SMTP credentials keeps
+    # the From identical to the account actually sending. When a real sender
+    # for hatiwal.com exists, change it here (docs/EMAIL.md).
+    config.x.mail_sender = Rails.application.credentials[:smtp_username].presence || "noreply@hatiwal.com"
   end
 end
