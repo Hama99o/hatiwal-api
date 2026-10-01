@@ -30,6 +30,44 @@ RSpec.describe "Admin: email a user", type: :request do
     expect(AdminEmail.count).to eq(0)
   end
 
+  # Regression: Mail returns an html_safe SafeBuffer, which went into srcdoc
+  # unescaped, closed the attribute at its first quote and spilled the email's
+  # HTML into the admin page.
+  it "escapes the email HTML inside the preview iframe" do
+    post preview_admin_user_emails_path(user), params: draft
+
+    srcdoc = response.body[/<iframe id="email-preview"[^>]*srcdoc="([^"]*)"/, 1]
+    expect(srcdoc).to include("dir=&quot;auto&quot;")
+    expect(CGI.unescapeHTML(srcdoc)).to include(draft[:body])
+  end
+
+  # Regression: data-confirm needs rails-ujs, which the admin doesn't load.
+  it "loads the admin confirm handler so Send (and Block, Take down…) ask first" do
+    post preview_admin_user_emails_path(user), params: draft
+
+    expect(response.body).to include('closest("[data-confirm]")')
+    expect(response.body).to include('data-confirm="Send this email to')
+  end
+
+  # Regression: Rails' per-form CSRF token is bound to the form's own action
+  # (preview), so the Send and Send-a-test buttons — which post elsewhere via
+  # formaction — were rejected with 422 in a real browser. The test env turns
+  # CSRF off, so this example turns it back on and posts with the page's token.
+  it "accepts Send and Send-a-test with the token the preview page carries" do
+    ActionController::Base.allow_forgery_protection = true
+    get new_admin_user_email_path(user)
+    form = response.body[%r{<form[^>]*id="email-form".*?</form>}m]
+    token = form[/name="authenticity_token" value="([^"]+)"/, 1]
+
+    post test_admin_user_emails_path(user), params: draft.merge(authenticity_token: token)
+    expect(response).to have_http_status(:ok)
+
+    post admin_user_emails_path(user), params: draft.merge(send: "1", authenticity_token: token)
+    expect(response).to redirect_to(admin_user_path(user, anchor: "user-email"))
+  ensure
+    ActionController::Base.allow_forgery_protection = false
+  end
+
   it "rejects an empty draft at preview" do
     post preview_admin_user_emails_path(user), params: { subject: "", body: "" }
 

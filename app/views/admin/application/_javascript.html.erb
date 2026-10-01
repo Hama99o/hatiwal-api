@@ -13,6 +13,21 @@ by providing a `content_for(:javascript)` block.
 
 <%= yield :javascript %>
 
+<%# `data: { confirm: … }` on every destructive admin button (Block user, Take
+    down, Warn, Send email…) did NOTHING: confirm is a rails-ujs feature, this
+    admin has no rails-ujs, and Turbo only honours data-turbo-confirm on forms
+    it drives — ours are data-turbo: false. So a single click blocked a user.
+    One capture-phase listener restores the confirm for all of them. %>
+<script>
+  document.addEventListener("click", function (event) {
+    var el = event.target.closest("[data-confirm]");
+    if (el && !window.confirm(el.getAttribute("data-confirm"))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+</script>
+
 <% if Rails.env.test? %>
   <%= javascript_tag do %>
     $.fx.off = true;

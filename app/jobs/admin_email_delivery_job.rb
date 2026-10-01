@@ -10,7 +10,13 @@ class AdminEmailDeliveryJob < ApplicationJob
     admin_email = AdminEmail.find_by(id: admin_email_id)
     return unless admin_email&.queued?
 
-    AdminMessageMailer.direct(admin_email).deliver_now
+    message = AdminMessageMailer.direct(admin_email)
+    # Always surface delivery errors for THIS send, whatever the environment
+    # says. development.rb sets raise_delivery_errors = false, so a rejected
+    # SMTP login "succeeded" silently and was recorded as sent (caught by a
+    # forced-failure run on dev). "sent" must mean the server accepted it.
+    message.raise_delivery_errors = true
+    message.deliver_now
     admin_email.update!(status: :sent, sent_at: Time.current, error: nil)
   rescue StandardError => e
     admin_email&.update_columns(status: AdminEmail.statuses[:failed], error: "#{e.class}: #{e.message}".truncate(500))

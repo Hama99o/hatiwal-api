@@ -18,7 +18,7 @@ module Admin
       @admin_email = draft
       return render(:new, status: :unprocessable_content) unless @admin_email.valid?
 
-      @rendered = AdminMessageMailer.direct(@admin_email).html_part&.body&.decoded
+      @rendered = rendered_html(@admin_email)
     end
 
     def test
@@ -58,8 +58,17 @@ module Admin
                      subject: params[:subject].to_s.strip, body: params[:body].to_s.strip)
     end
 
+    # The email's HTML as a PLAIN String. Mail hands back an html_safe
+    # SafeBuffer, which ERB then won't escape: inside srcdoc="…" its first quote
+    # closed the attribute and the rest of the email spilled into the admin page
+    # (breaking the form under it). A plain String is escaped like any value.
+    def rendered_html(admin_email)
+      html = AdminMessageMailer.direct(admin_email).html_part&.body&.decoded
+      html && String.new(html)
+    end
+
     def preview_again
-      @rendered = AdminMessageMailer.direct(@admin_email).html_part&.body&.decoded if @admin_email.valid?
+      @rendered = rendered_html(@admin_email) if @admin_email.valid?
       render :preview
     end
   end

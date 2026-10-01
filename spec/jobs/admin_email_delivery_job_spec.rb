@@ -26,6 +26,19 @@ RSpec.describe AdminEmailDeliveryJob, type: :job do
     expect(email.error).to include("535 bad credentials")
   end
 
+  # Regression: with raise_delivery_errors off (development.rb), an SMTP
+  # rejection was swallowed and the email recorded as sent.
+  it "records a failure even where the environment swallows delivery errors" do
+    allow(ActionMailer::Base).to receive(:raise_delivery_errors).and_return(false)
+    allow_any_instance_of(Mail::TestMailer).to receive(:deliver!)
+      .and_raise(Net::SMTPAuthenticationError, "535 Username and Password not accepted")
+
+    described_class.perform_now(email.id)
+
+    expect(email.reload).to be_failed
+    expect(email.error).to include("535")
+  end
+
   # Email can't be unsent: a second run must not mail the user again.
   it "never sends twice" do
     described_class.perform_now(email.id)
