@@ -824,7 +824,8 @@ label.channel:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
 }
 .ad-confirm label { display: block; margin: 0 0 8px; font-weight: 650; color: #7f1d1d; }
 .ad-confirm .ad-input { flex: 0 0 8rem; width: 8rem; border-color: var(--ad-danger-border); }
-.bulk-row td { background: #f7f8fd; }
+.bulk-row td,
+.main-content__body table tr.bulk-row td:first-child { background: #f7f8fd; }  /* the pinned cell too */
 .ad-sub { display: block; font-size: 0.78rem; color: var(--ad-muted); }
 
 /* ── Phone + small tablet ───────────────────────────────────────────────── */
