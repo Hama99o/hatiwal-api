@@ -12,6 +12,7 @@ class User < ApplicationRecord
          :recoverable, :rememberable, :validatable, :trackable
 
   include DeviseTokenAuth::Concerns::User
+  include ClientVersionReporting
 
   has_one_attached :avatar
 

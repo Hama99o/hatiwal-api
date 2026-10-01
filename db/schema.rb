@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -338,10 +338,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120000) do
     t.integer "failed_attempts", default: 0, null: false
     t.string "firstname", default: "", null: false
     t.string "image"
+    t.string "last_app_platform"
+    t.string "last_app_version"
+    t.datetime "last_app_version_at"
     t.datetime "last_sign_in_at"
     t.string "last_sign_in_ip"
     t.string "lastname", default: "", null: false
     t.decimal "latitude", precision: 10, scale: 6
+    t.datetime "legacy_client_seen_at"
     t.datetime "locked_at"
     t.decimal "longitude", precision: 10, scale: 6
     t.string "name"
@@ -376,7 +380,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_120000) do
     t.index ["deleted_at"], name: "index_users_on_deleted_at"
     t.index ["deletion_scheduled_at"], name: "index_users_on_deletion_scheduled_at"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["last_app_version_at"], name: "index_users_on_last_app_version_at"
     t.index ["last_sign_in_at"], name: "index_users_on_last_sign_in_at"
+    t.index ["legacy_client_seen_at"], name: "index_users_on_legacy_client_seen_at"
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["status"], name: "index_users_on_status"
     t.index ["support_account"], name: "index_users_single_support_account", unique: true, where: "support_account"

@@ -313,4 +313,22 @@ RSpec.describe "Admin dashboard", type: :request do
       expect(admin.reload.access_locked?).to be(true)
     end
   end
+
+  describe "app versions readout" do
+    before { sign_in admin, scope: :admin_user }
+
+    it "shows how many active users are still on a build with no version header" do
+      create(:user, legacy_client_seen_at: 2.days.ago)
+      create(:user, legacy_client_seen_at: 90.days.ago) # outside the window
+      create(:user, last_app_version: "1.1.0", last_app_platform: "android", last_app_version_at: 1.day.ago)
+
+      get admin_root_path
+
+      expect(response).to have_http_status(:ok)
+      section = response.body[/<section class="dash-section" id="app-versions">.*?<\/section>/m]
+      expect(section).to include("On v1.0.4 or older")
+      expect(section[/<div class="num">(\d+)<\/div>\s*<div class="label">On v1.0.4/, 1]).to eq("1")
+      expect(section).to include("v1.1.0 · android")
+    end
+  end
 end

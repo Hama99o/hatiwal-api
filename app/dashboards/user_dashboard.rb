@@ -28,6 +28,10 @@ class UserDashboard < Administrate::BaseDashboard
     block_reason: Field::Text,
     listings: Field::HasMany,
     filed_reports: Field::HasMany,
+    last_app_version: Field::String,
+    last_app_platform: Field::String,
+    last_app_version_at: Field::DateTime,
+    legacy_client_seen_at: Field::DateTime,
     created_at: Field::DateTime,
     updated_at: Field::DateTime
   }.freeze
@@ -60,6 +64,10 @@ class UserDashboard < Administrate::BaseDashboard
     confirmed_at
     status
     block_reason
+    last_app_version
+    last_app_platform
+    last_app_version_at
+    legacy_client_seen_at
     listings
     filed_reports
     created_at

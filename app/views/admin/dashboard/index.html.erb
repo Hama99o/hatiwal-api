@@ -47,6 +47,26 @@
   </div>
 </section>
 
+<section class="dash-section" id="app-versions">
+  <h2>App versions (users seen in the last 30 days)</h2>
+  <div class="dash-grid">
+    <div class="dash-card">
+      <div class="num"><%= @legacy_clients %></div>
+      <div class="label">On v1.0.4 or older (app sends no version)</div>
+    </div>
+    <% @app_versions.each do |(platform, version), count| %>
+      <div class="dash-card">
+        <div class="num"><%= count %></div>
+        <div class="label">v<%= version %> · <%= platform.presence || "unknown platform" %></div>
+      </div>
+    <% end %>
+  </div>
+  <p style="font-size:.8rem;color:#64748b;margin:.25rem 0 0;">
+    Check the first number before switching on anything an old build can't show
+    (e.g. <code>SUPPORT_ADMIN_INITIATE</code>). Someone using two phones can be counted twice.
+  </p>
+</section>
+
 <section class="dash-section">
   <h2>Growth (last 12 weeks)</h2>
   <div class="dash-charts">

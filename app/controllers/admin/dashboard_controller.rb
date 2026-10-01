@@ -5,6 +5,8 @@
 # "how is the marketplace doing?" with counts + growth-over-time charts.
 module Admin
   class DashboardController < Admin::ApplicationController
+    CLIENT_WINDOW = 30.days
+
     def index
       @stats = {
         users_total:       User.count,
@@ -20,6 +22,15 @@ module Admin
         reports_total:     Report.count,
         categories_total:  Category.count
       }
+
+      # Which app builds are in use (ClientVersionReporting). The number to read
+      # before switching on anything an old build can't render — first of all
+      # SUPPORT_ADMIN_INITIATE. A user on two devices can appear in both.
+      since = CLIENT_WINDOW.ago
+      @app_versions = User.reported_version_since(since)
+                          .group(:last_app_platform, :last_app_version).count
+                          .sort_by { |(platform, version), _| [ platform.to_s, Gem::Version.new(version) ] }.reverse
+      @legacy_clients = User.on_legacy_client_since(since).count
 
       # Growth over the last ~12 weeks (groupdate)
       @users_per_week    = User.group_by_week(:created_at, last: 12).count
