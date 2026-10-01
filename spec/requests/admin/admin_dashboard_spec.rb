@@ -74,6 +74,15 @@ RSpec.describe "Admin dashboard", type: :request do
       expect(response.body).to include("Total users", "Pending reports")
     end
 
+    it "keeps soft-deleted sign-ups in the new-user chart and says how many" do
+      create(:user)
+      create(:user, deleted_at: 1.hour.ago)
+
+      get admin_root_path(period: "month")
+      expect(response.body).to include("New users — 2 in this range",
+                                       "including accounts deleted since", "(1 of these)")
+    end
+
     it "renders every managed resource index" do
       create(:listing)
       create(:report)

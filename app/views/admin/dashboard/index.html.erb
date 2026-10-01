@@ -87,6 +87,10 @@
   <div class="dash-charts">
     <div>
       <h3 style="font-size:.85rem;color:#475569;margin:0 0 .4rem;">New users — <%= @new_users.values.sum %> in this range</h3>
+      <p style="font-size:.75rem;color:#64748b;margin:-.25rem 0 .4rem;">
+        Sign-ups as they happened, including accounts deleted since
+        (<%= @new_users_since_deleted %> of these).
+      </p>
       <%= column_chart @new_users, height: "260px", colors: ["#6366f1"], download: true,
             id: "chart-new-users", discrete: @growth_period == "year" %>
     </div>

@@ -36,6 +36,10 @@ module Admin
       # bucketed on Kabul time with Saturday weeks — see Admin::GrowthSeries.
       @growth_period = Admin::GrowthSeries.normalize(params[:period])
       @new_users     = Admin::GrowthSeries.for(User.members, @growth_period)
+      # Soft-deleted accounts STAY in the new-user counts: the chart records who
+      # signed up when, so a past week must not shrink when someone later leaves.
+      # The view labels this and shows how many of the range have since deleted.
+      @new_users_since_deleted = Admin::GrowthSeries.for(User.members.where.not(deleted_at: nil), @growth_period).values.sum
       @new_listings  = Admin::GrowthSeries.for(Listing.all, @growth_period)
 
       # Composition
