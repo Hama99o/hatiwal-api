@@ -1,3 +1,6 @@
+<%# Inline styles ON PURPOSE: email clients strip <style> blocks and linked
+    stylesheets, so every style here must stay on the element. Do not move
+    them to admin.css — that would break the look of every email sent. %>
 <!DOCTYPE html>
 <html lang="<%= @admin_email.locale.presence || @user.preferred_language.presence || "en" %>">
 <head>

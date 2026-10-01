@@ -85,6 +85,6 @@ class ListingDashboard < Administrate::BaseDashboard
   }.freeze
 
   def display_resource(listing)
-    listing.title.presence || "Listing ##{listing.id}"
+    BidiIsolate.wrap(listing.title.presence || "Listing ##{listing.id}")
   end
 end

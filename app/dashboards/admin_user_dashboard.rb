@@ -47,6 +47,6 @@ class AdminUserDashboard < Administrate::BaseDashboard
   COLLECTION_FILTERS = {}.freeze
 
   def display_resource(admin_user)
-    admin_user.name.presence || admin_user.email
+    BidiIsolate.wrap(admin_user.name.presence || admin_user.email)
   end
 end

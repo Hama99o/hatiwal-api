@@ -108,6 +108,6 @@ class UserDashboard < Administrate::BaseDashboard
   }.freeze
 
   def display_resource(user)
-    [ user.full_name.presence, user.email ].compact.first || "User ##{user.id}"
+    BidiIsolate.wrap([ user.full_name.presence, user.email ].compact.first || "User ##{user.id}")
   end
 end
