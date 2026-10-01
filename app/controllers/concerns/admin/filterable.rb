@@ -25,7 +25,7 @@ module Admin
     included do
       # The filter bar partial needs all four of these.
       helper_method :admin_filters, :admin_filter_values, :admin_filters_active?,
-                    :resolve_options
+                    :admin_filter_summary, :resolve_options
     end
 
     class_methods do
@@ -74,10 +74,22 @@ module Admin
       admin_filter_values.values.any?(&:present?)
     end
 
+    # The active filters in words ("Status: active · City: Kabul"), for records
+    # that must say which segment they were sent to (bulk email history).
+    def admin_filter_summary
+      admin_filter_values.filter_map { |k, v| "#{k.to_s.humanize}: #{v}" if v.present? }.join(" · ")
+    end
+
     private
 
     def scoped_resource
-      admin_filters.reduce(super) { |relation, f| apply_admin_filter(relation, f) }
+      apply_admin_filters(super)
+    end
+
+    # Every declared filter, applied to any relation — the same code path the
+    # index uses, so a segment can be reused outside it without re-implementing.
+    def apply_admin_filters(relation)
+      admin_filters.reduce(relation) { |rel, f| apply_admin_filter(rel, f) }
     end
 
     def apply_admin_filter(relation, filter)

@@ -101,7 +101,7 @@
   <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#3730a3;">💬 Support</h2>
   <% if support_thread %>
     <%= link_to "Open support conversation", admin_support_conversation_path(support_thread), class: "button" %>
-  <% elsif Admin::SupportConversationsController.admin_initiate_enabled? %>
+  <% elsif Conversation.admin_can_message?(page.resource) %>
     <%= button_to "Start support conversation", admin_support_conversations_path(user_id: page.resource.id),
           method: :post, data: { turbo: false }, class: "button" %>
   <% else %>

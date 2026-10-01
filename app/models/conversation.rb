@@ -255,6 +255,41 @@ class Conversation < ApplicationRecord
     kind_support.find_by!(buyer_id: user.id)
   end
 
+  # ── The admin-side gate (docs/SUPPORT_MESSAGING.md) ─────────────────────
+  #
+  # May an admin put a message in front of this user in the app? Only if the
+  # user ALREADY has a support thread — only the app version with support
+  # messaging can open one, so they are on it — or SUPPORT_ADMIN_INITIATE is on
+  # (most users have updated). Otherwise a v1.0.4 user would get it as a
+  # "removed listing" chat. The ONE place this is decided; views only reflect it.
+  def self.admin_initiate_enabled?
+    ActiveModel::Type::Boolean.new.cast(ENV.fetch("SUPPORT_ADMIN_INITIATE", "false"))
+  end
+
+  def self.admin_can_message?(user)
+    admin_message_refusal(user).nil?
+  end
+
+  def self.admin_message_refusal(user)
+    return "the Support account" if user.support_account?
+    return "the account is deleted" if user.deleted_at.present?
+    return nil if kind_support.exists?(buyer_id: user.id) || admin_initiate_enabled?
+
+    "needs the app update with support messaging (SUPPORT_ADMIN_INITIATE)"
+  end
+
+  # The ONLY way admin code may obtain a support thread: the existing one, or a
+  # new one when the gate allows; nil otherwise. Admin code must never call
+  # support_thread_for! (user-initiated, ungated) — a spec enforces that.
+  def self.admin_support_thread_for(user)
+    return nil unless admin_can_message?(user)
+
+    kind_support.find_by(buyer_id: user.id) ||
+      create!(kind: :support, buyer: user, seller: User.support_account!)
+  rescue ActiveRecord::RecordNotUnique
+    kind_support.find_by(buyer_id: user.id)
+  end
+
   # A support thread the user archived or deleted comes back when anything new
   # happens in it, from either side. Archive and delete are per side, so this
   # never affected the admin, who reads every support thread regardless.

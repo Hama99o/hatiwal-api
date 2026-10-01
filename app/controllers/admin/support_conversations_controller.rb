@@ -21,11 +21,8 @@ module Admin
     before_action :set_conversation, only: %i[show reply close reopen]
     helper_method :admin_initiate_enabled?
 
-    # Read per call (not memoized) so flipping the env var and restarting is
-    # the whole switch. Off unless explicitly "true".
-    def self.admin_initiate_enabled?
-      ActiveModel::Type::Boolean.new.cast(ENV.fetch("SUPPORT_ADMIN_INITIATE", "false"))
-    end
+    # The gate lives on Conversation; kept here as a delegate for the views.
+    def self.admin_initiate_enabled? = Conversation.admin_initiate_enabled?
 
     def index
       threads = Conversation.kind_support
@@ -80,19 +77,18 @@ module Admin
     end
 
     # Admin-initiated: open (or go to) a user's support thread from their page.
-    # An EXISTING thread is always reachable; creating one needs the flag.
+    # An EXISTING thread is always reachable; creating one needs the gate.
     def create
       user = User.find(params[:user_id])
       existing = Conversation.kind_support.find_by(buyer_id: user.id)
       return redirect_to admin_support_conversation_path(existing) if existing
 
-      unless self.class.admin_initiate_enabled?
+      conversation = Conversation.admin_support_thread_for(user)
+      unless conversation
         return redirect_to admin_user_path(user),
-                           alert: "Starting a support conversation is turned off until the app " \
-                                  "update with support messaging is live (SUPPORT_ADMIN_INITIATE)."
+                           alert: "Can't start a support conversation: #{Conversation.admin_message_refusal(user)}."
       end
 
-      conversation = Conversation.support_thread_for!(user)
       log_admin_action("support_start", target: conversation)
       redirect_to admin_support_conversation_path(conversation)
     end
