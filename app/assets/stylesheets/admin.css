@@ -431,8 +431,11 @@ a.button {
 .search__input {
   border: 1px solid var(--ad-border);
   border-radius: var(--ad-radius-sm);
-  padding: 0.55rem 0.8rem;
+  /* Room for Administrate's magnifier (left) and clear link (right): a plain
+     `padding` here once put typed text under the icon. */
+  padding: 0.55rem 2.5rem;
 }
+.search__input:focus { outline: none; border-color: var(--ad-lapis-500); box-shadow: 0 0 0 3px rgba(58, 99, 214, .18); }
 .flash { border-radius: var(--ad-radius-sm); }
 
 /* ── Index filter bar (combinable filters) ──────────────────────────────── */

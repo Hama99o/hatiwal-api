@@ -90,3 +90,26 @@ reinvented here.
 - **Every id and class that specs or scripts read is unchanged:** `bulk-row`,
   `label.channel`, `#support-thread > div`, `#nav-messages`, `.nav-badge`, and
   the others.
+
+**A class name or text in a spec is a contract, not an implementation detail.**
+This pass first renamed three (`bulk-row` → `bulk-row ad-row--bulk`,
+`label.channel` → `label.channel ad-check`, "In-app:" → "<strong>In-app:</strong>")
+and the behaviour owner's specs failed on all three. Style an existing hook
+with CSS (`.bulk-row td`, `label.channel:has(input:disabled)`) rather than
+renaming it. Run `spec/requests/admin` before committing any view change.
+
+### Right-to-left content (checked 2026-10-01)
+
+Pashto and Dari listing titles in field values and list cells render as
+right-to-left paragraphs (`unicode-bidi: plaintext`), with no clipping and no
+overflow, on desktop and phone. Two things remain:
+
+- **Titles that embed the record name** ("Show …", "Edit …", the browser
+  title) put a right-to-left name inside an English line, and it breaks
+  apart around any Latin character. The fix is to wrap `display_resource`
+  in U+2068/U+2069 (first-strong isolate). It is plain text, so it works in
+  headings, buttons and `<title>` alike. It lives in `app/dashboards/`,
+  outside this design pass's files, so it was proposed rather than done.
+- **"۳x۴" with a Latin `x`** reorders the same way in every browser and app:
+  the `x` is strong left-to-right between Arabic-Indic digits. That is the
+  text itself, not the page. `×` (U+00D7) would read correctly.
