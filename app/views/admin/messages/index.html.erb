@@ -39,7 +39,13 @@
               <td class="hw-nowrap hw-text-muted"><%= l(o.created_at, format: :short) %></td>
               <td><%= link_to pluralize(o.recipients_count, "person", plural: "people"), admin_bulk_email_path(o) %><span class="hw-sub"><%= o.segment %></span></td>
               <td><span class="hw-badge hw-badge--brand hw-badge--plain">Bulk <%= o.channels.join(" + ").downcase %></span><span class="hw-sub"><%= o.filled_locales.join(" · ") %></span></td>
-              <td dir="auto"><strong><%= o.content.dig(o.fallback_locale, "subject") %></strong><br><%= o.content.dig(o.fallback_locale, "body").to_s.truncate(120) %></td>
+              <td dir="auto">
+                <%= link_to admin_bulk_email_path(o), class: "hw-link" do %>
+                  <% if (subj = o.content.dig(o.fallback_locale, "subject")).present? %><strong><%= subj %></strong><br><% end %>
+                  <%= o.content.dig(o.fallback_locale, "body").to_s.truncate(120) %>
+                <% end %>
+                <span class="hw-sub"><%= link_to "View every language →", admin_bulk_email_path(o, anchor: "bulk-sent"), class: "bulk-view" %></span>
+              </td>
               <% ia = ->(st) { @bulk_in_app_counts[[ o.id, st.to_s ]].to_i } %>
               <td><%= o.status.humanize %>:
                 <% if o.via_email? %>email <%= n.(:sent) %> sent · <%= n.(:failed) %> failed · <%= n.(:queued) + n.(:sending) %> waiting<%= " · #{n.(:cancelled)} cancelled" if n.(:cancelled).positive? %><% end %>
@@ -52,10 +58,14 @@
           <tr>
             <td class="hw-nowrap hw-text-muted"><%= l(o.created_at, format: :short) %></td>
             <td dir="auto"><%= link_to o.user.full_name.presence || "User ##{o.user_id}", admin_user_path(o.user) %></td>
-            <td><%= o.channels.join(" + ") %><%= " (support inbox)" if o.support_inbox? %></td>
+            <td><%= o.channels.join(" + ") %><%= " (support inbox)" if o.support_inbox? %>
+              <span class="hw-sub outreach-language"><%= Admin::LanguageVersions::NAMES[o.locale] || o.locale.presence || "—" %></span></td>
             <td dir="auto">
-              <% if o.subject.present? %><strong><%= o.subject %></strong><br><% end %>
-              <%= o.body.truncate(140) %>
+              <%= link_to admin_message_path(o), class: "hw-link" do %>
+                <% if o.subject.present? %><strong><%= o.subject %></strong><br><% end %>
+                <%= o.body.truncate(140) %>
+              <% end %>
+              <span class="hw-sub"><%= link_to "View →", admin_message_path(o), class: "outreach-view" %></span>
             </td>
             <td>
               <% if (e = o.admin_email) %>

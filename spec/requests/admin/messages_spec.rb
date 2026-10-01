@@ -181,4 +181,51 @@ RSpec.describe "Admin Messages", type: :request do
       expect(response.body).not_to include('id="mode-refusal"')
     end
   end
+
+  # Owner: "we dont have well preview of this messages or mail when its send …
+  # to know which lang it was send etc and can read message".
+  describe "viewing a sent message in full" do
+    let(:long_body) { "سلام — #{'دا یو اوږد پیغام دی. ' * 20}پای" }
+
+    it "shows the language, the whole body, and the email exactly as sent" do
+      user.update!(preferred_language: "ps")
+      perform_enqueued_jobs do
+        post admin_messages_path, params: draft.merge(mode: "email", subject: "ستاسو حساب", body: long_body, send: "1")
+      end
+      outreach = AdminOutreach.last
+
+      get admin_message_path(outreach)
+
+      expect(response).to have_http_status(:ok)
+      expect(response.body[%r{<span id="outreach-language">.*?</span>}m]).to include("Pashto")
+      srcdoc = CGI.unescapeHTML(response.body[/<iframe id="email-preview"[^>]*srcdoc="([^"]*)"/, 1])
+      expect(srcdoc).to include(long_body).and include('dir="auto"')
+    end
+
+    it "shows an in-app-only message in full, with a link to its conversation" do
+      thread = Conversation.support_thread_for!(user)
+      post admin_messages_path, params: { user_id: user.id, mode: "in_app", body: long_body, send: "1" }
+
+      get admin_message_path(AdminOutreach.last)
+
+      expect(response.body[%r{<div id="in-app-sent".*?</div>}m]).to include(long_body)
+      expect(response.body).not_to include('id="email-preview"')
+      expect(response.body).to include(admin_support_conversation_path(thread))
+    end
+
+    it "the history row shows the language and opens the full view" do
+      user.update!(preferred_language: "ps")
+      post admin_messages_path, params: draft.merge(mode: "email", send: "1")
+
+      get admin_messages_path
+
+      expect(response.body).to include('class="hw-sub outreach-language">Pashto')
+      expect(response.body).to include(admin_message_path(AdminOutreach.last))
+    end
+
+    it "is a 404 for an unknown message" do
+      get admin_message_path(id: 0)
+      expect(response).to have_http_status(:not_found)
+    end
+  end
 end

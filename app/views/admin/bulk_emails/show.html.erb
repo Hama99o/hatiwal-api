@@ -22,6 +22,29 @@
 </header>
 
 <% ia = @in_app_counts %>
+<%# What was sent: every language version in full, with how many got it. %>
+<section id="bulk-sent" class="hw-card">
+  <h2 class="hw-section__title">What was sent</h2>
+  <div class="hw-lang-grid">
+    <% @bulk.filled_locales.each do |loc| %>
+      <% got = [ ("#{@email_by_locale[loc].to_i} by email" if @bulk.via_email?),
+                 ("#{@in_app_by_locale[loc].to_i} in-app" if @bulk.via_in_app?) ].compact.join(" · ") %>
+      <div class="hw-lang bulk-sent-version" data-locale="<%= loc %>">
+        <h3 class="hw-preview-label">
+          <%= names[loc] %><%= " (fallback)" if loc == @bulk.fallback_locale %> — <span class="bulk-sent-count"><%= got %></span>
+        </h3>
+        <% if @bulk.via_email? && (subj = @bulk.content.dig(loc, "subject")).present? %>
+          <p dir="auto"><strong><%= subj %></strong></p>
+        <% end %>
+        <div dir="auto" class="hw-bubble hw-bubble--preview hw-bubble__body"><%= @bulk.content.dig(loc, "body") %></div>
+      </div>
+    <% end %>
+  </div>
+  <% if @bulk.filled_locales.size < AdminBulkEmail::LOCALES.size %>
+    <p class="hw-note">Languages not written went out as the <%= names[@bulk.fallback_locale] %> version.</p>
+  <% end %>
+</section>
+
 <p id="bulk-status" class="hw-callout">
     <span class="hw-badge hw-badge--brand"><%= @bulk.status.humanize %></span>
     <% if @bulk.via_email? %>

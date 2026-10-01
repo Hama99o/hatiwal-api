@@ -88,6 +88,9 @@ module Admin
       @counts = @bulk.counts
       @in_app_rows = @bulk.in_app_deliveries.includes(:user).order(:id).limit(200)
       @in_app_counts = @bulk.in_app_counts
+      # How many people got each language version, per channel ("What was sent").
+      @email_by_locale = @bulk.admin_emails.group(:locale).count
+      @in_app_by_locale = @bulk.in_app_deliveries.group(:locale).count
     end
 
     def stop

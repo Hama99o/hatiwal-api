@@ -57,7 +57,7 @@ Rails.application.routes.draw do
     resources :user_warnings, only: [ :index, :show ]
     # One place to message one person (email / in-app / both) and see every
     # send. Admin::SendMessage does the sending.
-    resources :messages, only: %i[index new create] do
+    resources :messages, only: %i[index new create show] do
       collection do
         post :preview
         post :test

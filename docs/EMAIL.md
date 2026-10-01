@@ -89,15 +89,16 @@ Tick **In-app** (alone or with Email) on the bulk screen: a message from
 Hatiwal Support is posted into each recipient's support thread, in their
 language. A Support thread has **no unsubscribe**, so the restraints are:
 
-- **The gate, per recipient**: only users who already have a support thread
-  (or everyone, once `SUPPORT_ADMIN_INITIATE` is on). Counted before sending
+- **The gate, per recipient**: only users who already have a support thread,
+  or everyone while `SUPPORT_ADMIN_INITIATE` is on (it is, since 2026-10-01). Counted before sending
   ("3 can receive in-app · 37 can't") and **re-checked per delivery at send
   time** — a refused one is recorded `skipped`, never given a thread.
 - **Archive = mute for broadcasts.** A broadcast is delivered into an archived
   thread quietly: it stays archived and gets no push. A *personal* reply still
   brings it back. (`Message#broadcast`; do not merge the two rules.)
-- **Push off unless chosen**, each time, with "N of M can receive one" beside
-  the box; "N of M can't receive a push" is always shown.
+- **Push always** to everyone who can receive one (owner: "it send allway with
+  notification … if notification is off … no problem"), except someone who
+  archived Support; "N of M can't receive a push" is always shown.
 - **One broadcast per person per 7 days** (`AdminBulkEmail::IN_APP_COOLDOWN`);
   recent recipients are excluded and counted.
 - **Plain text, ≤ 1000 chars** (a chat message).

@@ -82,6 +82,18 @@ RSpec.describe "Admin bulk email", type: :request do
     expect(response.body).to include("Joined from 2026-09-01 to 2026-09-30")
   end
 
+  it "the campaign page shows every language version in full, with how many got it" do
+    perform_enqueued_jobs { post admin_bulk_emails_path, params: draft.merge(confirm_count: 2) }
+
+    get admin_bulk_email_path(AdminBulkEmail.last)
+
+    sent = response.body[%r{<section id="bulk-sent".*?</section>}m]
+    ps = sent[%r{<div class="hw-lang bulk-sent-version" data-locale="ps">.*?</div>\s*</div>}m]
+    en = sent[%r{<div class="hw-lang bulk-sent-version" data-locale="en">.*?</div>\s*</div>}m]
+    expect(ps).to include("Pashto").and include("1 by email").and include("سلام کابل").and include("خبرونه")
+    expect(en).to include("(fallback)").and include("1 by email").and include("Hello Kabul").and include("News")
+  end
+
   it "excludes unsubscribed users automatically" do
     kabul_en.update!(email_opt_out_at: 1.day.ago)
 

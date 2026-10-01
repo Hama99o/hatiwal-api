@@ -30,6 +30,16 @@ module Admin
                                                   .group(:admin_bulk_email_id, :status).count
     end
 
+    # One sent message in full: the exact email they got, the in-app text, the
+    # language it went in, and what happened on each channel.
+    def show
+      @outreach = AdminOutreach.includes(:user, :admin_user, :admin_email, :message).find(params[:id])
+      if (email = @outreach.admin_email)
+        html = AdminMessageMailer.direct(email).html_part&.body&.decoded
+        @rendered = html && String.new(html)
+      end
+    end
+
     def new
       @results = search(params[:q]) if @user.nil? && params[:q].present?
       @sender = build_sender if @user

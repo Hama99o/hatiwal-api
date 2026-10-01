@@ -1,0 +1,47 @@
+<% o = @outreach %>
+<% names = Admin::LanguageVersions::NAMES %>
+<% who = o.user.full_name.presence || "User ##{o.user_id}" %>
+<% content_for(:title) { "Message to #{who}" } %>
+
+<header class="hw-page-header">
+  <div>
+    <h1 class="hw-page-header__title main-content__page-title">Message to <span dir="auto"><%= who %></span></h1>
+    <p class="hw-page-header__subtitle">
+      <%= l(o.created_at, format: :short) %> · by <%= o.admin_user&.email %><%= " · a reply from the Support inbox" if o.support_inbox? %>
+    </p>
+  </div>
+  <%= link_to "← Messages", admin_messages_path, class: "button button--alt" %>
+</header>
+
+<section class="hw-card" id="outreach-detail">
+  <p class="hw-kv">
+    <span><strong>To</strong> <%= link_to who, admin_user_path(o.user), dir: "auto" %></span>
+    <span><strong>Sent by</strong> <%= o.channels.join(" + ") %></span>
+    <span id="outreach-language"><strong>Language</strong> <%= names[o.locale] || o.locale.presence || "—" %></span>
+    <% if (e = o.admin_email) %>
+      <span class="<%= 'hw-text-danger' if e.failed? %>"><strong>Email</strong> <%= e.status %><%= " #{l(e.sent_at, format: :short)}" if e.sent_at %><%= ": #{e.error}" if e.failed? && e.error.present? %></span>
+    <% end %>
+    <% if o.via_in_app? %>
+      <span><strong>In-app</strong> in their inbox · <%= o.push_note %></span>
+    <% end %>
+    <% if o.opt_out_acknowledged? %><span>Sent despite bulk opt-out (acknowledged)</span><% end %>
+  </p>
+
+  <% if o.via_email? %>
+    <h2 class="hw-preview-label hw-gap-top">Email — <span dir="auto"><%= o.subject %></span></h2>
+    <% if @rendered %>
+      <%# The email as they received it, escaped into srcdoc and sandboxed. %>
+      <iframe id="email-preview" title="Email as sent" sandbox srcdoc="<%= @rendered %>" class="hw-preview-frame"></iframe>
+    <% else %>
+      <div dir="auto" class="hw-bubble hw-bubble--preview hw-bubble__body"><%= o.body %></div>
+    <% end %>
+  <% end %>
+
+  <% if o.via_in_app? %>
+    <h2 class="hw-preview-label hw-gap-top">In the app, from Hatiwal Support</h2>
+    <div id="in-app-sent" dir="auto" class="hw-bubble hw-bubble--preview hw-bubble__body"><%= o.message&.body.presence || o.body %></div>
+    <% if o.message %>
+      <p class="hw-note"><%= link_to "Open the Support conversation", admin_support_conversation_path(o.message.conversation_id) %></p>
+    <% end %>
+  <% end %>
+</section>
