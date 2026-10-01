@@ -42,3 +42,11 @@
     <p style="color:#64748b;">No support conversations yet.</p>
   <% end %>
 </section>
+
+<%# New messages show up without anyone pressing reload. Plain polling, by
+    design: no websockets in the admin. Paused while the tab is hidden. %>
+<script>
+  setInterval(function () {
+    if (document.visibilityState === "visible") window.location.reload();
+  }, <%= Admin::SupportConversationsController::REFRESH_SECONDS * 1000 %>);
+</script>

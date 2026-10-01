@@ -41,6 +41,16 @@ class Conversation < ApplicationRecord
   # that, so adding a kind above it fails loudly instead of reordering inboxes.
   scope :support_first, -> { order(kind: :desc) }
 
+  # Support threads whose latest word is the user's: they have a message from
+  # the user (always the buyer on a support thread) that Support hasn't read.
+  # Counted per THREAD, so one chatty user can't swamp the admin badge.
+  scope :awaiting_support_reply, lambda {
+    kind_support.where(Message.where(read_at: nil)
+                              .where("messages.conversation_id = conversations.id")
+                              .where("messages.user_id = conversations.buyer_id")
+                              .arel.exists)
+  }
+
   validates :listing_id, uniqueness: { scope: :buyer_id, message: "already has a conversation with this buyer", allow_nil: true }
   validate :buyer_is_not_seller
   validate :support_thread_shape, if: :kind_support?

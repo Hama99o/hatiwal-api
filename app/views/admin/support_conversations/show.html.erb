@@ -58,3 +58,23 @@
     <p style="color:#64748b;">This conversation is closed — the user can't reply. Reopen it to continue.</p>
   <% end %>
 </section>
+
+<p id="support-refresh-note" style="font-size:.75rem;color:#94a3b8;margin:.5rem 0 0;"></p>
+
+<%# Bring in the user's new messages every few seconds — but NEVER while the
+    admin has typed something: a reload would throw the draft away. Plain
+    polling by design (no websockets in the admin). %>
+<script>
+  (function () {
+    var box = document.querySelector("#support-reply textarea");
+    var note = document.getElementById("support-refresh-note");
+    var last = document.querySelector("#support-thread > div:last-of-type");
+    if (last && !window.location.hash) last.scrollIntoView({ block: "end" });
+
+    setInterval(function () {
+      var drafting = box && box.value.trim() !== "";
+      if (note) note.textContent = drafting ? "Auto-refresh paused while you type a reply." : "";
+      if (!drafting && document.visibilityState === "visible") window.location.reload();
+    }, <%= Admin::SupportConversationsController::REFRESH_SECONDS * 1000 %>);
+  })();
+</script>

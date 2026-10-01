@@ -15,6 +15,8 @@
 module Admin
   class SupportConversationsController < Admin::ApplicationController
     PER_PAGE = 25
+    # How often the inbox and an open thread poll for new messages (by reload).
+    REFRESH_SECONDS = 30
 
     before_action :set_conversation, only: %i[show reply close reopen]
     helper_method :admin_initiate_enabled?
@@ -103,15 +105,10 @@ module Admin
       @conversation = Conversation.kind_support.includes(:buyer).find(params[:id])
     end
 
-    # Messages the USER sent that Support hasn't read. On a support thread the
-    # user is always the buyer, so "unread from the user" is buyer_id-authored.
-    def unread_from_user
-      Message.where(read_at: nil).where("messages.user_id = conversations.buyer_id")
-             .where("messages.conversation_id = conversations.id")
-    end
-
+    # Same condition as Conversation.awaiting_support_reply (one definition, not
+    # two), as a sort key: the subquery is uncorrelated, so it reads cleanly.
     def awaiting_reply_first
-      Arel::Nodes::Case.new.when(unread_from_user.arel.exists).then(0).else(1)
+      Arel.sql("CASE WHEN conversations.id IN (#{Conversation.awaiting_support_reply.select(:id).to_sql}) THEN 0 ELSE 1 END")
     end
 
     # One GROUP BY for the page.

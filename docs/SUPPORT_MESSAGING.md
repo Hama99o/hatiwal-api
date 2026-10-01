@@ -105,3 +105,26 @@ Without steps 1–3 it stays off. That is the safe default.
   and start is in the audit log.
 - The user's admin page links to their thread, and offers "Start" only when the
   flag is on.
+- The navigation shows **Support N** on every admin page, where N counts
+  threads waiting on a reply (threads, not messages, so one chatty user can't
+  swamp it).
+- The inbox and an open thread poll by reload every 30 s, with no websockets
+  in the admin. The thread page skips the reload while the reply box has text,
+  so a draft is never lost. The inbox paginates (25 a page).
+- The support views use inline styles, like `admin/users/show` and the
+  dashboard. That's expedience for an internal tool, not the house pattern to
+  copy.
+
+Verified end to end on the dev server (2026-10-01):
+1. A user signed in through the API and opened support.
+2. They sent a message; an offer was refused (422).
+3. The thread appeared first in the admin inbox, bold, with the badge on every
+   page.
+4. The admin replied in Chrome.
+5. The reply came back on the user's side, sent by the Support account (id 605),
+   with the user's message now marked read.
+6. A typed draft survived a refresh tick.
+7. The user's admin page opened the same thread.
+
+Not exercised: delivery of the push to a real device (the test user had no push
+token). The localized title is covered by a spec.

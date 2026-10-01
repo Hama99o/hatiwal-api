@@ -103,4 +103,45 @@ RSpec.describe "Admin support inbox", type: :request do
     get admin_user_path(user)
     expect(response.body).to include(admin_support_conversation_path(thread))
   end
+
+  describe "navigation badge" do
+    it "counts THREADS awaiting a reply, not messages, on every admin page" do
+      chatty = create(:user)
+      chatty_thread = Conversation.support_thread_for!(chatty)
+      3.times { |i| create(:message, conversation: chatty_thread, user: chatty, body: "hello #{i}") }
+      user_says("help")
+
+      get admin_listings_path
+
+      expect(response.body[%r{id="nav-support".*?</a>}m]).to include('class="nav-badge"').and include(">2<")
+    end
+
+    it "shows no badge once everything has been read" do
+      user_says("help")
+      get admin_support_conversation_path(thread) # reading marks it read
+
+      get admin_root_path
+
+      expect(response.body[%r{id="nav-support".*?</a>}m]).not_to include("nav-badge")
+    end
+  end
+
+  it "paginates the inbox" do
+    (Admin::SupportConversationsController::PER_PAGE + 1).times do
+      Conversation.support_thread_for!(create(:user))
+    end
+
+    get admin_support_conversations_path
+    rows = response.body[%r{<tbody>.*?</tbody>}m].scan("<tr ").size
+    expect(rows).to eq(Admin::SupportConversationsController::PER_PAGE)
+    expect(response.body).to include("page=2")
+  end
+
+  it "polls for new messages, and the thread page holds off while a reply is typed" do
+    get admin_support_conversations_path
+    expect(response.body).to include("window.location.reload()")
+
+    get admin_support_conversation_path(thread)
+    expect(response.body).to include("box.value.trim()").and include("Auto-refresh paused")
+  end
 end

@@ -15,6 +15,8 @@ module Admin
     protect_from_forgery with: :exception
 
     before_action :authenticate_admin_user!
+    helper_method :support_awaiting_reply_count
+
 
     private
 
@@ -41,6 +43,12 @@ module Admin
 
     def default_sorting_direction
       :desc
+    end
+
+    # Navigation badge: support threads waiting on us, shown on every admin page
+    # so a new message gets noticed without anyone opening the inbox.
+    def support_awaiting_reply_count
+      @support_awaiting_reply_count ||= Conversation.awaiting_support_reply.count
     end
 
     # Record a moderation action for accountability. Failures here must never

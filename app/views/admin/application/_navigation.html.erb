@@ -22,8 +22,11 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/listings') ? 'active' : 'inactive'}" %>
   <%= link_to "Reports", admin_reports_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/reports') ? 'active' : 'inactive'}" %>
-  <%= link_to "Support", admin_support_conversations_path,
-        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/support_conversations') ? 'active' : 'inactive'}" %>
+  <% awaiting = respond_to?(:support_awaiting_reply_count) ? support_awaiting_reply_count : 0 %>
+  <%= link_to admin_support_conversations_path, id: "nav-support",
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/support_conversations') ? 'active' : 'inactive'}" do %>
+    Support<% if awaiting.positive? %> <span class="nav-badge" title="<%= pluralize(awaiting, 'conversation') %> waiting for a reply"><%= awaiting %></span><% end %>
+  <% end %>
   <%= link_to "Warnings", admin_user_warnings_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/user_warnings') ? 'active' : 'inactive'}" %>
   <%= link_to "Blocks", admin_blocks_path,
