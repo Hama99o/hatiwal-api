@@ -894,6 +894,11 @@ label.channel:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
   .ad-panel { padding: var(--ad-space-4); }
   .ad-table-wrap { margin: 0 calc(-1 * var(--ad-space-4)); padding: 0 var(--ad-space-4); }
   .main-content__header { padding: var(--ad-space-3) var(--ad-space-4); }
+  /* Index header on a phone: search takes the full row; the help icon and
+     the New button share the next row at its two ends (Administrate's fixed
+     2rem right margins left them floating apart). */
+  .main-content__header .search { max-width: none; margin: 0; }
+  .main-content__header .search__tooltip { margin: 0 auto 0 0; }
   .main-content__page-title { font-size: 1.2rem; width: 100%; }
   .main-content__body { padding: var(--ad-space-3) var(--ad-space-4); }
   .main-content__body--flush { padding: 0; }

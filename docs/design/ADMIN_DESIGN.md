@@ -110,6 +110,22 @@ overflow, on desktop and phone. Two things remain:
   in U+2068/U+2069 (first-strong isolate). It is plain text, so it works in
   headings, buttons and `<title>` alike. It lives in `app/dashboards/`,
   outside this design pass's files, so it was proposed rather than done.
-- **"۳x۴" with a Latin `x`** reorders the same way in every browser and app:
-  the `x` is strong left-to-right between Arabic-Indic digits. That is the
-  text itself, not the page. `×` (U+00D7) would read correctly.
+- **"۳x۴" with a Latin `x` is a content problem, not a rendering bug.
+  Don't chase it in CSS.** A seller typing dimensions ("قالین ۳x۴ متره", a
+  3×4 m carpet) gets them shown reordered in **every** browser, app and
+  operating system: the admin, the website and the mobile app alike. The
+  Unicode bidi algorithm (UAX #9) does this by design:
+  - The Arabic-Indic digits ۳ and ۴ are *weak* (EN), not strong.
+  - The Latin `x` is *strong left-to-right* (L).
+  - Inside a right-to-left paragraph, rule W2 turns `۳` (after Arabic text)
+    into an Arabic number, and rule W7 turns `۴` (after the `x`) into
+    left-to-right.
+  - So `x۴` becomes a left-to-right run, split from `۳`, and the dimension
+    reads in the wrong order.
+
+  No stylesheet, `dir` attribute or font can fix it, because the characters
+  themselves say this. The fix is in the text: `×` (U+00D7, the
+  multiplication sign) is a neutral, so `۳×۴` reads correctly everywhere.
+  Normalising `x` → `×` between digits on input would fix it on every client
+  at once. But that changes what users type, so it is the owner's decision
+  (flagged 2026-10-01), not a design-pass change.
