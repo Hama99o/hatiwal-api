@@ -1,0 +1,25 @@
+<%# Subject + body, kept in every step so the draft is never lost. `buttons`
+    is the list of [label, path, extra] the step offers. %>
+<% if @admin_email.errors.any? %>
+  <div id="email-errors" style="margin:0 0 1rem;padding:.7rem .9rem;border:1px solid #fca5a5;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:.88rem;">
+    <%= @admin_email.errors.full_messages.to_sentence %>
+  </div>
+<% end %>
+
+<%= form_with url: preview_admin_user_emails_path(@user), method: :post, data: { turbo: false }, id: "email-form" do |f| %>
+  <label style="display:block;font-size:.8rem;font-weight:600;color:#475569;margin-bottom:.25rem;">Subject</label>
+  <%= f.text_field :subject, value: @admin_email.subject, required: true, maxlength: AdminEmail::SUBJECT_MAX, dir: "auto",
+        style: "width:100%;padding:.55rem .7rem;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;margin-bottom:.8rem;" %>
+
+  <label style="display:block;font-size:.8rem;font-weight:600;color:#475569;margin-bottom:.25rem;">Message</label>
+  <%= f.text_area :body, value: @admin_email.body, rows: 10, required: true, maxlength: AdminEmail::BODY_MAX, dir: "auto",
+        placeholder: "Plain text. Write in the user's language — Pashto, Dari and Urdu display right-to-left.",
+        style: "width:100%;padding:.6rem .7rem;border:1px solid #cbd5e1;border-radius:8px;box-sizing:border-box;" %>
+
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.8rem;align-items:center;">
+    <% buttons.each do |label, path, extra| %>
+      <%= f.button label, formaction: path, **(extra || {}) %>
+    <% end %>
+    <%= link_to "Cancel", admin_user_path(@user, anchor: "user-email"), style: "font-size:.88rem;" %>
+  </div>
+<% end %>

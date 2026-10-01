@@ -63,6 +63,39 @@
   <% end %>
 </section>
 
+<% emails = page.resource.admin_emails.includes(:admin_user).recent.limit(10) %>
+<section id="user-email" style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #bae6fd;border-radius:12px;background:#f0f9ff;">
+  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#075985;">✉️ Email</h2>
+  <% if page.resource.emailable? %>
+    <%= link_to "Write an email", new_admin_user_email_path(page.resource), class: "button", id: "write-email" %>
+  <% else %>
+    <p style="margin:0;color:#075985;font-size:.85rem;">This user can't be emailed: <%= page.resource.email_refusal_reason %>.</p>
+  <% end %>
+
+  <% if emails.any? %>
+    <table id="email-history" style="width:100%;border-collapse:collapse;font-size:.85rem;margin-top:.9rem;">
+      <thead>
+        <tr style="text-align:start;color:#64748b;font-size:.72rem;text-transform:uppercase;">
+          <th style="padding:.35rem .5rem;">Subject</th><th style="padding:.35rem .5rem;">Status</th>
+          <th style="padding:.35rem .5rem;">By</th><th style="padding:.35rem .5rem;">When</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% emails.each do |e| %>
+          <tr style="border-top:1px solid #e0f2fe;">
+            <td style="padding:.4rem .5rem;" dir="auto"><%= e.subject %></td>
+            <td style="padding:.4rem .5rem;<%= 'color:#b91c1c;' if e.failed? %>">
+              <%= e.status %><%= ": #{e.error}" if e.failed? && e.error.present? %>
+            </td>
+            <td style="padding:.4rem .5rem;"><%= e.admin_user&.email %></td>
+            <td style="padding:.4rem .5rem;color:#64748b;"><%= l(e.sent_at || e.created_at, format: :short) %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</section>
+
 <% support_thread = Conversation.kind_support.find_by(buyer_id: page.resource.id) %>
 <section id="user-support" style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;">
   <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#3730a3;">💬 Support</h2>

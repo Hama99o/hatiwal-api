@@ -1,0 +1,14 @@
+<% content_for(:title) { "Email #{@user.full_name}" } %>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Email <%= link_to @user.full_name.presence || "User ##{@user.id}", admin_user_path(@user) %></h1>
+</header>
+
+<section class="main-content__body">
+  <p style="margin:0 0 1rem;font-size:.85rem;color:#64748b;">
+    To <strong><%= @user.email %></strong> · language: <%= @user.preferred_language.presence || "—" %> ·
+    from and replies to <strong><%= Rails.application.config.x.mail_sender %></strong>.
+    Nothing is sent from this page — you'll see a preview first.
+  </p>
+  <%= render "form", buttons: [ [ "Preview", preview_admin_user_emails_path(@user), { class: "button" } ] ] %>
+</section>

@@ -53,6 +53,12 @@ Rails.application.routes.draw do
         patch :unblock
         post :warn
       end
+      resources :emails, only: %i[new create], controller: "user_emails" do
+        collection do
+          post :preview
+          post :test
+        end
+      end
     end
     resources :user_warnings, only: [ :index, :show ]
     resources :support_conversations, only: [ :index, :show, :create ] do

@@ -42,6 +42,7 @@ class User < ApplicationRecord
   has_many :listing_views, dependent: :destroy
   has_many :viewed_listings, through: :listing_views, source: :listing
   has_many :warnings, class_name: "UserWarning", dependent: :destroy
+  has_many :admin_emails, class_name: AdminEmail.name, dependent: :destroy
   has_many :reviews_written, class_name: Review.name, foreign_key: :reviewer_id, dependent: :destroy, inverse_of: :reviewer
   has_many :reviews_received, class_name: Review.name, foreign_key: :reviewee_id, dependent: :destroy, inverse_of: :reviewee
 
@@ -90,6 +91,21 @@ class User < ApplicationRecord
   # (code ahead of its migration) every chat push would fail. Declared, it
   # reads false.
   attribute :support_account, :boolean, default: false
+
+  # Whether an admin may email this user. `.invalid` covers both the Support
+  # account (support@hatiwal.invalid) and anonymized deleted accounts
+  # (deleted-<id>@deleted.invalid) — addresses that exist only to fill the column.
+  def emailable?
+    email_refusal_reason.nil?
+  end
+
+  def email_refusal_reason
+    return "the Support account" if support_account?
+    return "the account is deleted" if deleted_at.present?
+    return "no email address" if email.blank?
+
+    "a placeholder address" if email.end_with?(".invalid")
+  end
 
   # Real people: everyone except the Support account, which would otherwise be
   # counted as a new signup in the growth charts.
