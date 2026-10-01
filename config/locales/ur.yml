@@ -1,0 +1,12 @@
+ur:
+  # Push-notification body labels for non-text messages, in Urdu.
+  #
+  # Missing until 2026-10-01 although `ur` was a valid preferred_language: with
+  # no ur.yml, `ur` is not an available locale, so I18n.with_locale("ur") RAISED
+  # and every photo/offer/meetup/document push to an Urdu user failed.
+  push:
+    message:
+      offer: "پیشکش بھیجی"
+      meetup: "ملاقات کی تجویز دی"
+      image: "تصویر بھیجی"
+      document: "دستاویز بھیجی"

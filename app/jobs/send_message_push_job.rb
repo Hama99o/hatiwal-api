@@ -50,9 +50,18 @@ class SendMessagePushJob < ApplicationJob
   # language); only the non-text labels are translated.
   def preview_for(message, recipient)
     key = PREVIEW_KEYS[message.kind]
-    locale = recipient.preferred_language.presence || I18n.default_locale
     return message.body.to_s.truncate(BODY_MAX) unless key
 
-    I18n.with_locale(locale) { I18n.t(key) }
+    I18n.with_locale(recipient_locale(recipient)) { I18n.t(key) }
+  end
+
+  # A language with no locale file is not an available locale, and
+  # I18n.with_locale RAISES on it — which is how every non-text push to an Urdu
+  # user failed before ur.yml existed. Fall back instead, so the next language
+  # added to User::SUPPORTED_LANGUAGES without a locale file degrades to the
+  # default rather than silently dropping pushes.
+  def recipient_locale(recipient)
+    locale = recipient.preferred_language.presence&.to_sym
+    locale && I18n.locale_available?(locale) ? locale : I18n.default_locale
   end
 end

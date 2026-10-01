@@ -42,6 +42,24 @@ RSpec.describe SendMessagePushJob, type: :job do
     described_class.perform_now(msg.id)
   end
 
+  # Regression: there was no ur.yml, so with_locale("ur") raised InvalidLocale.
+  it "labels a non-text push in Urdu for an Urdu recipient" do
+    seller.update!(preferred_language: "ur")
+    msg = create(:message, conversation: conversation, user: buyer, kind: :offer, body: "100|AFN|200")
+
+    expect(Notifications::ExpoPushService).to receive(:deliver).with(
+      hash_including(body: "پیشکش بھیجی")
+    ).and_return(result)
+
+    described_class.perform_now(msg.id)
+  end
+
+  it "every supported language has a push label, so no locale raises" do
+    User::SUPPORTED_LANGUAGES.each do |lang|
+      expect(I18n.t("push.message.image", locale: lang, raise: true)).to be_present
+    end
+  end
+
   it "skips when the recipient has no push token" do
     seller.update!(push_token: nil)
     msg = create(:message, conversation: conversation, user: buyer, kind: :text, body: "hi")
