@@ -18,6 +18,8 @@
   .dash-section h2 { font-size: 1rem; color: #334155; margin: 0 0 .75rem; }
   .dash-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
   @media (max-width: 900px) { .dash-charts { grid-template-columns: 1fr; } }
+  .growth-period { padding: .25rem .65rem; border: 1px solid #e2e8f0; border-radius: 999px; color: #475569; text-decoration: none; }
+  .growth-period--active { background: #6366f1; border-color: #6366f1; color: #fff; }
 </style>
 
 <header class="main-content__header">
@@ -67,11 +69,32 @@
   </p>
 </section>
 
-<section class="dash-section">
-  <h2>Growth (last 12 weeks)</h2>
+<section class="dash-section" id="growth">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem;flex-wrap:wrap;">
+    <h2>Growth — <%= Admin::GrowthSeries::PERIODS[@growth_period][:label].downcase %></h2>
+    <nav aria-label="Growth period" style="display:flex;gap:.35rem;font-size:.85rem;">
+      <% Admin::GrowthSeries::PERIODS.each do |key, cfg| %>
+        <%= link_to key.capitalize, admin_root_path(period: key, anchor: "growth"),
+              class: "growth-period#{' growth-period--active' if key == @growth_period}",
+              "aria-current": (key == @growth_period ? "page" : nil) %>
+      <% end %>
+    </nav>
+  </div>
+  <p style="font-size:.78rem;color:#64748b;margin:.1rem 0 .75rem;">
+    Counted on Kabul time (UTC+04:30)<%= "; weeks start on Saturday" if @growth_period == "week" %>.
+    The current <%= @growth_period %> is still in progress.
+  </p>
   <div class="dash-charts">
-    <div><%= line_chart @users_per_week, height: "260px", colors: ["#6366f1"], download: true %></div>
-    <div><%= line_chart @listings_per_week, height: "260px", colors: ["#10b981"], download: true %></div>
+    <div>
+      <h3 style="font-size:.85rem;color:#475569;margin:0 0 .4rem;">New users — <%= @new_users.values.sum %> in this range</h3>
+      <%= column_chart @new_users, height: "260px", colors: ["#6366f1"], download: true,
+            id: "chart-new-users", discrete: @growth_period == "year" %>
+    </div>
+    <div>
+      <h3 style="font-size:.85rem;color:#475569;margin:0 0 .4rem;">New listings — <%= @new_listings.values.sum %> in this range</h3>
+      <%= column_chart @new_listings, height: "260px", colors: ["#10b981"], download: true,
+            id: "chart-new-listings", discrete: @growth_period == "year" %>
+    </div>
   </div>
 </section>
 

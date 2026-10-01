@@ -91,6 +91,10 @@ class User < ApplicationRecord
   # reads false.
   attribute :support_account, :boolean, default: false
 
+  # Real people: everyone except the Support account, which would otherwise be
+  # counted as a new signup in the growth charts.
+  scope :members, -> { where(support_account: false) }
+
   def self.support_account!
     find_by(support_account: true) || create_support_account!
   end

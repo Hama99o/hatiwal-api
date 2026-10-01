@@ -32,9 +32,11 @@ module Admin
                           .sort_by { |(platform, version), _| [ platform.to_s, Gem::Version.new(version) ] }.reverse
       @legacy_clients = User.on_legacy_client_since(since).count
 
-      # Growth over the last ~12 weeks (groupdate)
-      @users_per_week    = User.group_by_week(:created_at, last: 12).count
-      @listings_per_week = Listing.group_by_week(:created_at, last: 12).count
+      # Growth: new users / new listings per week, month or year (?period=),
+      # bucketed on Kabul time with Saturday weeks — see Admin::GrowthSeries.
+      @growth_period = Admin::GrowthSeries.normalize(params[:period])
+      @new_users     = Admin::GrowthSeries.for(User.members, @growth_period)
+      @new_listings  = Admin::GrowthSeries.for(Listing.all, @growth_period)
 
       # Composition
       @listings_by_status = Listing.group(:status).count.transform_keys { |k| Listing.statuses.key(k) || k }

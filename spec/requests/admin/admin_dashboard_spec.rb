@@ -331,4 +331,24 @@ RSpec.describe "Admin dashboard", type: :request do
       expect(section).to include("v1.1.0 · android")
     end
   end
+
+  describe "growth charts" do
+    before { sign_in admin, scope: :admin_user }
+
+    it "switches between weekly, monthly and yearly new-user charts" do
+      %w[week month year].each do |period|
+        get admin_root_path(period: period)
+
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include("chart-new-users").and include("Kabul time")
+        expect(response.body).to include('growth-period growth-period--active" aria-current="page" href="/admin?period=' + period)
+      end
+    end
+
+    it "ignores a bogus period" do
+      get admin_root_path(period: "decade")
+      expect(response).to have_http_status(:ok)
+      expect(response.body).to include("last 12 weeks")
+    end
+  end
 end
