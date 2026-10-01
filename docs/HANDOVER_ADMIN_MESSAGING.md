@@ -138,6 +138,18 @@ change reaches it.
 | Bulk: dev guard refuses, segment from Users list, language warnings, typed count, 1 real send in Pashto | "Send a test to me" live (the dev admin's address has no MX) |
 | Unsubscribe: page, one-click POST without CSRF, undo | |
 
+## Styling
+
+Admin views use `app/assets/stylesheets/admin.css` classes
+(`docs/design/ADMIN_DESIGN.md`, by the design session). Use them for new admin
+views; no inline styles. A self-reloading page goes in the `animation: none`
+`:has(...)` rule under "Motion". Exceptions: **mailer views** (email clients
+strip stylesheets) and **`unsubscribes/*`** (public pages, kept standalone).
+Inline scripts read ids/data attributes (`#bulk-send[data-expected]`,
+`.fallback-warning`, `.fallback-badge`'s inline `display`), and request specs
+don't run JS — after any restyle, re-check the confirm dialogs, typed-count
+lock and language warnings in a real browser.
+
 ## Working in this checkout
 
 Several sessions share it. Commit **only your paths**: `git commit -- <paths>`,
