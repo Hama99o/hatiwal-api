@@ -10,11 +10,38 @@
 #     forms backed by a browser session, so we re-enable it explicitly.
 module Admin
   class ApplicationController < Administrate::ApplicationController
+    include Admin::Filterable
+
     protect_from_forgery with: :exception
 
     before_action :authenticate_admin_user!
 
     private
+
+    # NEWEST FIRST, everywhere.
+    #
+    # Administrate sets no default order, so an index came back in whatever order
+    # Postgres felt like returning. For an append-mostly table that is usually
+    # insertion order, but it is not guaranteed and it is visibly not what an
+    # operator wants on a moderation screen.
+    #
+    # These two hooks are Administrate 1.0's own seam: `sorting_attribute` falls
+    # back to `default_sorting_attribute` ONLY when no sort param is present, so
+    # clicking a column header still re-sorts exactly as before.
+    #
+    # Safe on the base controller because every one of the eight dashboard models
+    # has a created_at column — admin_audit_logs, admin_users, blocks, categories,
+    # listings, reports, users, user_warnings, all checked against db/schema.rb. A
+    # model without one would need its own default rather than inheriting this.
+    #
+    # Private, as in the gem: a public method on a controller is an action.
+    def default_sorting_attribute
+      :created_at
+    end
+
+    def default_sorting_direction
+      :desc
+    end
 
     # Record a moderation action for accountability. Failures here must never
     # break the action itself, so they are swallowed.

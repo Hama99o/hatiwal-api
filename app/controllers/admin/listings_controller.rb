@@ -1,5 +1,38 @@
 module Admin
   class ListingsController < Admin::ApplicationController
+    filter :status, :select, options: -> { Listing.statuses.keys }
+    filter :condition, :select, options: -> { Listing.conditions.keys }
+    # Categories are stored per locale (name_en / name_ps / name_fa / name_ur) —
+    # there is no plain `name` column. The admin is English, so the picker shows
+    # name_en and falls back to the slug when a category has no English name.
+    #
+    # A :scope, not a plain :select on category_id: listings attach to
+    # SUBcategories, so picking a parent ("Electronics") has to include its
+    # children — Listing.by_category already does exactly that.
+    filter :category, :scope, label: "Category",
+           options: lambda {
+             Category.order(:name_en).pluck(:name_en, :slug, :id)
+                     .map { |en, slug, id| [ en.presence || slug, id ] }
+           },
+           scope: ->(rel, v) { rel.by_category(v.to_i) }
+    # Listings have no city column; `location` is the free-text place the seller
+    # typed, which is where the city lives.
+    filter :location, :text, label: "City / location"
+    filter :price, :number_range
+    filter :reported, :scope, options: -> { %w[yes] }, scope: lambda { |rel, v|
+      next rel unless v == "yes"
+
+      rel.where(id: Report.where(reportable_type: Listing.name).select(:reportable_id))
+    }
+    # Expiry is a timestamp, not a status, so a listing can be `active` AND past
+    # its expires_at — which is exactly the set an operator wants to find.
+    # expires_at is nullable (no expiry), so "no" must include NULL — reuse the
+    # model's not_expired, which does; a bare range comparison would drop them.
+    filter :expired, :scope, options: -> { %w[yes no] }, scope: lambda { |rel, v|
+      v == "yes" ? rel.where(expires_at: ...Time.current) : rel.not_expired
+    }
+    filter :created, :date_range, column: :created_at, label: "Posted"
+
     # Take down (soft-remove) a listing — hides it from the public feed/detail
     # page. Restore reverses it.
     def take_down

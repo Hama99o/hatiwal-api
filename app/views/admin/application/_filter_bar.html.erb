@@ -1,0 +1,73 @@
+<%#
+  Combinable index filters.
+
+  Renders only for controllers that declared any (`filter :status, :select, ...`),
+  so every other dashboard is unaffected.
+
+  The form is GET to the current index, and it carries Administrate's own search
+  term and sort order through as hidden fields — otherwise filtering would silently
+  drop the operator's search and reset their column sort.
+%>
+<% filters = admin_filters %>
+<% if filters.present? %>
+  <section class="filter-bar" id="admin-filter-bar">
+    <%= form_with url: request.path, method: :get, local: true, class: "filter-bar__form" do |f| %>
+      <% if params[:search].present? %>
+        <%= hidden_field_tag :search, params[:search] %>
+      <% end %>
+      <% if (sort = request.query_parameters[resource_name]).is_a?(Hash) %>
+        <%= hidden_field_tag "#{resource_name}[order]", sort["order"] %>
+        <%= hidden_field_tag "#{resource_name}[direction]", sort["direction"] %>
+      <% end %>
+
+      <div class="filter-bar__fields">
+        <% filters.each do |filter| %>
+          <div class="filter-bar__field">
+            <label class="filter-bar__label"><%= filter[:label] %></label>
+
+            <% case filter[:type] %>
+            <% when :select, :scope %>
+              <%= select_tag filter[:name],
+                    options_for_select(resolve_options(filter), params[filter[:name]]),
+                    include_blank: "Any", class: "filter-bar__input" %>
+
+            <% when :boolean %>
+              <%= select_tag filter[:name],
+                    options_for_select([ %w[Yes yes], %w[No no] ], params[filter[:name]]),
+                    include_blank: "Any", class: "filter-bar__input" %>
+
+            <% when :text %>
+              <%= text_field_tag filter[:name], params[filter[:name]],
+                    placeholder: "Any", class: "filter-bar__input" %>
+
+            <% when :date_range %>
+              <div class="filter-bar__range">
+                <%= date_field_tag "#{filter[:name]}_from", params[:"#{filter[:name]}_from"],
+                      class: "filter-bar__input" %>
+                <span class="filter-bar__to">to</span>
+                <%= date_field_tag "#{filter[:name]}_to", params[:"#{filter[:name]}_to"],
+                      class: "filter-bar__input" %>
+              </div>
+
+            <% when :number_range %>
+              <div class="filter-bar__range">
+                <%= number_field_tag "#{filter[:name]}_min", params[:"#{filter[:name]}_min"],
+                      placeholder: "min", step: "any", class: "filter-bar__input" %>
+                <span class="filter-bar__to">to</span>
+                <%= number_field_tag "#{filter[:name]}_max", params[:"#{filter[:name]}_max"],
+                      placeholder: "max", step: "any", class: "filter-bar__input" %>
+              </div>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+
+      <div class="filter-bar__actions">
+        <%= submit_tag "Apply", class: "button filter-bar__apply", data: { disable_with: false } %>
+        <% if admin_filters_active? %>
+          <%= link_to "Clear", request.path, class: "filter-bar__clear" %>
+        <% end %>
+      </div>
+    <% end %>
+  </section>
+<% end %>

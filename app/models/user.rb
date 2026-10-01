@@ -46,7 +46,11 @@ class User < ApplicationRecord
 
   validates :firstname, presence: true
   validates :lastname, presence: true
-  validates :preferred_language, inclusion: { in: %w[en ps fa ur] }, allow_blank: true
+  # The locales the app ships. Extracted from the validation below so the admin
+  # filter reads the same list rather than keeping its own copy that can drift.
+  SUPPORTED_LANGUAGES = %w[en ps fa ur].freeze
+
+  validates :preferred_language, inclusion: { in: SUPPORTED_LANGUAGES }, allow_blank: true
   validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
   validates :push_token, length: { maximum: 200 }, allow_blank: true
   # A WhatsApp number, which is often NOT the account phone (different SIM).

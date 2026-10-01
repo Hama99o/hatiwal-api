@@ -1,5 +1,11 @@
 module Admin
   class ReportsController < Admin::ApplicationController
+    filter :status, :select, options: -> { Report.statuses.keys }
+    filter :reason, :select, options: -> { Report.reasons.keys }
+    filter :reportable_type, :select, label: "Target",
+           options: -> { Report.distinct.pluck(:reportable_type).compact.sort }
+    filter :created, :date_range, column: :created_at, label: "Reported"
+
     # One-click moderation from a report: act on the reported thing AND resolve
     # the report in a single step, so triage is fast.
 
