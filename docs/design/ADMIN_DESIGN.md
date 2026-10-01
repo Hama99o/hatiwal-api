@@ -102,14 +102,17 @@ renaming it. Run `spec/requests/admin` before committing any view change.
 
 Pashto and Dari listing titles in field values and list cells render as
 right-to-left paragraphs (`unicode-bidi: plaintext`), with no clipping and no
-overflow, on desktop and phone. Two things remain:
+overflow, on desktop and phone.
 
 - **Titles that embed the record name** ("Show …", "Edit …", the browser
-  title) put a right-to-left name inside an English line, and it breaks
-  apart around any Latin character. The fix is to wrap `display_resource`
-  in U+2068/U+2069 (first-strong isolate). It is plain text, so it works in
-  headings, buttons and `<title>` alike. It lives in `app/dashboards/`,
-  outside this design pass's files, so it was proposed rather than done.
+  title) used to put a right-to-left name inside an English line, where it
+  broke apart around any Latin character. Fixed in `1e67649`:
+  `BidiIsolate.wrap` (`app/dashboards/bidi_isolate.rb`) puts U+2068/U+2069
+  (first-strong isolate) around `display_resource` for listings, users and
+  admins. It is plain text, so it works in headings, buttons and `<title>`
+  alike. Verified on the listing 130 page: the name is now one coherent
+  right-to-left block. When a new dashboard shows user-typed text in
+  `display_resource`, wrap it the same way.
 - **"۳x۴" with a Latin `x` is a content problem, not a rendering bug.
   Don't chase it in CSS.** A seller typing dimensions ("قالین ۳x۴ متره", a
   3×4 m carpet) gets them shown reordered in **every** browser, app and
