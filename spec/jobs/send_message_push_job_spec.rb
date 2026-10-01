@@ -60,6 +60,20 @@ RSpec.describe SendMessagePushJob, type: :job do
     end
   end
 
+  # The Support account's stored name is English; the push title is composed
+  # here and shown by the OS, so it must be in the RECIPIENT's language.
+  it "localizes the title of a Support reply to the recipient" do
+    user = create(:user, push_token: "ExponentPushToken[user]", preferred_language: "ps")
+    thread = Conversation.support_thread_for!(user)
+    reply = create(:message, conversation: thread, user: User.support_account!, kind: :text, body: "Salaam")
+
+    expect(Notifications::ExpoPushService).to receive(:deliver).with(
+      hash_including(title: "د هټیوال ملاتړ", body: "Salaam")
+    ).and_return(result)
+
+    described_class.perform_now(reply.id)
+  end
+
   it "skips when the recipient has no push token" do
     seller.update!(push_token: nil)
     msg = create(:message, conversation: conversation, user: buyer, kind: :text, body: "hi")

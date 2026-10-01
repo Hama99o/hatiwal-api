@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_13_135727) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_01_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -109,6 +109,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_135727) do
     t.datetime "buyer_deleted_at"
     t.bigint "buyer_id", null: false
     t.datetime "created_at", null: false
+    t.integer "kind", default: 0, null: false
     t.datetime "last_message_at"
     t.bigint "listing_id"
     t.datetime "seller_archived_at"
@@ -118,6 +119,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_135727) do
     t.datetime "updated_at", null: false
     t.index ["buyer_deleted_at"], name: "index_conversations_on_buyer_deleted_at"
     t.index ["buyer_id"], name: "index_conversations_on_buyer_id"
+    t.index ["buyer_id"], name: "index_conversations_one_support_thread_per_user", unique: true, where: "(kind = 1)"
     t.index ["last_message_at"], name: "index_conversations_on_last_message_at"
     t.index ["listing_id", "buyer_id"], name: "index_conversations_on_listing_id_and_buyer_id", unique: true
     t.index ["listing_id"], name: "index_conversations_on_listing_id"
@@ -199,6 +201,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_135727) do
   end
 
   create_table "messages", force: :cascade do |t|
+    t.bigint "admin_user_id"
     t.text "body", null: false
     t.bigint "conversation_id", null: false
     t.datetime "created_at", null: false
@@ -209,6 +212,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_135727) do
     t.bigint "responds_to_id"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.index ["admin_user_id"], name: "index_messages_on_admin_user_id"
     t.index ["conversation_id"], name: "index_messages_on_conversation_id"
     t.index ["created_at"], name: "index_messages_on_created_at"
     t.index ["deleted_at"], name: "index_messages_on_deleted_at"
@@ -358,6 +362,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_135727) do
     t.integer "sign_in_count", default: 0, null: false
     t.integer "sold_count", default: 0, null: false
     t.integer "status", default: 0, null: false
+    t.boolean "support_account", default: false, null: false
     t.json "tokens"
     t.string "uid", default: "", null: false
     t.string "unconfirmed_email"
@@ -374,6 +379,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_135727) do
     t.index ["last_sign_in_at"], name: "index_users_on_last_sign_in_at"
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["status"], name: "index_users_on_status"
+    t.index ["support_account"], name: "index_users_single_support_account", unique: true, where: "support_account"
     t.index ["uid", "provider"], name: "index_users_on_uid_and_provider", unique: true
     t.index ["unlock_token"], name: "index_users_on_unlock_token", unique: true
   end
@@ -394,6 +400,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_135727) do
   add_foreign_key "listing_views", "users"
   add_foreign_key "listings", "categories"
   add_foreign_key "listings", "users"
+  add_foreign_key "messages", "admin_users"
   add_foreign_key "messages", "conversations"
   add_foreign_key "messages", "messages", column: "responds_to_id"
   add_foreign_key "messages", "users"

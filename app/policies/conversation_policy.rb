@@ -7,6 +7,10 @@ class ConversationPolicy < ApplicationPolicy
   def mark_unread?   = participant?
   def archive?       = participant?
   def unarchive?     = participant?
+  # Anyone signed in may reach Support — including a suspended or banned user,
+  # who is exactly the person most likely to need it. (Whether a blocked
+  # account can authenticate at all is decided at sign-in, not here.)
+  def start_support? = user.present? && !user.support_account?
 
   class Scope < ApplicationPolicy::Scope
     def resolve

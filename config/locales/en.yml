@@ -44,6 +44,10 @@ en:
       meetup: "Proposed a meetup"
       image: "Sent a photo"
       document: "Sent a document"
+    # Push title for a reply from Hatiwal Support (the sender's stored name is
+    # English; the title is shown by the OS, so it is localized here).
+    support:
+      title: "Hatiwal Support"
   activerecord:
     errors:
       models:

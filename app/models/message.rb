@@ -3,6 +3,9 @@ class Message < ApplicationRecord
   belongs_to :user
   # A meetup accept/decline points back to the proposal it answers.
   belongs_to :responds_to, class_name: "Message", optional: true
+  # Set only on a reply an admin posted as the Support account. Audit only —
+  # never serialized; clients see the Support account as the author.
+  belongs_to :admin_user, optional: true
 
   has_one_attached :attachment
 
@@ -33,6 +36,7 @@ class Message < ApplicationRecord
               max_size: MAX_ATTACHMENT_SIZE
             }
   validate :kind_must_not_be_system_when_user_authored
+  validate :kind_allowed_in_support_thread, if: -> { conversation&.kind_support? }
   validate :responds_to_must_be_in_same_conversation, if: -> { responds_to_id.present? }
 
   # ── SF-B11: an offer carries how many units it is for ───────────────────────
@@ -206,5 +210,11 @@ class Message < ApplicationRecord
 
     "cannot be more than the #{available} #{'unit'.pluralize(available)} still available. " \
       "Set it to #{available} or fewer."
+  end
+
+  def kind_allowed_in_support_thread
+    return if Conversation::SUPPORT_MESSAGE_KINDS.include?(kind.to_s)
+
+    errors.add(:kind, "is not allowed in a support conversation")
   end
 end

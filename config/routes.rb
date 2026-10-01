@@ -55,6 +55,13 @@ Rails.application.routes.draw do
       end
     end
     resources :user_warnings, only: [ :index, :show ]
+    resources :support_conversations, only: [ :index, :show, :create ] do
+      member do
+        post  :reply
+        patch :close
+        patch :reopen
+      end
+    end
     resources :blocks, only: [ :index, :show ]
     resources :admin_audit_logs, only: [ :index, :show ]
     resources :admin_users
@@ -115,6 +122,10 @@ Rails.application.routes.draw do
           end
         end
       end
+
+      # The caller's own thread with Hatiwal Support (find-or-create). Additive;
+      # only the app version with support messaging calls it.
+      resource :support_conversation, only: [ :create ]
 
       # Categories
       resources :categories, only: [ :index ]

@@ -34,7 +34,7 @@ class SendMessagePushJob < ApplicationJob
 
     result = Notifications::ExpoPushService.deliver(
       token: recipient.push_token,
-      title: sender.full_name,
+      title: title_for(sender, recipient),
       body: preview_for(message, recipient),
       data: { type: "message", conversationId: conversation.id, messageId: message.id }
     )
@@ -53,6 +53,16 @@ class SendMessagePushJob < ApplicationJob
     return message.body.to_s.truncate(BODY_MAX) unless key
 
     I18n.with_locale(recipient_locale(recipient)) { I18n.t(key) }
+  end
+
+  # A person's name is their name in every language. The Support account's
+  # stored name is English, though, and a push title is composed HERE and shown
+  # by the OS verbatim — a client can't relabel it — so Support's title is
+  # localized to the recipient like the body.
+  def title_for(sender, recipient)
+    return sender.full_name unless sender.support_account?
+
+    I18n.with_locale(recipient_locale(recipient)) { I18n.t("push.support.title") }
   end
 
   # A language with no locale file is not an available locale, and

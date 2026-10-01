@@ -400,4 +400,42 @@ RSpec.describe Conversation, type: :model do
       expect(query_count).to be >= 1
     end
   end
+
+  describe "support threads" do
+    let(:user) { create(:user) }
+
+    # support_first is ORDER BY kind DESC, which pins support only while it is
+    # the highest kind value.
+    it "keeps support the highest kind value, which support_first relies on" do
+      expect(described_class.kinds.values.max).to eq(described_class.kinds[:support])
+    end
+
+    it "defaults every conversation to kind listing" do
+      expect(create(:conversation).kind).to eq("listing")
+    end
+
+    it "must have no listing and the Support account as seller" do
+      bad = described_class.new(kind: :support, buyer: user, seller: create(:user), listing: create(:listing))
+
+      expect(bad).not_to be_valid
+      expect(bad.errors[:listing_id]).to be_present
+      expect(bad.errors[:seller_id]).to be_present
+    end
+
+    it "refuses the Support account as the user side" do
+      bad = described_class.new(kind: :support, buyer: User.support_account!, seller: User.support_account!)
+      expect(bad).not_to be_valid
+    end
+
+    it "support_thread_for! returns the same thread every time" do
+      expect(described_class.support_thread_for!(user)).to eq(described_class.support_thread_for!(user))
+    end
+
+    it "accepts only plain message kinds" do
+      thread = described_class.support_thread_for!(user)
+
+      expect(build(:message, conversation: thread, user: user, kind: :text, body: "hi")).to be_valid
+      expect(build(:message, conversation: thread, user: user, kind: :meetup_proposal, body: "x")).not_to be_valid
+    end
+  end
 end

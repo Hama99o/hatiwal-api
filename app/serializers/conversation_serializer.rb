@@ -1,13 +1,24 @@
 class ConversationSerializer < ApplicationSerializer
   fields :id, :status, :last_message_at, :created_at
 
+  # "listing" | "support". ADDITIVE: every conversation that existed before
+  # support messaging is "listing" by the column default, so the v1.0.4 app
+  # (which ignores unknown keys and sends no version header) is unaffected.
+  # Clients must branch on this FIRST — before `listing_deleted` (see below).
+  field :kind
+
   # Shared by both views (TASK-R517) — tells the client which side of this
   # thread the requesting user is on so the inbox can render a Buying/Selling
   # hint. `nil` when there is no current_user (e.g. a serializer unit test
   # that doesn't pass one).
+  # `nil` on a support thread: the user is neither buying nor selling there.
+  # That is a type change from "always a string", and it is only safe because
+  # no client older than support messaging is ever served a support thread —
+  # docs/SUPPORT_MESSAGING.md, "Why this cannot break v1.0.4".
   def self.viewer_role_for(conversation, opts)
     current_user = opts[:current_user]
     return nil unless current_user
+    return nil if conversation.kind_support?
 
     conversation.buyer_id == current_user.id ? "buyer" : "seller"
   end
@@ -34,6 +45,12 @@ class ConversationSerializer < ApplicationSerializer
 
   view :list do
     field(:viewer_role) { |c, opts| viewer_role_for(c, opts) }
+    # On a support thread (no listing) this is TRUE, and it is meant to be —
+    # do not "fix" it to false. A client built before support messaging treats
+    # `listing_deleted: true` + `listing: null` as "the listing was removed" and
+    # shows a banner; `false` + `listing: null` would send it into
+    # `listing.title` on a null. A wrong banner beats a crash. New clients read
+    # `kind` before this field.
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c|
       next nil if c.listing_deleted?
@@ -100,6 +117,12 @@ class ConversationSerializer < ApplicationSerializer
     # thread read. Absent here until 2026-09-02, which is why the divider had
     # never appeared on any thread.
     field(:unread_count) { |c, opts| unread_count_for(c, opts) }
+    # On a support thread (no listing) this is TRUE, and it is meant to be —
+    # do not "fix" it to false. A client built before support messaging treats
+    # `listing_deleted: true` + `listing: null` as "the listing was removed" and
+    # shows a banner; `false` + `listing: null` would send it into
+    # `listing.title` on a null. A wrong banner beats a crash. New clients read
+    # `kind` before this field.
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c, opts|
       next nil if c.listing_deleted?

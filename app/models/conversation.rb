@@ -10,8 +10,40 @@ class Conversation < ApplicationRecord
 
   enum :status, { open: 0, closed: 1 }
 
+  # `listing`: buyer ⇄ seller about a listing (every conversation before
+  # support messaging). `support`: a user (as buyer) ⇄ the Support account (as
+  # seller), with no listing. Prefixed because `listing?`/`Conversation.listing`
+  # would collide with the association's name.
+  # Declared explicitly so the model still loads if the column is missing
+  # (code booted ahead of its migration: a half-failed migrate, a rollback, a
+  # console/job container that skips bin/docker-entrypoint's db:prepare).
+  # Without it, `enum` raises at class load, and because ListingSerializer
+  # counts conversations, that 500s the listing screen for every user — not
+  # just chat. With it, everything reads as "listing"; only queries that name
+  # the column (the inbox pin, support endpoints) can still fail.
+  attribute :kind, :integer, default: 0
+  enum :kind, { listing: 0, support: 1 }, prefix: true
+
+  # Support threads accept plain messages only; offers, meetups and the other
+  # deal kinds belong to a listing.
+  SUPPORT_MESSAGE_KINDS = %w[text image_message document].freeze
+
+  # Pins the support thread above every listing thread in the inbox.
+  #
+  # ORDER BY the plain `kind` COLUMN, not a CASE expression: inbox search
+  # (`matching`) is SELECT DISTINCT, and Postgres rejects an ORDER BY
+  # expression that is not in the select list — a CASE here made every
+  # `?search=` a 500, for every user and every app version. The column is in
+  # `conversations.*`, so DISTINCT accepts it. Caught by
+  # spec/requests/api/v1/api_contract_v1_0_4_spec.rb.
+  #
+  # DESC works because support is the highest kind value; the model spec pins
+  # that, so adding a kind above it fails loudly instead of reordering inboxes.
+  scope :support_first, -> { order(kind: :desc) }
+
   validates :listing_id, uniqueness: { scope: :buyer_id, message: "already has a conversation with this buyer", allow_nil: true }
   validate :buyer_is_not_seller
+  validate :support_thread_shape, if: :kind_support?
 
   # NULLS LAST matters. A conversation is created the moment a buyer opens a
   # thread from a listing, before any message is sent, so `last_message_at` is
@@ -197,6 +229,17 @@ class Conversation < ApplicationRecord
     end
   end
 
+  # The user's support thread, creating it on first call. Only ever called on
+  # the user's own request (POST /support_conversation, which only the new app
+  # has) or by an admin when SUPPORT_ADMIN_INITIATE is on — see
+  # docs/SUPPORT_MESSAGING.md for why that distinction is the safety.
+  def self.support_thread_for!(user)
+    kind_support.find_by(buyer_id: user.id) ||
+      create!(kind: :support, buyer: user, seller: User.support_account!)
+  rescue ActiveRecord::RecordNotUnique
+    kind_support.find_by!(buyer_id: user.id)
+  end
+
   private
 
   def deleted_at_for(user)
@@ -213,5 +256,11 @@ class Conversation < ApplicationRecord
 
   def buyer_is_not_seller
     errors.add(:base, "buyer and seller must be different users") if buyer_id == seller_id
+  end
+
+  def support_thread_shape
+    errors.add(:listing_id, "must be empty on a support thread") if listing_id.present?
+    errors.add(:seller_id, "must be the Support account on a support thread") unless seller&.support_account?
+    errors.add(:buyer_id, "cannot be the Support account") if buyer&.support_account?
   end
 end

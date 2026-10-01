@@ -35,8 +35,12 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     # matches — not "the matches that happened to be on page 1 anyway".
     base_scope = base_scope.matching(params[:search]) if params[:search].present?
 
+    # support_first BEFORE ordered: the user's support thread is pinned to the
+    # top, then everything else by recent activity. Only users on an app with
+    # support messaging can have a support thread (docs/SUPPORT_MESSAGING.md),
+    # so for everyone else this ORDER BY changes nothing.
     conversations = policy_scope(
-      base_scope.ordered
+      base_scope.support_first.ordered
                 .includes(
                     # :latest_message loads only the newest message per conversation
                     # (has_one with ORDER BY DESC) instead of the entire messages
@@ -152,11 +156,13 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   # Any absent or unrecognised value is a no-op — the full mixed inbox is the
   # existing (and default) behaviour, never a 500 or an accidentally-empty list.
   def apply_role_filter(scope)
+    # The Buying/Selling tabs are about listings. A support thread has the user
+    # as `buyer`, so without kind_listing it would land in "Buying".
     case params[:role]
     when ROLES[:buying]
-      scope.as_buyer_for(current_user)
+      scope.as_buyer_for(current_user).kind_listing
     when ROLES[:selling]
-      scope.as_seller_for(current_user)
+      scope.as_seller_for(current_user).kind_listing
     else
       scope
     end

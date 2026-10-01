@@ -1,0 +1,2427 @@
+{
+  "inbox": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "conversations",
+          "meta"
+        ]
+      },
+      "conversations": {
+        "types": [
+          "array"
+        ],
+        "count": 4
+      },
+      "conversations[]": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "blocked_by_me",
+          "blocked_with_participant",
+          "created_at",
+          "id",
+          "last_message_at",
+          "last_message_body",
+          "last_message_deleted",
+          "last_message_kind",
+          "listing",
+          "listing_deleted",
+          "other_participant",
+          "status",
+          "unread_count",
+          "viewer_role"
+        ]
+      },
+      "conversations[].blocked_by_me": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].blocked_with_participant": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].last_message_at": {
+        "types": [
+          "null",
+          "string"
+        ]
+      },
+      "conversations[].last_message_body": {
+        "types": [
+          "null",
+          "string"
+        ]
+      },
+      "conversations[].last_message_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].last_message_kind": {
+        "types": [
+          "null",
+          "string"
+        ]
+      },
+      "conversations[].listing": {
+        "types": [
+          "null",
+          "object"
+        ],
+        "keys": [
+          "id",
+          "title",
+          "thumbnail_url",
+          "status",
+          "price",
+          "currency",
+          "multi_unit",
+          "available_units"
+        ]
+      },
+      "conversations[].listing.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].listing.title": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.thumbnail_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversations[].listing.status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.price": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.currency": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.multi_unit": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].listing.available_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].listing_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].other_participant": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversations[].other_participant.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].other_participant.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].other_participant.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].other_participant.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].other_participant.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversations[].status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].unread_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].viewer_role": {
+        "types": [
+          "string"
+        ]
+      },
+      "meta": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "pagination"
+        ]
+      },
+      "meta.pagination": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "current_page",
+          "next_page",
+          "prev_page",
+          "total_count",
+          "total_pages"
+        ]
+      },
+      "meta.pagination.current_page": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.next_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.prev_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.total_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.total_pages": {
+        "types": [
+          "integer"
+        ]
+      }
+    },
+    "order": [
+      "Alpha Phone",
+      "Charlie Chair",
+      "(removed listing)",
+      "Bravo Bike"
+    ]
+  },
+  "inbox_buying": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "conversations",
+          "meta"
+        ]
+      },
+      "conversations": {
+        "types": [
+          "array"
+        ],
+        "count": 3
+      },
+      "conversations[]": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "blocked_by_me",
+          "blocked_with_participant",
+          "created_at",
+          "id",
+          "last_message_at",
+          "last_message_body",
+          "last_message_deleted",
+          "last_message_kind",
+          "listing",
+          "listing_deleted",
+          "other_participant",
+          "status",
+          "unread_count",
+          "viewer_role"
+        ]
+      },
+      "conversations[].blocked_by_me": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].blocked_with_participant": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].last_message_at": {
+        "types": [
+          "null",
+          "string"
+        ]
+      },
+      "conversations[].last_message_body": {
+        "types": [
+          "null",
+          "string"
+        ]
+      },
+      "conversations[].last_message_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].last_message_kind": {
+        "types": [
+          "null",
+          "string"
+        ]
+      },
+      "conversations[].listing": {
+        "types": [
+          "null",
+          "object"
+        ],
+        "keys": [
+          "id",
+          "title",
+          "thumbnail_url",
+          "status",
+          "price",
+          "currency",
+          "multi_unit",
+          "available_units"
+        ]
+      },
+      "conversations[].listing.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].listing.title": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.thumbnail_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversations[].listing.status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.price": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.currency": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.multi_unit": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].listing.available_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].listing_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].other_participant": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversations[].other_participant.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].other_participant.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].other_participant.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].other_participant.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].other_participant.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversations[].status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].unread_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].viewer_role": {
+        "types": [
+          "string"
+        ]
+      },
+      "meta": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "pagination"
+        ]
+      },
+      "meta.pagination": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "current_page",
+          "next_page",
+          "prev_page",
+          "total_count",
+          "total_pages"
+        ]
+      },
+      "meta.pagination.current_page": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.next_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.prev_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.total_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.total_pages": {
+        "types": [
+          "integer"
+        ]
+      }
+    },
+    "order": [
+      "Alpha Phone",
+      "(removed listing)",
+      "Bravo Bike"
+    ]
+  },
+  "inbox_selling": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "conversations",
+          "meta"
+        ]
+      },
+      "conversations": {
+        "types": [
+          "array"
+        ],
+        "count": 1
+      },
+      "conversations[]": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "blocked_by_me",
+          "blocked_with_participant",
+          "created_at",
+          "id",
+          "last_message_at",
+          "last_message_body",
+          "last_message_deleted",
+          "last_message_kind",
+          "listing",
+          "listing_deleted",
+          "other_participant",
+          "status",
+          "unread_count",
+          "viewer_role"
+        ]
+      },
+      "conversations[].blocked_by_me": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].blocked_with_participant": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].last_message_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].last_message_body": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].last_message_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].last_message_kind": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "title",
+          "thumbnail_url",
+          "status",
+          "price",
+          "currency",
+          "multi_unit",
+          "available_units"
+        ]
+      },
+      "conversations[].listing.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].listing.title": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.thumbnail_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversations[].listing.status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.price": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.currency": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.multi_unit": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].listing.available_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].listing_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].other_participant": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversations[].other_participant.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].other_participant.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].other_participant.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].other_participant.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].other_participant.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversations[].status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].unread_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].viewer_role": {
+        "types": [
+          "string"
+        ]
+      },
+      "meta": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "pagination"
+        ]
+      },
+      "meta.pagination": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "current_page",
+          "next_page",
+          "prev_page",
+          "total_count",
+          "total_pages"
+        ]
+      },
+      "meta.pagination.current_page": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.next_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.prev_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.total_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.total_pages": {
+        "types": [
+          "integer"
+        ]
+      }
+    },
+    "order": [
+      "Charlie Chair"
+    ]
+  },
+  "inbox_search": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "conversations",
+          "meta"
+        ]
+      },
+      "conversations": {
+        "types": [
+          "array"
+        ],
+        "count": 1
+      },
+      "conversations[]": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "blocked_by_me",
+          "blocked_with_participant",
+          "created_at",
+          "id",
+          "last_message_at",
+          "last_message_body",
+          "last_message_deleted",
+          "last_message_kind",
+          "listing",
+          "listing_deleted",
+          "other_participant",
+          "status",
+          "unread_count",
+          "viewer_role"
+        ]
+      },
+      "conversations[].blocked_by_me": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].blocked_with_participant": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].last_message_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].last_message_body": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].last_message_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].last_message_kind": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "title",
+          "thumbnail_url",
+          "status",
+          "price",
+          "currency",
+          "multi_unit",
+          "available_units"
+        ]
+      },
+      "conversations[].listing.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].listing.title": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.thumbnail_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversations[].listing.status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.price": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.currency": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].listing.multi_unit": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].listing.available_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].listing_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].other_participant": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversations[].other_participant.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].other_participant.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].other_participant.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].other_participant.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversations[].other_participant.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversations[].status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversations[].unread_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversations[].viewer_role": {
+        "types": [
+          "string"
+        ]
+      },
+      "meta": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "pagination"
+        ]
+      },
+      "meta.pagination": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "current_page",
+          "next_page",
+          "prev_page",
+          "total_count",
+          "total_pages"
+        ]
+      },
+      "meta.pagination.current_page": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.next_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.prev_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.total_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.total_pages": {
+        "types": [
+          "integer"
+        ]
+      }
+    },
+    "order": [
+      "Alpha Phone"
+    ]
+  },
+  "thread": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "conversation"
+        ]
+      },
+      "conversation": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "blocked_by_me",
+          "blocked_with_participant",
+          "buyer",
+          "created_at",
+          "id",
+          "last_message_at",
+          "listing",
+          "listing_deleted",
+          "other_participant",
+          "seller",
+          "status",
+          "unread_count",
+          "viewer_role"
+        ]
+      },
+      "conversation.blocked_by_me": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.blocked_with_participant": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.buyer": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversation.buyer.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.buyer.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.buyer.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.buyer.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.buyer.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.last_message_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "title",
+          "price",
+          "currency",
+          "thumbnail_url",
+          "status",
+          "location",
+          "negotiable",
+          "multi_unit",
+          "available_units",
+          "category",
+          "viewer_is_sale_buyer",
+          "viewer_sale_transaction_id",
+          "viewer_has_reviewed_sale"
+        ]
+      },
+      "conversation.listing.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.listing.title": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.price": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.currency": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.thumbnail_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.listing.status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.location": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.negotiable": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.listing.multi_unit": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.listing.available_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.listing.category": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "icon",
+          "id",
+          "name_en",
+          "name_fa",
+          "name_ps",
+          "name_ur",
+          "parent_id",
+          "position",
+          "slug"
+        ]
+      },
+      "conversation.listing.category.icon": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.category.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.listing.category.name_en": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.category.name_fa": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.category.name_ps": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.category.name_ur": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.category.parent_id": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.listing.category.position": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.listing.category.slug": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing.viewer_is_sale_buyer": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.listing.viewer_sale_transaction_id": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.listing.viewer_has_reviewed_sale": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.listing_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.other_participant": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversation.other_participant.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.other_participant.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.other_participant.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.other_participant.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.other_participant.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.seller": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversation.seller.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.seller.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.seller.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.seller.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.seller.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.unread_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.viewer_role": {
+        "types": [
+          "string"
+        ]
+      }
+    },
+    "order": null
+  },
+  "thread_removed_listing": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "conversation"
+        ]
+      },
+      "conversation": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "blocked_by_me",
+          "blocked_with_participant",
+          "buyer",
+          "created_at",
+          "id",
+          "last_message_at",
+          "listing",
+          "listing_deleted",
+          "other_participant",
+          "seller",
+          "status",
+          "unread_count",
+          "viewer_role"
+        ]
+      },
+      "conversation.blocked_by_me": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.blocked_with_participant": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.buyer": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversation.buyer.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.buyer.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.buyer.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.buyer.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.buyer.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.last_message_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.listing": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.listing_deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.other_participant": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversation.other_participant.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.other_participant.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.other_participant.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.other_participant.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.other_participant.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.seller": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "conversation.seller.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.seller.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.seller.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.seller.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "conversation.seller.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "conversation.status": {
+        "types": [
+          "string"
+        ]
+      },
+      "conversation.unread_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "conversation.viewer_role": {
+        "types": [
+          "string"
+        ]
+      }
+    },
+    "order": null
+  },
+  "messages": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "messages",
+          "meta"
+        ]
+      },
+      "messages": {
+        "types": [
+          "array"
+        ],
+        "count": 3
+      },
+      "messages[]": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "attachment_url",
+          "body",
+          "created_at",
+          "deleted",
+          "deleted_at",
+          "id",
+          "kind",
+          "offer_amount",
+          "offer_currency",
+          "offer_quantity",
+          "read_at",
+          "responds_to_id",
+          "sender"
+        ]
+      },
+      "messages[].attachment_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "messages[].body": {
+        "types": [
+          "string"
+        ]
+      },
+      "messages[].created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "messages[].deleted": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "messages[].deleted_at": {
+        "types": [
+          "null"
+        ]
+      },
+      "messages[].id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "messages[].kind": {
+        "types": [
+          "string"
+        ]
+      },
+      "messages[].offer_amount": {
+        "types": [
+          "float",
+          "null"
+        ]
+      },
+      "messages[].offer_currency": {
+        "types": [
+          "null",
+          "string"
+        ]
+      },
+      "messages[].offer_quantity": {
+        "types": [
+          "null"
+        ]
+      },
+      "messages[].read_at": {
+        "types": [
+          "null"
+        ]
+      },
+      "messages[].responds_to_id": {
+        "types": [
+          "null"
+        ]
+      },
+      "messages[].sender": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "avatar_url"
+        ]
+      },
+      "messages[].sender.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "messages[].sender.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "messages[].sender.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "pagination"
+        ]
+      },
+      "meta.pagination": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "current_page",
+          "next_page",
+          "prev_page",
+          "total_count",
+          "total_pages"
+        ]
+      },
+      "meta.pagination.current_page": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.next_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.prev_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.total_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.total_pages": {
+        "types": [
+          "integer"
+        ]
+      }
+    },
+    "order": [
+      "9000|AFN|1",
+      "Yes",
+      "Is it available?"
+    ]
+  },
+  "listings": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "listings",
+          "meta"
+        ]
+      },
+      "listings": {
+        "types": [
+          "array"
+        ],
+        "count": 3
+      },
+      "listings[]": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "address",
+          "available_units",
+          "category",
+          "category_id",
+          "condition",
+          "created_at",
+          "currency",
+          "held_units",
+          "id",
+          "image_urls",
+          "is_saved",
+          "is_viewed",
+          "location",
+          "multi_unit",
+          "negotiable",
+          "price",
+          "price_at_save",
+          "price_drop_amount",
+          "price_drop_percent",
+          "price_dropped",
+          "price_dropped_at",
+          "quantity",
+          "sales_count",
+          "seller",
+          "status",
+          "thumbnail_url",
+          "title",
+          "views_count"
+        ]
+      },
+      "listings[].address": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].available_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].category": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "icon",
+          "id",
+          "name_en",
+          "name_fa",
+          "name_ps",
+          "name_ur",
+          "parent_id",
+          "position",
+          "slug"
+        ]
+      },
+      "listings[].category.icon": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].category.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].category.name_en": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].category.name_fa": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].category.name_ps": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].category.name_ur": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].category.parent_id": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].category.position": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].category.slug": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].category_id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].condition": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].currency": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].held_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].image_urls": {
+        "types": [
+          "array"
+        ],
+        "count": 0
+      },
+      "listings[].is_saved": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listings[].is_viewed": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listings[].location": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].multi_unit": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listings[].negotiable": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listings[].price": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].price_at_save": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].price_drop_amount": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].price_drop_percent": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].price_dropped": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listings[].price_dropped_at": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].quantity": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].sales_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].seller": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "verified",
+          "avatar_url"
+        ]
+      },
+      "listings[].seller.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listings[].seller.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].seller.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].seller.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listings[].seller.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].status": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].thumbnail_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "listings[].title": {
+        "types": [
+          "string"
+        ]
+      },
+      "listings[].views_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "pagination"
+        ]
+      },
+      "meta.pagination": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "current_page",
+          "next_page",
+          "prev_page",
+          "total_count",
+          "total_pages"
+        ]
+      },
+      "meta.pagination.current_page": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.next_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.prev_page": {
+        "types": [
+          "null"
+        ]
+      },
+      "meta.pagination.total_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "meta.pagination.total_pages": {
+        "types": [
+          "integer"
+        ]
+      }
+    },
+    "order": [
+      "Charlie Chair",
+      "Bravo Bike",
+      "Alpha Phone"
+    ]
+  },
+  "listing": {
+    "status": 200,
+    "shape": {
+      "": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "listing"
+        ]
+      },
+      "listing": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "address",
+          "available_units",
+          "category",
+          "category_id",
+          "condition",
+          "conversations_count",
+          "created_at",
+          "currency",
+          "description",
+          "expired",
+          "expires_at",
+          "held_units",
+          "id",
+          "image_attachments",
+          "images",
+          "is_saved",
+          "is_viewed",
+          "latitude",
+          "location",
+          "location_precision",
+          "location_radius_m",
+          "longitude",
+          "multi_unit",
+          "negotiable",
+          "price",
+          "price_drop_percent",
+          "price_dropped_at",
+          "published_at",
+          "quantity",
+          "reserved_at",
+          "sales_count",
+          "saves_count",
+          "seller",
+          "share_url",
+          "sold_at",
+          "status",
+          "thumbnail_url",
+          "title",
+          "updated_at",
+          "views_count"
+        ]
+      },
+      "listing.address": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.available_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.category": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "icon",
+          "id",
+          "name_en",
+          "name_fa",
+          "name_ps",
+          "name_ur",
+          "parent_id",
+          "position",
+          "slug"
+        ]
+      },
+      "listing.category.icon": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.category.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.category.name_en": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.category.name_fa": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.category.name_ps": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.category.name_ur": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.category.parent_id": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.category.position": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.category.slug": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.category_id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.condition": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.conversations_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.created_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.currency": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.description": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.expired": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listing.expires_at": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.held_units": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.image_attachments": {
+        "types": [
+          "array"
+        ],
+        "count": 0
+      },
+      "listing.images": {
+        "types": [
+          "array"
+        ],
+        "count": 0
+      },
+      "listing.is_saved": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listing.is_viewed": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listing.latitude": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.location": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.location_precision": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.location_radius_m": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.longitude": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.multi_unit": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listing.negotiable": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listing.price": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.price_drop_percent": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.price_dropped_at": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.published_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.quantity": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.reserved_at": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.sales_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.saves_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.seller": {
+        "types": [
+          "object"
+        ],
+        "keys": [
+          "id",
+          "name",
+          "city",
+          "phone",
+          "whatsapp_number",
+          "verified",
+          "avatar_url",
+          "avg_rating",
+          "review_count",
+          "response_rate_percent",
+          "response_time_label",
+          "last_active_label",
+          "seller_is_away",
+          "seller_away_until"
+        ]
+      },
+      "listing.seller.id": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.seller.name": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.seller.city": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.seller.phone": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.seller.whatsapp_number": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.seller.verified": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listing.seller.avatar_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.seller.avg_rating": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.seller.review_count": {
+        "types": [
+          "integer"
+        ]
+      },
+      "listing.seller.response_rate_percent": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.seller.response_time_label": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.seller.last_active_label": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.seller.seller_is_away": {
+        "types": [
+          "boolean"
+        ]
+      },
+      "listing.seller.seller_away_until": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.share_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.sold_at": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.status": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.thumbnail_url": {
+        "types": [
+          "null"
+        ]
+      },
+      "listing.title": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.updated_at": {
+        "types": [
+          "string"
+        ]
+      },
+      "listing.views_count": {
+        "types": [
+          "integer"
+        ]
+      }
+    },
+    "order": null
+  }
+}

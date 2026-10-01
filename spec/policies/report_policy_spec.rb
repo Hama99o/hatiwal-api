@@ -19,4 +19,18 @@ RSpec.describe ReportPolicy do
       expect(scope).to contain_exactly(mine)
     end
   end
+
+  describe "#create? against the Support account" do
+    it "refuses a report whose target is the Support account" do
+      reporter = create(:user)
+      report = Report.new(reporter: reporter, reportable: User.support_account!, reason: :spam)
+      expect(described_class.new(reporter, report).create?).to be false
+    end
+
+    it "still allows reporting an ordinary user" do
+      reporter = create(:user)
+      report = Report.new(reporter: reporter, reportable: create(:user), reason: :spam)
+      expect(described_class.new(reporter, report).create?).to be true
+    end
+  end
 end

@@ -114,4 +114,11 @@ RSpec.describe ConversationPolicy do
       expect(scope).to contain_exactly(mine_as_buyer, mine_as_seller)
     end
   end
+
+  describe "#start_support?" do
+    it "lets any signed-in user reach Support, but not the Support account itself" do
+      expect(described_class.new(outsider, Conversation).start_support?).to be true
+      expect(described_class.new(User.support_account!, Conversation).start_support?).to be false
+    end
+  end
 end

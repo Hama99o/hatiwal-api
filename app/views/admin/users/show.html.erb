@@ -63,6 +63,22 @@
   <% end %>
 </section>
 
+<% support_thread = Conversation.kind_support.find_by(buyer_id: page.resource.id) %>
+<section id="user-support" style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #c7d2fe;border-radius:12px;background:#eef2ff;">
+  <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#3730a3;">💬 Support</h2>
+  <% if support_thread %>
+    <%= link_to "Open support conversation", admin_support_conversation_path(support_thread), class: "button" %>
+  <% elsif Admin::SupportConversationsController.admin_initiate_enabled? %>
+    <%= button_to "Start support conversation", admin_support_conversations_path(user_id: page.resource.id),
+          method: :post, data: { turbo: false }, class: "button" %>
+  <% else %>
+    <p style="margin:0;color:#3730a3;font-size:.85rem;">
+      This user hasn't contacted support. Starting a conversation from here is turned off
+      until the app update with support messaging is live.
+    </p>
+  <% end %>
+</section>
+
 <section style="margin:0 0 1.5rem;padding:1.25rem 1.5rem;border:1px solid #fca5a5;border-radius:12px;background:#fef2f2;">
   <h2 style="margin:0 0 .5rem;font-size:1.05rem;color:#991b1b;">🚫 Account moderation</h2>
 
