@@ -11,6 +11,8 @@ ur:
       image: "تصویر بھیجی"
       document: "دستاویز بھیجی"
     # Push title for a reply from Hatiwal Support (the sender's stored name is
-    # English; the title is shown by the OS, so it is localized here).
+    # English; the title is shown by the OS, so it is localized here). Spelled
+    # EXACTLY as the mobile app's in-app Support name, so the push and the
+    # inbox row match — the brand spelling is the owner's call; change both.
     support:
-      title: "ہاٹیوال سپورٹ"
+      title: "ہتیوال سپورٹ"
