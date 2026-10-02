@@ -1,5 +1,8 @@
 # Deployment Guide
 
+> **Start with [INFRASTRUCTURE.md](INFRASTRUCTURE.md)**: what runs where, the four
+> databases, secrets, backups, restore, and the move to the dedicated VPS.
+
 > ⚠️ **Welcome message stays OFF (2026-10-02).** `main` carries the sign-up
 > welcome from Hatiwal Support. It runs only when `WELCOME_SUPPORT_MESSAGE=true`,
 > and that variable is deliberately absent from `.env.production`,

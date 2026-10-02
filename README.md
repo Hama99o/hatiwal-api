@@ -182,3 +182,8 @@ bin/kms deploy
 bin/kms logs-f
 bin/kms console
 ```
+
+## Production
+
+How the backend runs in production (services, databases, secrets, deploy,
+backups, restore, and the dedicated-server move): [docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md).
