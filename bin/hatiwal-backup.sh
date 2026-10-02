@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Nightly Hatiwal backup (docs/INFRASTRUCTURE.md §6, layer 2). Installed by Claude Code 2026-10-02.
-# main DB + queue DB (gzipped SQL) + photos volume (tar.gz) -> ~/backups/hatiwal/<stamp>/, keep 14 days.
+# main DB + queue DB (gzipped SQL) + photos volume (tar.gz) -> ~/backups/hatiwal/<stamp>/, keep 7 days.
 set -euo pipefail
 DIR="$HOME/backups/hatiwal/$(date +%Y%m%d_%H%M%S)"; mkdir -p "$DIR"
 for db in hatiwal_production hatiwal_production_queue; do
@@ -9,11 +9,11 @@ for db in hatiwal_production hatiwal_production_queue; do
 done
 docker run --rm -v hatiwal_api_storage:/s:ro postgres:16 tar czf - -C /s . > "$DIR/storage.tar.gz"
 tar tzf "$DIR/storage.tar.gz" >/dev/null
-find "$HOME/backups/hatiwal" -mindepth 1 -maxdepth 1 -type d -mtime +14 -exec rm -rf {} +
+find "$HOME/backups/hatiwal" -mindepth 1 -maxdepth 1 -type d -mtime +6 -exec rm -rf {} +
 echo "$(date -Is) ok $DIR $(du -sh "$DIR" | cut -f1)" >> "$HOME/backups/hatiwal/backup.log"
 # Layer 3: off-server copy to the old OVH VPS (write-only key, rrsync). No --delete:
 # a broken or compromised primary must not be able to wipe the copies; that side
-# prunes itself after 30 days.
+# prunes itself after 14 days.
 rsync -a -e "ssh -i $HOME/.ssh/offsite_backup -o IdentitiesOnly=yes -o BatchMode=yes" \
   "$DIR" "$HOME/backups/hatiwal/backup.log" kamal@51.254.130.18:/ \
   && echo "$(date -Is) offsite ok $(basename "$DIR")" >> "$HOME/backups/hatiwal/backup.log" \
