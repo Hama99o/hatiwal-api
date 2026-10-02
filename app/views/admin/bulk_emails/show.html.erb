@@ -65,6 +65,9 @@
     </p>
 <% end %>
 
+<%# An in-app-only send has no email rows — no empty header-only table for it. %>
+<% if @bulk.via_email? %>
+<% if @bulk.via_in_app? %><h2 class="hw-section__title hw-gap-top">Email deliveries</h2><% end %>
 <section class="main-content__body main-content__body--flush">
   <table id="bulk-recipients">
     <thead><tr>
@@ -83,6 +86,7 @@
   </table>
   <%= paginate @rows %>
 </section>
+<% end %>
 
 <% if @bulk.via_in_app? %>
   <h2 class="hw-section__title hw-gap-top">In-app deliveries</h2>

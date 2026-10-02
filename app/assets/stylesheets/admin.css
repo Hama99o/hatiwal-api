@@ -419,6 +419,9 @@ a.button {
   transition: background 0.15s ease-in-out;
 }
 .button:hover, a.button:hover, button.button:hover { background: var(--hw-lapis-700); }
+/* Administrate's header button reads "Edit <record title>" and is nowrap: a
+   long listing title ran out of its card on a phone. Let it wrap. */
+.main-content__header .button { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
 .button--danger, button.button--danger { background: var(--hw-danger); }
 .button--danger:hover, button.button--danger:hover { background: #a61f1f; }
 .button--alt, a.button--alt {

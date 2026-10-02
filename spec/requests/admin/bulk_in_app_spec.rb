@@ -141,6 +141,15 @@ RSpec.describe "Admin bulk message — in-app", type: :request do
     expect(CGI.unescapeHTML(response.body)).to include("won't send a broadcast push")
   end
 
+  it "the result page of an in-app-only send has no empty email table" do
+    send_it
+    get admin_bulk_email_path(AdminBulkEmail.last)
+
+    expect(response.body).to include('id="bulk-in-app-recipients"')
+    expect(response.body).not_to include('id="bulk-recipients"')
+    expect(response.body).not_to include("Email deliveries")
+  end
+
   it "email + in-app: the confirm number counts each person once" do
     [ with_thread, also_thread, without_thread ].each { |u| u.update!(confirmed_at: Time.current) }
 
