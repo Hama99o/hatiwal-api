@@ -27,3 +27,7 @@ ur:
     undone: "آپ دوبارہ سبسکرائب ہو گئے"
     email_footer: "ان ای میلز سے ان سبسکرائب کریں"
     invalid: "This unsubscribe link isn't valid."
+  support:
+    # First message a new account receives from Hatiwal Support
+    # (WelcomeSupportMessageJob).
+    welcome: "ہتیوال میں خوش آمدید! 👋 یہ ہتیوال سپورٹ ہے۔ اگر آپ کا کوئی سوال، مسئلہ یا تجویز ہو تو یہیں ہمیں لکھیں۔ ہم ہر پیغام پڑھتے ہیں۔"

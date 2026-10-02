@@ -23,3 +23,7 @@ ps:
     undone: "تاسو بېرته ګډون وکړ"
     email_footer: "له دې برېښنالیکونو ګډون لغوه کړئ"
     invalid: "This unsubscribe link isn't valid."
+  support:
+    # First message a new account receives from Hatiwal Support
+    # (WelcomeSupportMessageJob).
+    welcome: "هتیوال ته ښه راغلاست! 👋 دا د هتیوال ملاتړ دی. که پوښتنه، ستونزه یا کوم نظر لرئ، همدلته یې راته ولیکئ. موږ هر پیغام لولو."

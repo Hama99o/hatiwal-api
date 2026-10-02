@@ -102,7 +102,7 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
   end
 
   def create_user_from_google(payload, email)
-    User.create(
+    user = User.create(
       email: email,
       uid: email,
       provider: "google",
@@ -116,6 +116,9 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
       # account permanently "unconfirmed" in the admin view.
       confirmed_at: Time.current
     )
+    # Only a NEW account: a returning Google user is found above and never gets here.
+    WelcomeSupportMessageJob.perform_later(user.id) if user.persisted?
+    user
   end
 
   def issue_tokens(user)

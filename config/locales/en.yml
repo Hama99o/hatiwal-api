@@ -75,3 +75,7 @@ en:
     undone: "You're subscribed again"
     email_footer: "Unsubscribe from these emails"
     invalid: "This unsubscribe link isn't valid."
+  support:
+    # First message a new account receives from Hatiwal Support
+    # (WelcomeSupportMessageJob).
+    welcome: "Welcome to Hatiwal! 👋 This is Hatiwal Support. If you have a question, a problem or an idea, just reply here. We read every message."

@@ -59,6 +59,13 @@ reach it is a support thread, and that is controlled by **who creates one**:
   with Block and Report pointed at Support. It is built but **off** behind
   `SUPPORT_ADMIN_INITIATE`. Admins can always reply in a thread the user opened.
 - No migration, seed or backfill creates a support conversation, and none may.
+- **Welcome on sign-up (2026-10-02, owner's request).** A new account gets one
+  welcome from Support in its language (`support.welcome`), from
+  `WelcomeSupportMessageJob`. It is queued by the two sign-up doors only
+  (email registration, new Google account), never by a model callback, so
+  seeds and backfills still create no thread. It goes through
+  `admin_support_thread_for`, so it obeys `SUPPORT_ADMIN_INITIATE`, and it is
+  skipped if the thread already has any message.
   The Support account is created on first use; an account alone is invisible.
 
 **Known limit, not solved:** a user who updates, opens support, and then also

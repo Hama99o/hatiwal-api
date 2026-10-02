@@ -10,6 +10,12 @@ module Api
         # far too slow to farm accounts with.
         throttle to: 10, within: 1.hour, by: :ip, only: :create
 
+        # POST /api/v1/auth — a new account gets a welcome from Hatiwal Support
+        # (WelcomeSupportMessageJob). The block runs only after a successful save.
+        def create
+          super { |user| WelcomeSupportMessageJob.perform_later(user.id) }
+        end
+
         # DELETE /api/v1/auth — request account deletion. We override the default
         # (which hard-destroys + cascades away the user's messages) to SCHEDULE a
         # 30-day deletion: the account is immediately hidden and logged out, but

@@ -21,3 +21,7 @@ fa:
     undone: "دوباره مشترک شدید"
     email_footer: "لغو اشتراک این ایمیل‌ها"
     invalid: "This unsubscribe link isn't valid."
+  support:
+    # First message a new account receives from Hatiwal Support
+    # (WelcomeSupportMessageJob).
+    welcome: "به هتیوال خوش آمدید! 👋 اینجا پشتیبانی هتیوال است. اگر سوال، مشکل یا پیشنهادی دارید، همین‌جا برای ما بنویسید. ما همه پیام‌ها را می‌خوانیم."
