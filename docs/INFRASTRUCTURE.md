@@ -9,6 +9,29 @@ says otherwise. Status markers: ✅ done · ⏳ in progress · 📋 planned.
 
 ---
 
+> ✅ **MIGRATED 2026-10-02 ~18:20 (Paris).** Hatiwal (API, Postgres, Redis, photos,
+> web, map) runs on the dedicated server `141.94.205.46`. Both repos'
+> `.env.production` have `KAMAL_HOST=141.94.205.46`, so `bin/kms` and the map's
+> `HOST` now target it.
+>
+> Data was copied after freezing the old API, and the counts matched exactly:
+> 44 users · 69 listings · 36 conversations · 305 messages · 63 blobs ·
+> 2 admins · last message #305.
+>
+> **Temporary, on the OLD server `51.254.130.18`:** the old API is stopped, and
+> a forwarder `hatiwal_api_forward` (nginx, `~kamal/hatiwal-forward/api.conf`)
+> sends `api.hatiwal.com` traffic to the new server, for devices still
+> caching the old DNS (TTL 4 h). The old web/map containers and the old
+> database stay as a fallback.
+>
+> Cleanup is due 2026-10-09. Remove from the old server: the forwarder, the
+> Hatiwal containers, volumes, `~kamal/hatiwal-*` and `~kamal/hatiwal_api-*`.
+>
+> Nightly backup: `~kamal/bin/hatiwal-backup.sh` runs from cron at 03:15 UTC,
+> into `~kamal/backups/hatiwal/`, and keeps 14 days. The first run was at
+> 16:20 UTC, and its restore test (44 users / 305 messages / 64 photos) passed.
+> **Still to do:** the off-server copy (§6, layer 3).
+
 ## 1. Where Hatiwal runs
 
 | | Server | IP | Status |
