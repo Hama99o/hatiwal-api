@@ -145,11 +145,38 @@ finished).
 
 ---
 
+## 5b. Shortcuts (`bin/kms`): all tested against production 2026-10-02
+
+Run them from the repo root. `bin/kms help` lists everything.
+
+| Need | API (`hatiwal-api/bin/kms`) | Web (`hatiwal-web/bin/kms`) |
+|---|---|---|
+| Deploy / redeploy / roll back | `deploy` · `redeploy` · `rollback` | same |
+| Deploy got cut off (SSH dropped) | `kamal deploy --skip-push` | `deploy:retry` |
+| Is it up? | `health` (API + web + map) | `health` |
+| Server load, RAM, disk, containers | `server` | — |
+| Shell on the server | `ssh` | — |
+| Live logs | `logs` | `logs` |
+| Last N lines / a time window | `logs:200` · `logs:since 2h` | `logs:200` |
+| Errors only | `logs:errors` | `logs:errors` |
+| Background jobs and push | `logs:jobs` | — |
+| Search the logs | `logs:grep <text>` | `logs:grep <text>` |
+| Postgres / Redis / proxy logs | `logs:db [N]` · `logs:redis [N]` · `logs:proxy [N]` | `logs:proxy [N]` |
+| Rails console / one-liner | `console` · `runner '<ruby>'` (quotes are safe) | — |
+| DB console / Redis CLI | `psql` · `redis:console` | — |
+| Migrations | `migrate` | — |
+| **Full backup** (main DB + queue DB + all photos) | `backup` → `backups/<time>/` · `backup:list` | — |
+| DB only | `db:dump` | — |
+| Restore to production | `db:restore <file>` (takes a full backup first, asks `yes`) | — |
+
+First full backup with photos: `backups/20261002_174447/` (52 KB + 8 KB of
+gzipped SQL, 64 files / 67 MB of photos), on the owner's PC.
+
 ## 6. Backups 📋
 
-**Today: none for Hatiwal.** The only database copies are dumps taken by hand
-with `bin/kms db:dump` into `hatiwal-api/backups/` (3 files, the newest from
-2026-10-01). Photos have **never** been backed up.
+**Today: manual only.** `bin/kms backup` (2026-10-02) takes a full copy (main and
+queue DBs plus every photo) onto the owner's PC; the first one ran on
+2026-10-02. Nothing runs automatically yet, and nothing is kept off the PC.
 
 Planned, on the dedicated server from day one (and on the shared server until
 then, if the owner approves):

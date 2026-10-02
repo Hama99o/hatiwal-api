@@ -13,6 +13,10 @@ DB_USER="hatiwal"
 DB_PROD="hatiwal_production"
 DB_DEV="hatiwal_development"      # local docker-compose database
 DC_PG_SERVICE="postgres"         # docker-compose service name
+DB_QUEUE="hatiwal_production_queue"  # Solid Queue: scheduled jobs worth keeping
+STORAGE_VOLUME="hatiwal_api_storage" # ActiveStorage photos/files (Disk service)
+# Public health endpoints (docs/INFRASTRUCTURE.md section 2)
+HEALTH_URLS="https://api.hatiwal.com/up https://hatiwal.com/api/health https://map.hatiwal.com/styles/hatiwal-light-en.json"
 
 # Load env (.env.production preferred, then .env)
 if [ -f .env.production ]; then set -a; source .env.production; set +a
@@ -22,53 +26,83 @@ SSH_TARGET="${SSH_USER:-kamal}@${KAMAL_HOST}"
 
 need_kamal() { command -v kamal >/dev/null 2>&1 || { echo -e "${RED}kamal not installed — run: gem install kamal${NC}"; exit 1; }; }
 need_host()  { [ -n "$KAMAL_HOST" ] || { echo -e "${RED}KAMAL_HOST not set (check .env.production)${NC}"; exit 1; }; }
+on_server()  { ssh -o IdentitiesOnly=yes -i "${SSH_KEY_PATH:-$HOME/.ssh/id_ed25519}" "$SSH_TARGET" "$@"; }
+
+# Full backup into backups/<timestamp>/: main DB + queue DB (gzipped SQL) and
+# every photo/file from the storage volume (tar.gz). Read-only on the server.
+full_backup() {
+  need_host
+  TS=$(date +"%Y%m%d_%H%M%S"); DIR="backups/${TS}"; mkdir -p "$DIR"
+  echo -e "${CYAN}Backing up production -> ${DIR}/${NC}"
+  for db in "$DB_PROD" "$DB_QUEUE"; do
+    on_server "docker exec $DB_CONTAINER pg_dump -U $DB_USER -d $db --no-owner --no-acl | gzip" > "$DIR/$db.sql.gz"
+    if ! gzip -t "$DIR/$db.sql.gz" 2>/dev/null || ! gzip -dc "$DIR/$db.sql.gz" | head -1 | grep -qE "^(--|SET|CREATE)"; then
+      echo -e "${RED}x dump of $db failed${NC}"; exit 1
+    fi
+    echo -e "  ${GREEN}ok${NC} $db ($(du -h "$DIR/$db.sql.gz" | cut -f1))"
+  done
+  # postgres:16 is already on the server and has tar: no extra image pulled.
+  on_server "docker run --rm -v $STORAGE_VOLUME:/s:ro postgres:16 tar czf - -C /s ." > "$DIR/storage.tar.gz"
+  tar tzf "$DIR/storage.tar.gz" >/dev/null 2>&1 || { echo -e "${RED}x photo archive is corrupt${NC}"; exit 1; }
+  echo -e "  ${GREEN}ok${NC} photos/files: $(tar tzf "$DIR/storage.tar.gz" | grep -vc '/$') files ($(du -h "$DIR/storage.tar.gz" | cut -f1))"
+  echo -e "${GREEN}Backup complete: ${DIR}${NC}"
+}
 
 help() {
-cat <<EOF
-$(echo -e "${CYAN}hatiwal-api · Kamal Management Script${NC}")
-$(echo -e "${YELLOW}Usage:${NC}) bin/kms <command> [args]
-
-$(echo -e "${GREEN}Deploy${NC})
-  deploy, d           Build, push and deploy (zero-downtime)
-  redeploy            Force rebuild + deploy
-  rollback            Roll back to the previous version
-  status, s           Show deployment details
-  version             Show the running version
-  lock <args>         Manage deploy locks (e.g. lock release)
-
-$(echo -e "${GREEN}Rails${NC})
-  c, console          Rails console on production
-  migrate             bin/rails db:migrate
-  seed                bin/rails db:seed
-  routes              bin/rails routes
-  runner '<code>'     Run Ruby in the Rails context
-  exec '<cmd>'        Run a shell command in the app container
-  bash, sh            Open a shell in the app container
-
-$(echo -e "${GREEN}Logs${NC})
-  logs, l             Follow app logs
-  logs:N              Last N lines (e.g. logs:200)
-  logs:db             Follow Postgres logs
-  logs:redis          Follow Redis logs
-  logs:proxy          Follow kamal-proxy logs
-  logs:grep <pat>     Grep the last 1000 app log lines
-
-$(echo -e "${GREEN}Database / Redis${NC})
-  psql, db:console    Postgres console (production)
-  db:dump             Download prod DB → ./backups/
-  db:load [file]      Load a dump into the LOCAL docker-compose DB
-  db:restore <file>   Restore a dump to PRODUCTION (danger!)
-  redis:console       Redis CLI (production)
-  acc:boot            Boot accessories (db + redis)
-  acc:restart         Reboot all accessories
-
-$(echo -e "${GREEN}Maintenance${NC})
-  ps                  List app containers
-  restart, boot       Reboot the app
-  stop / start        Stop / start the app
-  clean               Prune old containers + images
-  audit               Kamal security audit
-EOF
+  h() { printf "\n${GREEN}%s${NC}\n" "$1"; }
+  printf "${CYAN}hatiwal-api . Kamal Management Script${NC}   (docs/INFRASTRUCTURE.md)\n"
+  printf "${YELLOW}Usage:${NC} bin/kms <command> [args]\n"
+  h "Deploy"
+  printf '%s\n' \
+    "  deploy, d           Build, push and deploy (zero-downtime)" \
+    "  redeploy            Force rebuild + deploy" \
+    "  rollback            Roll back to the previous version" \
+    "  status, s           Show deployment details" \
+    "  version             Show the running version" \
+    "  lock <args>         Manage deploy locks (e.g. lock release)"
+  h "Rails"
+  printf '%s\n' \
+    "  c, console          Rails console on production" \
+    "  migrate             bin/rails db:migrate" \
+    "  seed                bin/rails db:seed" \
+    "  routes              bin/rails routes" \
+    "  runner '<code>'     Run Ruby in the Rails context (quotes are safe)" \
+    "  exec '<cmd>'        Run a shell command in the app container" \
+    "  bash, sh            Open a shell in the app container"
+  h "Logs"
+  printf '%s\n' \
+    "  logs, l             Follow app logs" \
+    "  logs:N              Last N app lines (e.g. logs:200)" \
+    "  logs:since <dur>    App logs for a window, e.g. 30m, 2h, 1d" \
+    "  logs:errors         Only errors / exceptions / 5xx (last 3000 lines)" \
+    "  logs:jobs           Background jobs: Solid Queue, ActiveJob, push (last 2000)" \
+    "  logs:grep <pat>     Grep the last 1000 app log lines" \
+    "  logs:db [N]         Postgres: last N lines (default: last 100, then follow)" \
+    "  logs:redis [N]      Redis: same" \
+    "  logs:proxy [N]      kamal-proxy: same"
+  h "Backup / database / Redis"
+  printf '%s\n' \
+    "  backup              FULL backup -> backups/<time>/ (main DB + queue DB + all photos)" \
+    "  backup:list         List local backups" \
+    "  db:dump             Main prod DB only -> backups/<file>.sql" \
+    "  db:load [file]      Load a dump into the LOCAL docker-compose DB" \
+    "  db:restore <file>   Restore to PRODUCTION (full backup first; asks 'yes')" \
+    "  psql, db:console    Postgres console (production)" \
+    "  redis:console       Redis CLI (production)" \
+    "  acc:boot            Boot accessories (db + redis)" \
+    "  acc:restart         Reboot all accessories"
+  h "Server"
+  printf '%s\n' \
+    "  health              Check API, web and map are up (HTTP code + time)" \
+    "  server              Uptime, load, RAM, disk, Hatiwal containers, photo size" \
+    "  ssh                 Open a shell on the server (user kamal)"
+  h "Maintenance"
+  printf '%s\n' \
+    "  ps                  List app containers (incl. old stopped ones)" \
+    "  restart, boot       Reboot the app" \
+    "  stop / start        Stop / start the app" \
+    "  clean               Prune old containers + images" \
+    "  audit               Kamal security audit"
 }
 
 case "${1:-help}" in
@@ -83,19 +117,27 @@ case "${1:-help}" in
   migrate)      need_kamal; kamal app exec "bin/rails db:migrate" ;;
   seed)         need_kamal; kamal app exec "bin/rails db:seed" ;;
   routes)       need_kamal; kamal app exec "bin/rails routes" ;;
-  runner)       need_kamal; shift; kamal app exec "bin/rails runner '$*'" ;;
+  runner)       # Base64 so quotes in the Ruby code survive the trip
+                need_kamal; shift; B64=$(printf '%s' "$*" | base64 -w0)
+                kamal app exec "bin/rails runner \"eval(Base64.decode64('$B64'))\"" ;;
   exec)         need_kamal; shift; kamal app exec "$*" ;;
   bash|sh)      need_kamal; kamal app exec -i --reuse "bash" ;;
 
   l|logs)       need_kamal; kamal app logs -f ;;
   logs:[0-9]*)  need_kamal; kamal app logs -n "${1#logs:}" ;;
-  logs:db)      need_kamal; kamal accessory logs db -f ;;
-  logs:redis)   need_kamal; kamal accessory logs redis -f ;;
-  logs:proxy)   need_kamal; kamal proxy logs -f ;;
+  logs:db)    need_kamal; if [[ "${2:-}" =~ ^[0-9]+$ ]]; then kamal accessory logs db -n "$2"; else kamal accessory logs db -n 100 -f; fi ;;
+  logs:redis) need_kamal; if [[ "${2:-}" =~ ^[0-9]+$ ]]; then kamal accessory logs redis -n "$2"; else kamal accessory logs redis -n 100 -f; fi ;;
+  logs:proxy) need_kamal; if [[ "${2:-}" =~ ^[0-9]+$ ]]; then kamal proxy logs -n "$2"; else kamal proxy logs -n 100 -f; fi ;;
   logs:grep)    need_kamal; shift; kamal app logs -n 1000 | grep -i "$*" ;;
+  logs:errors)  need_kamal; kamal app logs -n 3000 | grep -E 'ERROR|FATAL|Exception|Completed 5[0-9][0-9]|"status":5[0-9][0-9]' || echo -e "${GREEN}No errors in the last 3000 lines${NC}" ;;
+  logs:jobs)    need_kamal; kamal app logs -n 2000 | grep -iE "SolidQueue|ActiveJob|Performing|Performed|ExpoPush" || echo "No job lines in the last 2000" ;;
+  logs:since)   need_kamal; [ -n "${2:-}" ] || { echo "Usage: bin/kms logs:since 2h"; exit 1; }; kamal app logs --since "$2" ;;
 
   psql|db:console)
     need_kamal; kamal accessory exec db -i "psql -U $DB_USER -d $DB_PROD" ;;
+
+  backup)       full_backup ;;
+  backup:list)  ls -1t backups 2>/dev/null | head -20 | while read -r b; do echo "$b  $(du -sh "backups/$b" | cut -f1)"; done ;;
 
   db:dump|db:backup)
     need_host
@@ -126,6 +168,8 @@ case "${1:-help}" in
     FILE="${2:-}"; [ -n "$FILE" ] && [ -f "$FILE" ] || { echo -e "${RED}Usage: bin/kms db:restore <file.sql>${NC}"; exit 1; }
     echo -e "${YELLOW}This REPLACES the production database with ${FILE}.${NC}"
     read -p "Type 'yes' to continue: " ok; [ "$ok" = "yes" ] || { echo "cancelled"; exit 0; }
+    echo -e "${CYAN}Safety first: full backup of the CURRENT production data before replacing it...${NC}"
+    full_backup
     ssh "$SSH_TARGET" "docker exec $DB_CONTAINER psql -U $DB_USER -d postgres -c \"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$DB_PROD' AND pid<>pg_backend_pid();\"" >/dev/null 2>&1 || true
     ssh "$SSH_TARGET" "docker exec $DB_CONTAINER psql -U $DB_USER -d postgres -c 'DROP DATABASE IF EXISTS $DB_PROD;'"
     ssh "$SSH_TARGET" "docker exec $DB_CONTAINER psql -U $DB_USER -d postgres -c 'CREATE DATABASE $DB_PROD OWNER $DB_USER;'"
@@ -142,6 +186,25 @@ case "${1:-help}" in
   start)        need_kamal; kamal app start ;;
   clean)        need_kamal; kamal prune all ;;
   audit)        need_kamal; kamal audit ;;
+
+  health)
+    for u in $HEALTH_URLS; do
+      r=$(curl -s -o /dev/null -m 20 -w "%{http_code} %{time_total}s" "$u")
+      case "$r" in 200*) c=$GREEN;; *) c=$RED;; esac
+      echo -e "${c}${r}${NC}  $u"
+    done ;;
+  server)
+    need_host
+    on_server "STORAGE_VOLUME=$STORAGE_VOLUME bash -s" <<'REMOTE'
+echo "== $(hostname): up $(uptime -p | sed 's/up //'), load $(cut -d' ' -f1-3 /proc/loadavg)"
+free -h | sed -n 1,2p
+df -h / | tail -1
+echo "== Hatiwal containers"
+docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' | grep -i hatiwal
+echo "== photos: $(docker run --rm -v "$STORAGE_VOLUME":/s:ro postgres:16 du -sh /s | cut -f1)"
+REMOTE
+    ;;
+  ssh)          need_host; on_server ;;
 
   -h|--help|help|"") help ;;
   *) echo -e "${RED}Unknown command: $1${NC}"; echo "Run: bin/kms help"; exit 1 ;;
