@@ -195,26 +195,21 @@ Run them from the repo root. `bin/kms help` lists everything.
 First full backup with photos: `backups/20261002_174447/` (52 KB + 8 KB of
 gzipped SQL, 64 files / 67 MB of photos), on the owner's PC.
 
-## 6. Backups 📋
+## 6. Backups ✅ (since 2026-10-02)
 
-**Today: manual only.** `bin/kms backup` (2026-10-02) takes a full copy (main and
-queue DBs plus every photo) onto the owner's PC; the first one ran on
-2026-10-02. Nothing runs automatically yet, and nothing is kept off the PC.
+| Layer | What | When | Kept | Status |
+|---|---|---|---|---|
+| 1. OVH Automated Backup (included in VPS-2) | The whole server | Daily | OVH's rotation | ✅ on |
+| 2. App backup on the server: `~kamal/bin/hatiwal-backup.sh` (copy in `bin/hatiwal-backup.sh`) | `pg_dump` of `hatiwal_production` + `hatiwal_production_queue` (gzipped SQL), plus a `tar.gz` of the `hatiwal_api_storage` photos | Nightly, cron **03:15 UTC** | 14 days, in `~kamal/backups/hatiwal/<stamp>/`; log in `backup.log` | ✅ |
+| 3. Off-server copy | Layer 2's folder, pushed by rsync to the **old VPS** `51.254.130.18:~kamal/offsite/hatiwal/` with a **write-only key** (rrsync, `from=` the new IP, cannot run a shell). No `--delete`: a broken primary can't wipe the copies. | Right after layer 2 | 30 days (pruned on that side, 04:30) | ✅ (`offsite ok` in `backup.log`) |
+| 4. Restore test | Restore the latest dump into a scratch DB `restore_test`, count rows, drop it | Done 2026-10-02 (44 users / 305 messages / 64 photos); repeat monthly | — | ✅ first run |
+| On demand | `bin/kms backup` → `backups/<time>/` on the owner's PC | When needed | Manual | ✅ |
 
-Planned, on the dedicated server from day one (and on the shared server until
-then, if the owner approves):
-
-| Layer | What | When | Kept |
-|---|---|---|---|
-| 1. OVH Automated Backup (included in VPS-2) | The whole server | Daily | OVH's rotation |
-| 2. App backup on the server | `pg_dump` of `hatiwal_production` + `hatiwal_production_queue` (custom format), plus a `tar` of the `hatiwal_api_storage` photos | Nightly, by a `kamal` cron | 14 days, in `~kamal/backups/hatiwal/` |
-| 3. Off-server copy | Layer 2's files copied off the box (object storage or the owner's PC) | Nightly | 30 days |
-| 4. Restore test | Restore the latest dump into a scratch database and count the rows | After setup, then monthly | — |
+**When the old VPS is cleaned up** (2026-10-09), keep `~kamal/offsite/hatiwal`
+and its prune cron, or move layer 3 to object storage first.
 
 The map tiles need no backup. They're one rebuildable file, and
 `hatiwal-map/deploy/RUNBOOK.md` explains how to rebuild them.
-
----
 
 ## 7. Restoring
 
