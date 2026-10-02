@@ -1,5 +1,12 @@
 # Deployment Guide
 
+> ⚠️ **Welcome message stays OFF (2026-10-02).** `main` carries the sign-up
+> welcome from Hatiwal Support. It runs only when `WELCOME_SUPPORT_MESSAGE=true`,
+> and that variable is deliberately absent from `.env.production`,
+> `.kamal/secrets` and `config/deploy.yml`, so deploying the API is safe. Do NOT
+> add it until mobile **1.1.4** is live on BOTH the App Store and Google Play.
+> Steps: `../hatiwal-mobile/docs/RELEASE_1.1.4.md` §4.
+
 > **Domains, corrected 2026-09-01.** Production is **`api.hatiwal.com`**. This
 > file still described the `nip.io` hostnames the first deploy used and hardcoded
 > the VPS IP — which also breaks the workspace rule that hosts live only in the
