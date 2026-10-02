@@ -200,6 +200,7 @@ gzipped SQL, 64 files / 67 MB of photos), on the owner's PC.
 | Layer | What | When | Kept | Status |
 |---|---|---|---|---|
 | 1. OVH Automated Backup (included in VPS-2) | The whole server | Daily | OVH's rotation | ✅ on |
+| 1b. OVH Snapshot option (€0.50 HT/month, order #260806206, 2026-10-02) | One manual restore point of the whole server (a new one replaces the old) | **Before any big server change** (system upgrade, Docker/Kamal upgrade, big release); take one first | 1 | ✅ ordered; first snapshot: after the migration |
 | 2. App backup on the server: `~kamal/bin/hatiwal-backup.sh` (copy in `bin/hatiwal-backup.sh`) | `pg_dump` of `hatiwal_production` + `hatiwal_production_queue` (gzipped SQL), plus a `tar.gz` of the `hatiwal_api_storage` photos | Nightly, cron **03:15 UTC** | **newest 7**, one a day, i.e. a week (by count, so a stopped backup never ages out the good ones), in `~kamal/backups/hatiwal/<stamp>/`; log in `backup.log` | ✅ |
 | 3. Off-server copy | Layer 2's folder, pushed by rsync to the **old VPS** `51.254.130.18:~kamal/offsite/hatiwal/` with a **write-only key** (rrsync, `from=` the new IP, cannot run a shell). No `--delete`: a broken primary can't wipe the copies. | Right after layer 2 | **newest 7** (pruned on that side, 04:30) | ✅ (`offsite ok` in `backup.log`) |
 | 4. Restore test | Restore the latest dump into a scratch DB `restore_test`, count rows, drop it | Done 2026-10-02 (44 users / 305 messages / 64 photos); repeat monthly | — | ✅ first run |
