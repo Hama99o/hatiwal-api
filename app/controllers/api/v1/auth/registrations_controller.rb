@@ -13,7 +13,7 @@ module Api
         # POST /api/v1/auth — a new account gets a welcome from Hatiwal Support
         # (WelcomeSupportMessageJob). The block runs only after a successful save.
         def create
-          super { |user| WelcomeSupportMessageJob.perform_later(user.id) }
+          super { |user| WelcomeSupportMessageJob.enqueue_for(user) }
         end
 
         # DELETE /api/v1/auth — request account deletion. We override the default

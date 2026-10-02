@@ -5,6 +5,25 @@ require "rails_helper"
 RSpec.describe "Welcome message on sign-up", type: :request do
   include ActiveJob::TestHelper
 
+  # The feature is OFF by default (until mobile 1.1.4); these specs turn it on,
+  # except the one that checks the default.
+  before do
+    allow(ENV).to receive(:fetch).and_call_original
+    allow(ENV).to receive(:fetch).with("WELCOME_SUPPORT_MESSAGE", "false").and_return("true")
+  end
+
+  it "queues nothing on sign-up while WELCOME_SUPPORT_MESSAGE is off (the default)" do
+    allow(ENV).to receive(:fetch).with("WELCOME_SUPPORT_MESSAGE", "false").and_return("false")
+
+    expect do
+      post "/api/v1/auth",
+           params: { email: "off@example.com", password: "Password123!", password_confirmation: "Password123!",
+                     firstname: "Off", lastname: "Flag" },
+           as: :json
+    end.not_to have_enqueued_job(WelcomeSupportMessageJob)
+    expect(response).to have_http_status(:ok)
+  end
+
   describe "email sign-up (POST /api/v1/auth)" do
     def sign_up(email:)
       post "/api/v1/auth",

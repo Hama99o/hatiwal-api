@@ -66,6 +66,11 @@ reach it is a support thread, and that is controlled by **who creates one**:
   seeds and backfills still create no thread. It goes through
   `admin_support_thread_for`, so it obeys `SUPPORT_ADMIN_INITIATE`, and it is
   skipped if the thread already has any message.
+- **OFF in production until mobile 1.1.4 is live on iOS and Android**
+  (owner, 2026-10-02): older apps draw the Support thread poorly. Switch:
+  `WELCOME_SUPPORT_MESSAGE=true`. It is deliberately absent from
+  `config/deploy.yml` env, so a deploy cannot turn it on; enabling it for 1.1.4
+  means adding it there and to `.env.production` / `.kamal/secrets`.
   The Support account is created on first use; an account alone is invisible.
 
 **Known limit, not solved:** a user who updates, opens support, and then also

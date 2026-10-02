@@ -117,7 +117,7 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
       confirmed_at: Time.current
     )
     # Only a NEW account: a returning Google user is found above and never gets here.
-    WelcomeSupportMessageJob.perform_later(user.id) if user.persisted?
+    WelcomeSupportMessageJob.enqueue_for(user)
     user
   end
 

@@ -3,9 +3,10 @@ require "rails_helper"
 RSpec.describe WelcomeSupportMessageJob, type: :job do
   include ActiveJob::TestHelper
 
-  def flag(on)
+  def flag(on, welcome: true)
     allow(ENV).to receive(:fetch).and_call_original
     allow(ENV).to receive(:fetch).with("SUPPORT_ADMIN_INITIATE", "false").and_return(on ? "true" : "false")
+    allow(ENV).to receive(:fetch).with("WELCOME_SUPPORT_MESSAGE", "false").and_return(welcome ? "true" : "false")
   end
 
   def welcome_for(user) = Conversation.kind_support.find_by(buyer_id: user.id)&.messages&.to_a
@@ -74,6 +75,25 @@ RSpec.describe WelcomeSupportMessageJob, type: :job do
 
   it "sends nothing while SUPPORT_ADMIN_INITIATE is off (the gate), and creates no thread" do
     flag(false)
+    user = create(:user)
+
+    described_class.perform_now(user.id)
+
+    expect(Conversation.kind_support.where(buyer_id: user.id)).to be_empty
+  end
+
+  it "is OFF by default: nothing is sent and no thread is created (until mobile 1.1.4)" do
+    allow(ENV).to receive(:fetch).with("WELCOME_SUPPORT_MESSAGE", "false").and_call_original
+    user = create(:user)
+
+    expect(described_class.enabled?).to be(false)
+    described_class.perform_now(user.id)
+
+    expect(Conversation.kind_support.where(buyer_id: user.id)).to be_empty
+  end
+
+  it "sends nothing while WELCOME_SUPPORT_MESSAGE is off, even with the Support flag on" do
+    flag(true, welcome: false)
     user = create(:user)
 
     described_class.perform_now(user.id)

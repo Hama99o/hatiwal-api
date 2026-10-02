@@ -9,10 +9,27 @@
 #
 # The thread comes from Conversation.admin_support_thread_for, the gate. With
 # SUPPORT_ADMIN_INITIATE off it returns nil and nothing is sent.
+#
+# OFF until mobile 1.1.4 is live on iOS AND Android (owner, 2026-10-02): older
+# apps draw the Support thread poorly, so a welcome would land in a bad screen.
+# Switch: WELCOME_SUPPORT_MESSAGE=true. It is deliberately NOT in
+# config/deploy.yml env, so production cannot have it on until someone adds it
+# there for the 1.1.4 release.
 class WelcomeSupportMessageJob < ApplicationJob
   queue_as :default
 
+  def self.enabled?
+    ActiveModel::Type::Boolean.new.cast(ENV.fetch("WELCOME_SUPPORT_MESSAGE", "false"))
+  end
+
+  # The sign-up doors call this, so nothing is even queued while it is off.
+  def self.enqueue_for(user)
+    perform_later(user.id) if enabled? && user&.persisted?
+  end
+
   def perform(user_id)
+    return unless self.class.enabled?
+
     user = User.find_by(id: user_id)
     return if user.nil? || user.support_account? || user.deleted_at.present?
 
