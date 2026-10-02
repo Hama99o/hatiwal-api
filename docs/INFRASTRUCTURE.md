@@ -14,7 +14,7 @@ says otherwise. Status markers: ✅ done · ⏳ in progress · 📋 planned.
 | | Server | IP | Status |
 |---|---|---|---|
 | **Today** | Shared OVH VPS `vps-30ee3e0c.vps.ovh.net` (4 vCPU, 7.6 GB RAM, 72 GB). Also hosts **edu_safi** and **multi_magic**. | `51.254.130.18` | ✅ live |
-| **Target** | Dedicated OVH **VPS-2**, `vps-4814504b.vps.ovh.net` (4 vCore, 8 GB RAM, 75 GB NVMe, Gravelines). Order #260793534, 2026-10-02. | `141.94.205.46` | ⏳ reinstall to Ubuntu 24.04 with the deploy key; nothing deployed yet |
+| **Target** | Dedicated OVH **VPS-2**, `vps-4814504b.vps.ovh.net` (4 vCore, 8 GB RAM, 75 GB NVMe, Gravelines). Order #260793534, 2026-10-02. | `141.94.205.46` | ✅ Ubuntu 24.04.4, hardened by `bin/server-bootstrap.sh` (2026-10-02); ⏳ Hatiwal not deployed yet |
 
 **Why move:** on the shared server, another app's load, mistake or reboot hits
 Hatiwal too, and Hatiwal has had **no backups** there (multi_magic does). A
@@ -216,7 +216,7 @@ before touching production.
 
 Nothing changes for users until step 6.
 
-1. **Prepare the server** (done by Claude Code over SSH):
+1. ✅ **Prepare the server** (2026-10-02). Run `ssh ubuntu@<ip> 'sudo bash -s' < bin/server-bootstrap.sh "$(cat ~/.ssh/id_ed25519.pub)"`; it is idempotent. Done, and verified from outside: kamal login, docker, ufw 22/80/443, root and password login refused, fail2ban, log caps. The `ubuntu` password (OVH forced a change) is kept only in `~/.ssh/hatiwal-vps-ubuntu.password` on the owner's PC, for the OVH KVM console.
    - Ubuntu 24.04, `kamal` user with the deploy key, root and password login off.
    - Firewall: allow only 22, 80, 443.
    - `unattended-upgrades`, `fail2ban`, time sync.
