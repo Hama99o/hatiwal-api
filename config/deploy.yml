@@ -51,6 +51,7 @@ env:
     # "we should able to send message" — a message waits in the chat whatever
     # app they have). Value lives in .env.production; see docs/SUPPORT_MESSAGING.md.
     - SUPPORT_ADMIN_INITIATE
+    - WELCOME_SUPPORT_MESSAGE
     # Sensitive tokens (Google OAuth, Postmark) are in config/credentials.yml.enc — not env vars
   clear:
     DATABASE_HOST: hatiwal_api-db

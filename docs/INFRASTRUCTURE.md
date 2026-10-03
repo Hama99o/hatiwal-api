@@ -129,8 +129,8 @@ and the same key OVH stores as **hama-deploy**. There are no passwords.
 
 **Feature flags held in production:**
 - `SUPPORT_ADMIN_INITIATE=true`: on since 2026-10-01.
-- `WELCOME_SUPPORT_MESSAGE`: **deliberately absent** until mobile 1.1.4 is live
-  on both stores. See `docs/SUPPORT_MESSAGING.md`.
+- `WELCOME_SUPPORT_MESSAGE=true`: **on since 2026-10-03**, once mobile 1.1.4
+  was live on both stores. See `docs/SUPPORT_MESSAGING.md`.
 
 Moving to a new server changes **one value**: `KAMAL_HOST` in each repo's
 `.env.production` (hatiwal-api, hatiwal-web), and `HOST` for the map's
