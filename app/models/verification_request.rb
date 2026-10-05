@@ -30,7 +30,7 @@ class VerificationRequest < ApplicationRecord
   # formats (owner: "if unsure, accept 6–20 digits").
   # Letters and digits, at least one digit (owner, 2026-10-05: IDs can carry letters).
   DOCUMENT_NUMBER_FORMAT = /\A(?=.*\d)[0-9A-Z]{5,20}\z/
-  FILES = %i[front back selfie].freeze
+  FILES = %i[front back selfie proof].freeze
 
   # Preset rejection reasons, each translated for the person under
   # `verification.reasons.<code>` (all four locales; spec'd). `other` sends the
@@ -51,18 +51,20 @@ class VerificationRequest < ApplicationRecord
 
   # Document types with a back side to photograph.
   TWO_SIDED = %w[e_tazkira cnic kart_melli].freeze
-  # What a person may apply with (licence is for shops).
-  USER_DOCUMENT_TYPES = %w[tazkira e_tazkira cnic kart_melli passport].freeze
+  # Owner, 2026-10-05: ONLY the e-Tazkira is accepted, for people and for a
+  # shop's owner. Paper Tazkira, CNIC, Kart-e Melli, passport and licence stay
+  # in the enum for old rows but can no longer be sent.
+  USER_DOCUMENT_TYPES = %w[e_tazkira].freeze
   # ── SHOP-1 ──────────────────────────────────────────────────────────────────
-  # A shop sends a photo of the shop front (`front`), a photo of the business
-  # licence or the owner's ID (`back`, typed by document_type) and a phone the
-  # team calls back. No selfie, no name/last-4: the admin compares the sign and
-  # licence with the shop page instead.
-  SHOP_DOCUMENT_TYPES = (%w[licence] + USER_DOCUMENT_TYPES).freeze
+  # A shop sends the shop front (`front`), the OWNER's e-Tazkira (`back`) with
+  # its number, a REQUIRED proof that the business is theirs (`proof`: licence,
+  # rental contract, tax paper… any document; owner 2026-10-05) and a phone the
+  # team calls back. No selfie.
+  SHOP_DOCUMENT_TYPES = USER_DOCUMENT_TYPES
   # What each file IS, per subject — the admin card labels them with this.
   FILE_LABELS = {
     User.name => { front: "document_front", back: "document_back", selfie: "selfie" },
-    Shop.name => { front: "shop_front", back: "licence_or_id" }
+    Shop.name => { front: "shop_front", back: "owner_e_tazkira", proof: "business_proof" }
   }.freeze
   # A business licence number keeps its letters ("KBL-2021/0456" → "KBL20210456");
   # a person's ID number stays digits-only, so the same Tazkira matches across
@@ -75,6 +77,7 @@ class VerificationRequest < ApplicationRecord
   has_one_attached :front
   has_one_attached :back
   has_one_attached :selfie
+  has_one_attached :proof # SHOP-1: proof of business (shops only)
 
   encrypts :document_number
   before_validation :normalize_document_number
@@ -97,11 +100,9 @@ class VerificationRequest < ApplicationRecord
   # SHOP-1 — what a shop's application must carry (see SHOP_DOCUMENT_TYPES).
   with_options on: :create, if: -> { requested? && shop_subject? } do
     validates :document_type, inclusion: { in: SHOP_DOCUMENT_TYPES }
-    validates :front, :back, presence: true
+    validates :front, :back, :proof, presence: true
     validates :phone, presence: true, length: { maximum: 30 }
-    # Optional for a shop; when given it is checked like the kind of document it is.
-    validates :document_number, format: { with: LICENCE_NUMBER_FORMAT }, allow_blank: true, if: :licence?
-    validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }, allow_blank: true, unless: :licence?
+    validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }
   end
   validate :subject_must_be_eligible, on: :create, if: :requested?
 

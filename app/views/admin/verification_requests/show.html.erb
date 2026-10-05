@@ -9,7 +9,7 @@
   names_match = r.name_on_document.to_s.squish.casecmp?(user.full_name.squish)
   reports_count = user.reports_against.size
   warnings_count = user.active_warnings_count
-  labels = shop ? { front: "Shop front", back: "Licence or ID" } : { front: "Front", back: "Back", selfie: "Selfie with document" }
+  labels = shop ? { front: "Shop front", back: "Owner's e-Tazkira", proof: "Proof of business" } : { front: "Front", back: "Back", selfie: "Selfie with document" }
   subject_name = r.subject.full_name
 %>
 <% content_for(:title) { "Verification — #{subject_name}" } %>

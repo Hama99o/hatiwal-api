@@ -75,17 +75,17 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
           name_on_document: { type: :string },
           document_number: { type: :string, pattern: "^\\d{6,20}$", description: "the FULL number; kept encrypted, never returned" },
           front: { type: :string, format: :binary },
-          back: { type: :string, format: :binary, description: "e_tazkira, cnic, kart_melli only" },
+          back: { type: :string, format: :binary, description: "the back of the e-Tazkira" },
           selfie: { type: :string, format: :binary, description: "holding the document" }
         },
-        required: %w[document_type name_on_document document_number front selfie]
+        required: %w[document_type name_on_document document_number front back selfie]
       }
 
       let(:"access-token") { headers["access-token"] }
       let(:client)         { headers["client"] }
       let(:uid)            { headers["uid"] }
       let(:verification_request) do
-        { document_type: "tazkira", name_on_document: user.full_name, document_number: "1234564821", front: image, selfie: image }
+        { document_type: "e_tazkira", name_on_document: user.full_name, document_number: "1234564821", front: image, back: image, selfie: image }
       end
 
       response "201", "sent; the card says under review, with no document" do
@@ -97,7 +97,7 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
 
       response "422", "a two-sided document needs its back" do
         let(:verification_request) do
-          { document_type: "cnic", name_on_document: user.full_name, document_number: "1234564821", front: image, selfie: image }
+          { document_type: "e_tazkira", name_on_document: user.full_name, document_number: "1234564821", front: image, selfie: image }
         end
         run_test!
       end
@@ -134,7 +134,7 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
 
   describe "POST /api/v1/verification_requests" do
     def apply(as: user, **attrs)
-      params = { document_type: "tazkira", name_on_document: "Umair Safi", document_number: "1234564821", front: image, selfie: image }
+      params = { document_type: "e_tazkira", name_on_document: "Umair Safi", document_number: "1234564821", front: image, back: image, selfie: image }
       post "/api/v1/verification_requests", params: { verification_request: params.merge(attrs) }, headers: auth_headers_for(as)
     end
 
@@ -142,14 +142,23 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
       apply
       expect(response).to have_http_status(:created)
       expect(response.parsed_body.dig("verification_status", "status")).to eq("requested")
-      expect(response.parsed_body.dig("verification_status", "request", "files_count")).to eq(2)
+      expect(response.parsed_body.dig("verification_status", "request", "files_count")).to eq(3) # front, back, selfie
       expect_no_documents(response.body)
       expect(user.verification_requests.sole).to have_attributes(requested_by: user, document_last4: "4821")
     end
 
-    it "needs the back of a two-sided document" do
-      apply(document_type: "cnic")
+    it "needs the back of the e-Tazkira" do
+      apply(back: nil)
       expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    # Owner, 2026-10-05: only the e-Tazkira is accepted.
+    it "refuses a paper Tazkira, CNIC, Kart-e Melli and passport" do
+      %w[tazkira cnic kart_melli passport].each do |type|
+        apply(document_type: type)
+        expect(response).to have_http_status(:unprocessable_entity), type
+      end
+      expect(VerificationRequest.count).to eq(0)
     end
 
     it "keeps the full number encrypted, shows only the last 4, and never returns it" do

@@ -9,14 +9,15 @@ RSpec.describe "Shop verification", type: :request do
   let(:image)   { Rack::Test::UploadedFile.new(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg") }
   let(:apply_params) do
     { subject: "shop:#{shop.id}",
-      verification_request: { document_type: "licence", phone: "+93 70 123 4567", front: image, back: image } }
+      verification_request: { document_type: "e_tazkira", document_number: "1234564821", phone: "+93 70 123 4567",
+                              front: image, back: image, proof: image } }
   end
 
   path "/api/v1/verification_requests" do
     post "apply for Verified shop (subject=shop:<id>)" do
       tags "Shops"
       description "A shop owner or manager applies: front = the shop front with its sign, back = the business " \
-                  "licence or the owner's ID (document_type), phone = a number the team calls back. No selfie."
+                  "the owner's e-Tazkira (back) + its number, a proof of business (proof), phone = a number the team calls back. No selfie."
       consumes "multipart/form-data"
       produces "application/json"
       security [ { bearer: [] } ]
@@ -30,9 +31,11 @@ RSpec.describe "Shop verification", type: :request do
           document_type: { type: :string, enum: VerificationRequest::SHOP_DOCUMENT_TYPES },
           phone: { type: :string },
           front: { type: :string, format: :binary, description: "the shop front, sign visible" },
-          back: { type: :string, format: :binary, description: "business licence or the owner's ID" }
+          back: { type: :string, format: :binary, description: "the owner's e-Tazkira" },
+          proof: { type: :string, format: :binary, description: "proof of business: licence, rental contract, tax paper…" },
+          document_number: { type: :string, description: "the owner's e-Tazkira number" }
         },
-        required: %w[document_type phone front back]
+        required: %w[document_type document_number phone front back proof]
       }
       let(:"access-token") { headers["access-token"] }
       let(:client)         { headers["client"] }
@@ -67,7 +70,7 @@ RSpec.describe "Shop verification", type: :request do
   end
 
   it "needs the phone and both photos" do
-    apply(params: apply_params.merge(verification_request: { document_type: "licence" }))
+    apply(params: apply_params.merge(verification_request: { document_type: "passport" }))
     expect(response).to have_http_status(:unprocessable_entity)
   end
 
@@ -167,23 +170,19 @@ RSpec.describe "Admin — shop verification queue", type: :request do
 end
 
 RSpec.describe VerificationRequest, "shop document numbers", type: :model do
-  it "keeps a licence number's letters, upper-cased, and digests that value" do
-    request = create(:shop_verification_request, document_number: "kbl-2021/0456")
-    expect(request.document_number).to eq("KBL20210456")
-    expect(request.document_last4).to eq("0456")
-    expect(request.document_number_digest).to eq(described_class.hmac("KBL20210456"))
-  end
-
-  it "keeps an ID number digits-only, so it matches the same ID on a person's request" do
-    shop_request = create(:shop_verification_request, document_type: :tazkira, document_number: "۱۲۳۴-۵۶۷۸۹")
+  it "keeps the owner's e-Tazkira number normalized, so it matches the same ID on a person's request" do
+    shop_request = create(:shop_verification_request, document_number: "۱۲۳۴-۵۶۷۸۹")
     expect(shop_request.document_number).to eq("123456789")
     expect(shop_request.document_number_digest).to eq(described_class.digest_for("123456789"))
   end
 
-  it "is optional for a shop, and refuses a malformed licence" do
+  it "requires the owner's e-Tazkira number and a proof of business (owner, 2026-10-05)" do
     shop = create(:shop, :verification_eligible)
-    expect(build(:shop_verification_request, shop: shop, document_number: nil)).to be_valid
-    expect(build(:shop_verification_request, shop: shop, document_number: "a")).not_to be_valid
+    expect(build(:shop_verification_request, shop: shop, document_number: nil)).not_to be_valid
+    no_proof = build(:shop_verification_request, shop: shop)
+    no_proof.proof.detach
+    expect(no_proof).not_to be_valid
+    expect(build(:shop_verification_request, shop: shop, document_type: :licence)).not_to be_valid
   end
 end
 
