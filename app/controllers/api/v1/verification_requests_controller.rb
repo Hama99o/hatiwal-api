@@ -4,8 +4,10 @@
 # Every response is the status card (VerificationStatusSerializer) — never a
 # document. Only `subject=me` exists today; `shop:<id>` arrives with SHOP-1.
 class Api::V1::VerificationRequestsController < Api::V1::BaseController
-  # Spec: 3 requests per day per user.
-  throttle to: 3, within: 1.day, by: :user, only: :create
+  # Spec: 3 requests per day per user. Counted on requests actually SENT
+  # (VerificationRequest::DAILY_LIMIT), so blurry uploads that fail validation
+  # don't lock anyone out. This throttle is only the anti-script backstop.
+  throttle to: 30, within: 1.day, by: :user, only: :create
 
   before_action :require_subject_me
 
@@ -17,6 +19,8 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
 
   # POST /api/v1/verification_requests (multipart)
   def create
+    return render_daily_limit_reached if VerificationRequest.daily_limit_reached?(current_user)
+
     request = VerificationRequest.new(request_params.merge(subject: current_user, requested_by: current_user))
     authorize request
 
@@ -26,7 +30,7 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
       render_unprocessable_entity(request)
     end
   rescue ActiveRecord::RecordNotUnique
-    render_unprocessable_entity("A request is already waiting", code: "verification_already_requested")
+    render_unprocessable_entity(error_text(:already_requested), code: "verification_already_requested")
   end
 
   # DELETE /api/v1/verification_requests/:id
@@ -45,7 +49,19 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
 
   def require_subject_me
     subject = params[:subject].presence || "me"
-    render_unprocessable_entity("Unknown subject", code: "verification_unknown_subject") unless subject == "me"
+    render_unprocessable_entity(error_text(:unknown_subject), code: "verification_unknown_subject") unless subject == "me"
+  end
+
+  def render_daily_limit_reached
+    render_ok({ error: "rate_limited", code: "verification_daily_limit", message: error_text(:daily_limit) },
+              status: :too_many_requests)
+  end
+
+  # In the caller's own language (the API does not switch locale per request).
+  def error_text(key)
+    locale = current_user&.preferred_language.presence
+    locale = I18n.default_locale unless locale && I18n.locale_available?(locale)
+    I18n.t("verification.errors.#{key}", locale: locale)
   end
 
   def request_params

@@ -34,6 +34,15 @@ class VerificationStatus
 
   def missing = state == "verified" ? [] : subject.verification_missing
 
+  # The badge came off because the person changed their name after approval
+  # (User#drop_badge_after_name_change!): the card says "verify again".
+  # Derived, not stored: approved, no badge, and the name no longer matches.
+  def name_changed?
+    return false unless state == "none" && request&.approved? && request.name_on_document.present?
+
+    !request.name_on_document.squish.casecmp?(subject.full_name.squish)
+  end
+
   # The reason in the subject's language (the clients also translate
   # reason_code themselves; this is the fallback and the "other" free text).
   def reason

@@ -490,6 +490,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_160000) do
     t.bigint "subject_id", null: false
     t.string "subject_type", null: false
     t.datetime "updated_at", null: false
+    t.index ["decided_at"], name: "index_verification_requests_purgeable", where: "((files_purged_at IS NULL) AND (decided_at IS NOT NULL))"
     t.index ["decided_by_id"], name: "index_verification_requests_on_decided_by_id"
     t.index ["requested_by_id"], name: "index_verification_requests_on_requested_by_id"
     t.index ["status", "created_at"], name: "index_verification_requests_on_status_and_created_at"

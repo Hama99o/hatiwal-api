@@ -7,7 +7,7 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
 
   def update_me
     if current_user.update(profile_params)
-      current_user.reopen_verification_after_name_change!
+      current_user.drop_badge_after_name_change!
       render_blue(UserSerializer, current_user, view: :me)
     else
       render_unprocessable_entity(current_user)

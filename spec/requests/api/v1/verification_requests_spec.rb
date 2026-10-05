@@ -58,6 +58,80 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
     end
   end
 
+  path "/api/v1/verification_requests" do
+    post "apply for the Verified badge (multipart)" do
+      tags "Verification"
+      consumes "multipart/form-data"
+      produces "application/json"
+      security [ { bearer: [] } ]
+      description "3 requests sent per day. Answers the status card; never a document."
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+      parameter name: :verification_request, in: :formData, schema: {
+        type: :object,
+        properties: {
+          document_type: { type: :string, enum: VerificationRequest::USER_DOCUMENT_TYPES },
+          name_on_document: { type: :string },
+          document_last4: { type: :string, pattern: "^\\d{4}$" },
+          front: { type: :string, format: :binary },
+          back: { type: :string, format: :binary, description: "e_tazkira, cnic, kart_melli only" },
+          selfie: { type: :string, format: :binary, description: "holding the document" }
+        },
+        required: %w[document_type name_on_document document_last4 front selfie]
+      }
+
+      let(:"access-token") { headers["access-token"] }
+      let(:client)         { headers["client"] }
+      let(:uid)            { headers["uid"] }
+      let(:verification_request) do
+        { document_type: "tazkira", name_on_document: user.full_name, document_last4: "4821", front: image, selfie: image }
+      end
+
+      response "201", "sent; the card says under review, with no document" do
+        run_test! do |response|
+          expect(response.parsed_body.dig("verification_status", "status")).to eq("requested")
+          expect_no_documents(response.body)
+        end
+      end
+
+      response "422", "a two-sided document needs its back" do
+        let(:verification_request) do
+          { document_type: "cnic", name_on_document: user.full_name, document_last4: "4821", front: image, selfie: image }
+        end
+        run_test!
+      end
+    end
+  end
+
+  path "/api/v1/verification_requests/{id}" do
+    delete "cancel a waiting request (its photos are deleted at once)" do
+      tags "Verification"
+      produces "application/json"
+      security [ { bearer: [] } ]
+      parameter name: :id, in: :path, type: :integer, required: true
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+
+      let(:"access-token") { headers["access-token"] }
+      let(:client)         { headers["client"] }
+      let(:uid)            { headers["uid"] }
+      let(:id)             { create(:verification_request, user: user).id }
+
+      response "200", "cancelled; the card is back to none" do
+        run_test! do |response|
+          expect(response.parsed_body.dig("verification_status", "status")).to eq("none")
+        end
+      end
+
+      response "404", "someone else's request" do
+        let(:id) { create(:verification_request).id }
+        run_test!
+      end
+    end
+  end
+
   describe "POST /api/v1/verification_requests" do
     def apply(as: user, **attrs)
       params = { document_type: "tazkira", name_on_document: "Umair Safi", document_last4: "4821", front: image, selfie: image }
@@ -118,12 +192,25 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
 
-    it "is limited to 3 requests a day" do
-      h = auth_headers_for(user)
-      params = { verification_request: { document_type: "tazkira" } }
-      3.times { post "/api/v1/verification_requests", params: params, headers: h }
-      post "/api/v1/verification_requests", params: params, headers: h
+    it "is limited to 3 requests SENT a day; failed uploads do not count" do
+      4.times { apply(selfie: nil) } # four blurry/incomplete tries: all 422, none counted
+      expect(response).to have_http_status(:unprocessable_entity)
+
+      3.times do
+        apply
+        expect(response).to have_http_status(:created)
+        user.verification_requests.requested.sole.cancel!
+      end
+      apply
       expect(response).to have_http_status(:too_many_requests)
+      expect(response.parsed_body).to include("code" => "verification_daily_limit")
+    end
+
+    it "explains the daily limit in the person's language" do
+      user.update!(preferred_language: "ps")
+      3.times { create(:verification_request, user: user).cancel! }
+      apply
+      expect(response.parsed_body["message"]).to eq(I18n.t("verification.errors.daily_limit", locale: :ps))
     end
 
     it "lets a rejected user apply again at once" do
@@ -156,9 +243,11 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
       expect(response.parsed_body.dig("verification_status", "verified_since")).to be_present
     end
 
-    it "refuses an unknown subject" do
+    it "refuses an unknown subject, in the person's language" do
+      user.update!(preferred_language: "fa")
       get "/api/v1/verification_requests/current", params: { subject: "shop:1" }, headers: headers
       expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include(I18n.t("verification.errors.unknown_subject", locale: :fa))
     end
   end
 
@@ -201,12 +290,22 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
   end
 
   describe "changing the name on a verified account" do
-    it "takes the badge off and reopens the approved request for an admin" do
+    it "takes the badge off, keeps the decision as it was, and asks to verify again" do
       request = create(:verification_request, user: user)
       request.approve!(admin: create(:admin_user))
       put "/api/v1/users/me", params: { user: { lastname: "Different" } }, headers: headers
       expect(user.reload).not_to be_verified
-      expect(request.reload).to be_requested
+      expect(request.reload).to be_approved
+
+      get "/api/v1/verification_requests/current", headers: headers
+      expect(response.parsed_body["verification_status"]).to include("status" => "none", "name_changed" => true)
+    end
+
+    it "changes nothing for someone who never applied" do
+      put "/api/v1/users/me", params: { user: { lastname: "Different" } }, headers: headers
+      expect(response).to have_http_status(:ok)
+      get "/api/v1/verification_requests/current", headers: headers
+      expect(response.parsed_body["verification_status"]).to include("status" => "none", "name_changed" => false)
     end
   end
 end

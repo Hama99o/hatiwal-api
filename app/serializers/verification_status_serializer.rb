@@ -6,6 +6,7 @@ class VerificationStatusSerializer < ApplicationSerializer
   field :verified_since
   field :missing
   field :reason
+  field(:name_changed, &:name_changed?)
   field(:request) do |status|
     r = status.shown_request
     next nil unless r

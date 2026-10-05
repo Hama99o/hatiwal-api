@@ -33,6 +33,10 @@ fa:
   # VER-1: verification decision reasons, shown to the person (Support
   # message + status card). Keys = VerificationRequest::REJECT_REASONS + REVOKE_REASONS.
   verification:
+    errors:
+      already_requested: "یک درخواست هنوز در حال بررسی است."
+      unknown_subject: "موضوع تایید نامعلوم است."
+      daily_limit: "امروز ۳ درخواست فرستاده‌اید. لطفاً فردا دوباره تلاش کنید."
     reasons:
       photo_not_clear: "عکس واضح نیست"
       name_mismatch: "نام با سند شما مطابقت ندارد"

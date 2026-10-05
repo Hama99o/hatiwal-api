@@ -122,4 +122,35 @@ RSpec.describe VerificationRequest, type: :model do
       end
     end
   end
+
+  it "has the indexes the queue, the status card and the purge job filter on (scale)" do
+    names = ActiveRecord::Base.connection.indexes(:verification_requests).map(&:name)
+    expect(names).to include("index_verification_requests_on_subject",
+                             "index_verification_requests_one_open_per_subject",
+                             "index_verification_requests_on_status_and_created_at",
+                             "index_verification_requests_purgeable")
+  end
+
+  describe "when the account is deleted (User#anonymize_account!)" do
+    it "cancels the open request, deletes every photo and blanks the document details" do
+      user = create(:user, :verification_eligible)
+      old = create(:verification_request, :two_sided, user: user)
+      old.reject!(admin: admin, reason_code: "photo_not_clear")
+      waiting = create(:verification_request, user: user)
+      keys = [ old, waiting ].flat_map { |r| r.attached_files.map { |n| r.public_send(n).blob.key } }
+
+      user.anonymize_account!
+
+      [ old.reload, waiting.reload ].each do |r|
+        expect(r.files_count).to eq(0)
+        expect(r).to have_attributes(name_on_document: nil, document_last4: nil)
+        expect(r.files_purged_at).to be_present
+      end
+      expect(waiting).to be_cancelled
+      expect(old).to be_rejected
+      expect(described_class.requested).not_to exist
+      keys.each { |key| expect(ActiveStorage::Blob.service.exist?(key)).to be(false) }
+      expect(user.reload).not_to be_verified
+    end
+  end
 end

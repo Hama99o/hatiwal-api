@@ -19,6 +19,8 @@ class VerificationRequest < ApplicationRecord
   DOCUMENT_URL_TTL = 5.minutes
   DOCUMENT_TOKEN_PURPOSE = :admin_verification_document
   MAX_FILE_SIZE = 10.megabytes
+  # Spec: 3 requests a day. Counts requests actually sent, not failed uploads.
+  DAILY_LIMIT = 3
   FILES = %i[front back selfie].freeze
 
   # Preset rejection reasons, each translated for the person under
@@ -67,6 +69,10 @@ class VerificationRequest < ApplicationRecord
   scope :recent, -> { order(created_at: :desc) }
   scope :for_users, -> { where(subject_type: User.name) }
   scope :purgeable, -> { where(files_purged_at: nil).where(decided_at: ...FILES_KEPT_FOR.ago) }
+
+  def self.daily_limit_reached?(user)
+    where(requested_by: user).where(created_at: 1.day.ago..).count >= DAILY_LIMIT
+  end
 
   def two_sided? = TWO_SIDED.include?(document_type.to_s)
 
