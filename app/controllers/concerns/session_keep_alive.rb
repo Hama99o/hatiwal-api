@@ -27,8 +27,18 @@ module SessionKeepAlive
     new_expiry = (Time.current + DeviseTokenAuth.token_lifespan).to_i
     return if new_expiry - token["expiry"].to_i < REFRESH_AFTER.to_i
 
+    # Only THIS device's expiry, under a row lock on a fresh copy. Writing the
+    # tokens hash loaded at the start of the request would erase a token another
+    # device created meanwhile, and log that device out.
+    user.class.transaction do
+      fresh = user.class.lock.find(user.id)
+      current = fresh.tokens&.dig(client)
+      next unless current
+
+      current["expiry"] = new_expiry
+      fresh.update_column(:tokens, fresh.tokens)
+    end
     token["expiry"] = new_expiry
-    user.update_column(:tokens, user.tokens)
   rescue StandardError => e
     Rails.logger.warn("[session-keep-alive] not extended for user #{user&.id}: #{e.class}: #{e.message}")
   end

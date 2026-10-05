@@ -64,4 +64,32 @@ RSpec.describe "Session stability", type: :request do
       travel_to(2.days.from_now + 3.hours) { me(headers) }
     end.not_to(change { user.reload.updated_at })
   end
+
+  it "extending one device never erases another device's token" do
+    phone = sign_in_headers
+    stale = User.find(user.id) # this request's copy, loaded before the tablet signs in
+    tablet = sign_in_headers
+
+    # The phone's keep-alive runs with its stale copy of the user.
+    travel_to(3.days.from_now) do
+      controller = Api::V1::BaseController.new
+      allow(controller).to receive(:request).and_return(instance_double(ActionDispatch::Request, headers: { "client" => phone["client"] }))
+      controller.instance_variable_set(:@resource, stale)
+      controller.send(:extend_session_expiry)
+
+      expect(me(tablet)).to have_http_status(:ok)
+      expect(me(phone)).to have_http_status(:ok)
+    end
+  end
+
+  it "signs out the other devices when the password is changed (a leaked token stops working)" do
+    stolen = sign_in_headers  # an older session, e.g. a token someone copied
+    travel 1.minute
+    _owner = sign_in_headers  # the owner's own, newest device
+    expect(DeviseTokenAuth.remove_tokens_after_password_reset).to be(true)
+
+    user.reload.update!(password: "newpassword456", password_confirmation: "newpassword456")
+
+    expect(me(stolen)).to have_http_status(:unauthorized)
+  end
 end
