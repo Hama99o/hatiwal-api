@@ -12,7 +12,10 @@ test:
   # DATABASE_URL (used by development) takes precedence over the `database:` key,
   # which would make the test suite run against — and wipe — the development DB.
   # Reuse the same host/credentials from DATABASE_URL but force a dedicated test DB.
-  url: <%= require "uri"; u = URI.parse(ENV.fetch("DATABASE_URL", "postgres://hatiwal:password@localhost:5407/hatiwal_development")); u.path = "/hatiwal_test"; u.to_s %>
+  # TEST_DB_NAME lets parallel sessions on this box each run the suite in their
+  # own database: two `rspec` runs on one test DB deadlock in DatabaseCleaner's
+  # truncation (seen 2026-10-05, three sessions at once).
+  url: <%= require "uri"; u = URI.parse(ENV.fetch("DATABASE_URL", "postgres://hatiwal:password@localhost:5407/hatiwal_development")); u.path = "/#{ENV.fetch("TEST_DB_NAME", "hatiwal_test")}"; u.to_s %>
 
 production:
   primary: &primary_production
