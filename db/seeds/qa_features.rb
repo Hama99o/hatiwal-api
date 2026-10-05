@@ -208,13 +208,20 @@ if defined?(VerificationRequest) && VerificationRequest.table_exists?
 
   # Puts one user's request into an exact state. Rows are written directly: the
   # model's approve!/reject!/revoke! send Support messages, which seeds must not.
-  ver_fixture = lambda do |user, status:, document_type: "tazkira", reason_code: nil, reason_text: nil,
+  # FAKE document numbers only (owner, 2026-10-05): all zeros + the user id, so
+  # they are unique per account and obviously not anyone's real ID. Pass
+  # `number:` to force one (the duplicate pair below).
+  fake_number = ->(user) { "00000000#{format('%04d', user.id % 10_000)}" }
+  full_number = VerificationRequest.column_names.include?("document_number")
+
+  ver_fixture = lambda do |user, status:, document_type: "tazkira", reason_code: nil, reason_text: nil, number: nil,
                                  decided_ago: nil, files: true, purged: false, verified: false|
     VerificationRequest.where(subject: user).where.not(status: status).destroy_all
     request = VerificationRequest.find_or_initialize_by(subject: user, status: status)
     request.assign_attributes(
       requested_by: user, document_type: document_type,
-      name_on_document: user.full_name, document_last4: "0000",
+      name_on_document: user.full_name,
+      **(full_number ? { document_number: number || fake_number.call(user) } : { document_last4: "0000" }),
       reason_code: reason_code, reason_text: reason_text,
       decided_by: (admin if decided_ago), decided_at: decided_ago&.ago,
       checklist: decided_ago ? VerificationRequest::CHECKLIST.index_with { status == "approved" } : {},
@@ -253,6 +260,12 @@ if defined?(VerificationRequest) && VerificationRequest.table_exists?
 
   approved = qa_user(email: "ver.approved@hatiwal.test", firstname: "Yusuf", lastname: "Verified", place: :mazar, avatar: true)
   ver_fixture.call(approved, status: "approved", decided_ago: 3.days, verified: true)
+  # DUPLICATE pair: ver.requested2's waiting request carries ver.approved's number,
+  # so the admin card must show the same-ID warning (#verify-same-number).
+  if full_number
+    dup = VerificationRequest.requested.find_by(subject: User.find_by(email: "ver.requested2@hatiwal.test"))
+    dup&.update!(document_number: fake_number.call(approved))
+  end
 
   user_reject_reasons = VerificationRequest::REJECT_REASONS - %w[shop_sign_not_visible] # that one is for shops (SHOP-1)
   user_reject_reasons.each do |code|
