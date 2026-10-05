@@ -9,6 +9,12 @@
 class ShopSerializer < ApplicationSerializer
   fields :id, :name
 
+  # The sitemap: just enough to list a shop page.
+  view :sitemap do
+    field(:updated_at) { |s| s.updated_at.iso8601 }
+    field(:verified) { |s| s.verified? }
+  end
+
   view :card do
     field(:logo_url) { |s| s.logo_url }
     field(:verified) { |s| s.verified? }
@@ -25,6 +31,11 @@ class ShopSerializer < ApplicationSerializer
     # query); a single shop page counts its own.
     field(:listings_count) { |s, opts| opts[:listings_counts] ? opts[:listings_counts].fetch(s.id, 0) : s.live_listings_count }
     field(:verified_at) { |s| s.verified_at&.iso8601 }
+    # Decided here, in the shop's own time zone, so no client guesses with the
+    # phone's clock. open_now is null when the shop states no hours.
+    field(:open_now) { |s| s.open_now }
+    field(:next_change_at) { |s| s.next_change_at&.iso8601 }
+    field(:time_zone) { |s| s.time_zone }
     field(:owner) { |s| { id: s.owner_id, name: s.owner.full_name } }
     field(:share_url) { |s| Shop.share_url_for(s) }
     # The reviews of the owner count for the shop in phase 1.

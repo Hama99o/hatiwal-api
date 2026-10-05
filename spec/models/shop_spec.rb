@@ -24,7 +24,7 @@ RSpec.describe Shop, type: :model do
 
     it "accepts well-formed opening hours and rejects the rest" do
       expect(build(:shop, hours: { "sat" => [ %w[08:00 12:00], %w[14:00 20:00] ], "fri" => [] })).to be_valid
-      [ { "xyz" => [] }, { "sat" => [ %w[18:00 08:00] ] }, { "sat" => [ %w[8 18] ] }, { "sat" => "08-18" }, :unparseable ].each do |bad|
+      [ { "xyz" => [] }, { "sat" => [ %w[08:00 08:00] ] }, { "sat" => [ %w[8 18] ] }, { "sat" => "08-18" }, :unparseable ].each do |bad|
         expect(build(:shop, hours: bad)).not_to be_valid, bad.inspect
       end
     end
@@ -122,5 +122,66 @@ RSpec.describe Shop, type: :model do
     shop.destroy!
     expect(listing.reload.shop_id).to be_nil
     expect(owner.reload.active_shop_id).to be_nil
+  end
+
+  describe "#close! — the owner closes it, or deletes their account" do
+    let(:admin) { create(:admin_user) }
+    let(:shop) { create(:shop, :verification_eligible, owner: owner) }
+
+    def verified_with_number!
+      request = create(:shop_verification_request, shop: shop, document_number: "KBL-2021/0456")
+      request.approve!(admin: admin)
+      request
+    end
+
+    it "closing (DELETE) takes the shop off public but keeps the row, the decision and the digest" do
+      request = verified_with_number!
+      digest = request.reload.document_number_digest
+      shop.cover.attach(io: Rails.root.join("spec/fixtures/files/test_image.jpg").open, filename: "c.jpg", content_type: "image/jpeg")
+      staff = create(:shop_member, shop: shop).user
+      staff.update!(active_shop: shop)
+      product = shop.listings.first
+
+      shop.close!
+
+      expect(shop.reload).to have_attributes(status: "closed", phone: nil, address_line: nil, description: nil,
+                                             latitude: nil, longitude: nil, verified_at: nil, name: shop.name)
+      expect(shop.logo.attached? || shop.cover.attached?).to be(false)
+      expect(shop.shop_members).to be_empty
+      expect(staff.reload.active_shop_id).to be_nil
+      expect(product.reload).to have_attributes(shop_id: nil, removed_at: nil) # personal again
+      expect(described_class.visible).not_to include(shop)
+      expect(request.reload).to have_attributes(status: "approved", document_number: nil, name_on_document: nil,
+                                                document_number_digest: digest)
+      expect(request.files_count).to eq(0)
+    end
+
+    it "lets the owner open a new shop after closing one" do
+      shop.close!
+      expect(build(:shop, owner: owner)).to be_valid
+    end
+
+    it "an account deletion closes their shop and removes its products like every listing; the digest survives" do
+      request = verified_with_number!
+      digest = request.reload.document_number_digest
+      product = shop.listings.first
+      owner.update!(active_shop: shop)
+
+      owner.anonymize_account!
+
+      expect(shop.reload).to be_closed
+      expect(owner.reload.active_shop_id).to be_nil
+      expect(product.reload).to have_attributes(shop_id: nil, removed_reason: "account_deleted")
+      expect(Listing.browsable).not_to include(product)
+      expect(VerificationRequest.where(document_number_digest: digest)).to exist
+    end
+
+    it "an account deletion only ends their membership in someone else's shop" do
+      other = create(:shop)
+      create(:shop_member, shop: other, user: owner)
+      owner.anonymize_account!
+      expect(other.reload.shop_members.where(user: owner)).to be_empty
+      expect(other).to be_active
+    end
   end
 end

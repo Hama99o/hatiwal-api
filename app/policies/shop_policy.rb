@@ -5,6 +5,7 @@ class ShopPolicy < ApplicationPolicy
   EDITORS = %w[owner manager].freeze
 
   # A suspended or still-pending shop is visible to its own members only.
+  def index? = true
   def show? = record.active? || member?
   def create? = user.present?
   def update? = EDITORS.include?(role)

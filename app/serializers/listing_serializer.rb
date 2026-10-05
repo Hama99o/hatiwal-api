@@ -127,7 +127,7 @@ class ListingSerializer < ApplicationSerializer
     end
     # SHOP-1 — present when the listing was posted as a shop: the card shows the
     # shop name + "Shop" chip and the button reads "Message shop". nil = personal.
-    field(:shop) { |l| l.shop && ShopSerializer.render_as_hash(l.shop, view: :card) }
+    field(:shop) { |l| l.shop&.active? ? ShopSerializer.render_as_hash(l.shop, view: :card) : nil }
     # Reuses CategorySerializer (TASK-K729 dedup fix) instead of hand-rolling
     # the same {id, name_en, name_ps, name_fa, slug} shape a 3rd time — see
     # the identical field in :seller_list and :detailed below.
@@ -201,7 +201,7 @@ class ListingSerializer < ApplicationSerializer
 
       opts[:current_user]&.listing_views&.exists?(listing_id: l.id) || false
     end
-    field(:shop) { |l| l.shop && ShopSerializer.render_as_hash(l.shop, view: :card) }
+    field(:shop) { |l| l.shop&.active? ? ShopSerializer.render_as_hash(l.shop, view: :card) : nil }
     field(:seller) do |l, opts|
       u = l.user
       viewer = opts[:current_user]

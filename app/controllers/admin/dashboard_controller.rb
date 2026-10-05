@@ -22,7 +22,7 @@ module Admin
         reports_total:     Report.count,
         verifications_waiting: VerificationRequest.requested.count,
         # SHOP-1
-        shops_total:       Shop.count,
+        shops_total:       Shop.where.not(status: :closed).count,
         shops_new_week:    Shop.where(created_at: 1.week.ago..).count,
         shops_verified:    Shop.where.not(verified_at: nil).count,
         shop_verifications_waiting: VerificationRequest.for_shops.requested.count,

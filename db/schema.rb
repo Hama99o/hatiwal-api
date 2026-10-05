@@ -268,6 +268,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_190000) do
     t.index ["latitude", "longitude"], name: "index_listings_on_point_browsable", where: "((latitude IS NOT NULL) AND (longitude IS NOT NULL) AND (removed_at IS NULL))"
     t.index ["price"], name: "index_listings_on_price"
     t.index ["removed_at"], name: "index_listings_on_removed_at"
+    t.index ["shop_id", "status", "published_at"], name: "index_listings_on_shop_id_and_status_and_published_at"
     t.index ["shop_id"], name: "index_listings_on_shop_id"
     t.index ["status", "created_at"], name: "index_listings_on_status_and_created_at"
     t.index ["status", "views_count"], name: "index_listings_on_status_and_views_count"
@@ -374,14 +375,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_190000) do
   end
 
   create_table "shops", force: :cascade do |t|
-    t.string "address_line", null: false
+    t.string "address_line"
     t.bigint "category_id", null: false
     t.string "city"
     t.datetime "created_at", null: false
     t.string "description"
     t.jsonb "hours", default: {}, null: false
-    t.decimal "latitude", precision: 10, scale: 6, null: false
-    t.decimal "longitude", precision: 10, scale: 6, null: false
+    t.decimal "latitude", precision: 10, scale: 6
+    t.decimal "longitude", precision: 10, scale: 6
     t.string "name", null: false
     t.bigint "owner_id", null: false
     t.string "phone"
@@ -393,6 +394,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_190000) do
     t.bigint "verified_by_id"
     t.index ["category_id"], name: "index_shops_on_category_id"
     t.index ["owner_id"], name: "index_shops_on_owner_id"
+    t.index ["owner_id"], name: "index_shops_one_open_per_owner", unique: true, where: "(status <> 3)"
     t.index ["province"], name: "index_shops_on_province"
     t.index ["status", "verified_at"], name: "index_shops_on_status_and_verified_at"
     t.index ["verified_by_id"], name: "index_shops_on_verified_by_id"
@@ -485,6 +487,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_190000) do
     t.string "reset_password_token"
     t.integer "review_count", default: 0, null: false
     t.boolean "seller_mode", default: false, null: false
+    t.integer "shop_memberships_count", default: 0, null: false
     t.boolean "show_address_publicly", default: true, null: false
     t.boolean "show_phone_publicly", default: true, null: false
     t.integer "sign_in_count", default: 0, null: false

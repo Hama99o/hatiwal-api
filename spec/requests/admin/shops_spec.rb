@@ -12,7 +12,7 @@ RSpec.describe "Admin shops", type: :request do
   before { sign_in admin, scope: :admin_user }
 
   describe "the list" do
-    let!(:other) { create(:shop, name: "Kabul Mobile", province: "Kabul", status: :suspended) }
+    let!(:other) { create(:shop, name: "Kabul Mobile", latitude: 34.5553, longitude: 69.2075, status: :suspended) }
 
     it "lists shops and filters by status, province, verified and waiting" do
       get admin_shops_path

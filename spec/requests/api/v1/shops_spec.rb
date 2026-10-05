@@ -127,12 +127,17 @@ RSpec.describe "Api::V1::Shops", type: :request do
     expect(response).to have_http_status(:forbidden)
   end
 
-  it "lets the owner delete it; its products become personal" do
+  it "lets the owner close it: soft, the page 404s, its products become personal" do
     shop = create(:shop, owner: owner)
     listing = create(:listing, :active, user: owner, shop: shop)
     delete "/api/v1/shops/#{shop.id}", headers: headers
     expect(response).to have_http_status(:no_content)
+    expect(shop.reload).to be_closed
     expect(listing.reload.shop_id).to be_nil
+    get "/api/v1/shops/#{shop.id}", headers: headers
+    expect(response).to have_http_status(:not_found)
+    get "/api/v1/shops/#{shop.id}"
+    expect(response).to have_http_status(:not_found)
   end
 
   it "moves the owner's listings into the shop" do

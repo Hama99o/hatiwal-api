@@ -8,6 +8,11 @@ class Shop < ApplicationRecord
   ADDRESS_MAX = 160
   PHONE_MAX = 30
   DAYS = %w[sat sun mon tue wed thu fri].freeze
+  # Date#wday (0 = Sunday) → our day keys.
+  WDAY_KEYS = %w[sun mon tue wed thu fri sat].freeze
+  # Shops keep local hours: Pakistan's provinces are on Asia/Karachi, the rest
+  # (Afghanistan, and anything we cannot place) on Asia/Kabul.
+  PAKISTAN_PROVINCES = [ "Punjab", "Sindh", "Khyber Pakhtunkhwa", "Balochistan", "Islamabad", "Gilgit-Baltistan", "Azad Kashmir" ].freeze
   TIME_FORMAT = /\A([01]\d|2[0-3]):[0-5]\d\z/
   LOGO_MAX_SIZE = 5.megabytes
 
@@ -29,7 +34,10 @@ class Shop < ApplicationRecord
 
   # `pending` only exists while SHOP_APPROVAL_REQUIRED is on: the shop waits for
   # an admin before it appears. Off by default (owner, 2026-10-05).
-  enum :status, { active: 0, suspended: 1, pending: 2 }
+  # `closed`: the owner closed it, or deleted their account (#close!). Kept,
+  # soft, so its verification decisions and ID digest survive (owner, 2026-10-05:
+  # a banned person must not verify again with the same ID).
+  enum :status, { active: 0, suspended: 1, pending: 2, closed: 3 }
 
   validates :name, presence: true, length: { in: NAME_LENGTH }
   validates :description, length: { maximum: DESCRIPTION_MAX }
@@ -45,10 +53,6 @@ class Shop < ApplicationRecord
   before_validation :fill_province_from_point
   before_create :apply_approval_switch
   after_create :add_owner_as_member
-  # The badge vouched for THIS name and address: changing either after
-  # verification takes it off and puts the approved request back to `requested`
-  # for an admin to re-check (docs/SHOPS.md, "Losing it").
-  after_update :reopen_verification_after_change, if: -> { verified? && saved_change_to_identity? }
 
   scope :visible, -> { active }
   scope :recent, -> { order(created_at: :desc) }
@@ -84,6 +88,105 @@ class Shop < ApplicationRecord
   end
 
   def verified? = verified_at.present?
+
+  # ── Open now (server-side, in the shop's own time zone) ────────────────────
+  def time_zone = PAKISTAN_PROVINCES.include?(province) ? "Asia/Karachi" : "Asia/Kabul"
+
+  # true / false, or nil when the shop states no hours at all.
+  def open_now(at: Time.current)
+    return nil unless hours_stated?
+
+    open_interval(at).present?
+  end
+
+  # The next open→closed or closed→open moment (in the shop's zone, ISO8601 by
+  # the serializer); nil when there is none in the coming week or no hours.
+  def next_change_at(at: Time.current)
+    return nil unless hours_stated?
+
+    now = at.in_time_zone(time_zone)
+    current = open_interval(now)
+    return current.last if current
+
+    hour_intervals(now).map(&:first).select { |start| start > now }.min
+  end
+
+  def hours_stated? = hours.is_a?(Hash) && hours.any?
+
+  # ── Losing the badge (docs/SHOPS.md, "Losing it") ──────────────────────────
+  # The badge vouched for THIS name and address. After the owner changes either,
+  # it comes off; the owner re-applies (the status card says "Your shop
+  # name/address changed — verify again", VerificationStatus#name_changed?).
+  # Decided requests are history and are never rewritten — the same rule as
+  # User#drop_badge_after_name_change! (VER-1, 1988052). Called from the owner's
+  # own edit (ShopsController#update), never as a callback. True when dropped.
+  def drop_badge_after_identity_change!
+    return false unless verified? && saved_change_to_identity?
+
+    update_columns(verified_at: nil, verified_by_id: nil, updated_at: Time.current)
+    true
+  end
+
+  # The open intervals around `now` as [start, end] times, merged so a range
+  # that runs past midnight into the next day's first range reads as one.
+  def hour_intervals(now)
+    zone = ActiveSupport::TimeZone[time_zone]
+    today = now.in_time_zone(time_zone).to_date
+    raw = (-1..7).flat_map do |offset|
+      date = today + offset
+      Array(hours[WDAY_KEYS[date.wday]]).map do |from, to|
+        start = zone.parse("#{date} #{from}")
+        stop = zone.parse("#{to < from ? date + 1 : date} #{to}")
+        [ start, stop ]
+      end
+    end
+    raw.sort_by(&:first).each_with_object([]) do |(start, stop), merged|
+      if merged.any? && start <= merged.last.last
+        merged.last[1] = [ merged.last.last, stop ].max
+      else
+        merged << [ start, stop ]
+      end
+    end
+  end
+
+  def open_interval(at)
+    now = at.in_time_zone(time_zone)
+    hour_intervals(now).find { |start, stop| start <= now && now < stop }
+  end
+
+  def saved_change_to_identity?
+    saved_change_to_name? || saved_change_to_address_line? || saved_change_to_latitude? || saved_change_to_longitude?
+  end
+
+  # ── Closing (the owner's "Close my shop", or their account deletion) ───────
+  # Nothing of a closed shop stays public, but the row stays (status closed):
+  #   - page 404, out of search / share link / Selling as / public counts
+  #     (`visible` is active only);
+  #   - logo, cover and verification photos purged; phone, address,
+  #     description and the point blanked (the name stays for the admin);
+  #   - every membership ends; anyone selling as it falls back to Me;
+  #   - its products go back to the owner as personal listings (an account
+  #     deletion has already taken them off with every other listing);
+  #   - verification requests: files purged, document number + name blanked,
+  #     open ones cancelled — the digest and the decisions are KEPT.
+  def close!
+    transaction do
+      verification_requests.find_each do |request|
+        request.purge_files!
+        attrs = { document_number: nil, name_on_document: nil, updated_at: Time.current }
+        attrs.merge!(status: VerificationRequest.statuses[:cancelled], decided_at: Time.current) if request.requested?
+        request.update_columns(attrs)
+      end
+      logo.purge if logo.attached?
+      cover.purge if cover.attached?
+      listings.update_all(shop_id: nil, updated_at: Time.current)
+      User.where(active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
+      shop_members.destroy_all # destroy, not delete: keeps the members' counters right
+      update_columns(status: self.class.statuses[:closed], phone: nil, phone_public: false, address_line: nil,
+                     description: nil, latitude: nil, longitude: nil, verified_at: nil, verified_by_id: nil,
+                     updated_at: Time.current)
+    end
+  end
 
   # ── Admin moderation ───────────────────────────────────────────────────────
   # Suspended shops leave search (Listing.from_visible_shops); every member is
@@ -155,23 +258,17 @@ class Shop < ApplicationRecord
 
   # Move the user's own listings into this shop (to_shop) or back to Me.
   # Returns how many moved. Someone else's listing is never touched.
+  MOVE_LISTINGS_MAX = 200
+
   def move_listings!(user, listing_ids, to_shop: true)
-    scope = user.listings.where(id: listing_ids)
+    return 0 if to_shop && !active? # only an open shop takes products
+    scope = user.listings.where(id: Array(listing_ids).first(MOVE_LISTINGS_MAX))
     scope = to_shop ? scope.where(shop_id: nil) : scope.where(shop_id: id)
     scope.update_all(shop_id: to_shop ? id : nil, updated_at: Time.current)
   end
 
   private
 
-  def saved_change_to_identity?
-    saved_change_to_name? || saved_change_to_address_line? || saved_change_to_latitude? || saved_change_to_longitude?
-  end
-
-  def reopen_verification_after_change
-    approved = verification_requests.approved.order(decided_at: :desc).first
-    update_columns(verified_at: nil, verified_by_id: nil, updated_at: Time.current)
-    approved&.update!(status: :requested, decided_by: nil, decided_at: nil)
-  end
 
   def location_in_service_area
     return if latitude.blank? || longitude.blank?
@@ -180,7 +277,9 @@ class Shop < ApplicationRecord
   end
 
   # { "sat" => [["08:00","18:00"]], "fri" => [] } — known days only, each a list
-  # of [from, to] pairs in HH:MM with from < to. Empty or missing = not stated.
+  # of [from, to] pairs in HH:MM. to < from = closes after midnight
+  # (["18:00", "02:00"] on fri = fri 18:00 → sat 02:00); from == to is refused.
+  # [] = closed that day; a missing day = not stated.
   def hours_well_formed
     return errors.add(:hours, :malformed) unless hours.is_a?(Hash)
 
@@ -188,7 +287,7 @@ class Shop < ApplicationRecord
       next errors.add(:hours, :malformed) unless DAYS.include?(day.to_s) && ranges.is_a?(Array)
 
       ranges.each do |range|
-        ok = range.is_a?(Array) && range.size == 2 && range.all? { |t| t.is_a?(String) && TIME_FORMAT.match?(t) } && range[0] < range[1]
+        ok = range.is_a?(Array) && range.size == 2 && range.all? { |t| t.is_a?(String) && TIME_FORMAT.match?(t) } && range[0] != range[1]
         errors.add(:hours, :malformed) unless ok
       end
     end
@@ -196,13 +295,16 @@ class Shop < ApplicationRecord
 
   # Phase 1 rule: one shop per user (lifted in phase 2).
   def one_shop_per_owner
-    errors.add(:base, :one_shop_per_user) if owner && Shop.exists?(owner_id: owner.id)
+    errors.add(:base, :one_shop_per_user) if owner && Shop.where.not(status: :closed).exists?(owner_id: owner.id)
   end
 
+  # The province always follows the pin (the pin is the truth; a typed
+  # province could disagree with it). Kept as given when no capital is near.
   def fill_province_from_point
-    return if province.present? || latitude.blank? || longitude.blank?
+    return if latitude.blank? || longitude.blank?
+    return unless new_record? || will_save_change_to_latitude? || will_save_change_to_longitude?
 
-    self.province = ServiceArea.nearest_province(latitude, longitude)
+    self.province = ServiceArea.nearest_province(latitude, longitude) || province
   end
 
   def apply_approval_switch

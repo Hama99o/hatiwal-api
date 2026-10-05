@@ -186,7 +186,7 @@ Rails.application.routes.draw do
       resources :reports, only: [ :create, :index ]
 
       # SHOP-1 — shops (hatiwal-mobile/docs/SHOPS.md)
-      resources :shops, only: %i[show create update destroy] do
+      resources :shops, only: %i[index show create update destroy] do
         member { post :move_listings }
       end
 

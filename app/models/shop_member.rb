@@ -3,7 +3,8 @@
 # rules, not a migration (hatiwal-mobile/docs/SHOPS.md, "Roles").
 class ShopMember < ApplicationRecord
   belongs_to :shop
-  belongs_to :user
+  # The counter lets /users/me skip all shop work for users with no shop.
+  belongs_to :user, counter_cache: :shop_memberships_count
   belongs_to :invited_by, class_name: User.name, optional: true
 
   enum :role, { owner: 0, manager: 1, staff: 2 }

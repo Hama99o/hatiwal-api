@@ -376,6 +376,10 @@ class User < ApplicationRecord
       )
       avatar.purge_later if avatar.attached?
       forget_verification_documents! # VER-1
+      # SHOP-1: their shops leave with them; memberships elsewhere end.
+      owned_shops.where.not(status: :closed).find_each(&:close!)
+      shop_members.destroy_all
+      assign_attributes(active_shop_id: nil)
       assign_attributes(verified: false)
       save!(validate: false)
     end

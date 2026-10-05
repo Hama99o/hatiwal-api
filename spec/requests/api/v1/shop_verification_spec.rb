@@ -113,17 +113,27 @@ RSpec.describe VerificationRequest, "for a shop", type: :model do
     expect(shop.reload.verified?).to be(false)
   end
 
-  it "changing the shop's name after verification puts it back for review" do
+  it "a name/address change drops the badge but never rewrites the decided request" do
     request.approve!(admin: admin)
+    decided_at = request.reload.decided_at
     shop.reload.update!(name: "Another name")
+    expect(shop.drop_badge_after_identity_change!).to be(true)
     expect(shop.reload.verified?).to be(false)
-    expect(request.reload).to be_requested
+    expect(request.reload).to have_attributes(status: "approved", decided_at: decided_at, decided_by_id: admin.id)
+    expect(VerificationStatus.new(shop.reload)).to have_attributes(state: "none", name_changed?: true)
+  end
+
+  it "keeps the badge for changes that are not the name or address" do
+    request.approve!(admin: admin)
+    shop.reload.update!(description: "New description", hours: { "sat" => [ %w[09:00 17:00] ] })
+    expect(shop.drop_badge_after_identity_change!).to be(false)
+    expect(shop.reload.verified?).to be(true)
   end
 
   it "sends the shop notices in the owner's language, all four locales" do
     request.approve!(admin: admin)
     User::SUPPORTED_LANGUAGES.each do |locale|
-      %w[shop_verified shop_verification_rejected shop_badge_removed].each do |key|
+      %w[shop_verified shop_verification_rejected shop_badge_removed shop_reverify_needed].each do |key|
         text = I18n.t("support.notices.#{key}", locale: locale, shop: "Safi", reason: "x", name: "A", raise: true)
         expect(text).to include("Safi")
       end
@@ -174,5 +184,25 @@ RSpec.describe VerificationRequest, "shop document numbers", type: :model do
     shop = create(:shop, :verification_eligible)
     expect(build(:shop_verification_request, shop: shop, document_number: nil)).to be_valid
     expect(build(:shop_verification_request, shop: shop, document_number: "a")).not_to be_valid
+  end
+end
+
+RSpec.describe "Shop edit after verification", type: :request do
+  include ActiveJob::TestHelper
+
+  let(:admin) { create(:admin_user) }
+  let(:verification) { create(:shop_verification_request) }
+  let(:shop) { verification.subject }
+  let(:headers) { auth_headers_for(shop.owner).merge("Content-Type" => "application/json") }
+
+  before { verification.approve!(admin: admin) }
+
+  it "the owner renaming the shop drops the badge and tells them, in their language" do
+    expect do
+      patch "/api/v1/shops/#{shop.id}", params: { shop: { name: "Renamed" } }.to_json, headers: headers
+    end.to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_reverify_needed")
+    expect(shop.reload.verified?).to be(false)
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: headers
+    expect(JSON.parse(response.body)["verification_status"]).to include("status" => "none", "name_changed" => true)
   end
 end
