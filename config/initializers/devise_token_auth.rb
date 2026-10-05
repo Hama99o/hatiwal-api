@@ -11,6 +11,10 @@ DeviseTokenAuth.setup do |config|
   # reached the phone, and the phone's old token 401'd a few seconds later.
   config.change_headers_on_each_request = false
 
+  # Tokens no longer rotate, so a password reset is the kill switch for a
+  # leaked one: it must sign out every device.
+  config.remove_tokens_after_password_reset = true
+
   # By default, users will need to re-authenticate after 2 weeks. This setting
   # determines how long tokens will remain valid after they are issued.
   # A login ends after 2 months WITHOUT using the app. Every use pushes the
