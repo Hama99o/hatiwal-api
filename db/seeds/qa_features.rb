@@ -276,7 +276,8 @@ if defined?(VerificationRequest) && VerificationRequest.table_exists?
     dup&.update!(document_number: fake_number.call(approved))
   end
 
-  user_reject_reasons = VerificationRequest::REJECT_REASONS - %w[shop_sign_not_visible] # that one is for shops (SHOP-1)
+  # Shop-only reasons (a person has no shop sign or business proof) are left to the shop fixtures.
+  user_reject_reasons = VerificationRequest::REJECT_REASONS - %w[shop_sign_not_visible proof_not_accepted]
   user_reject_reasons.each do |code|
     u = qa_user(email: "ver.rejected.#{code.tr('_', '-')}@hatiwal.test", firstname: "Rejected",
                 lastname: code.split("_").map(&:capitalize).join, place: :kandahar, avatar: true)
