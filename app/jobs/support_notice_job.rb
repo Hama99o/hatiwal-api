@@ -25,7 +25,10 @@ class SupportNoticeJob < ApplicationJob
     shop_verification_rejected: ->(user) { user.owned_shops.first&.latest_verification_request&.rejected? },
     shop_badge_removed: ->(user) { (shop = user.owned_shops.first) && !shop.verified? && shop.latest_verification_request&.revoked? },
     # The owner changed the verified shop's name/address: the badge came off.
-    shop_reverify_needed: ->(user) { (shop = user.owned_shops.first) && !shop.verified? && shop.latest_verification_request&.approved? }
+    shop_reverify_needed: ->(user) { (shop = user.owned_shops.first) && !shop.verified? && shop.latest_verification_request&.approved? },
+    # UPD-1: "please update" for app builds too old to be blocked (1.1.5 and
+    # older). Once per user per target version: AppUpdateNotice.
+    app_update_available: ->(_user) { true }
   }.freeze
 
   def self.enqueue(user, key)

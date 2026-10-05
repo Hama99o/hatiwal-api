@@ -66,6 +66,10 @@ Rails.application.routes.draw do
         delete "members/:member_id", action: :remove_member, as: :remove_member
       end
     end
+    # UPD-1 — "App versions": force update / reminder settings + old-version message
+    resource :app_versions, only: %i[show update] do
+      post :message_old_versions
+    end
     resources :verification_requests, only: %i[index show] do
       member do
         patch :approve
@@ -181,6 +185,9 @@ Rails.application.routes.draw do
 
       # Categories
       resources :categories, only: [ :index ]
+
+      # UPD-1 — force update / update reminder (public)
+      get "app_config", to: "app_configs#show", as: :app_config
 
       # Reports
       resources :reports, only: [ :create, :index ]

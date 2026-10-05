@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -148,6 +148,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_190000) do
     t.index ["email"], name: "index_admin_users_on_email", unique: true
     t.index ["reset_password_token"], name: "index_admin_users_on_reset_password_token", unique: true
     t.index ["unlock_token"], name: "index_admin_users_on_unlock_token", unique: true
+  end
+
+  create_table "app_release_settings", force: :cascade do |t|
+    t.string "android_latest_version"
+    t.string "android_min_version"
+    t.string "android_released_version"
+    t.string "android_store_url"
+    t.datetime "created_at", null: false
+    t.string "ios_latest_version"
+    t.string "ios_min_version"
+    t.string "ios_released_version"
+    t.string "ios_store_url"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id"
+    t.index ["updated_by_id"], name: "index_app_release_settings_on_updated_by_id"
+  end
+
+  create_table "app_update_notices", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "platform", null: false
+    t.string "target_version", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["user_id", "target_version"], name: "index_app_update_notices_on_user_id_and_target_version", unique: true
+    t.index ["user_id"], name: "index_app_update_notices_on_user_id"
   end
 
   create_table "blocks", force: :cascade do |t|
@@ -560,6 +585,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_190000) do
   add_foreign_key "admin_outreaches", "admin_users"
   add_foreign_key "admin_outreaches", "messages"
   add_foreign_key "admin_outreaches", "users"
+  add_foreign_key "app_release_settings", "admin_users", column: "updated_by_id"
+  add_foreign_key "app_update_notices", "users"
   add_foreign_key "blocks", "users", column: "blocked_id"
   add_foreign_key "blocks", "users", column: "blocker_id"
   add_foreign_key "categories", "categories", column: "parent_id", on_delete: :restrict
