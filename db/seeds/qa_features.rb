@@ -361,6 +361,20 @@ if defined?(Shop) && Shop.table_exists?
     .each { |t, pr, sl| qa_shop_listing.call(vowner, carpets, t, pr, sl, :herat) }
   vowner.update_column(:active_shop_id, nil)
 
+  # Eligible to apply for "Verified shop" and has never applied: logo, pin, one
+  # live product, no request. The shop Get-verified happy path starts here.
+  aowner = qa_user(email: "shop.apply@hatiwal.test", firstname: "Hakim", lastname: "Applicant", place: :jalalabad, avatar: true)
+  # Friday 18:00–02:00 is an OVERNIGHT range (to < from = after midnight), only
+  # accepted once the overnight fix is in; before that the shop gets plain hours.
+  overnight = { "fri" => [ %w[18:00 02:00] ] }
+  overnight_ok = Shop.new(hours: overnight).tap(&:validate).errors[:hours].empty?
+  bakery_hours = Shop::DAYS.index_with { [ %w[06:00 20:00] ] }.merge(overnight_ok ? overnight : {})
+  bakery = qa_shop.call(aowner, name: "Jalalabad QA Bakery", place: :jalalabad, slug: "food", hours: bakery_hours)
+  puts "  overnight hours #{overnight_ok ? 'seeded (Fri 18:00–02:00)' : 'NOT accepted by this schema yet: plain hours'}"
+  qa_shop_listing.call(aowner, bakery, "Jalalabad QA Bakery — Naan x10", 150, "food", :jalalabad)
+  VerificationRequest.where(subject: bakery).destroy_all if VerificationRequest::SUBJECT_TYPES.include?(Shop.name)
+  aowner.update_column(:active_shop_id, bakery.id)
+
   # Suspended shop whose owner still has it as active_shop_id: a STALE choice,
   # so `selling_as_shop` must come back null and the shop must not be public.
   sowner = qa_user(email: "shop.suspended@hatiwal.test", firstname: "Jawid", lastname: "Suspended", place: :mazar, avatar: true)
@@ -383,7 +397,7 @@ if defined?(Shop) && Shop.table_exists?
     end
     puts "  shop verification: Kabul QA Cosmetics requested, Herat QA Carpets approved"
   end
-  puts "  shops: #{[ cosmetics, carpets, phones ].map { |s| "#{s.name} (#{s.status}#{', verified' if s.verified_at})" }.join(' · ')}"
+  puts "  shops: #{[ cosmetics, carpets, phones, bakery ].map { |s| "#{s.name} (#{s.status}#{', verified' if s.verified_at})" }.join(' · ')}"
   puts "  shop.owner sells as the shop; shop.verified as Me; shop.suspended has a stale active shop; shop.none has none"
 else
   puts "  SKIP shops: shops table not migrated yet (SHOP-1)"
