@@ -26,7 +26,7 @@
     </p>
   </div>
   <div class="hw-actions">
-    <%= link_to "← Queue", admin_verification_requests_path, class: "button button--alt" %>
+    <%= link_to "← Queue", admin_verification_requests_path(kind: kind_of(r)), class: "button button--alt", id: "verify-back" %>
   </div>
 </header>
 
@@ -130,6 +130,16 @@
         <%= button_tag "Approve ✓", type: "submit", id: "verify-approve", class: "button",
               data: { confirm: "Give #{subject_name} the Verified badge?" } %>
       </div>
+      <%# Approve and Reject both write to the owner/person through Support — say
+          up front whether that message can actually be delivered. %>
+      <% refusal = Conversation.admin_message_refusal(user) %>
+      <p class="hw-panel__text <%= refusal ? 'hw-text-danger' : 'hw-panel__text--muted' %>" id="verify-message-note">
+        <% if refusal %>
+          No Support message can reach <%= user.full_name %>: <%= refusal %>. Decide anyway; tell them another way.
+        <% else %>
+          Approve sends a congratulations message; Reject sends the reason and how to try again. Both go to <%= user.full_name %> in their language (<%= user.preferred_language.presence || "en" %>) in Support.
+        <% end %>
+      </p>
     <% end %>
   <% else %>
     <p class="hw-verify-line" id="verify-decision">

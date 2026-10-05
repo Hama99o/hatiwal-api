@@ -25,7 +25,12 @@ module Admin
 
     def index
       @filter = FILTERS.key?(params[:status]) ? params[:status] : "waiting"
-      @kind = params[:kind] == "shops" ? "shops" : "users"
+      # Waiting count on each kind tab, so a shop request is never missed behind the Users tab.
+      @waiting_by_kind = { "users" => VerificationRequest.for_users.requested.count,
+                           "shops" => VerificationRequest.for_shops.requested.count }
+      # No kind asked (the nav link): open where the work is.
+      @kind = params[:kind].presence_in(%w[users shops]) ||
+              (@waiting_by_kind["users"].zero? && @waiting_by_kind["shops"].positive? ? "shops" : "users")
       # SHOP-1: the Shops tab is live.
       requests = (@kind == "shops" ? VerificationRequest.for_shops : VerificationRequest.for_users).where.not(status: :cancelled)
       @counts = FILTERS.transform_values { |status| status ? requests.where(status: status).count : requests.count }
@@ -47,7 +52,7 @@ module Admin
     def approve
       @verification.approve!(admin: current_admin_user, checklist: params[:checklist] || {})
       log_admin_action("verification_approve", target: @verification, details: checklist_summary)
-      redirect_to next_waiting_path, notice: "#{@verification.subject.full_name} is verified. They get a message in their language."
+      redirect_to next_waiting_path, notice: "#{@verification.subject.full_name} is verified. #{message_outcome}"
     rescue ArgumentError => e
       redirect_to admin_verification_request_path(@verification), alert: e.message
     end
@@ -56,7 +61,7 @@ module Admin
       @verification.reject!(admin: current_admin_user, reason_code: params[:reason_code],
                        reason_text: params[:reason_text], checklist: params[:checklist] || {})
       log_admin_action("verification_reject", target: @verification, details: reason_details)
-      redirect_to next_waiting_path, notice: "Request rejected. #{@verification.subject.full_name} sees the reason and can try again."
+      redirect_to next_waiting_path, notice: "Request rejected. #{@verification.subject.full_name} sees the reason and can try again. #{message_outcome}"
     rescue ArgumentError => e
       redirect_to admin_verification_request_path(@verification), alert: e.message
     end
@@ -64,7 +69,7 @@ module Admin
     def revoke
       @verification.revoke!(admin: current_admin_user, reason_code: params[:reason_code], reason_text: params[:reason_text])
       log_admin_action("verification_revoke", target: @verification, details: reason_details)
-      redirect_to admin_verification_request_path(@verification), notice: "Badge removed. #{@verification.subject.full_name} gets a message with the reason."
+      redirect_to admin_verification_request_path(@verification), notice: "Badge removed. #{message_outcome}"
     rescue ArgumentError => e
       redirect_to admin_verification_request_path(@verification), alert: e.message
     end
@@ -78,7 +83,7 @@ module Admin
       @verification = VerificationRequest.revoke_badge!(user, admin: current_admin_user,
                                                         reason_code: params[:reason_code], reason_text: params[:reason_text])
       log_admin_action("verification_revoke", target: @verification, details: reason_details)
-      redirect_to admin_user_path(user), notice: "Badge removed. #{user.full_name} gets a message with the reason."
+      redirect_to admin_user_path(user), notice: "Badge removed. #{message_outcome}"
     rescue ArgumentError => e
       redirect_to admin_user_path(user), alert: e.message
     end
@@ -118,8 +123,26 @@ module Admin
     def next_waiting_path
       following = VerificationRequest.where(subject_type: @verification.subject_type).requested
                                      .where.not(id: @verification.id).order(:created_at).first
-      following ? admin_verification_request_path(following) : admin_verification_requests_path
+      following ? admin_verification_request_path(following) : admin_verification_requests_path(kind: kind_of(@verification))
     end
+
+    def kind_of(verification) = verification.shop_subject? ? "shops" : "users"
+
+    # Says whether the Support message really goes out — the gate
+    # (Conversation.admin_message_refusal) can hold it back, and the flash must
+    # never claim a message that will not be sent.
+    def message_outcome
+      recipient = @verification.subject.verification_notice_recipient
+      refusal = Conversation.admin_message_refusal(recipient)
+      return "No Support message sent to #{recipient.full_name}: #{refusal}." if refusal
+
+      "#{recipient.full_name} gets a Support message in #{language_name(recipient)}."
+    end
+
+    def language_name(user)
+      { "en" => "English", "ps" => "Pashto", "fa" => "Dari", "ur" => "Urdu" }.fetch(user.preferred_language.to_s, "English")
+    end
+    helper_method :kind_of
 
     def checklist_summary
       ticked = @verification.checklist.select { |_, v| v }.keys

@@ -266,6 +266,7 @@ class VerificationRequest < ApplicationRecord
 
   def decide!(status, admin, reason_code, reason_text, allowed, checklist: nil)
     code = reason_code.to_s
+    raise ArgumentError, "choose a reason first" if code.blank?
     raise ArgumentError, "unknown reason: #{code}" unless allowed.include?(code)
     raise ArgumentError, "write the reason for \"other\"" if code == "other" && reason_text.blank?
 

@@ -3,12 +3,12 @@
 <header class="hw-page-header">
   <div>
     <h1 class="hw-page-header__title main-content__page-title">Verifications</h1>
-    <p class="hw-page-header__subtitle">People asking for the Verified badge. Every decision is made by hand; waiting requests come oldest first.</p>
+    <p class="hw-page-header__subtitle"><%= @kind == "shops" ? "Shops asking for the Verified shop badge (the owner's e-Tazkira + a proof of business)." : "People asking for the Verified badge." %> Every decision is made by hand; waiting requests come oldest first.</p>
   </div>
   <nav class="hw-segmented" aria-label="Kind">
-    <%= link_to "Users", admin_verification_requests_path(kind: "users", status: @filter),
-          class: "growth-period #{'growth-period--active' if @kind == 'users'}" %>
-    <%= link_to "Shops", admin_verification_requests_path(kind: "shops", status: @filter),
+    <%= link_to "Users#{" (#{@waiting_by_kind['users']} waiting)" if @waiting_by_kind['users'].positive?}", admin_verification_requests_path(kind: "users", status: @filter),
+          class: "growth-period #{'growth-period--active' if @kind == 'users'}", id: "verification-kind-users" %>
+    <%= link_to "Shops#{" (#{@waiting_by_kind['shops']} waiting)" if @waiting_by_kind['shops'].positive?}", admin_verification_requests_path(kind: "shops", status: @filter),
           class: "growth-period #{'growth-period--active' if @kind == 'shops'}", id: "verification-kind-shops" %>
   </nav>
 </header>
@@ -24,7 +24,7 @@
   <% if @requests.any? %>
     <table id="verification-queue">
       <thead>
-        <tr><th>Person</th><th>Document</th><th>Status</th><th>Sent</th><th>Decided</th><th></th></tr>
+        <tr><th><%= @kind == "shops" ? "Shop" : "Person" %></th><th>Document</th><th>Status</th><th>Sent</th><th>Decided</th><th></th></tr>
       </thead>
       <tbody>
         <% @requests.each do |r| %>
@@ -47,6 +47,6 @@
     </table>
     <%= paginate @requests %>
   <% else %>
-    <p class="hw-empty hw-pad"><%= @filter == "waiting" ? "Nothing waiting. Good job." : "No requests here." %></p>
+    <p class="hw-empty hw-pad" id="verification-empty"><%= @filter == "waiting" ? "No #{@kind == 'shops' ? 'shop' : 'person'} waiting. Good job." : "No #{@kind == 'shops' ? 'shop' : 'person'} requests here." %></p>
   <% end %>
 </section>
