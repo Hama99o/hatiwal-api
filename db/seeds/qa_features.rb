@@ -218,7 +218,9 @@ if defined?(VerificationRequest) && VerificationRequest.table_exists?
   fake_number = ->(user) { "00000000#{format('%04d', user.id % 10_000)}" }
   full_number = VerificationRequest.column_names.include?("document_number")
 
-  ver_fixture = lambda do |user, status:, document_type: "tazkira", reason_code: nil, reason_text: nil, number: nil,
+  user_doc = VerificationRequest::USER_DOCUMENT_TYPES.first # e_tazkira only since 2026-10-05
+
+  ver_fixture = lambda do |user, status:, document_type: user_doc, reason_code: nil, reason_text: nil, number: nil,
                                  decided_ago: nil, files: true, purged: false, verified: false|
     VerificationRequest.where(subject: user).where.not(status: status).destroy_all
     request = VerificationRequest.find_or_initialize_by(subject: user, status: status)
@@ -229,15 +231,17 @@ if defined?(VerificationRequest) && VerificationRequest.table_exists?
       reason_code: reason_code, reason_text: reason_text,
       decided_by: (admin if decided_ago), decided_at: decided_ago&.ago,
       checklist: decided_ago ? VerificationRequest::CHECKLIST.index_with { status == "approved" } : {},
-      files_purged_at: (decided_ago.ago + VerificationRequest::FILES_KEPT_FOR if purged)
+      files_purged_at: nil
     )
-    if files && !purged
-      request.front.attach(sample.call("document_front")) unless request.front.attached?
-      request.back.attach(sample.call("document_back")) if request.two_sided? && !request.back.attached?
-      request.selfie.attach(sample.call("selfie")) unless request.selfie.attached?
-    end
+    # Always attach, then purge for the no-file states: that is what cancelling
+    # and the 90-day job really do, and the e-Tazkira rule needs a back side to save.
+    request.front.attach(sample.call("document_front")) unless request.front.attached?
+    request.back.attach(sample.call("document_back")) if request.two_sided? && !request.back.attached?
+    request.selfie.attach(sample.call("selfie")) unless request.selfie.attached?
     user.update_column(:verified, false) # an open request needs an unverified subject
     request.save!
+    request.purge_files! if (!files || purged) && request.files_count.positive?
+    request.update_columns(files_purged_at: decided_ago.ago + VerificationRequest::FILES_KEPT_FOR) if purged
     request.update_columns(created_at: ((decided_ago || 0.days) + 1.day).ago)
     user.update_column(:verified, verified)
     request
@@ -259,6 +263,7 @@ if defined?(VerificationRequest) && VerificationRequest.table_exists?
   waiting.each do |email, first, last, doc|
     lang = email.include?(".ps@") ? "ps" : "en"
     u = qa_user(email: email, firstname: first, lastname: last, place: :kabul, avatar: true, language: lang)
+    doc = user_doc unless VerificationRequest::USER_DOCUMENT_TYPES.include?(doc)
     ver_fixture.call(u, status: "requested", document_type: doc)
   end
 
@@ -388,11 +393,16 @@ if defined?(Shop) && Shop.table_exists?
     { cosmetics => [ "requested", nil ], carpets => [ "approved", 3.days ] }.each do |shop, (status, ago)|
       VerificationRequest.where(subject: shop).where.not(status: status).destroy_all
       r = VerificationRequest.find_or_initialize_by(subject: shop, status: status)
-      r.assign_attributes(requested_by: shop.owner, document_type: "licence", phone: "+93700000222",
+      shop_doc = (defined?(VerificationRequest::SHOP_DOCUMENT_TYPES) ? VerificationRequest::SHOP_DOCUMENT_TYPES.first : "licence")
+      r.assign_attributes(requested_by: shop.owner, document_type: shop_doc, phone: "+93700000222",
                           decided_at: ago&.ago, decided_by: (AdminUser.order(:id).first if ago),
                           checklist: ago ? VerificationRequest::SHOP_CHECKLIST.index_with { true } : {})
       r.front.attach(qa_blob(QA_SAMPLES.join("shop_front.png"), "qa-sample-shop-front.png", "image/png")) unless r.front.attached?
-      r.back.attach(qa_blob(QA_SAMPLES.join("document_front.png"), "qa-sample-licence.png", "image/png")) unless r.back.attached?
+      r.back.attach(qa_blob(QA_SAMPLES.join("document_front.png"), "qa-sample-owner-id.png", "image/png")) unless r.back.attached?
+      if r.respond_to?(:proof) && !r.proof.attached?
+        r.proof.attach(qa_blob(QA_SAMPLES.join("document_back.png"), "qa-sample-business-proof.png", "image/png"))
+      end
+      r.document_number = "00000000#{format('%04d', shop.owner_id % 10_000)}" if r.respond_to?(:document_number) && r.document_number.blank?
       r.save!
     end
     puts "  shop verification: Kabul QA Cosmetics requested, Herat QA Carpets approved"
