@@ -47,3 +47,12 @@ ur:
       shop_sign_not_visible: "دکان کا بورڈ نظر نہیں آ رہا"
       policy_violation: "ہمارے قواعد کی خلاف ورزی ہوئی"
       other: "دیگر"
+  # VER-1 validation messages (VerificationRequest#subject_must_be_eligible).
+  activerecord:
+    errors:
+      models:
+        verification_request:
+          attributes:
+            subject:
+              already_verified: "پہلے سے تصدیق شدہ ہے"
+              not_eligible: "ابھی درخواست نہیں دے سکتا (کمی: %{missing})"

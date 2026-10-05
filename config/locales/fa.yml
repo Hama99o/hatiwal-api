@@ -41,3 +41,12 @@ fa:
       shop_sign_not_visible: "تابلوی دکان دیده نمی‌شود"
       policy_violation: "قوانین ما رعایت نشده"
       other: "دیگر"
+  # VER-1 validation messages (VerificationRequest#subject_must_be_eligible).
+  activerecord:
+    errors:
+      models:
+        verification_request:
+          attributes:
+            subject:
+              already_verified: "قبلاً تایید شده است"
+              not_eligible: "هنوز نمی‌تواند درخواست دهد (کم است: %{missing})"

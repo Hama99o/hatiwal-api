@@ -110,4 +110,16 @@ RSpec.describe VerificationRequest, type: :model do
       end
     end
   end
+
+  it "has its validation messages in all four locales" do
+    User::SUPPORTED_LANGUAGES.each do |locale|
+      I18n.with_locale(locale) do
+        request = described_class.new
+        request.errors.add(:subject, :already_verified)
+        request.errors.add(:subject, :not_eligible, missing: "avatar")
+        expect(request.errors.full_messages.join).not_to include("Translation missing"), locale
+        expect(request.errors.full_messages.last).to include("avatar")
+      end
+    end
+  end
 end

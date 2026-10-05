@@ -43,3 +43,12 @@ ps:
       shop_sign_not_visible: "د دوکان لوحه نه ښکاري"
       policy_violation: "زموږ قواعد مات شوي"
       other: "بل"
+  # VER-1 validation messages (VerificationRequest#subject_must_be_eligible).
+  activerecord:
+    errors:
+      models:
+        verification_request:
+          attributes:
+            subject:
+              already_verified: "مخکې تایید شوی دی"
+              not_eligible: "لا غوښتنه نه شي کولی (پاتې: %{missing})"
