@@ -68,10 +68,11 @@ RSpec.describe User, "location" do
     end
   end
 
-  it "is wiped when the account is anonymized" do
+  it "is wiped when the account is anonymized, own map point included" do
     user.record_location_guess!(**herat, source: User::GuessSource::LISTING)
+    user.update!(latitude: 34.5553, longitude: 69.2075)
     user.anonymize_account!
     expect(user.reload).to have_attributes(guessed_latitude: nil, guessed_longitude: nil, guessed_province: nil,
-                                           guessed_source: nil, guessed_at: nil)
+                                           guessed_source: nil, guessed_at: nil, latitude: nil, longitude: nil)
   end
 end

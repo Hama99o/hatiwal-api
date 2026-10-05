@@ -15,8 +15,8 @@ class Api::V1::Users::LocationGuessesController < Api::V1::BaseController
 
   def update
     authorize current_user, :update_location_guess?
-    return render_unprocessable_entity("Unknown location source") unless User::GuessSource::ALL.include?(guess_params[:source].to_s)
-    return render_unprocessable_entity("Latitude and longitude are required") unless coordinates?
+    return render_unprocessable_entity(I18n.t("location.errors.unknown_source"), code: :unknown_location_source) unless User::GuessSource::ALL.include?(guess_params[:source].to_s)
+    return render_unprocessable_entity(I18n.t("location.errors.coordinates_required"), code: :coordinates_required) unless coordinates?
 
     current_user.record_location_guess!(
       latitude: guess_params[:latitude], longitude: guess_params[:longitude],

@@ -378,11 +378,13 @@ RSpec.describe Listing, type: :model do
         expect(result).to eq([ near, far ])
       end
 
-      it "excludes listings without coordinates" do
+      # LOC-1 review: nearest is the DEFAULT feed now, so a listing without a
+      # map point must stay in it — after every listing that has one.
+      it "keeps listings without coordinates, after those with them" do
         with_coords = create(:listing, :active, latitude: 34.5800, longitude: 69.2100)
-        create(:listing, :active, latitude: nil, longitude: nil)
+        without = create(:listing, :active, latitude: nil, longitude: nil)
 
-        expect(Listing.nearest_first(kabul_lat, kabul_lng)).to contain_exactly(with_coords)
+        expect(Listing.nearest_first(kabul_lat, kabul_lng).to_a).to eq([ with_coords, without ])
       end
 
       it "composes with within_radius — radius filters, nearest_first orders" do

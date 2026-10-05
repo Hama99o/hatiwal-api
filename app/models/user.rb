@@ -65,17 +65,27 @@ class User < ApplicationRecord
     missing
   end
 
-  # A verified person who changes their name goes back under review: the badge
-  # vouches for the name. Their last approved request reopens, so an admin
-  # re-checks it against the new name. Called from the user's own profile edit,
+  # A verified person who changes their name loses the badge: it vouched for
+  # the OLD name. They re-apply (the status card says "Your name changed —
+  # verify again", VerificationStatus#name_changed?). Decided rows are history
+  # and stay exactly as they were. Called from the user's own profile edit,
   # not on admin edits.
-  def reopen_verification_after_name_change!
+  def drop_badge_after_name_change!
     return unless verified? && (saved_change_to_firstname? || saved_change_to_lastname?)
 
-    approved = verification_requests.approved.order(decided_at: :desc).first
-    transaction do
-      update!(verified: false)
-      approved&.update!(status: :requested, decided_by: nil, decided_at: nil) unless verification_requests.requested.exists?
+    update!(verified: false)
+  end
+
+  # Account deletion: nothing of an ID document may outlive the account. Open
+  # requests are cancelled (so none sits in the admin queue forever), every
+  # photo is deleted, and the name on the document + last 4 digits are blanked.
+  # Decisions (status, reason, dates) stay as anonymous history.
+  def forget_verification_documents!
+    verification_requests.find_each do |request|
+      request.purge_files!
+      attrs = { name_on_document: nil, document_last4: nil, updated_at: Time.current }
+      attrs.merge!(status: VerificationRequest.statuses[:cancelled], decided_at: Time.current) if request.requested?
+      request.update_columns(attrs)
     end
   end
   # ── end VER-1 ──
@@ -338,6 +348,8 @@ class User < ApplicationRecord
         bio: nil,
         city: nil,
         province: nil,
+        latitude: nil,
+        longitude: nil,
         guessed_latitude: nil,
         guessed_longitude: nil,
         guessed_province: nil,
@@ -349,6 +361,8 @@ class User < ApplicationRecord
         tokens: {}                       # invalidate all existing sessions
       )
       avatar.purge_later if avatar.attached?
+      forget_verification_documents! # VER-1
+      assign_attributes(verified: false)
       save!(validate: false)
     end
   end

@@ -76,6 +76,16 @@ RSpec.describe "Api::V1::Users::LocationGuesses", type: :request do
     expect(user.reload.guessed_latitude).to be_nil
   end
 
+  it "has its error messages in all four locales" do
+    User::SUPPORTED_LANGUAGES.each do |locale|
+      I18n.with_locale(locale) do
+        %w[location.errors.unknown_source location.errors.coordinates_required].each do |key|
+          expect(I18n.t(key, raise: true)).to be_present
+        end
+      end
+    end
+  end
+
   it "rejects coordinates that are not numbers" do
     send_guess(latitude: "x", longitude: 62.2, source: "gps")
     expect(response).to have_http_status(:unprocessable_entity)

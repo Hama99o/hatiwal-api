@@ -1,0 +1,7 @@
+# LOC-1 messages (hatiwal-mobile/docs/USER_LOCATION.md). Own file so it never
+# collides with edits to ur.yml.
+ur:
+  location:
+    errors:
+      unknown_source: "مقام کا ماخذ نامعلوم ہے"
+      coordinates_required: "عرض بلد اور طول بلد ضروری ہیں"

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -264,6 +264,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_130000) do
     t.index ["condition"], name: "index_listings_on_condition"
     t.index ["created_at"], name: "index_listings_on_created_at"
     t.index ["expires_at"], name: "index_listings_on_expires_at"
+    t.index ["latitude", "longitude"], name: "index_listings_on_point_browsable", where: "((latitude IS NOT NULL) AND (longitude IS NOT NULL) AND (removed_at IS NULL))"
     t.index ["price"], name: "index_listings_on_price"
     t.index ["removed_at"], name: "index_listings_on_removed_at"
     t.index ["status", "created_at"], name: "index_listings_on_status_and_created_at"

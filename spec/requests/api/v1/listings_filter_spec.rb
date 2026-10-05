@@ -195,7 +195,8 @@ RSpec.describe "Api::V1::Listings filtering", type: :request do
       create(:listing, :active, title: "Near", latitude: 34.5800, longitude: 69.2100)
       # Herat — ~570 km from Kabul
       create(:listing, :active, title: "Far",  latitude: 34.3529, longitude: 62.2040)
-      # No coordinates at all — never eligible for distance sort
+      # No coordinates at all — no distance, so it comes after every listing
+      # that has one (LOC-1 review: never dropped from the default feed)
       create(:listing, :active, title: "NoCoords", latitude: nil, longitude: nil)
     end
 
@@ -205,7 +206,7 @@ RSpec.describe "Api::V1::Listings filtering", type: :request do
           headers: headers
 
       expect(response).to have_http_status(:ok)
-      expect(titles).to eq(%w[Near Far])
+      expect(titles).to eq(%w[Near Far NoCoords])
     end
 
     it "composes with the radius filter — radius narrows, nearest orders" do
@@ -231,7 +232,7 @@ RSpec.describe "Api::V1::Listings filtering", type: :request do
       get "/api/v1/listings", params: { sort: "nearest", latitude: kabul_lat, longitude: kabul_lng }
 
       expect(response).to have_http_status(:ok)
-      expect(titles).to eq(%w[Near Far])
+      expect(titles).to eq(%w[Near Far NoCoords])
     end
   end
 end

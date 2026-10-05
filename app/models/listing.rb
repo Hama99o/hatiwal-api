@@ -287,17 +287,57 @@ class Listing < ApplicationRecord
          .where("#{haversine_distance_sql} <= ?", *haversine_binds(lat, lng), km.to_f)
   end
 
-  # Orders listings by Haversine distance from (lat, lng), nearest first.
-  # Reuses the exact same distance expression as `within_radius` so the two
-  # compose cleanly (radius filter + nearest sort). Listings without
-  # coordinates are excluded — they have no defined distance. Returns the
-  # scope untouched (no reorder) when lat/lng are blank so callers can fall
-  # back to another sort.
+  # Orders listings nearest first from (lat, lng):
+  #   1. listings WITH a map point, by Haversine distance (the same expression
+  #      as `within_radius`, so the two compose);
+  #   2. THEN listings without one — never dropped. Since LOC-1 made this the
+  #      DEFAULT Bazaar order, filtering them out hid half the feed. Among
+  #      them, those whose location names the centre's province come first,
+  #      then newest;
+  #   3. `id DESC` last, so rows at the same point have a total order and
+  #      offset pages never repeat or skip one.
+  # Returns the scope untouched when lat/lng are blank so callers can fall back
+  # to another sort.
   def self.nearest_first(lat, lng)
     return all if lat.blank? || lng.blank?
 
-    where.not(latitude: nil, longitude: nil)
-         .reorder(Arel.sql(sanitize_sql_array([ "#{haversine_distance_sql} ASC", *haversine_binds(lat, lng) ])))
+    province = ServiceArea.nearest_province(lat, lng)
+    province_term = province ? sanitize_sql_array([ "(LOWER(listings.location) LIKE ?) DESC, ", "#{province.downcase}%" ]) : ""
+    reorder(Arel.sql(
+      "(listings.latitude IS NULL OR listings.longitude IS NULL) ASC, " \
+      "#{sanitize_sql_array([ haversine_distance_sql, *haversine_binds(lat, lng) ])} ASC NULLS LAST, " \
+      "#{province_term}listings.created_at DESC, listings.id DESC"
+    ))
+  end
+
+  # Nearest-first without sorting the whole table (LOC-1 made it the DEFAULT
+  # Bazaar order, review of 901c31e). Sorting every browsable row by Haversine on
+  # every page is a full scan + sort; at 100k listings that is too slow.
+  #
+  # So the sort only sees the rows inside a box around the centre, using the
+  # (latitude, longitude) index. The box is the SMALLEST of these radii whose
+  # CIRCLE already holds every row the requested page needs: everything outside
+  # the box is further than the radius, so it could not rank above any row in
+  # that circle, and the first `needed` rows — the page — come out exactly as the
+  # unboxed sort would order them. When no radius is enough, no box (as before).
+  NEAREST_RADII_KM = [ 50, 150, 400, 1000 ].freeze
+  KM_PER_DEGREE = 111.32
+
+  # Rows whose point is inside the square that encloses the circle of `km`.
+  # Plain ranges on the indexed columns, so it is an index range scan.
+  def self.within_box(lat, lng, km)
+    lat = lat.to_f
+    lng = lng.to_f
+    dlat = km / KM_PER_DEGREE
+    dlng = km / (KM_PER_DEGREE * [ Math.cos(lat * Math::PI / 180), 0.01 ].max)
+    where(latitude: (lat - dlat)..(lat + dlat), longitude: (lng - dlng)..(lng + dlng))
+  end
+
+  # The radius to box a nearest-first page with, or nil for "no box".
+  def self.nearest_window_km(scope, lat, lng, needed)
+    NEAREST_RADII_KM.find do |km|
+      scope.within_box(lat, lng, km).within_radius(lat, lng, km).count >= needed
+    end
   end
 
   # The Haversine great-circle distance expression, parameterized with `?`

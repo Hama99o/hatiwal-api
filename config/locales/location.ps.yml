@@ -1,0 +1,7 @@
+# LOC-1 messages (hatiwal-mobile/docs/USER_LOCATION.md). Own file so it never
+# collides with edits to ps.yml.
+ps:
+  location:
+    errors:
+      unknown_source: "د ځای سرچینه نه پېژندل کېږي"
+      coordinates_required: "عرض البلد او طول البلد اړین دي"

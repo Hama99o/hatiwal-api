@@ -43,8 +43,10 @@ class Api::V1::ListingsController < Api::V1::BaseController
     # Haversine distance (composing with any radius filter above). Without
     # coordinates it falls back to the default (newest), same as any other
     # unrecognised value.
+    total = nil
     listings = if nearest_sort?
-                 listings.nearest_first(params[:latitude], params[:longitude])
+                 total, boxed = nearest_page_scope(listings)
+                 boxed.nearest_first(params[:latitude], params[:longitude])
     else
                  listings.sorted(params[:sort])
     end
@@ -88,7 +90,8 @@ class Api::V1::ListingsController < Api::V1::BaseController
     paginate_blue(
       ListingSerializer,
       listings,
-      extra: { view: :list, viewed_ids: viewed_listing_ids(listings), saved_ids: saved_listing_ids(listings) }
+      extra: { view: :list, viewed_ids: viewed_listing_ids(listings), saved_ids: saved_listing_ids(listings) },
+      count: total
     )
   end
 
@@ -193,6 +196,23 @@ class Api::V1::ListingsController < Api::V1::BaseController
   # sort=nearest only makes sense with coordinates — radius is optional (the
   # buyer may want "nearest first" across the whole feed, not just within a
   # radius). When coordinates are absent, `sorted` falls back to newest.
+  # LOC-1 review — the nearest-first feed without sorting the whole table.
+  # Returns [total, scope]: the real total for the pagination meta, and the scope
+  # to sort. When the requested page lies entirely among listings WITH a map
+  # point, that is just the rows inside the smallest box that already holds the
+  # page (Listing.nearest_window_km), so the page is identical to the unboxed
+  # sort. Otherwise (a deep page reaching the listings without a point) the
+  # whole scope, as before.
+  def nearest_page_scope(listings)
+    lat = params[:latitude]
+    lng = params[:longitude]
+    options = pagy_page_options
+    needed = options[:page] * (options[:items] || Pagy::DEFAULT[:items] || 20)
+    with_point = listings.where.not(latitude: nil, longitude: nil)
+    km = Listing.nearest_window_km(with_point, lat, lng, needed)
+    [ listings.count, km ? with_point.within_box(lat, lng, km) : listings ]
+  end
+
   def nearest_sort?
     params[:sort].to_s == "nearest" && params[:latitude].present? && params[:longitude].present?
   end

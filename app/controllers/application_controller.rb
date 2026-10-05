@@ -68,8 +68,10 @@ class ApplicationController < ActionController::API
     opts
   end
 
-  def paginate_blue(serializer, collection, extra: {})
-    pagy, records = pagy(collection, **pagy_page_options)
+  # `count:` — the total to report when `collection` is a narrowed slice of the
+  # real result set (the boxed nearest-first feed); Pagy then skips its COUNT.
+  def paginate_blue(serializer, collection, extra: {}, count: nil)
+    pagy, records = pagy(collection, **pagy_page_options, **(count ? { count: count } : {}))
     render json: {
       serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default, **extra.except(:view)),
       meta: {
