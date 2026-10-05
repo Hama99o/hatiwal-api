@@ -121,10 +121,14 @@ class Conversation < ApplicationRecord
       .joins("LEFT JOIN listings   ON listings.id  = conversations.listing_id")
       .joins("LEFT JOIN users AS b ON b.id         = conversations.buyer_id")
       .joins("LEFT JOIN users AS s ON s.id         = conversations.seller_id")
+      .joins("LEFT JOIN shops AS sh ON sh.id       = COALESCE(conversations.shop_id, listings.shop_id)")
       .where(
+        # SHOP-2: a chat with a shop is found by the shop's name, never by the
+        # owner's personal one (that would tell the buyer who is behind it).
         "listings.title ILIKE :like
          OR b.firstname ILIKE :like OR b.lastname ILIKE :like
-         OR s.firstname ILIKE :like OR s.lastname ILIKE :like
+         OR ((s.firstname ILIKE :like OR s.lastname ILIKE :like) AND sh.id IS NULL)
+         OR sh.name ILIKE :like
          OR messages.body ILIKE :like",
         like: like
       )
@@ -178,10 +182,11 @@ class Conversation < ApplicationRecord
 
   # Returns true when the associated listing has been removed (admin-removed or
   # hard-deleted and nullified).
-  # A "Message shop" chat (SHOP-2) never had a listing: nothing was deleted.
+  # TRUE whenever there is no listing, a "Message shop" chat included: clients
+  # older than SHOP-2 read `listing_deleted: false` + `listing: null` as a live
+  # listing and crash on `listing.title` (see ConversationSerializer). New
+  # clients branch on `shop_chat` first, like `kind` for support threads.
   def listing_deleted?
-    return false if shop_chat?
-
     listing.nil? || listing.removed?
   end
 
@@ -190,6 +195,16 @@ class Conversation < ApplicationRecord
 
   # The shop this chat is with: its own (a shop chat) or its product's.
   def chat_shop = shop_chat? ? shop : listing&.shop
+
+  # The shop the SELLER side speaks as, or nil. Owner, 2026-10-05: whatever is
+  # done as the shop shows the shop, never the person — so the buyer gets the
+  # shop's name and logo in place of the owner's. A product chat only while the
+  # shop is open (a closed shop's products went back to the owner); a "Message
+  # shop" chat always.
+  def shop_face
+    s = chat_shop
+    s if s && (shop_chat? || s.active?)
+  end
 
   def participant?(user)
     buyer_id == user.id || seller_id == user.id

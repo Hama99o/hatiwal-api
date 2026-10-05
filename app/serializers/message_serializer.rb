@@ -9,7 +9,15 @@ class MessageSerializer < ApplicationSerializer
 
   # Sender is always exposed (tombstones still show who sent — both sides
   # see "Message deleted" but the sender row stays so threading is intact)
-  field(:sender) { |m| u = m.user; { id: m.user_id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil } }
+  # SHOP-1/2: the seller side of a chat with a shop writes AS the shop — its
+  # name and logo, never the owner's (ConversationSerializer.person_block).
+  field(:sender) do |m|
+    u = m.user
+    shop = m.conversation&.shop_face if m.user_id == m.conversation&.seller_id
+    next { id: m.user_id, name: shop.name, avatar_url: shop.logo_url, as_shop: true } if shop
+
+    { id: m.user_id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
+  end
 
   # Attachment URL: suppressed when deleted
   field(:attachment_url) { |m| m.deleted? ? nil : (m.attachment.attached? ? m.attachment.url : nil) }

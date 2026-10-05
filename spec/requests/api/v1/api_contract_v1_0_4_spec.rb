@@ -34,7 +34,11 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     "conversations[].shop" => "SHOP-1 shop block (null = personal)",
     "conversation.shop" => "SHOP-1 shop block (null = personal)",
     "listings[].shop" => "SHOP-1 shop block (null = personal)",
-    "listing.shop" => "SHOP-1 shop block (null = personal)"
+    "listing.shop" => "SHOP-1 shop block (null = personal)",
+    # SHOP-2. false on every chat an old client can meet unless a shop
+    # messaged it; listing_deleted stays true on a shop chat for exactly them.
+    "conversations[].shop_chat" => "SHOP-2 Message-shop chat flag",
+    "conversation.shop_chat" => "SHOP-2 Message-shop chat flag"
   }.freeze
 
   # Values are irrelevant; their JSON TYPE is the contract.

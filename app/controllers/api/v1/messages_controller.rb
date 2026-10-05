@@ -15,7 +15,9 @@ class Api::V1::MessagesController < Api::V1::BaseController
     # older pages on scroll-up.
     messages = @conversation.messages
                            .includes(user: { avatar_attachment: :blob },
-                                     attachment_attachment: :blob)
+                                     attachment_attachment: :blob,
+                                     # sender as the shop (MessageSerializer): one load, not one per message
+                                     conversation: [ { shop: { logo_attachment: :blob } }, { listing: { shop: { logo_attachment: :blob } } } ])
                            .newest_first
     paginate_blue(MessageSerializer, messages, extra: { view: :default })
   end

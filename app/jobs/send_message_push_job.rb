@@ -76,8 +76,8 @@ class SendMessagePushJob < ApplicationJob
   def title_for(sender, recipient, conversation)
     # SHOP-1/2: the shop side writes AS the shop — the buyer sees the shop's
     # name, never the owner's personal one.
-    shop = conversation.chat_shop
-    return shop.name if shop&.active? && sender.id == conversation.seller_id
+    shop = conversation.shop_face
+    return shop.name if shop && sender.id == conversation.seller_id
     return sender.full_name unless sender.support_account?
 
     I18n.with_locale(recipient_locale(recipient)) { I18n.t("push.support.title") }

@@ -27,6 +27,20 @@ class ConversationSerializer < ApplicationSerializer
     shop.active? ? ShopSerializer.render_as_hash(shop, view: :card) : nil
   end
 
+  # A participant as the viewer may see them. The seller side of a chat with a
+  # shop is the SHOP (name, logo, city, verified) under the owner's id — the
+  # id the public shop page already exposes, which blocking and reporting
+  # need. Same keys, so an app older than shops still draws a sensible header.
+  def self.person_block(conversation, person)
+    shop = conversation.shop_face if person.id == conversation.seller_id
+    if shop
+      return { id: person.id, name: shop.name, city: shop.city, verified: shop.verified?, avatar_url: shop.logo_url, as_shop: true }
+    end
+
+    { id: person.id, name: person.full_name, city: person.city, verified: person.verified,
+      avatar_url: person.avatar.attached? ? person.avatar.url : nil }
+  end
+
   def self.viewer_role_for(conversation, opts)
     current_user = opts[:current_user]
     return nil unless current_user
@@ -64,6 +78,9 @@ class ConversationSerializer < ApplicationSerializer
     # `listing.title` on a null. A wrong banner beats a crash. New clients read
     # `kind` before this field.
     field(:listing_deleted) { |c| c.listing_deleted? }
+    # SHOP-2: a "Message shop" chat (no product). Branch on it BEFORE
+    # listing_deleted, which stays true there for older clients.
+    field(:shop_chat) { |c| c.shop_chat? }
     field(:listing) do |c|
       next nil if c.listing_deleted? || c.listing.nil?
       # TASK-J471: price/currency so the inbox row's PriceTag has something to
@@ -80,7 +97,7 @@ class ConversationSerializer < ApplicationSerializer
     field(:other_participant) do |c, opts|
       current_user = opts[:current_user]
       other = current_user ? c.other_participant(current_user) : c.buyer
-      { id: other.id, name: other.full_name, city: other.city, verified: other.verified, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
+      person_block(c, other)
     end
     # TASK-M913: a retracted last message must not leak its content into the
     # inbox preview — suppress body, keep kind/deleted flag so the client can
@@ -139,6 +156,9 @@ class ConversationSerializer < ApplicationSerializer
     # `listing.title` on a null. A wrong banner beats a crash. New clients read
     # `kind` before this field.
     field(:listing_deleted) { |c| c.listing_deleted? }
+    # SHOP-2: a "Message shop" chat (no product). Branch on it BEFORE
+    # listing_deleted, which stays true there for older clients.
+    field(:shop_chat) { |c| c.shop_chat? }
     field(:listing) do |c, opts|
       next nil if c.listing_deleted? || c.listing.nil?
       # TASK-K729: category is included so the mobile thread's reserved/sold
@@ -188,7 +208,7 @@ class ConversationSerializer < ApplicationSerializer
         viewer_has_reviewed_sale: viewer_is_sale_buyer ? Review.exists?(transaction_id: txn.id, reviewer_id: current_user.id) : nil }
     end
     field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
-    field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, verified: s.verified, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }
+    field(:seller) { |c| person_block(c, c.seller) }
     # SHOP-1 — the chat is with a shop when its listing is: the buyer sees the
     # shop's name and logo, and replies go out as the shop.
     field(:shop) { |c| shop_block(c) }
@@ -198,7 +218,7 @@ class ConversationSerializer < ApplicationSerializer
     field(:other_participant) do |c, opts|
       current_user = opts[:current_user]
       other = current_user ? c.other_participant(current_user) : c.buyer
-      { id: other.id, name: other.full_name, city: other.city, verified: other.verified, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
+      person_block(c, other)
     end
     field(:blocked_with_participant) do |c, opts|
       current_user = opts[:current_user]

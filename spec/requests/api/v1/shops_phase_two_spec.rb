@@ -178,12 +178,13 @@ RSpec.describe "Shops phase 2", type: :request do
     it "is never a 'removed listing' chat, and keeps showing the SHOP (with status) even once suspended" do
       message_shop(message: "Salaam")
       c = JSON.parse(response.body)["conversation"]
-      expect(c).to include("listing" => nil, "listing_deleted" => false)
+      # shop_chat first; listing_deleted stays true so a pre-SHOP-2 app never reads listing.title on null.
+      expect(c).to include("listing" => nil, "shop_chat" => true, "listing_deleted" => true)
       expect(c["shop"]).to include("id" => shop.id, "status" => "active")
       shop.suspended!
       get "/api/v1/conversations", headers: auth_headers_for(buyer)
       row = JSON.parse(response.body)["conversations"].find { |x| x["id"] == c["id"] }
-      expect(row).to include("listing_deleted" => false)
+      expect(row).to include("shop_chat" => true)
       expect(row["shop"]).to include("name" => shop.name, "status" => "suspended")
     end
 
@@ -291,6 +292,75 @@ RSpec.describe "Shops phase 2", type: :request do
       expect(own_person.document_number_digest).to eq(mine.document_number_digest)
       get admin_verification_request_path(mine)
       expect(response.body).not_to include("verify-same-number")
+    end
+  end
+
+  # Owner, 2026-10-05: whatever is done as the shop shows the shop, never the
+  # person. The owner's personal name must not reach the buyer anywhere.
+  describe "the owner stays behind the shop" do
+    include ActionCable::TestHelper
+
+    let(:owner) { create(:user, firstname: "Zarmina", lastname: "Qadirzai") }
+    let(:shop) { create(:shop, owner: owner, name: "Herat Silk House") }
+    let(:buyer) { create(:user) }
+    let(:personal) { [ "Zarmina", "Qadirzai" ] }
+
+    def without_personal_name(body)
+      personal.each { |n| expect(body).not_to include(n) }
+    end
+
+    shared_examples "a chat with the shop" do
+      it "index, show, messages and the live broadcast carry the shop, never the owner's name" do
+        owner_reply = conversation.messages.create!(user: owner, body: "Welcome", kind: :text)
+        headers = auth_headers_for(buyer)
+
+        get "/api/v1/conversations", headers: headers
+        without_personal_name(response.body)
+        row = JSON.parse(response.body)["conversations"].find { |x| x["id"] == conversation.id }
+        expect(row["other_participant"]).to include("id" => owner.id, "name" => shop.name, "as_shop" => true)
+
+        get "/api/v1/conversations/#{conversation.id}", headers: headers
+        without_personal_name(response.body)
+        expect(JSON.parse(response.body)["conversation"]["seller"]).to include("name" => shop.name)
+
+        get "/api/v1/conversations/#{conversation.id}/messages", headers: headers
+        without_personal_name(response.body)
+
+        payload = MessageSerializer.render_as_hash(owner_reply, view: :default)
+        expect(payload[:sender]).to include(name: shop.name)
+        expect(payload.to_json).not_to include("Qadirzai")
+        expect { BroadcastMessageJob.perform_now(owner_reply.id) }
+          .to have_broadcasted_to("conversation_#{conversation.id}").with { |data| expect(data.to_json).not_to include("Qadirzai") }
+
+        get "/api/v1/conversations", params: { search: "Qadirzai" }, headers: headers
+        expect(JSON.parse(response.body)["conversations"].pluck("id")).not_to include(conversation.id)
+        get "/api/v1/conversations", params: { search: "Silk House" }, headers: headers
+        expect(JSON.parse(response.body)["conversations"].pluck("id")).to include(conversation.id)
+      end
+    end
+
+    context "a Message-shop chat" do
+      let(:conversation) { Conversations::StartShopService.new(buyer: buyer, shop: shop, message_body: "Salaam").call }
+
+      it_behaves_like "a chat with the shop"
+    end
+
+    context "a chat about one of the shop's products" do
+      let(:listing) { create(:listing, :active, user: owner, shop: shop) }
+      let(:conversation) { Conversations::StartService.new(buyer: buyer, listing: listing, message_body: "Salaam").call }
+
+      it_behaves_like "a chat with the shop"
+    end
+
+    it "the owner still sees the buyer as a person, and a personal chat still shows the person" do
+      chat = Conversations::StartShopService.new(buyer: buyer, shop: shop, message_body: "Salaam").call
+      get "/api/v1/conversations/#{chat.id}", headers: auth_headers_for(owner)
+      expect(JSON.parse(response.body)["conversation"]["other_participant"]).to include("name" => buyer.full_name)
+
+      personal_listing = create(:listing, :active, user: owner)
+      mine = Conversations::StartService.new(buyer: buyer, listing: personal_listing, message_body: "Hi").call
+      get "/api/v1/conversations/#{mine.id}", headers: auth_headers_for(buyer)
+      expect(JSON.parse(response.body)["conversation"]["other_participant"]).to include("name" => "Zarmina Qadirzai")
     end
   end
 end
