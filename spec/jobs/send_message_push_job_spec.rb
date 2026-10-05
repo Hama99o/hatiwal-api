@@ -68,7 +68,7 @@ RSpec.describe SendMessagePushJob, type: :job do
     reply = create(:message, conversation: thread, user: User.support_account!, kind: :text, body: "Salaam")
 
     expect(Notifications::ExpoPushService).to receive(:deliver).with(
-      hash_including(title: "د هتیوال ملاتړ", body: "Salaam")
+      hash_including(title: "د هټیوال ملاتړ", body: "Salaam")
     ).and_return(result)
 
     described_class.perform_now(reply.id)
@@ -77,7 +77,7 @@ RSpec.describe SendMessagePushJob, type: :job do
   # The push title must read exactly like the Support name the mobile app
   # shows in the inbox, or a user sees two spellings of the brand.
   it "spells the Support push title exactly as the mobile app does, per locale" do
-    expected = { en: "Hatiwal Support", ps: "د هتیوال ملاتړ", fa: "پشتیبانی هتیوال", ur: "ہتیوال سپورٹ" }
+    expected = { en: "Hatiwal Support", ps: "د هټیوال ملاتړ", fa: "پشتیبانی هتیوال", ur: "ہتیوال سپورٹ" }
     expected.each { |locale, title| expect(I18n.t("push.support.title", locale: locale)).to eq(title) }
   end
 
