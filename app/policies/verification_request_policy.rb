@@ -7,10 +7,20 @@ class VerificationRequestPolicy < ApplicationPolicy
   def destroy? = owner? && record.requested?
 
   class Scope < ApplicationPolicy::Scope
-    def resolve = scope.where(subject: user)
+    # SHOP-1: plus the requests of the shops the user manages.
+    def resolve
+      managed = ShopMember.where(user_id: user.id, role: ShopPolicy::EDITORS).select(:shop_id)
+      scope.where(subject: user).or(scope.where(subject_type: Shop.name, subject_id: managed))
+    end
   end
 
   private
 
-  def owner? = record.subject == user && record.requested_by == user
+  # SHOP-1: for a Shop subject, "owner" = a user who manages that shop
+  # (ShopPolicy#update?: owner or manager), and it is still their request.
+  def owner?
+    return false unless record.requested_by == user
+
+    record.subject.is_a?(Shop) ? ShopPolicy.new(user, record.subject).update? : record.subject == user
+  end
 end

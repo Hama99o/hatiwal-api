@@ -21,6 +21,9 @@ class Api::V1::ListingsController < Api::V1::BaseController
     listings = policy_scope(Listing.browsable)
     listings = listings.not_hidden_for(current_user)
     listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
+    # SHOP-1 — the Bazaar "Shops" filter, and a shop page's Products tab.
+    listings = listings.from_shops if params[:seller_type] == Listing::SELLER_TYPE_SHOP
+    listings = listings.by_shop(params[:shop_id]) if params[:shop_id].present?
     listings = listings.search(params[:search]) if params[:search].present?
     listings = listings.by_category(params[:category_id]) if params[:category_id].present?
     listings = listings.by_condition(params[:condition]) if params[:condition].present?
@@ -84,6 +87,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
       :price_histories,
       :sale_transactions,
       { user: { avatar_attachment: :blob },
+        shop: { logo_attachment: :blob },
         images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
     )
 

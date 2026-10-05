@@ -28,7 +28,13 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
   ALLOWED_ADDITIONS = {
     # Support messaging. Always "listing" for every pre-existing conversation.
     "conversations[].kind" => "support messaging",
-    "conversation.kind" => "support messaging"
+    "conversation.kind" => "support messaging",
+    # SHOP-1. Always null for a listing that is not in a shop — i.e. every row
+    # an old client can meet until someone opens a shop; it ignores the key.
+    "conversations[].shop" => "SHOP-1 shop block (null = personal)",
+    "conversation.shop" => "SHOP-1 shop block (null = personal)",
+    "listings[].shop" => "SHOP-1 shop block (null = personal)",
+    "listing.shop" => "SHOP-1 shop block (null = personal)"
   }.freeze
 
   # Values are irrelevant; their JSON TYPE is the contract.

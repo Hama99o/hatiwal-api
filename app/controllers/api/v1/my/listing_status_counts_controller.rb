@@ -2,7 +2,9 @@ class Api::V1::My::ListingStatusCountsController < Api::V1::BaseController
   def show
     authorize Listing, :status_counts?
 
-    base  = current_user.listings.not_removed
+    # SHOP-1: the badges count the tab they sit on — the shop's products when
+    # selling as a shop, the personal listings as Me.
+    base  = current_user.listings_for_selling_identity.not_removed
     # One grouped query for draft/active/reserved/sold raw counts.
     raw   = base.group(:status).count
     # One extra query for the "expired" virtual bucket (active past expiry).

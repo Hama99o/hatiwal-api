@@ -73,6 +73,9 @@ class ConversationSerializer < ApplicationSerializer
     # TASK-M913: a retracted last message must not leak its content into the
     # inbox preview — suppress body, keep kind/deleted flag so the client can
     # render its own localized "Message deleted" preview text.
+    # SHOP-1 — see :detailed. The inbox row shows the shop for the buyer, and
+    # lets the seller's Chat tab tell shop chats from personal ones.
+    field(:shop) { |c| (shop = c.listing&.shop) && ShopSerializer.render_as_hash(shop, view: :card) }
     field(:last_message_body) { |c| lm = c.last_message; lm && !lm.deleted? ? lm.body : nil }
     field(:last_message_kind) { |c| c.last_message&.kind }
     field(:last_message_deleted) { |c| c.last_message&.deleted? || false }
@@ -174,6 +177,9 @@ class ConversationSerializer < ApplicationSerializer
     end
     field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
     field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, verified: s.verified, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }
+    # SHOP-1 — the chat is with a shop when its listing is: the buyer sees the
+    # shop's name and logo, and replies go out as the shop.
+    field(:shop) { |c| (shop = c.listing&.shop) && ShopSerializer.render_as_hash(shop, view: :card) }
     # The thread screen shows the *other* person (name, avatar, tap-to-profile,
     # block toggle). Mirror the :list view so the detailed payload exposes it too
     # — without this the mobile Conversation screen silently hides those controls.

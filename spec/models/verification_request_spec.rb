@@ -13,8 +13,10 @@ RSpec.describe VerificationRequest, type: :model do
     expect(build(:verification_request, :two_sided)).to be_valid
   end
 
-  it "accepts only users as subjects for now" do
-    expect(described_class::SUBJECT_TYPES).to eq([ "User" ])
+  # SHOP-1 added shops (spec/requests/api/v1/shop_verification_spec.rb).
+  it "accepts users and shops as subjects, nothing else" do
+    expect(described_class::SUBJECT_TYPES).to eq(%w[User Shop])
+    expect(build(:verification_request, subject: create(:category))).not_to be_valid
   end
 
   describe "#approve!" do

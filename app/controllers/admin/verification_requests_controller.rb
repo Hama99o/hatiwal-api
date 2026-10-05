@@ -26,7 +26,8 @@ module Admin
     def index
       @filter = FILTERS.key?(params[:status]) ? params[:status] : "waiting"
       @kind = params[:kind] == "shops" ? "shops" : "users"
-      requests = VerificationRequest.for_users.where.not(status: :cancelled)
+      # SHOP-1: the Shops tab is live.
+      requests = (@kind == "shops" ? VerificationRequest.for_shops : VerificationRequest.for_users).where.not(status: :cancelled)
       @counts = FILTERS.transform_values { |status| status ? requests.where(status: status).count : requests.count }
       status = FILTERS[@filter]
       requests = requests.where(status: status) if status
@@ -110,12 +111,13 @@ module Admin
     private
 
     def set_request
-      @verification = VerificationRequest.for_users.includes(:subject).find(params[:id])
+      @verification = VerificationRequest.includes(:subject).find(params[:id])
     end
 
     # After a decision, straight on to the next one waiting (queue flow).
     def next_waiting_path
-      following = VerificationRequest.for_users.requested.where.not(id: @verification.id).order(:created_at).first
+      following = VerificationRequest.where(subject_type: @verification.subject_type).requested
+                                     .where.not(id: @verification.id).order(:created_at).first
       following ? admin_verification_request_path(following) : admin_verification_requests_path
     end
 

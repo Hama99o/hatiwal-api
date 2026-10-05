@@ -46,12 +46,22 @@ class Api::V1::ConversationsController < Api::V1::BaseController
                     # (has_one with ORDER BY DESC) instead of the entire messages
                     # collection — far lighter than the old includes(:messages) path.
                     :latest_message,
-                    { listing: { images_attachments: { blob: { variant_records: { image_attachment: :blob } } } },
+                    { listing: { images_attachments: { blob: { variant_records: { image_attachment: :blob } } },
+                                 shop: { logo_attachment: :blob } },
                       buyer: { avatar_attachment: :blob },
                       seller: { avatar_attachment: :blob } }
                   )
     )
     conversations = conversations.where(listing_id: params[:listing_id]) if params[:listing_id].present?
+    # SHOP-1 — `shop_id=<id>`: that shop's chats (members only); `shop_id=none`:
+    # personal chats. Absent: everything, exactly as before.
+    if params[:shop_id] == "none"
+      conversations = conversations.without_shop
+    elsif params[:shop_id].present?
+      shop = Shop.find(params[:shop_id])
+      authorize shop, :member?
+      conversations = conversations.for_shop(shop.id)
+    end
 
     # Preload the current user's block relationships once (as id sets) so the
     # serializer's blocked_with_participant flag resolves in memory instead of

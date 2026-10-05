@@ -7,8 +7,9 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   throttle to: 30, within: 1.day, by: :user, only: :create
 
   def index
+    # SHOP-1: "My listings" as Me, "My shop" as a shop (User#selling_shop).
     listings = policy_scope(
-      current_user.listings
+      current_user.listings_for_selling_identity
                   .not_removed
                   .includes(
                     :category, :conversations, :price_histories,
@@ -37,6 +38,9 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   def create
     @listing = current_user.listings.new(listing_params)
+    # SHOP-1: "+ Sell" posts as whoever the user is selling as. Decided here,
+    # never by a client param, so nobody can post into a shop they have left.
+    @listing.shop = current_user.selling_shop
     authorize @listing
 
     if @listing.save

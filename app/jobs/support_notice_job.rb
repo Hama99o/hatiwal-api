@@ -19,7 +19,11 @@ class SupportNoticeJob < ApplicationJob
     user_verified: ->(user) { user.verified? },
     # VER-1: the latest decision must still be the one the message is about.
     user_verification_rejected: ->(user) { user.latest_verification_request&.rejected? },
-    user_badge_revoked: ->(user) { !user.verified? && user.latest_verification_request&.revoked? }
+    user_badge_revoked: ->(user) { !user.verified? && user.latest_verification_request&.revoked? },
+    # SHOP-1: sent to the shop's OWNER (phase 1: one shop per owner).
+    shop_verified: ->(user) { user.owned_shops.first&.verified? },
+    shop_verification_rejected: ->(user) { user.owned_shops.first&.latest_verification_request&.rejected? },
+    shop_badge_removed: ->(user) { (shop = user.owned_shops.first) && !shop.verified? && shop.latest_verification_request&.revoked? }
   }.freeze
 
   def self.enqueue(user, key)
@@ -66,6 +70,11 @@ class SupportNoticeJob < ApplicationJob
     case key
     when :user_verification_rejected, :user_badge_revoked
       { reason: user.latest_verification_request.reason_for(locale) }
+    when :shop_verified
+      { shop: user.owned_shops.first.name }
+    when :shop_verification_rejected, :shop_badge_removed
+      shop = user.owned_shops.first
+      { shop: shop.name, reason: shop.latest_verification_request.reason_for(locale) }
     else
       {}
     end

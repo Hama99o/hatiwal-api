@@ -39,6 +39,11 @@ class Conversation < ApplicationRecord
   #
   # DESC works because support is the highest kind value; the model spec pins
   # that, so adding a kind above it fails loudly instead of reordering inboxes.
+  # SHOP-1 — the Chat tab follows who you sell as: a shop's chats are the ones
+  # whose listing belongs to the shop; personal chats are the rest (including
+  # support threads, which have no listing).
+  scope :for_shop, ->(shop_id) { where(listing_id: Listing.where(shop_id: shop_id).select(:id)) }
+  scope :without_shop, -> { where(listing_id: nil).or(where(listing_id: Listing.where(shop_id: nil).select(:id))) }
   scope :support_first, -> { order(kind: :desc) }
 
   # Support threads whose latest word is the user's: they have a message from

@@ -1,0 +1,39 @@
+# SHOP-1 messages (hatiwal-mobile/docs/SHOPS.md). Own file so it never
+# collides with edits to en.yml.
+en:
+  support:
+    notices:
+      shop_verified: "Congratulations! ✅ %{shop} is now a Verified shop on Hatiwal. Buyers will see the badge on your shop and products."
+      shop_verification_rejected: "We could not verify %{shop} yet: %{reason}. You can send a new request from My shop → Get verified."
+      shop_badge_removed: "The verified badge of %{shop} was removed: %{reason}. Reply here if you have a question."
+  shops:
+    errors:
+      cannot_sell_as: "You cannot sell as this shop"
+  activerecord:
+    models:
+      shop: "Shop"
+    attributes:
+      shop:
+        name: "Shop name"
+        description: "Description"
+        category: "Category"
+        address_line: "Address"
+        latitude: "Location"
+        longitude: "Location"
+        logo: "Logo"
+        cover: "Cover photo"
+        phone: "Phone"
+        hours: "Opening hours"
+    errors:
+      models:
+        shop:
+          attributes:
+            base:
+              outside_service_area: "must be in Afghanistan, Pakistan or Iran"
+              one_shop_per_user: "You already have a shop"
+            hours:
+              malformed: "are not valid opening hours"
+        listing:
+          attributes:
+            shop:
+              not_a_member: "is not a shop you sell for"

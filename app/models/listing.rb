@@ -8,6 +8,10 @@ class Listing < ApplicationRecord
   class CorrectionBlocked < StandardError; end
 
   belongs_to :user
+  # SHOP-1 — set when posted while "selling as" a shop; nil = a personal listing.
+  belongs_to :shop, optional: true
+  # `GET /listings?seller_type=shop` — the Bazaar's "Shops" filter.
+  SELLER_TYPE_SHOP = "shop"
   belongs_to :category
   has_many_attached :images
   has_many :saved_listings, dependent: :destroy
@@ -101,6 +105,7 @@ class Listing < ApplicationRecord
   CURRENCIES = %w[AFN PKR USD EUR].freeze
   validates :currency, presence: true, inclusion: { in: CURRENCIES }
   validates :category, presence: true
+  validate :shop_must_be_sellers
 
   # Photo limits. Both clients cap their picker at 8 photos (mobile
   # PhotosSection MAX_DEFAULT, web listing-form MAX_PHOTOS); this enforces the
@@ -223,7 +228,13 @@ class Listing < ApplicationRecord
   # by an admin. THE load-bearing line of SF-B1 — the feed, search, category
   # counts, the similar-listings rail and recently-viewed all compose on top of
   # this one scope, so widening it here widens all of them at once.
-  scope :browsable,   -> { live.not_expired.not_removed.ordered }
+  # SHOP-1: a suspended (or still pending) shop disappears from search with all
+  # its products. A subquery, not a join, so every caller's count/select/distinct
+  # stays exactly as it was.
+  scope :from_visible_shops, -> { where("listings.shop_id IS NULL OR listings.shop_id IN (?)", Shop.visible.select(:id)) }
+  scope :from_shops,  -> { where.not(shop_id: nil) }
+  scope :by_shop,     ->(id) { where(shop_id: id) }
+  scope :browsable,   -> { live.not_expired.not_removed.from_visible_shops.ordered }
 
   # Explicit per-user "Not interested" dismissal — excludes listings the given
   # user has hidden from their own feed. Guests (nil user) see everything.
@@ -1103,6 +1114,13 @@ class Listing < ApplicationRecord
   end
 
   private
+
+  # SHOP-1: a listing can only sit in a shop its seller belongs to.
+  def shop_must_be_sellers
+    return if shop.nil? || shop.member?(user)
+
+    errors.add(:shop, :not_a_member)
+  end
 
   # Rounds to the nearest GRID_DEGREES. `nil` in, `nil` out: a listing without
   # coordinates must not gain a phantom point at 0,0 off the coast of Africa.

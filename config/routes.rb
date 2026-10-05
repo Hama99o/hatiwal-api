@@ -176,6 +176,11 @@ Rails.application.routes.draw do
       # Reports
       resources :reports, only: [ :create, :index ]
 
+      # SHOP-1 — shops (hatiwal-mobile/docs/SHOPS.md)
+      resources :shops, only: %i[show create update destroy] do
+        member { post :move_listings }
+      end
+
       # Reviews (double-blind, on a sold Transaction)
       resources :transactions, only: [] do
         # POST /api/v1/transactions/:transaction_id/reviews
@@ -200,6 +205,8 @@ Rails.application.routes.draw do
         post  "/me/restore",  to: "profiles#restore",   as: :restore_me
         # LOC-1 — a clue about where the user is (never their own address).
         patch "/me/location_guess", to: "location_guesses#update", as: :me_location_guess
+        # SHOP-1 — who the user sells as (null = Me).
+        patch "/me/selling_as", to: "selling_as#update", as: :me_selling_as
 
         # Saved searches — MUST be declared before the "/:id" wildcard below,
         # otherwise GET /users/saved_searches is captured as profiles#show
@@ -226,6 +233,7 @@ Rails.application.routes.draw do
 
       # Seller / owner mode
       namespace :my do
+        get "shops", to: "shops#index", as: :shops
         resources :listings do
           member do
             put :publish
