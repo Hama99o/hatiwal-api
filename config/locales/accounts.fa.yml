@@ -1,0 +1,21 @@
+# Account and upload messages that were en-only (found by spec/i18n/locale_coverage_spec.rb, 2026-10-05).
+fa:
+  accounts:
+    auto_suspended_reason: "پس از رسیدن به %{count} اخطار به‌طور خودکار تعلیق شد."
+    blocked:
+      default: "حساب شما مسدود شده است. لطفاً با پشتیبانی تماس بگیرید."
+      suspended: "حساب شما تعلیق شده است. لطفاً با پشتیبانی تماس بگیرید."
+      banned: "حساب شما به دلیل نقض قوانین جامعه مسدود شده است."
+      reason: "دلیل: %{reason}"
+  errors:
+    messages:
+      invalid_file_type: "نوع فایل پشتیبانی نمی‌شود (%{content_type})"
+      file_too_large: "بزرگ‌تر از حد %{limit} است"
+      too_many_files: "نمی‌تواند بیشتر از %{count} فایل داشته باشد"
+  activerecord:
+    errors:
+      models:
+        report:
+          attributes:
+            reportable_id:
+              already_reported: "شما قبلاً این را گزارش داده‌اید"

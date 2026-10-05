@@ -1,0 +1,21 @@
+# Account and upload messages that were en-only (found by spec/i18n/locale_coverage_spec.rb, 2026-10-05).
+ps:
+  accounts:
+    auto_suspended_reason: "د %{count} خبرتیاوو تر رسېدو وروسته په خپله وځنډول شو."
+    blocked:
+      default: "ستاسو حساب بند شوی. مهرباني وکړئ له ملاتړ سره اړیکه ونیسئ."
+      suspended: "ستاسو حساب وځنډول شو. مهرباني وکړئ له ملاتړ سره اړیکه ونیسئ."
+      banned: "ستاسو حساب د ټولنې د قواعدو د ماتولو له امله بند شو."
+      reason: "لامل: %{reason}"
+  errors:
+    messages:
+      invalid_file_type: "د دوتنې ډول یې نه منل کېږي (%{content_type})"
+      file_too_large: "له %{limit} حد څخه لویه ده"
+      too_many_files: "له %{count} دوتنو زیاتې نشي کېدای"
+  activerecord:
+    errors:
+      models:
+        report:
+          attributes:
+            reportable_id:
+              already_reported: "تاسو دا مخکې راپور کړی دی"

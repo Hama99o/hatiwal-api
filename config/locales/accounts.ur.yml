@@ -1,0 +1,21 @@
+# Account and upload messages that were en-only (found by spec/i18n/locale_coverage_spec.rb, 2026-10-05).
+ur:
+  accounts:
+    auto_suspended_reason: "%{count} انتباہات تک پہنچنے کے بعد خودکار طور پر معطل کر دیا گیا۔"
+    blocked:
+      default: "آپ کا اکاؤنٹ بلاک کر دیا گیا ہے۔ براہ کرم سپورٹ سے رابطہ کریں۔"
+      suspended: "آپ کا اکاؤنٹ معطل کر دیا گیا ہے۔ براہ کرم سپورٹ سے رابطہ کریں۔"
+      banned: "کمیونٹی کے قوانین کی خلاف ورزی کی وجہ سے آپ کا اکاؤنٹ پابندی کا شکار ہے۔"
+      reason: "وجہ: %{reason}"
+  errors:
+    messages:
+      invalid_file_type: "فائل کی قسم قابل قبول نہیں (%{content_type})"
+      file_too_large: "%{limit} کی حد سے بڑی ہے"
+      too_many_files: "%{count} سے زیادہ فائلیں نہیں ہو سکتیں"
+  activerecord:
+    errors:
+      models:
+        report:
+          attributes:
+            reportable_id:
+              already_reported: "آپ پہلے ہی اس کی رپورٹ کر چکے ہیں"
