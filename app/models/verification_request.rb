@@ -63,6 +63,10 @@ class VerificationRequest < ApplicationRecord
     User.name => { front: "document_front", back: "document_back", selfie: "selfie" },
     Shop.name => { front: "shop_front", back: "licence_or_id" }
   }.freeze
+  # A business licence number keeps its letters ("KBL-2021/0456" → "KBL20210456");
+  # a person's ID number stays digits-only, so the same Tazkira matches across
+  # users and shops (same_number_elsewhere).
+  LICENCE_NUMBER_FORMAT = /\A[0-9A-Z]{3,40}\z/
   # The shop checklist (docs/SHOPS.md, "What the admin checks").
   SHOP_CHECKLIST = %w[shop_real name_matches address_right owner_real phone_works listings_clean no_bad_history].freeze
   # ── end SHOP-1 ──
@@ -94,6 +98,9 @@ class VerificationRequest < ApplicationRecord
     validates :document_type, inclusion: { in: SHOP_DOCUMENT_TYPES }
     validates :front, :back, presence: true
     validates :phone, presence: true, length: { maximum: 30 }
+    # Optional for a shop; when given it is checked like the kind of document it is.
+    validates :document_number, format: { with: LICENCE_NUMBER_FORMAT }, allow_blank: true, if: :licence?
+    validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }, allow_blank: true, unless: :licence?
   end
   validate :subject_must_be_eligible, on: :create, if: :requested?
 
@@ -105,10 +112,20 @@ class VerificationRequest < ApplicationRecord
   # HMAC of the normalized number with its own secret: equal numbers give equal
   # digests on every account, and the digest alone reveals nothing.
   def self.digest_for(number)
-    digits = normalize_number(number)
-    return nil if digits.blank?
+    hmac(normalize_number(number))
+  end
 
-    OpenSSL::HMAC.hexdigest("SHA256", number_digest_key, digits)
+  # SHOP-1: the HMAC of an already-normalized value (a licence keeps letters,
+  # so it must not go through normalize_number's digits-only filter).
+  def self.hmac(normalized)
+    return nil if normalized.blank?
+
+    OpenSSL::HMAC.hexdigest("SHA256", number_digest_key, normalized)
+  end
+
+  # SHOP-1: a licence number → ASCII digits + upper-case letters, nothing else.
+  def self.normalize_licence(raw)
+    raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").upcase.gsub(/[^0-9A-Z]/, "")
   end
 
   # Persian/Arabic-Indic digits → ASCII; spaces, dashes and the like dropped.
@@ -238,10 +255,11 @@ class VerificationRequest < ApplicationRecord
   def normalize_document_number
     return unless will_save_change_to_document_number? && document_number.present?
 
-    digits = self.class.normalize_number(document_number)
-    self.document_number = digits
-    self.document_last4 = digits.last(4)
-    self.document_number_digest = self.class.digest_for(digits)
+    # SHOP-1: a licence keeps its letters; every ID number is digits-only.
+    normalized = licence? ? self.class.normalize_licence(document_number) : self.class.normalize_number(document_number)
+    self.document_number = normalized
+    self.document_last4 = normalized.last(4)
+    self.document_number_digest = self.class.hmac(normalized)
   end
 
   def decide!(status, admin, reason_code, reason_text, allowed, checklist: nil)

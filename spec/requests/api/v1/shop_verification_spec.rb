@@ -155,3 +155,24 @@ RSpec.describe "Admin — shop verification queue", type: :request do
     expect(request_record.subject.reload.verified?).to be(true)
   end
 end
+
+RSpec.describe VerificationRequest, "shop document numbers", type: :model do
+  it "keeps a licence number's letters, upper-cased, and digests that value" do
+    request = create(:shop_verification_request, document_number: "kbl-2021/0456")
+    expect(request.document_number).to eq("KBL20210456")
+    expect(request.document_last4).to eq("0456")
+    expect(request.document_number_digest).to eq(described_class.hmac("KBL20210456"))
+  end
+
+  it "keeps an ID number digits-only, so it matches the same ID on a person's request" do
+    shop_request = create(:shop_verification_request, document_type: :tazkira, document_number: "۱۲۳۴-۵۶۷۸۹")
+    expect(shop_request.document_number).to eq("123456789")
+    expect(shop_request.document_number_digest).to eq(described_class.digest_for("123456789"))
+  end
+
+  it "is optional for a shop, and refuses a malformed licence" do
+    shop = create(:shop, :verification_eligible)
+    expect(build(:shop_verification_request, shop: shop, document_number: nil)).to be_valid
+    expect(build(:shop_verification_request, shop: shop, document_number: "a")).not_to be_valid
+  end
+end
