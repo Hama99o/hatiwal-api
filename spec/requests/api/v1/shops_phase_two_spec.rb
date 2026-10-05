@@ -229,4 +229,28 @@ RSpec.describe "Shops phase 2", type: :request do
     end.to have_enqueued_job(SendMessagePushJob).and have_enqueued_job(BroadcastMessageJob)
     expect(response).to have_http_status(:created)
   end
+
+  describe "admin duplicate warnings (SHOP-2)" do
+    include Devise::Test::IntegrationHelpers
+
+    let(:admin) { create(:admin_user) }
+    let(:mine) { create(:shop_verification_request) }
+
+    before { sign_in admin, scope: :admin_user }
+
+    it "warns on another person's shop with the same proof file, and links the SHOP" do
+      theirs = create(:shop_verification_request, document_number: "99887766")
+      get admin_verification_request_path(mine)
+      expect(response.body).to include("verify-same-proof", admin_shop_path(theirs.subject), admin_user_path(theirs.subject.owner))
+    end
+
+    it "never flags the owner's own person request (the same e-Tazkira, by design)" do
+      owner = create(:user, :verification_eligible)
+      mine = create(:shop_verification_request, shop: create(:shop, :verification_eligible, owner: owner))
+      own_person = create(:verification_request, user: owner, document_number: mine.document_number)
+      expect(own_person.document_number_digest).to eq(mine.document_number_digest)
+      get admin_verification_request_path(mine)
+      expect(response.body).not_to include("verify-same-number")
+    end
+  end
 end

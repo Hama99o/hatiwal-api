@@ -71,14 +71,22 @@
 
   <%# Same ID number on another account (owner decision 2026-10-05). The
       applicant is never told; the admin decides. %>
-  <% if @same_number.any? %>
-    <div class="hw-callout hw-callout--danger" id="verify-same-number">
-      <% @same_number.map(&:subject).compact.uniq.each do |other| %>
+  <% { "verify-same-number" => [ @same_number, "This ID is already used by" ],
+       "verify-same-proof" => [ @same_proof, "This proof of business is already on" ] }.each do |dom_id, (matches, lead)| %>
+    <% next if matches.blank? %>
+    <div class="hw-callout hw-callout--danger" id="<%= dom_id %>">
+      <% matches.map(&:subject).compact.uniq.each do |other| %>
+        <% person = other.is_a?(Shop) ? other.owner : other %>
         <p class="hw-verify-line">
-          ⚠ This ID is already used by account
-          <%= link_to "##{other.id}", admin_user_path(other) %>
-          <% if other.respond_to?(:account_blocked?) && other.account_blocked? %><span class="hw-badge hw-badge--danger">blocked</span><% end %>
-          <% if other.respond_to?(:deleted_at) && other.deleted_at %><span class="hw-badge hw-badge--plain">deleted</span><% end %>
+          ⚠ <%= lead %>
+          <% if other.is_a?(Shop) %>
+            shop <%= link_to "##{other.id} #{other.name}", admin_shop_path(other), dir: "auto" %> (owner <%= link_to "##{person.id}", admin_user_path(person) %>)
+            <% if other.closed? || other.suspended? %><span class="hw-badge hw-badge--danger"><%= other.status %></span><% end %>
+          <% else %>
+            account <%= link_to "##{other.id}", admin_user_path(other) %>
+          <% end %>
+          <% if person.account_blocked? %><span class="hw-badge hw-badge--danger">blocked</span><% end %>
+          <% if person.deleted_at %><span class="hw-badge hw-badge--plain">deleted</span><% end %>
         </p>
       <% end %>
     </div>

@@ -44,7 +44,10 @@ module Admin
     def show
       @user = @verification.subject
       # Same ID number on another account (owner decision): flagged here only.
-      @same_number = @verification.same_number_elsewhere.limit(10).to_a
+      # SHOP-2: also the same proof file; never the applicant's own other requests.
+      duplicates = @verification.duplicates_elsewhere
+      @same_number = duplicates[:number]
+      @same_proof = duplicates[:proof]
       @history = @user.verification_requests.where.not(id: @verification.id).recent.includes(:decided_by)
       @audit = AdminAuditLog.where(target: @verification).recent.includes(:admin_user).limit(30)
     end

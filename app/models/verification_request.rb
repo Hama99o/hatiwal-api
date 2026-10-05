@@ -145,6 +145,26 @@ class VerificationRequest < ApplicationRecord
         .includes(:subject).order(created_at: :desc)
   end
 
+  # The person behind the request: the user, or the shop's owner.
+  def person = shop_subject? ? subject&.owner : subject
+
+  # SHOP-2 — the admin's duplicate warnings, without the applicant's OWN other
+  # requests (a shop owner's e-Tazkira is, rightly, also on their person
+  # request and their other shops): same ID number, or the same proof file
+  # (blob checksum) on another person's request. Shown to the admin only.
+  def duplicates_elsewhere(limit: 10)
+    mine = person&.id
+    numbers = same_number_elsewhere.limit(50).to_a
+    proofs = proof.attached? ? same_proof_elsewhere.limit(50).to_a : []
+    { number: numbers.reject { |r| r.person&.id == mine }.first(limit),
+      proof: proofs.reject { |r| r.person&.id == mine }.first(limit) }
+  end
+
+  def same_proof_elsewhere
+    self.class.joins(proof_attachment: :blob).where(active_storage_blobs: { checksum: proof.blob.checksum })
+        .where.not(id: id).includes(:subject).order(created_at: :desc)
+  end
+
   def self.daily_limit_reached?(user)
     where(requested_by: user).where(created_at: 1.day.ago..).count >= DAILY_LIMIT
   end
