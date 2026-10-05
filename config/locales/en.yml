@@ -79,3 +79,6 @@ en:
     # First message a new account receives from Hatiwal Support
     # (WelcomeSupportMessageJob).
     welcome: "Welcome to Hatiwal! 👋 This is Hatiwal Support. If you have a question, a problem or an idea, just reply here. We read every message."
+    # Ready-written Support messages (SupportNoticeJob).
+    notices:
+      user_verified: "Congratulations %{name}! ✅ Your Hatiwal account is now verified. Buyers will see the blue verified badge next to your name, so they can trust you more. Thank you for being part of Hatiwal!"

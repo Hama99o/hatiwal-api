@@ -27,3 +27,6 @@ ps:
     # First message a new account receives from Hatiwal Support
     # (WelcomeSupportMessageJob).
     welcome: "هتیوال ته ښه راغلاست! 👋 دا د هتیوال ملاتړ دی. که پوښتنه، ستونزه یا کوم نظر لرئ، همدلته یې راته ولیکئ. موږ هر پیغام لولو."
+    # Ready-written Support messages (SupportNoticeJob).
+    notices:
+      user_verified: "مبارک شه %{name}! ✅ ستاسو د هتیوال حساب اوس تایید شو. پېرودونکي به ستاسو د نوم تر څنګ آبي د تایید نښه وویني، او په تاسو به ډېر باور وکړي. مننه چې د هتیوال برخه یاست!"

@@ -25,3 +25,6 @@ fa:
     # First message a new account receives from Hatiwal Support
     # (WelcomeSupportMessageJob).
     welcome: "به هتیوال خوش آمدید! 👋 اینجا پشتیبانی هتیوال است. اگر سوال، مشکل یا پیشنهادی دارید، همین‌جا برای ما بنویسید. ما همه پیام‌ها را می‌خوانیم."
+    # Ready-written Support messages (SupportNoticeJob).
+    notices:
+      user_verified: "تبریک %{name}! ✅ حساب هتیوال شما اکنون تایید شد. خریداران نشان آبی تایید را کنار نام شما می‌بینند و بیشتر به شما اعتماد می‌کنند. سپاس که بخشی از هتیوال هستید!"

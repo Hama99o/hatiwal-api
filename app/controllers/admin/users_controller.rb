@@ -41,6 +41,16 @@ module Admin
       redirect_to [ namespace, user ], notice: notice
     end
 
+    # Administrate's update, plus the "you are verified" Support message when an
+    # admin switches the badge ON (off → on only; SupportNoticeJob re-checks it).
+    def update
+      user = requested_resource
+      was_verified = user.verified?
+      super
+      user.reload
+      SupportNoticeJob.enqueue(user, :user_verified) if !was_verified && user.verified?
+    end
+
     # Override this method to specify custom lookup behavior.
     # This will be used to set the resource for the `show`, `edit`, and `update`
     # actions.

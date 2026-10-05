@@ -181,3 +181,21 @@ Verified end to end on the dev server (2026-10-01):
 
 Not exercised: delivery of the push to a real device (the test user had no push
 token). The localized title is covered by a spec.
+
+## Ready-written notices (SupportNoticeJob)
+
+Automatic messages from Hatiwal Support when something happens to an account.
+Each goes into the person's Support thread in **their** language (`preferred_language`,
+else the default locale) with the usual broadcast + push. Added 2026-10-05.
+
+| Key | Sent when | Enqueued by |
+|---|---|---|
+| `user_verified` | An admin switches a user's **verified** badge from off to on | `Admin::UsersController#update` |
+| `shop_verified`, `shop_verification_rejected`, `shop_badge_removed` | planned, see `hatiwal-mobile/docs/SHOPS.md` | Admin shops (not built) |
+
+Rules:
+- Enqueued by the action, never by a model callback (same reason as the welcome).
+- The job re-checks the condition when it runs, so a badge switched on and straight off again sends nothing.
+- It goes through `Conversation.admin_support_thread_for`, so nothing is sent while `SUPPORT_ADMIN_INITIATE` is off.
+- A retried job does not post the same text twice within an hour.
+- Text lives under `support.notices.<key>` in en/ps/fa/ur. `%{name}` is the first name.

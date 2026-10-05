@@ -31,3 +31,6 @@ ur:
     # First message a new account receives from Hatiwal Support
     # (WelcomeSupportMessageJob).
     welcome: "ہتیوال میں خوش آمدید! 👋 یہ ہتیوال سپورٹ ہے۔ اگر آپ کا کوئی سوال، مسئلہ یا تجویز ہو تو یہیں ہمیں لکھیں۔ ہم ہر پیغام پڑھتے ہیں۔"
+    # Ready-written Support messages (SupportNoticeJob).
+    notices:
+      user_verified: "مبارک ہو %{name}! ✅ آپ کا ہتیوال اکاؤنٹ اب تصدیق شدہ ہے۔ خریدار آپ کے نام کے ساتھ نیلا تصدیقی نشان دیکھیں گے اور آپ پر زیادہ بھروسہ کریں گے۔ ہتیوال کا حصہ بننے کا شکریہ!"
