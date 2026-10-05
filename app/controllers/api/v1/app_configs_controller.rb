@@ -16,6 +16,9 @@ class Api::V1::AppConfigsController < Api::V1::BaseController
   skip_before_action :set_request_start, raise: false
   skip_after_action :update_auth_header, raise: false
   skip_after_action :record_client_version, raise: false
+  # The auth hotfix's sliding expiry reads current_user after every action;
+  # this endpoint must not touch a token at all.
+  skip_after_action :extend_session_expiry, raise: false
 
   def show
     authorize AppReleaseSetting, :show?
