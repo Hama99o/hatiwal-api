@@ -1,0 +1,23 @@
+# SHOP-3 — the team (hatiwal-mobile/docs/SHOPS.md, "Phase 3 — the team").
+en:
+  push:
+    shop_team:
+      shop_invite: '%{name} invites you to join %{shop} as Staff. Open Hatiwal to answer.'
+      shop_member_joined: '%{name} joined %{shop}.'
+      shop_membership_changed_removed: You were removed from %{shop}. You are selling as yourself again.
+      shop_membership_changed_closed: '%{shop} is closed. You are selling as yourself again.'
+  shops:
+    team:
+      errors:
+        already_member: This person is already in the shop
+        invite_expired: This invite has expired
+        invite_used: This invite was already used
+        invite_cancelled: This invite was cancelled
+        invite_wrong_account: This invite is for another account
+        cannot_invite_self: You can't invite yourself
+        shop_unavailable: This shop is not open
+        owner_cannot_leave: The owner can't leave the shop
+        not_a_member: You are not in this shop
+        forbidden: Only the shop's owner can do this
+        team_full: The team is full (20 people)
+        too_many_invites: Too many invites today. Try again tomorrow.

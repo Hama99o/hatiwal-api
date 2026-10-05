@@ -15,7 +15,8 @@ class ConversationChannel < ApplicationCable::Channel
 
   private
 
+  # The buyer, the seller, or (SHOP-3) a member of the chat's shop.
   def participant?(conversation)
-    current_user == conversation.buyer || current_user == conversation.seller
+    conversation.participant?(current_user)
   end
 end

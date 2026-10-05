@@ -2,7 +2,9 @@
 # Support account is staff and never applies. Admin decisions are not here:
 # they go through the admin session (Admin::VerificationRequestsController).
 class VerificationRequestPolicy < ApplicationPolicy
-  def show? = owner?
+  # SHOP-3: every member of a shop sees its verification card (read-only);
+  # applying and cancelling stay the owner's.
+  def show? = record.subject.is_a?(Shop) ? ShopPolicy.new(user, record.subject).member? : owner?
   def create? = owner? && !user.support_account?
   def destroy? = owner? && record.requested?
 

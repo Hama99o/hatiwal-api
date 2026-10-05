@@ -24,11 +24,27 @@ class SendMessagePushJob < ApplicationJob
     sender = message.user
 
     # Only real participant-authored messages notify. Server :system messages
-    # (authored by a system user) are skipped.
-    return unless sender && [ conversation.buyer_id, conversation.seller_id ].include?(sender.id)
+    # (authored by a system user) are skipped. SHOP-3: a shop's team are
+    # participants too.
+    return unless sender && conversation.participant?(sender)
 
-    recipient = conversation.other_participant(sender)
-    return if recipient.nil?
+    recipients(conversation, sender).each { |recipient| deliver(message, conversation, sender, recipient) }
+  end
+
+  private
+
+  # The buyer's message goes to the whole seller side (the seller and, SHOP-3,
+  # every member of the chat's shop); a seller-side message goes to the buyer.
+  def recipients(conversation, sender)
+    if conversation.buyer_id == sender.id
+      ids = conversation.seller_side_user_ids - [ sender.id ]
+      ids.size == 1 ? [ conversation.seller ] : User.where(id: ids).to_a
+    else
+      [ conversation.buyer ].compact
+    end
+  end
+
+  def deliver(message, conversation, sender, recipient)
     if recipient.push_token.blank?
       # Normally silent: plenty of users have no token. But a Support reply is
       # an admin waiting on someone, and returning quietly made "can never be
@@ -49,7 +65,7 @@ class SendMessagePushJob < ApplicationJob
       # SHOP-1: `role` and `shopId` let the app switch "Selling as" to the shop
       # the chat belongs to when the push is tapped. Additive — old apps ignore them.
       data: { type: "message", conversationId: conversation.id, messageId: message.id,
-              role: recipient.id == conversation.seller_id ? "selling" : "buying",
+              role: recipient.id == conversation.buyer_id ? "buying" : "selling",
               shopId: conversation.shop_id || conversation.listing&.shop_id }
     )
 
@@ -57,7 +73,6 @@ class SendMessagePushJob < ApplicationJob
     recipient.update_column(:push_token, nil) if result.error.to_s == "DeviceNotRegistered"
   end
 
-  private
 
   # Localized to the RECIPIENT's language since the device renders this text
   # verbatim. Text messages show their actual content (already in the sender's
@@ -77,7 +92,7 @@ class SendMessagePushJob < ApplicationJob
     # SHOP-1/2: the shop side writes AS the shop — the buyer sees the shop's
     # name, never the owner's personal one.
     shop = conversation.shop_face
-    return shop.name if shop && sender.id == conversation.seller_id
+    return shop.name if shop && conversation.written_as_shop?(sender.id)
     return sender.full_name unless sender.support_account?
 
     I18n.with_locale(recipient_locale(recipient)) { I18n.t("push.support.title") }

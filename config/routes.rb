@@ -197,6 +197,19 @@ Rails.application.routes.draw do
         member { post :move_listings }
         # SHOP-2 — "Message shop" from the shop page (no product): find-or-create.
         resources :conversations, only: %i[create], controller: "shop_conversations"
+        # SHOP-3 — the team.
+        resources :members, only: %i[index destroy], controller: "shop_members", param: :user_id
+        delete :membership, to: "shop_members#leave"
+        resources :invites, only: %i[index create destroy], controller: "shop_invites" do
+          member { post :resend }
+        end
+      end
+      # SHOP-3 — opening an invitation (the token is the only key; public GET).
+      resources :shop_invites, only: %i[show], param: :token, controller: "shop_invite_tokens" do
+        member do
+          post :accept
+          post :decline
+        end
       end
 
       # Reviews (double-blind, on a sold Transaction)

@@ -651,6 +651,21 @@ class Listing < ApplicationRecord
   # clamp mirrors `sold_with_buyer!` field-for-field: a single-item listing
   # ignores the param entirely (there is exactly one unit to hold), and a stale
   # client cannot hold more units than exist.
+  # SHOP-3 — who is doing this (the member tapping Sold or holding a unit),
+  # set by the controller; recorded on the sale as `recorded_by`.
+  attr_accessor :acting_user
+
+  # A shop sale's seller is the shop's OWNER (reviews and the shop page's
+  # rating are the owner's), whoever posted the product.
+  def sale_seller_id = shop&.owner_id || user_id
+
+  # The poster, or (SHOP-3) any member of the product's shop.
+  def manageable_by?(user)
+    return false unless user
+
+    user_id == user.id || (shop_id.present? && shop&.member?(user))
+  end
+
   def reserve_with_buyer!(buyer_id:, final_price: nil, quantity: nil)
     return nil if buyer_id.blank?
 
@@ -663,7 +678,8 @@ class Listing < ApplicationRecord
         existing
       else
         sale_transactions.create!(
-          seller_id: user_id,
+          seller_id: sale_seller_id,
+      recorded_by_id: acting_user&.id,
           buyer_id: buyer_id,
           final_price: final_price.presence || price,
           currency: currency,
@@ -1370,7 +1386,8 @@ class Listing < ApplicationRecord
   # a sale with no counterparty account).
   def create_sold_sale!(buyer_id:, final_price:, units:)
     sale_transactions.create!(
-      seller_id: user_id,
+      seller_id: sale_seller_id,
+      recorded_by_id: acting_user&.id,
       buyer_id: buyer_id,
       final_price: final_price.presence || price,
       currency: currency,

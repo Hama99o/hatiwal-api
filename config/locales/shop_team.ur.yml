@@ -1,0 +1,23 @@
+# SHOP-3 — the team (hatiwal-mobile/docs/SHOPS.md, "Phase 3 — the team").
+ur:
+  push:
+    shop_team:
+      shop_invite: '%{name} آپ کو بطور عملہ %{shop} میں شامل ہونے کی دعوت دیتے ہیں۔ جواب کے لیے ہتیوال کھولیں۔'
+      shop_member_joined: '%{name} %{shop} میں شامل ہو گئے۔'
+      shop_membership_changed_removed: آپ کو %{shop} سے ہٹا دیا گیا۔ اب آپ دوبارہ اپنے نام سے بیچ رہے ہیں۔
+      shop_membership_changed_closed: '%{shop} بند ہو گئی۔ اب آپ دوبارہ اپنے نام سے بیچ رہے ہیں۔'
+  shops:
+    team:
+      errors:
+        already_member: یہ شخص پہلے سے دکان میں ہے
+        invite_expired: اس دعوت کی مدت ختم ہو گئی
+        invite_used: یہ دعوت پہلے استعمال ہو چکی
+        invite_cancelled: یہ دعوت منسوخ کر دی گئی
+        invite_wrong_account: یہ دعوت کسی اور اکاؤنٹ کے لیے ہے
+        cannot_invite_self: آپ خود کو مدعو نہیں کر سکتے
+        shop_unavailable: یہ دکان کھلی نہیں ہے
+        owner_cannot_leave: مالک دکان نہیں چھوڑ سکتا
+        not_a_member: آپ اس دکان میں نہیں ہیں
+        forbidden: یہ کام صرف دکان کا مالک کر سکتا ہے
+        team_full: ٹیم مکمل ہے (۲۰ افراد)
+        too_many_invites: آج بہت زیادہ دعوتیں بھیجی گئیں۔ کل دوبارہ کوشش کریں۔

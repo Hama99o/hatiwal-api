@@ -15,6 +15,8 @@ class Shop < ApplicationRecord
   PAKISTAN_PROVINCES = [ "Punjab", "Sindh", "Khyber Pakhtunkhwa", "Balochistan", "Islamabad", "Gilgit-Baltistan", "Azad Kashmir" ].freeze
   TIME_FORMAT = /\A([01]\d|2[0-3]):[0-5]\d\z/
   LOGO_MAX_SIZE = 5.megabytes
+  # SHOP-3: the owner plus at most 19 staff.
+  TEAM_LIMIT = 20
   # SHOP-2 — "the same shop can't be added twice" (one owner's own shops only):
   # the same normalized name this close, or the same address in the same city
   # (within ADDRESS_NEAR_KM when a city isn't stored).
@@ -26,6 +28,9 @@ class Shop < ApplicationRecord
   belongs_to :verified_by, class_name: AdminUser.name, optional: true
 
   has_many :shop_members, dependent: :destroy
+  # SHOP-3 — the team: invitations and who changed what.
+  has_many :invites, class_name: ShopInvite.name, dependent: :destroy
+  has_many :audit_events, class_name: ShopAuditEvent.name, dependent: :destroy
   has_many :members, through: :shop_members, source: :user
   # A deleted shop's products go back to being the owner's personal listings
   # (the owner is moved to "Me" too — users.active_shop_id is nullified by FK).
@@ -81,6 +86,53 @@ class Shop < ApplicationRecord
     return false unless user
 
     shop_members.exists?(user_id: user.id)
+  end
+
+  # ── SHOP-3: the team (docs/SHOPS.md, "Phase 3 — the team") ─────────────────
+  def owner?(user) = user.present? && owner_id == user.id
+  def team_full? = shop_members.count >= TEAM_LIMIT
+
+  # The owner invites someone as Staff: a plain link (email nil) or a
+  # confirmed-email invite. Raises ShopInvite::Refused with the code to show.
+  def invite!(by:, email: nil)
+    email = email.to_s.strip.downcase.presence
+    raise ShopInvite::Refused.new(:shop_unavailable) unless active?
+    raise ShopInvite::Refused.new(:cannot_invite_self) if email && by.email.to_s.casecmp?(email)
+    raise ShopInvite::Refused.new(:already_member) if email && members.where("LOWER(users.email) = ?", email).exists?
+    raise ShopInvite::Refused.new(:team_full) if team_full?
+
+    invite = self.class.transaction do
+      self.class.lock_owner!(owner_id) # one owner's invites are counted one at a time
+      if invites.where("shop_invites.created_at > ?", 1.day.ago).count >= ShopInvite::DAILY_LIMIT
+        raise ShopInvite::Refused.new(:too_many_invites, status: :too_many_requests)
+      end
+
+      created = invites.create!(invited_by: by, email: email, role: :staff)
+      ShopAuditEvent.record!(self, :invited, actor: by, invite_id: created.id, by_email: email.present?)
+      created
+    end
+    if email && (invitee = User.find_by("LOWER(email) = ?", email)) && invitee.confirmed_at.present?
+      ShopTeamPushJob.perform_later("shop_invite", invitee.id, id, by.id)
+    end
+    invite
+  end
+
+  # The owner removes a Staff member; the owner can't be removed.
+  def remove_team_member!(user, by:)
+    member = shop_members.find_by(user_id: user.id)
+    raise ShopInvite::Refused.new(:not_a_member, status: :not_found) unless member
+    raise ShopInvite::Refused.new(:owner_cannot_leave) if member.owner?
+
+    drop_member!(member, :removed, actor: by)
+  end
+
+  # A Staff member leaves; the owner can't (transfer is "Later").
+  def leave!(user)
+    member = shop_members.find_by(user_id: user.id)
+    raise ShopInvite::Refused.new(:not_a_member, status: :forbidden) unless member
+    raise ShopInvite::Refused.new(:owner_cannot_leave) if member.owner?
+
+    drop_member!(member, :left, actor: user)
   end
 
   # The failures the shop form must name in the user's own words, as a stable
@@ -215,6 +267,11 @@ class Shop < ApplicationRecord
       cover.purge if cover.attached?
       listings.update_all(shop_id: nil, updated_at: Time.current)
       User.where(active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
+      # SHOP-3: pending invites die with the shop; each Staff member is told.
+      invites.pending.update_all(status: ShopInvite.statuses[:cancelled], decided_at: Time.current, updated_at: Time.current)
+      shop_members.staff.pluck(:user_id).each do |user_id|
+        ShopTeamPushJob.perform_later("shop_membership_changed", user_id, id, nil, "closed")
+      end
       shop_members.destroy_all # destroy, not delete: keeps the members' counters right
       update_columns(status: self.class.statuses[:closed], phone: nil, phone_public: false, address_line: nil,
                      description: nil, latitude: nil, longitude: nil, verified_at: nil, verified_by_id: nil,
@@ -236,13 +293,12 @@ class Shop < ApplicationRecord
 
   # The owner can never be removed (phase 3 will transfer ownership first).
   # Returns false for the owner row.
+  # The admin removes a member (moderation). Same effect as the owner's
+  # remove_team_member!, audited (SHOP-3) with no app actor.
   def remove_member!(member)
     return false if member.owner?
 
-    transaction do
-      member.destroy!
-      User.where(id: member.user_id, active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
-    end
+    drop_member!(member, :removed, actor: nil, by_admin: true)
     true
   end
 
@@ -364,5 +420,17 @@ class Shop < ApplicationRecord
 
   def add_owner_as_member
     shop_members.create!(user: owner, role: :owner)
+  end
+
+  # Removed or left: the person drops back to Me at once, keeps their personal
+  # account, and (removed) is told.
+  def drop_member!(member, action, actor:, **data)
+    transaction do
+      member.destroy!
+      User.where(id: member.user_id, active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
+      ShopAuditEvent.record!(self, action, actor: actor, target_user: member.user, **data)
+    end
+    ShopTeamPushJob.perform_later("shop_membership_changed", member.user_id, id, actor&.id, "removed") if action == :removed
+    member
   end
 end

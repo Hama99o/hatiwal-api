@@ -19,22 +19,27 @@ class Conversations::StartService
   def call
     return existing_conversation if existing_conversation
 
-    raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(@listing.user)
-    raise Error.new("you have been blocked by this user", code: :blocked_by) if @listing.user.blocked?(@buyer)
+    seller = chat_seller
+    raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(seller)
+    raise Error.new("you have been blocked by this user", code: :blocked_by) if seller.blocked?(@buyer)
 
     # SF-B1 — `live?`, not `active?`: a reserved listing is still on the market
     # (it is back in the feed and in search), so refusing the first message on it
     # would make the feed advertise a listing the buyer cannot reach.
     raise Error, "listing is not available" unless @listing.live?
     raise Error, "cannot start a conversation on your own listing" if @listing.user_id == @buyer.id
+    # SHOP-3: the shop's team doesn't buy from its own shop.
+    raise Error.new("you cannot message your own shop", code: :own_shop) if @listing.shop&.member?(@buyer)
     raise Error, "message cannot be blank" if @message_body.blank?
 
     message = nil
     conversation = ActiveRecord::Base.transaction do
+      # SHOP-3: a shop product's chat is with the shop, so its seller is the
+      # shop's owner whoever posted it (docs/SHOPS.md, "Phase 3 — the team").
       created = Conversation.create!(
         listing: @listing,
         buyer:   @buyer,
-        seller:  @listing.user
+        seller:  chat_seller
       )
       message = created.messages.create!(
         user: @buyer,
@@ -51,6 +56,9 @@ class Conversations::StartService
   end
 
   private
+
+  # A shop product's chat is with the shop: its seller is the shop's owner.
+  def chat_seller = @listing.shop&.owner || @listing.user
 
   def existing_conversation
     @existing_conversation ||= Conversation.find_by(listing: @listing, buyer: @buyer)

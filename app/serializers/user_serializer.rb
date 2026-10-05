@@ -101,8 +101,9 @@ class UserSerializer < ApplicationSerializer
     field(:review_count) { |u| u.review_count }
     field(:unread_message_count) do |u|
       # Exclude conversations the user has archived — archiving should silence the badge.
-      conversation_ids = Conversation.for_user(u.id).not_archived_for(u).select(:id)
-      Message.where(conversation_id: conversation_ids, read_at: nil).where.not(user_id: u.id).count
+      conversation_ids = Conversation.for_user(u).not_archived_for(u).select(:id)
+      Message.joins(:conversation).where(conversation_id: conversation_ids, read_at: nil)
+             .where(Conversation.inbound_message_sql_for(u), u: u.id).count
     end
     # Strike status so the app can show a "X of N warnings" banner from the
     # /users/me payload without an extra request.

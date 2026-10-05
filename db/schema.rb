@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_210000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_06_090100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -389,6 +389,39 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_210000) do
     t.index ["user_id"], name: "index_saved_searches_on_user_id"
   end
 
+  create_table "shop_audit_events", force: :cascade do |t|
+    t.string "action", null: false
+    t.bigint "actor_id"
+    t.datetime "created_at", null: false
+    t.jsonb "data", default: {}, null: false
+    t.bigint "shop_id", null: false
+    t.bigint "target_user_id"
+    t.index ["actor_id"], name: "index_shop_audit_events_on_actor_id"
+    t.index ["shop_id", "created_at"], name: "index_shop_audit_events_on_shop_id_and_created_at"
+    t.index ["shop_id"], name: "index_shop_audit_events_on_shop_id"
+    t.index ["target_user_id"], name: "index_shop_audit_events_on_target_user_id"
+  end
+
+  create_table "shop_invites", force: :cascade do |t|
+    t.bigint "accepted_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "decided_at"
+    t.string "email"
+    t.datetime "expires_at", null: false
+    t.bigint "invited_by_id", null: false
+    t.integer "role", default: 2, null: false
+    t.bigint "shop_id", null: false
+    t.integer "status", default: 0, null: false
+    t.string "token", null: false
+    t.datetime "updated_at", null: false
+    t.index ["accepted_by_id"], name: "index_shop_invites_on_accepted_by_id"
+    t.index ["email"], name: "index_shop_invites_on_email"
+    t.index ["invited_by_id"], name: "index_shop_invites_on_invited_by_id"
+    t.index ["shop_id", "status"], name: "index_shop_invites_on_shop_id_and_status"
+    t.index ["shop_id"], name: "index_shop_invites_on_shop_id"
+    t.index ["token"], name: "index_shop_invites_on_token", unique: true
+  end
+
   create_table "shop_members", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "invited_by_id"
@@ -435,12 +468,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_210000) do
     t.decimal "final_price", precision: 12, scale: 2, null: false
     t.bigint "listing_id", null: false
     t.integer "quantity", default: 1, null: false
+    t.bigint "recorded_by_id"
     t.bigint "seller_id", null: false
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
     t.index ["buyer_id"], name: "index_transactions_on_buyer_id"
     t.index ["listing_id"], name: "index_transactions_on_listing_id"
     t.index ["listing_id"], name: "index_transactions_on_listing_id_while_open", unique: true, where: "(status = 0)"
+    t.index ["recorded_by_id"], name: "index_transactions_on_recorded_by_id"
     t.index ["seller_id"], name: "index_transactions_on_seller_id"
     t.index ["status"], name: "index_transactions_on_status"
     t.check_constraint "quantity >= 1", name: "transactions_quantity_positive"
@@ -616,6 +651,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_210000) do
   add_foreign_key "saved_listings", "users"
   add_foreign_key "saved_searches", "categories"
   add_foreign_key "saved_searches", "users"
+  add_foreign_key "shop_audit_events", "shops", on_delete: :cascade
+  add_foreign_key "shop_audit_events", "users", column: "actor_id", on_delete: :nullify
+  add_foreign_key "shop_audit_events", "users", column: "target_user_id", on_delete: :nullify
+  add_foreign_key "shop_invites", "shops", on_delete: :cascade
+  add_foreign_key "shop_invites", "users", column: "accepted_by_id"
+  add_foreign_key "shop_invites", "users", column: "invited_by_id"
   add_foreign_key "shop_members", "shops"
   add_foreign_key "shop_members", "users"
   add_foreign_key "shop_members", "users", column: "invited_by_id"
@@ -624,6 +665,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_210000) do
   add_foreign_key "shops", "users", column: "owner_id"
   add_foreign_key "transactions", "listings"
   add_foreign_key "transactions", "users", column: "buyer_id"
+  add_foreign_key "transactions", "users", column: "recorded_by_id", on_delete: :nullify
   add_foreign_key "transactions", "users", column: "seller_id"
   add_foreign_key "user_warnings", "admin_users"
   add_foreign_key "user_warnings", "users"

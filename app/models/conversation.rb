@@ -88,8 +88,42 @@ class Conversation < ApplicationRecord
   scope :ordered, lambda {
     order(arel_table[:last_message_at].desc.nulls_last, created_at: :desc)
   }
-  scope :for_user, ->(user_id) {
-    where("buyer_id = ? OR seller_id = ?", user_id, user_id)
+  # SHOP-3 — "the seller side" of a chat: its seller, or any member of the
+  # chat's shop (its own shop for a Message-shop chat, else its listing's).
+  # Personal chats have no shop, so a team member never reaches one.
+  SELLER_SIDE_SQL = <<~SQL.squish.freeze
+    (conversations.seller_id = :u OR EXISTS (
+      SELECT 1 FROM shop_members sm
+       WHERE sm.user_id = :u
+         AND sm.shop_id = COALESCE(conversations.shop_id,
+               (SELECT l.shop_id FROM listings l WHERE l.id = conversations.listing_id))))
+  SQL
+
+  # Messages `:u` hasn't read that count as inbound: not their own, and, on
+  # the seller side of a shop chat, not a teammate's (the team shares one inbox).
+  INBOUND_MESSAGE_SQL = <<~SQL.squish.freeze
+    messages.user_id <> :u AND (conversations.buyer_id = :u OR messages.user_id NOT IN (
+      SELECT sm.user_id FROM shop_members sm
+       WHERE sm.shop_id = COALESCE(conversations.shop_id,
+               (SELECT l.shop_id FROM listings l WHERE l.id = conversations.listing_id))))
+  SQL
+
+  # A user with no shop (almost everyone) gets the plain, shop-free SQL: the
+  # team subqueries run only for members (users.shop_memberships_count, a
+  # counter column, so deciding costs nothing).
+  def self.seller_side_sql_for(user)
+    team_member?(user) ? SELLER_SIDE_SQL : "conversations.seller_id = :u"
+  end
+
+  def self.inbound_message_sql_for(user)
+    team_member?(user) ? INBOUND_MESSAGE_SQL : "messages.user_id <> :u"
+  end
+
+  # A bare id can't tell, so it gets the team-aware SQL (always correct).
+  def self.team_member?(user) = !user.is_a?(User) || user.shop_memberships_count.to_i.positive?
+
+  scope :for_user, ->(user) {
+    where("conversations.buyer_id = :u OR #{seller_side_sql_for(user)}", u: user.is_a?(User) ? user.id : user)
   }
 
   # Role-scoped views of the inbox (TASK-R517) — "conversations where I am
@@ -136,28 +170,29 @@ class Conversation < ApplicationRecord
   }
 
   scope :as_buyer_for, ->(user) { where(buyer_id: user.id) }
-  scope :as_seller_for, ->(user) { where(seller_id: user.id) }
+  scope :as_seller_for, ->(user) { where(seller_side_sql_for(user), u: user.id) }
 
   # Scopes that filter by archive state for a specific user.
   # The caller's role (buyer vs seller) determines which column to test.
+  # The seller side's columns are shared by the shop's team (SHOP-3).
   scope :not_archived_for, ->(user) {
     where(
-      "(buyer_id = ? AND buyer_archived_at IS NULL) OR (seller_id = ? AND seller_archived_at IS NULL)",
-      user.id, user.id
+      "(conversations.buyer_id = :u AND conversations.buyer_archived_at IS NULL) OR " \
+      "(#{seller_side_sql_for(user)} AND conversations.seller_archived_at IS NULL)", u: user.id
     )
   }
   scope :archived_for, ->(user) {
     where(
-      "(buyer_id = ? AND buyer_archived_at IS NOT NULL) OR (seller_id = ? AND seller_archived_at IS NOT NULL)",
-      user.id, user.id
+      "(conversations.buyer_id = :u AND conversations.buyer_archived_at IS NOT NULL) OR " \
+      "(#{seller_side_sql_for(user)} AND conversations.seller_archived_at IS NOT NULL)", u: user.id
     )
   }
 
   # Scopes that filter by soft-delete state for a specific user.
   scope :not_deleted_for, ->(user) {
     where(
-      "(buyer_id = ? AND buyer_deleted_at IS NULL) OR (seller_id = ? AND seller_deleted_at IS NULL)",
-      user.id, user.id
+      "(conversations.buyer_id = :u AND conversations.buyer_deleted_at IS NULL) OR " \
+      "(#{seller_side_sql_for(user)} AND conversations.seller_deleted_at IS NULL)", u: user.id
     )
   }
 
@@ -170,9 +205,10 @@ class Conversation < ApplicationRecord
   # When both participants have soft-deleted, the record and all messages are
   # hard-deleted so orphaned data doesn't accumulate.
   def delete_for!(user)
-    if buyer_id == user.id
+    case side_for(user)
+    when :buyer
       update_column(:buyer_deleted_at, Time.current) if buyer_deleted_at.nil?
-    elsif seller_id == user.id
+    when :seller
       update_column(:seller_deleted_at, Time.current) if seller_deleted_at.nil?
     end
 
@@ -207,7 +243,52 @@ class Conversation < ApplicationRecord
   end
 
   def participant?(user)
-    buyer_id == user.id || seller_id == user.id
+    side_for(user).present?
+  end
+
+  # :buyer, :seller (the seller or, SHOP-3, a member of the chat's shop) or nil.
+  def side_for(user)
+    return nil unless user
+    return :buyer if buyer_id == user.id
+
+    :seller if seller_side?(user)
+  end
+
+  def seller_side?(user)
+    return false unless user
+    return true if seller_id == user.id
+
+    seller_side_user_ids.include?(user.id)
+  end
+
+  # The seller plus the chat's shop team (memoized: the message serializer
+  # asks once per message of the same conversation).
+  def seller_side_user_ids
+    @seller_side_user_ids ||= begin
+      shop = chat_shop
+      [ seller_id, *(shop ? shop.shop_members.pluck(:user_id) : []) ].uniq
+    end
+  end
+
+  # A teammate wrote it as the shop (MessageSerializer, push titles).
+  def written_as_shop?(user_id) = shop_face.present? && seller_side_user_ids.include?(user_id)
+
+  # SHOP-3 — why a team member (seller side, not the seller) can't send here,
+  # or nil: a block between the buyer and the OWNER ends the chat for the whole
+  # shop; a block between the buyer and THIS member stops only them.
+  def team_block_code(user)
+    return nil unless side_for(user) == :seller && seller_id != user.id && buyer
+
+    return :blocked_by if buyer.blocked?(user) || buyer.blocked?(seller)
+    return :blocked if user.blocked?(buyer) || seller.blocked?(buyer)
+
+    nil
+  end
+
+  # What `user` hasn't read: see INBOUND_MESSAGE_SQL.
+  def inbound_messages_for(user)
+    scope = messages.where.not(user_id: user.id)
+    side_for(user) == :seller ? scope.where.not(user_id: seller_side_user_ids) : scope
   end
 
   # Returns true when this conversation is archived for the given user.
@@ -217,28 +298,25 @@ class Conversation < ApplicationRecord
 
   # Returns the archive timestamp for the given user (nil if not archived).
   def archived_at_for(user)
-    if buyer_id == user.id
-      buyer_archived_at
-    elsif seller_id == user.id
-      seller_archived_at
+    case side_for(user)
+    when :buyer then buyer_archived_at
+    when :seller then seller_archived_at
     end
   end
 
   # Sets the caller's archive column to now (idempotent).
   def archive_for!(user)
-    if buyer_id == user.id
-      update_column(:buyer_archived_at, Time.current) if buyer_archived_at.nil?
-    elsif seller_id == user.id
-      update_column(:seller_archived_at, Time.current) if seller_archived_at.nil?
+    case side_for(user)
+    when :buyer then update_column(:buyer_archived_at, Time.current) if buyer_archived_at.nil?
+    when :seller then update_column(:seller_archived_at, Time.current) if seller_archived_at.nil?
     end
   end
 
   # Clears the caller's archive column (idempotent).
   def unarchive_for!(user)
-    if buyer_id == user.id
-      update_column(:buyer_archived_at, nil) if buyer_archived_at.present?
-    elsif seller_id == user.id
-      update_column(:seller_archived_at, nil) if seller_archived_at.present?
+    case side_for(user)
+    when :buyer then update_column(:buyer_archived_at, nil) if buyer_archived_at.present?
+    when :seller then update_column(:seller_archived_at, nil) if seller_archived_at.present?
     end
   end
 
@@ -272,9 +350,10 @@ class Conversation < ApplicationRecord
   # hash via opts[:unread_counts] to avoid one COUNT query per row.
   def unread_count_for(user)
     if messages.loaded?
-      messages.count { |m| m.read_at.nil? && m.user_id != user.id }
+      own_side = side_for(user) == :seller ? seller_side_user_ids : [ user.id ]
+      messages.count { |m| m.read_at.nil? && own_side.exclude?(m.user_id) }
     else
-      messages.where(read_at: nil).where.not(user_id: user.id).count
+      inbound_messages_for(user).where(read_at: nil).count
     end
   end
 
@@ -360,10 +439,9 @@ class Conversation < ApplicationRecord
   private
 
   def deleted_at_for(user)
-    if buyer_id == user.id
-      buyer_deleted_at
-    elsif seller_id == user.id
-      seller_deleted_at
+    case side_for(user)
+    when :buyer then buyer_deleted_at
+    when :seller then seller_deleted_at
     end
   end
 

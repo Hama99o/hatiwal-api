@@ -656,8 +656,8 @@ class User < ApplicationRecord
     )
     raw = Message.joins(:conversation)
                  .joins("LEFT JOIN listings ON listings.id = conversations.listing_id")
-                 .where(conversation_id: Conversation.for_user(id).not_archived_for(self).select(:id), read_at: nil)
-                 .where.not(user_id: id)
+                 .where(conversation_id: Conversation.for_user(self).not_archived_for(self).select(:id), read_at: nil)
+                 .where(Conversation.inbound_message_sql_for(self), u: id)
                  .group(identity).count
     shops = raw.except("buying", "selling_me").transform_keys(&:to_s)
     { buying: raw.fetch("buying", 0), selling_me: raw.fetch("selling_me", 0), shops: shops }
@@ -665,9 +665,16 @@ class User < ApplicationRecord
 
   # The seller-side listings for whoever the user is selling as: the shop's
   # products, or their personal (shop-less) listings as Me.
+  # Listings this user may manage: their own, plus (SHOP-3) every product of a
+  # shop they're a member of.
+  def manageable_listings
+    Listing.where(user_id: id).or(Listing.where(shop_id: shop_members.select(:shop_id)))
+  end
+
   def listings_for_selling_identity
     shop = selling_shop
-    shop ? shop.listings.where(user_id: id) : listings.where(shop_id: nil)
+    # SHOP-3: a shop's products are every member's to manage, whoever posted them.
+    shop ? shop.listings : listings.where(shop_id: nil)
   end
 
   private

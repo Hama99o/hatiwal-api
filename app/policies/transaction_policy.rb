@@ -3,7 +3,7 @@ class TransactionPolicy < ApplicationPolicy
   # controller/scope already restricts the collection to rows where the
   # caller is the buyer or the seller.
   def index? = true
-  def show?  = user.present? && (record.buyer_id == user.id || record.seller_id == user.id)
+  def show?  = user.present? && (record.buyer_id == user.id || record.seller_id == user.id || shop_member?)
 
   # SF-B4 — correcting or voiding a recorded sale.
   #
@@ -14,14 +14,23 @@ class TransactionPolicy < ApplicationPolicy
   #   - `sold?` because a still-RESERVED row is not a sale yet; releasing a hold
   #     is `PUT /my/listings/:id/activate`, which already exists and already
   #     cancels the open transaction. Two doors to the same room would drift.
-  def update?  = user.present? && record.seller_id == user.id && record.sold?
+  # SHOP-3: a shop sale is fixed by any member of the product's shop, not only its seller (the owner).
+  def update?  = user.present? && (record.seller_id == user.id || shop_member?) && record.sold?
   def destroy? = update?
 
   class Scope < ApplicationPolicy::Scope
     def resolve
       return scope.none if user.nil?
 
-      scope.for_user(user)
+      # SHOP-3: plus the sales a member recorded for a shop.
+      scope.for_user(user).or(scope.where(recorded_by_id: user.id))
     end
+  end
+
+  private
+
+  def shop_member?
+    shop = record.listing&.shop
+    shop.present? && shop.member?(user)
   end
 end

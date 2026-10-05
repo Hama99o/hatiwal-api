@@ -19,8 +19,8 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     show_archived = ActiveModel::Type::Boolean.new.cast(params[:archived])
 
     base_scope = show_archived \
-      ? Conversation.for_user(current_user.id).not_deleted_for(current_user).archived_for(current_user) \
-      : Conversation.for_user(current_user.id).not_deleted_for(current_user).not_archived_for(current_user)
+      ? Conversation.for_user(current_user).not_deleted_for(current_user).archived_for(current_user) \
+      : Conversation.for_user(current_user).not_deleted_for(current_user).not_archived_for(current_user)
 
     base_scope = apply_role_filter(base_scope)
 
@@ -74,9 +74,10 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     # query and pass the resulting hash to the serializer so every row reads
     # from memory — no per-row COUNT queries (N+1).
     conversation_ids = conversations.map(&:id)
-    unread_counts = Message
+    # SHOP-3: a teammate's message is not inbound (Conversation::INBOUND_MESSAGE_SQL).
+    unread_counts = Message.joins(:conversation)
       .where(conversation_id: conversation_ids, read_at: nil)
-      .where.not(user_id: current_user.id)
+      .where(Conversation.inbound_message_sql_for(current_user), u: current_user.id)
       .group(:conversation_id)
       .count
 
@@ -102,9 +103,8 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def mark_read
     authorize @conversation
-    @conversation.messages
+    @conversation.inbound_messages_for(current_user)
                  .where(read_at: nil)
-                 .where.not(user_id: current_user.id)
                  .update_all(read_at: Time.current)
     head :no_content
   end
@@ -115,8 +115,7 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     # unread_count_for(current_user) > 0 again.  A single targeted UPDATE
     # avoids N+1 — we find the latest inbound message id via a subquery and
     # update only that one row.
-    latest_inbound = @conversation.messages
-                                  .where.not(user_id: current_user.id)
+    latest_inbound = @conversation.inbound_messages_for(current_user)
                                   .order(created_at: :desc)
                                   .limit(1)
     updated = Message.where(id: latest_inbound).update_all(read_at: nil)
