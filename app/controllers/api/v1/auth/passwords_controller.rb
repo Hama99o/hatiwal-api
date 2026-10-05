@@ -32,4 +32,15 @@ class Api::V1::Auth::PasswordsController < DeviseTokenAuth::PasswordsController
       render_not_found_error
     end
   end
+
+  private
+
+  # PUT /api/v1/auth/password — only the device that sent the change stays
+  # signed in (User#remove_tokens_after_password_reset). DTA's #update sets
+  # @resource and @token itself (the signed-in device, or for an email-link reset a
+  # fresh token), then calls this just before saving: the one hook between them.
+  def resource_update_method
+    @resource.password_change_client = @token&.client
+    super
+  end
 end
