@@ -21,6 +21,11 @@ module Admin
         reports_pending:   Report.where(status: :pending).count,
         reports_total:     Report.count,
         verifications_waiting: VerificationRequest.requested.count,
+        # SHOP-1
+        shops_total:       Shop.count,
+        shops_new_week:    Shop.where(created_at: 1.week.ago..).count,
+        shops_verified:    Shop.where.not(verified_at: nil).count,
+        shop_verifications_waiting: VerificationRequest.for_shops.requested.count,
         categories_total:  Category.count
       }
 

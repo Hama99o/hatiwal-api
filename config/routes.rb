@@ -57,6 +57,15 @@ Rails.application.routes.draw do
     resources :user_warnings, only: [ :index, :show ]
     # VER-1: the verification queue. `document` streams one ID photo for a
     # token that expires in 5 minutes; every view is audit-logged.
+    # SHOP-1 — shops: moderate, not edit.
+    resources :shops, only: %i[index show] do
+      member do
+        patch :suspend
+        patch :reactivate
+        post :remove_badge
+        delete "members/:member_id", action: :remove_member, as: :remove_member
+      end
+    end
     resources :verification_requests, only: %i[index show] do
       member do
         patch :approve

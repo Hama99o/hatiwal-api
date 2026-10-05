@@ -19,6 +19,9 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/users') ? 'active' : 'inactive'}" %>
   <%= link_to "Listings", admin_listings_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/listings') ? 'active' : 'inactive'}" %>
+  <%# SHOP-1 %>
+  <%= link_to "Shops", admin_shops_path, id: "nav-shops",
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/shops') ? 'active' : 'inactive'}" %>
   <%= link_to "Reports", admin_reports_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/reports') ? 'active' : 'inactive'}" %>
   <%= link_to "Messages", admin_messages_path, id: "nav-messages",

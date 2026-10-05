@@ -85,6 +85,30 @@ class Shop < ApplicationRecord
 
   def verified? = verified_at.present?
 
+  # ── Admin moderation ───────────────────────────────────────────────────────
+  # Suspended shops leave search (Listing.from_visible_shops); every member is
+  # moved back to selling as themselves at once, not on their next request.
+  def suspend!
+    transaction do
+      suspended!
+      User.where(active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
+    end
+  end
+
+  def reactivate! = active!
+
+  # The owner can never be removed (phase 3 will transfer ownership first).
+  # Returns false for the owner row.
+  def remove_member!(member)
+    return false if member.owner?
+
+    transaction do
+      member.destroy!
+      User.where(id: member.user_id, active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
+    end
+    true
+  end
+
   # ── Verification (VER-1's VerificationRequest, subject = this shop) ─────────
   def latest_verification_request
     verification_requests.where.not(status: :cancelled).order(created_at: :desc, id: :desc).first
