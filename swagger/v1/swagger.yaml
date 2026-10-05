@@ -6,6 +6,60 @@ info:
   description: Local marketplace API for Afghanistan — no online payment, meetup-based
     transactions
 paths:
+  "/api/v1/app_config":
+    get:
+      summary: which app version must run (force update / reminder)
+      tags:
+      - App
+      description: 'Public. Platform from X-App-Platform (or ?platform=), version
+        from X-App-Version (or ?version=). status: ok | soft (below latest: banner)
+        | blocked (below minimum: full-screen block). A missing or malformed version
+        is always ok. Cache-Control: public, max-age=60; Vary on both headers.'
+      parameters:
+      - name: X-App-Platform
+        in: header
+        required: false
+        enum:
+        - ios
+        - android
+        schema:
+          type: string
+        description: ":\n * `ios` \n * `android` \n "
+      - name: X-App-Version
+        in: header
+        required: false
+        example: 1.1.6
+        schema:
+          type: string
+      responses:
+        '200':
+          description: blocked below the minimum
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  platform:
+                    type: string
+                    nullable: true
+                  min_version:
+                    type: string
+                    nullable: true
+                  latest_version:
+                    type: string
+                    nullable: true
+                  store_url:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - ok
+                    - soft
+                    - blocked
+                required:
+                - platform
+                - status
   "/api/v1/listings":
     get:
       summary: browse active listings
@@ -864,6 +918,321 @@ paths:
       responses:
         '200':
           description: returns only visible reviews
+  "/api/v1/verification_requests":
+    post:
+      summary: apply for the Verified badge (multipart)
+      tags:
+      - Verification
+      description: 3 requests sent per day. Answers the status card; never a document.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: sent; the card says under review, with no document
+        '422':
+          description: a two-sided document needs its back
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                document_type:
+                  type: string
+                  enum:
+                  - e_tazkira
+                name_on_document:
+                  type: string
+                document_number:
+                  type: string
+                  pattern: "^\\d{6,20}$"
+                  description: the FULL number; kept encrypted, never returned
+                front:
+                  type: string
+                  format: binary
+                back:
+                  type: string
+                  format: binary
+                  description: the back of the e-Tazkira
+                selfie:
+                  type: string
+                  format: binary
+                  description: holding the document
+              required:
+              - document_type
+              - name_on_document
+              - document_number
+              - front
+              - back
+              - selfie
+  "/api/v1/shops/{shop_id}/conversations":
+    post:
+      summary: Message shop (a chat without a product)
+      tags:
+      - Shops
+      description: 'Find-or-create the caller''s one chat with the shop that has no
+        product. 201 when created, 200 with the same chat after. `message` is optional.
+        Refused: own shop / a shop you''re a member of (422 code own_shop), a shop
+        that isn''t open (404), a blocked pair (422).'
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: created; listing null, shop set
+        '422':
+          description: your own shop
+        '404':
+          description: a shop that isn't open
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+  "/api/v1/shops":
+    post:
+      summary: open your shop
+      tags:
+      - Shops
+      description: Only name, category and location (pin + address line) are required.
+        One shop per user (phase 1). The location must be in Afghanistan, Pakistan
+        or Iran. Live at once unless SHOP_APPROVAL_REQUIRED is on, when it starts
+        `pending`. Multipart for logo/cover; `hours` may be JSON.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: shop opened
+        '422':
+          description: outside the service area, or a second shop
+        '401':
+          description: requires authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      minLength: 2
+                      maxLength: 50
+                    description:
+                      type: string
+                      maxLength: 160
+                    category_id:
+                      type: integer
+                    latitude:
+                      type: number
+                    longitude:
+                      type: number
+                    province:
+                      type: string
+                    city:
+                      type: string
+                    address_line:
+                      type: string
+                    phone:
+                      type: string
+                    phone_public:
+                      type: boolean
+                    hours:
+                      type: object
+                      example:
+                        sat:
+                        - - '08:00'
+                          - '18:00'
+                        fri: []
+                  required:
+                  - name
+                  - category_id
+                  - latitude
+                  - longitude
+                  - address_line
+              required:
+              - shop
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                shop:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      minLength: 2
+                      maxLength: 50
+                    description:
+                      type: string
+                      maxLength: 160
+                    category_id:
+                      type: integer
+                    latitude:
+                      type: number
+                    longitude:
+                      type: number
+                    province:
+                      type: string
+                    city:
+                      type: string
+                    address_line:
+                      type: string
+                    phone:
+                      type: string
+                    phone_public:
+                      type: boolean
+                    hours:
+                      type: object
+                      example:
+                        sat:
+                        - - '08:00'
+                          - '18:00'
+                        fri: []
+                  required:
+                  - name
+                  - category_id
+                  - latitude
+                  - longitude
+                  - address_line
+              required:
+              - shop
+  "/api/v1/shops/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: a shop page (public)
+      tags:
+      - Shops
+      responses:
+        '200':
+          description: the shop; phone only when phone_public
+        '403':
+          description: a suspended shop is not public
+  "/api/v1/users/me/selling_as":
+    patch:
+      summary: choose who you sell as (null = Me)
+      tags:
+      - Shops
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: saved; me.selling_as_shop shows it
+        '422':
+          description: not a shop you are in
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop_id:
+                  type: integer
+                  nullable: true
+  "/api/v1/my/shops":
+    get:
+      summary: the shops you sell for
+      tags:
+      - Shops
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: paginated, with role and live product count
   "/api/v1/support_conversation":
     post:
       summary: open (or return) the caller's thread with Hatiwal Support
@@ -895,6 +1264,67 @@ paths:
           description: requires authentication
         '200':
           description: the caller's support thread
+  "/api/v1/users/me/location_guess":
+    patch:
+      summary: record a clue about where the signed-in user is
+      tags:
+      - Users
+      description: The area the user searched in (`search_area`) or a GPS fix the
+        app already had permission for (`gps`, at most once a day). The newest clue
+        replaces the last. Ignored (still 204) when the user has an own address or
+        the point is outside Afghanistan, Pakistan and Iran. Read the result from
+        `location` on GET /users/me. Never public.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: recorded (or ignored)
+        '422':
+          description: unknown source or missing coordinates
+        '401':
+          description: requires authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                  example: 34.3529
+                longitude:
+                  type: number
+                  example: 62.204
+                province:
+                  type: string
+                  example: Herat
+                  nullable: true
+                source:
+                  type: string
+                  enum:
+                  - listing
+                  - search_area
+                  - gps
+              required:
+              - latitude
+              - longitude
+              - source
   "/api/v1/users/me":
     put:
       summary: report push registration (token, or why there is none)
@@ -989,6 +1419,73 @@ paths:
           description: returns only that seller's sold listings (authenticated)
         '404':
           description: seller not found
+  "/api/v1/verification_requests/current":
+    get:
+      summary: the verification status card for the caller
+      tags:
+      - Verification
+      security:
+      - bearer: []
+      parameters:
+      - name: subject
+        in: query
+        required: false
+        description: me (default). shop:<id> comes with SHOP-1.
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '401':
+          description: requires authentication
+        '200':
+          description: under review, without any document
+  "/api/v1/verification_requests/{id}":
+    delete:
+      summary: cancel a waiting request (its photos are deleted at once)
+      tags:
+      - Verification
+      security:
+      - bearer: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: cancelled; the card is back to none
+        '404':
+          description: someone else's request
 servers:
 - url: https://{defaultHost}
   variables:
