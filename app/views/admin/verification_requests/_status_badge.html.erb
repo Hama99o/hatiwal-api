@@ -1,0 +1,3 @@
+<%# One status pill, same colours everywhere in the verification queue. %>
+<% tone = { "requested" => "warning", "approved" => "success", "rejected" => "danger", "revoked" => "danger", "cancelled" => "plain" }[request.status] %>
+<span class="hw-badge hw-badge--<%= tone %>"><%= request.requested? ? "waiting" : request.status %></span>

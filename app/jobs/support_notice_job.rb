@@ -16,7 +16,10 @@ class SupportNoticeJob < ApplicationJob
   # key => the condition that must STILL hold when the job runs, so a badge
   # switched on and straight off again sends nothing.
   NOTICES = {
-    user_verified: ->(user) { user.verified? }
+    user_verified: ->(user) { user.verified? },
+    # VER-1: the latest decision must still be the one the message is about.
+    user_verification_rejected: ->(user) { user.latest_verification_request&.rejected? },
+    user_badge_revoked: ->(user) { !user.verified? && user.latest_verification_request&.revoked? }
   }.freeze
 
   def self.enqueue(user, key)
@@ -52,6 +55,19 @@ class SupportNoticeJob < ApplicationJob
   def notice_text(user, key)
     locale = user.preferred_language.presence&.to_sym
     locale = I18n.default_locale unless locale && I18n.locale_available?(locale)
-    I18n.with_locale(locale) { I18n.t("support.notices.#{key}", name: user.firstname.presence || user.full_name) }
+    I18n.with_locale(locale) do
+      I18n.t("support.notices.#{key}", name: user.firstname.presence || user.full_name, **notice_params(user, key, locale))
+    end
+  end
+
+  # Extra interpolations a notice needs, e.g. the verification reason in the
+  # person's own language.
+  def notice_params(user, key, locale)
+    case key
+    when :user_verification_rejected, :user_badge_revoked
+      { reason: user.latest_verification_request.reason_for(locale) }
+    else
+      {}
+    end
   end
 end

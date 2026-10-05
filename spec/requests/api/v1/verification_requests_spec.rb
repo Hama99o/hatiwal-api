@@ -1,0 +1,212 @@
+require "swagger_helper"
+
+# VER-1: apply for the Verified badge. Documents must NEVER come back in a
+# response — not to the owner, not after sending (docs/VERIFICATION.md).
+RSpec.describe "Api::V1::VerificationRequests", type: :request do
+  let(:user)    { create(:user, :verification_eligible) }
+  let(:headers) { auth_headers_for(user) }
+  let(:image)   { Rack::Test::UploadedFile.new(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg") }
+
+  # Nothing that could fetch a file: no URL, no blob key, no signed id.
+  def expect_no_documents(body)
+    raw = body.is_a?(String) ? body : body.to_json
+    expect(raw).not_to match(%r{https?://|/rails/active_storage|blob|signed_id|"key"}i)
+    VerificationRequest.find_each do |r|
+      r.attached_files.each { |name| expect(raw).not_to include(r.public_send(name).blob.key) }
+    end
+  end
+
+  path "/api/v1/verification_requests/current" do
+    get "the verification status card for the caller" do
+      tags "Verification"
+      produces "application/json"
+      security [ { bearer: [] } ]
+      parameter name: :subject, in: :query, type: :string, required: false, description: "me (default). shop:<id> comes with SHOP-1."
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+
+      let(:subject)        { "me" }
+      let(:"access-token") { headers["access-token"] }
+      let(:client)         { headers["client"] }
+      let(:uid)            { headers["uid"] }
+
+      response "401", "requires authentication" do
+        let(:"access-token") { nil }
+        let(:client)         { nil }
+        let(:uid)            { nil }
+        run_test!
+      end
+
+      response "200", "none, with nothing missing" do
+        run_test! do |response|
+          status = response.parsed_body["verification_status"]
+          expect(status).to include("status" => "none", "missing" => [], "request" => nil)
+        end
+      end
+
+      response "200", "under review, without any document" do
+        before { create(:verification_request, :two_sided, user: user) }
+
+        run_test! do |response|
+          status = response.parsed_body["verification_status"]
+          expect(status["status"]).to eq("requested")
+          expect(status["request"]).to include("document_type" => "e_tazkira", "document_last4" => "4821", "files_count" => 3)
+          expect_no_documents(response.body)
+        end
+      end
+    end
+  end
+
+  describe "POST /api/v1/verification_requests" do
+    def apply(as: user, **attrs)
+      params = { document_type: "tazkira", name_on_document: "Umair Safi", document_last4: "4821", front: image, selfie: image }
+      post "/api/v1/verification_requests", params: { verification_request: params.merge(attrs) }, headers: auth_headers_for(as)
+    end
+
+    it "sends the request; the card says under review, with no document in it" do
+      apply
+      expect(response).to have_http_status(:created)
+      expect(response.parsed_body.dig("verification_status", "status")).to eq("requested")
+      expect(response.parsed_body.dig("verification_status", "request", "files_count")).to eq(2)
+      expect_no_documents(response.body)
+      expect(user.verification_requests.sole).to have_attributes(requested_by: user, document_last4: "4821")
+    end
+
+    it "needs the back of a two-sided document" do
+      apply(document_type: "cnic")
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "rejects a full document number (only the last 4 digits are stored)" do
+      apply(document_last4: "1234567890")
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(VerificationRequest.count).to eq(0)
+    end
+
+    it "rejects an unknown document type with a 422, not a 500" do
+      apply(document_type: "driving_licence")
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "rejects a licence (shops only)" do
+      apply(document_type: "licence")
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "requires the selfie" do
+      apply(selfie: nil)
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "allows only one open request at a time" do
+      create(:verification_request, user: user)
+      apply
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(user.verification_requests.requested.count).to eq(1)
+    end
+
+    it "refuses a user who is not eligible yet" do
+      newcomer = create(:user)
+      apply(as: newcomer)
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "refuses an already verified user" do
+      user.update!(verified: true)
+      apply
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+
+    it "is limited to 3 requests a day" do
+      h = auth_headers_for(user)
+      params = { verification_request: { document_type: "tazkira" } }
+      3.times { post "/api/v1/verification_requests", params: params, headers: h }
+      post "/api/v1/verification_requests", params: params, headers: h
+      expect(response).to have_http_status(:too_many_requests)
+    end
+
+    it "lets a rejected user apply again at once" do
+      create(:verification_request, user: user).reject!(admin: create(:admin_user), reason_code: "photo_not_clear")
+      apply
+      expect(response).to have_http_status(:created)
+    end
+  end
+
+  describe "GET /api/v1/verification_requests/current" do
+    it "lists what is missing for someone who cannot apply yet" do
+      newcomer = create(:user)
+      get "/api/v1/verification_requests/current", headers: auth_headers_for(newcomer)
+      expect(response.parsed_body.dig("verification_status", "missing")).to eq(%w[email_confirmed avatar])
+    end
+
+    it "shows the reason of a rejection in the person's language" do
+      user.update!(preferred_language: "fa")
+      create(:verification_request, user: user).reject!(admin: create(:admin_user), reason_code: "photo_not_clear")
+      get "/api/v1/verification_requests/current", headers: headers
+      status = response.parsed_body["verification_status"]
+      expect(status).to include("status" => "rejected", "reason" => I18n.t("verification.reasons.photo_not_clear", locale: :fa))
+      expect(status.dig("request", "reason_code")).to eq("photo_not_clear")
+    end
+
+    it "shows verified since the approval" do
+      create(:verification_request, user: user).approve!(admin: create(:admin_user))
+      get "/api/v1/verification_requests/current", headers: headers
+      expect(response.parsed_body.dig("verification_status", "status")).to eq("verified")
+      expect(response.parsed_body.dig("verification_status", "verified_since")).to be_present
+    end
+
+    it "refuses an unknown subject" do
+      get "/api/v1/verification_requests/current", params: { subject: "shop:1" }, headers: headers
+      expect(response).to have_http_status(:unprocessable_entity)
+    end
+  end
+
+  describe "DELETE /api/v1/verification_requests/:id" do
+    it "cancels a waiting request and deletes its files at once" do
+      request = create(:verification_request, user: user)
+      delete "/api/v1/verification_requests/#{request.id}", headers: headers
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body.dig("verification_status", "status")).to eq("none")
+      expect(request.reload).to be_cancelled
+      expect(request.files_count).to eq(0)
+    end
+
+    it "cannot cancel someone else's request" do
+      other = create(:verification_request)
+      delete "/api/v1/verification_requests/#{other.id}", headers: headers
+      expect(response).to have_http_status(:not_found)
+      expect(other.reload).to be_requested
+    end
+
+    it "cannot cancel a decided request" do
+      request = create(:verification_request, user: user)
+      request.reject!(admin: create(:admin_user), reason_code: "photo_not_clear")
+      delete "/api/v1/verification_requests/#{request.id}", headers: headers
+      expect(response).to have_http_status(:forbidden)
+    end
+  end
+
+  describe "the public Active Storage routes" do
+    it "refuse a verification document even with its signed id" do
+      request = create(:verification_request, user: user)
+      get rails_blob_path(request.front, disposition: "inline")
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "still serve an avatar" do
+      get rails_blob_path(user.avatar, disposition: "inline")
+      expect(response).to have_http_status(:redirect)
+    end
+  end
+
+  describe "changing the name on a verified account" do
+    it "takes the badge off and reopens the approved request for an admin" do
+      request = create(:verification_request, user: user)
+      request.approve!(admin: create(:admin_user))
+      put "/api/v1/users/me", params: { user: { lastname: "Different" } }, headers: headers
+      expect(user.reload).not_to be_verified
+      expect(request.reload).to be_requested
+    end
+  end
+end

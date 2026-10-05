@@ -55,6 +55,11 @@ en:
           attributes:
             reportable_id:
               already_reported: "has already been reported by you"
+        verification_request:
+          attributes:
+            subject:
+              already_verified: "is already verified"
+              not_eligible: "cannot apply yet (missing: %{missing})"
   # Attachment validation (AttachedFileValidator). The API does not switch
   # locale per request — validation errors are English and both clients display
   # the server string as-is — so these live in en.yml only, like every other
@@ -82,3 +87,16 @@ en:
     # Ready-written Support messages (SupportNoticeJob).
     notices:
       user_verified: "Congratulations %{name}! ✅ Your Hatiwal account is now verified. Buyers will see the blue verified badge next to your name, so they can trust you more. Thank you for being part of Hatiwal!"
+      user_verification_rejected: "Hello %{name}. We checked your request for the verified badge, but we could not approve it this time. Reason: %{reason}. You can try again now from your profile; it only takes 2 minutes."
+      user_badge_revoked: "Hello %{name}. We have removed the verified badge from your Hatiwal account. Reason: %{reason}. If you think this is a mistake, reply here. You can apply again from your profile."
+  # VER-1: verification decision reasons, shown to the person (Support
+  # message + status card). Keys = VerificationRequest::REJECT_REASONS + REVOKE_REASONS.
+  verification:
+    reasons:
+      photo_not_clear: "The photo is not clear"
+      name_mismatch: "The name does not match your document"
+      selfie_mismatch: "The selfie is missing or does not match the document"
+      document_not_accepted: "This document is not accepted"
+      shop_sign_not_visible: "The shop sign is not visible"
+      policy_violation: "Our rules were broken"
+      other: "Other"

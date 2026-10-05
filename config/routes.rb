@@ -55,6 +55,20 @@ Rails.application.routes.draw do
       end
     end
     resources :user_warnings, only: [ :index, :show ]
+    # VER-1: the verification queue. `document` streams one ID photo for a
+    # token that expires in 5 minutes; every view is audit-logged.
+    resources :verification_requests, only: %i[index show] do
+      member do
+        patch :approve
+        patch :reject
+        patch :revoke
+        get "document/:token", action: :document, as: :document, constraints: { token: %r{[^/]+} }
+      end
+      collection do
+        # Remove a badge that has no approved request behind it (switched on by hand).
+        post :revoke_badge
+      end
+    end
     # One place to message one person (email / in-app / both) and see every
     # send. Admin::SendMessage does the sending.
     resources :messages, only: %i[index new create show] do
@@ -169,6 +183,12 @@ Rails.application.routes.draw do
       resources :reviews, only: [ :update ]
       # GET /api/v1/users/:user_id/reviews — a user's visible reviews (public)
       get "users/:user_id/reviews", to: "reviews#index", as: :user_reviews
+
+      # VER-1: apply for the Verified badge. Responses carry the status card,
+      # never a document.
+      resources :verification_requests, only: %i[create destroy] do
+        collection { get :current }
+      end
 
       # User profiles
       namespace :users do

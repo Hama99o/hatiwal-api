@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -472,6 +472,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_120000) do
     t.index ["unlock_token"], name: "index_users_on_unlock_token", unique: true
   end
 
+  create_table "verification_requests", force: :cascade do |t|
+    t.jsonb "checklist", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "decided_at"
+    t.bigint "decided_by_id"
+    t.string "document_last4", limit: 4
+    t.integer "document_type"
+    t.datetime "files_purged_at"
+    t.string "name_on_document"
+    t.string "phone"
+    t.string "reason_code"
+    t.text "reason_text"
+    t.bigint "requested_by_id", null: false
+    t.integer "status", default: 0, null: false
+    t.bigint "subject_id", null: false
+    t.string "subject_type", null: false
+    t.datetime "updated_at", null: false
+    t.index ["decided_by_id"], name: "index_verification_requests_on_decided_by_id"
+    t.index ["requested_by_id"], name: "index_verification_requests_on_requested_by_id"
+    t.index ["status", "created_at"], name: "index_verification_requests_on_status_and_created_at"
+    t.index ["subject_type", "subject_id"], name: "index_verification_requests_on_subject"
+    t.index ["subject_type", "subject_id"], name: "index_verification_requests_one_open_per_subject", unique: true, where: "(status = 0)"
+  end
+
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "admin_audit_logs", "admin_users"
@@ -516,4 +540,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_120000) do
   add_foreign_key "transactions", "users", column: "seller_id"
   add_foreign_key "user_warnings", "admin_users"
   add_foreign_key "user_warnings", "users"
+  add_foreign_key "verification_requests", "admin_users", column: "decided_by_id"
+  add_foreign_key "verification_requests", "users", column: "requested_by_id"
 end

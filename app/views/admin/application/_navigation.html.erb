@@ -28,6 +28,12 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/support_conversations') ? 'active' : 'inactive'}" do %>
     Support<% if awaiting.positive? %> <span class="nav-badge" title="<%= pluralize(awaiting, 'conversation') %> waiting for a reply"><%= awaiting %></span><% end %>
   <% end %>
+  <%# VER-1: verification queue, with the number waiting for a decision. %>
+  <% waiting_ver = respond_to?(:waiting_verifications_count) ? waiting_verifications_count : 0 %>
+  <%= link_to admin_verification_requests_path, id: "nav-verifications",
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/verification_requests') ? 'active' : 'inactive'}" do %>
+    Verifications<% if waiting_ver.positive? %> <span class="nav-badge" title="<%= pluralize(waiting_ver, 'request') %> waiting"><%= waiting_ver %></span><% end %>
+  <% end %>
   <%= link_to "Warnings", admin_user_warnings_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/user_warnings') ? 'active' : 'inactive'}" %>
   <%= link_to "Blocks", admin_blocks_path,

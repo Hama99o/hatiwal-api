@@ -47,6 +47,39 @@ class User < ApplicationRecord
   has_many :reviews_written, class_name: Review.name, foreign_key: :reviewer_id, dependent: :destroy, inverse_of: :reviewer
   has_many :reviews_received, class_name: Review.name, foreign_key: :reviewee_id, dependent: :destroy, inverse_of: :reviewee
 
+  # ── VER-1: applying for the Verified badge (hatiwal-mobile/docs/VERIFICATION.md) ──
+  has_many :verification_requests, as: :subject, dependent: :destroy, inverse_of: :subject
+
+  # The latest application that still means something (a cancelled one does not).
+  def latest_verification_request
+    verification_requests.where.not(status: :cancelled).order(created_at: :desc, id: :desc).first
+  end
+
+  # What stops this person applying, as stable keys the clients translate.
+  # Empty = may apply.
+  def verification_missing
+    missing = []
+    missing << "email_confirmed" if confirmed_at.blank?
+    missing << "avatar" unless avatar.attached?
+    missing << "full_name" if firstname.blank? || lastname.blank?
+    missing
+  end
+
+  # A verified person who changes their name goes back under review: the badge
+  # vouches for the name. Their last approved request reopens, so an admin
+  # re-checks it against the new name. Called from the user's own profile edit,
+  # not on admin edits.
+  def reopen_verification_after_name_change!
+    return unless verified? && (saved_change_to_firstname? || saved_change_to_lastname?)
+
+    approved = verification_requests.approved.order(decided_at: :desc).first
+    transaction do
+      update!(verified: false)
+      approved&.update!(status: :requested, decided_by: nil, decided_at: nil) unless verification_requests.requested.exists?
+    end
+  end
+  # ── end VER-1 ──
+
   validates :firstname, presence: true
   validates :lastname, presence: true
   # The locales the app ships. Extracted from the validation below so the admin

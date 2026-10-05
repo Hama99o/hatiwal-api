@@ -30,3 +30,16 @@ ps:
     # Ready-written Support messages (SupportNoticeJob).
     notices:
       user_verified: "مبارک شه %{name}! ✅ ستاسو د هټیوال حساب اوس تایید شو. پېرودونکي به ستاسو د نوم تر څنګ آبي د تایید نښه وویني، او په تاسو به ډېر باور وکړي. مننه چې د هټیوال برخه یاست!"
+      user_verification_rejected: "سلام %{name}. مونږ ستاسو د تایید نښې غوښتنه وکتله، خو دا ځل مو ونه منله. لامل: %{reason}. تاسو همدا اوس له خپل پروفایل څخه بیا هڅه کولی شئ، یوازې ۲ دقیقې وخت نیسي."
+      user_badge_revoked: "سلام %{name}. مونږ ستاسو د هټیوال له حساب څخه د تایید نښه لرې کړه. لامل: %{reason}. که فکر کوئ چې دا تېروتنه ده، دلته ځواب راکړئ. تاسو له خپل پروفایل څخه بیا غوښتنه کولی شئ."
+  # VER-1: verification decision reasons, shown to the person (Support
+  # message + status card). Keys = VerificationRequest::REJECT_REASONS + REVOKE_REASONS.
+  verification:
+    reasons:
+      photo_not_clear: "انځور روښانه نه دی"
+      name_mismatch: "نوم له سند سره سمون نه خوري"
+      selfie_mismatch: "سیلفي نشته یا له سند سره سمون نه خوري"
+      document_not_accepted: "دا سند نه منل کېږي"
+      shop_sign_not_visible: "د دوکان لوحه نه ښکاري"
+      policy_violation: "زموږ قواعد مات شوي"
+      other: "بل"

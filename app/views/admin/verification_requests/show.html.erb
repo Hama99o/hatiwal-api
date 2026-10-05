@@ -1,0 +1,151 @@
+<%# VER-1 decision card. The photos load through #document with 5-minute tokens;
+    each one served is written to the audit log (shown at the bottom). %>
+<%
+  r = @verification
+  user = @user
+  names_match = r.name_on_document.to_s.squish.casecmp?(user.full_name.squish)
+  reports_count = user.reports_against.size
+  warnings_count = user.active_warnings_count
+  labels = { front: "Front", back: "Back", selfie: "Selfie with document" }
+%>
+<% content_for(:title) { "Verification — #{user.full_name}" } %>
+
+<header class="hw-page-header">
+  <div>
+    <h1 class="hw-page-header__title main-content__page-title">
+      Verification — <%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto" %>
+      <%= render "status_badge", request: r %>
+    </h1>
+    <p class="hw-page-header__subtitle">
+      user #<%= user.id %><% if user.city.present? %> · <%= user.city %><% end %> · joined <%= user.created_at.strftime("%b %Y") %> ·
+      language: <%= user.preferred_language.presence || "—" %>
+    </p>
+  </div>
+  <div class="hw-actions">
+    <%= link_to "← Queue", admin_verification_requests_path, class: "button button--alt" %>
+  </div>
+</header>
+
+<section class="hw-panel hw-panel--wide" id="verification-card">
+  <div class="hw-verify-head">
+    <% if user.avatar.attached? %>
+      <%= image_tag url_for(user.avatar), class: "hw-verify-avatar", alt: "" %>
+    <% end %>
+    <div>
+      <p class="hw-verify-line">
+        <strong><%= r.document_type ? r.document_type.humanize : "Badge switched on by hand" %></strong>
+        <% if r.document_last4 %> · ••••<%= r.document_last4 %><% end %>
+        · sent <%= time_ago_in_words(r.created_at) %> ago
+      </p>
+      <p class="hw-verify-line" dir="auto">
+        Profile name: <strong><%= user.full_name %></strong> ·
+        Name on document: <strong><%= r.name_on_document.presence || "—" %></strong>
+        <% if r.name_on_document.present? %>
+          <span class="hw-badge <%= names_match ? 'hw-badge--success' : 'hw-badge--warning' %>" id="verify-name-match"><%= names_match ? "matches ✓" : "differs" %></span>
+        <% end %>
+      </p>
+      <p class="hw-kv">
+        <span>Listings <%= user.listings.count %></span>
+        <span class="<%= 'hw-text-danger' if reports_count.positive? %>">Reports <%= reports_count %></span>
+        <span class="<%= 'hw-text-danger' if warnings_count.positive? %>">Warnings <%= warnings_count %></span>
+        <span>Email <%= user.confirmed_at ? "confirmed" : "not confirmed" %></span>
+      </p>
+    </div>
+  </div>
+
+  <% if r.files_purged_at %>
+    <p class="hw-callout" id="verify-photos-purged">Photos deleted on <%= l(r.files_purged_at.to_date) %> (they are kept <%= VerificationRequest::FILES_KEPT_FOR.inspect %> after the decision). The decision and checklist stay.</p>
+  <% elsif r.attached_files.any? %>
+    <div class="hw-verify-photos" id="verify-photos">
+      <% r.attached_files.each do |name| %>
+        <% src = document_admin_verification_request_path(r, token: r.document_token(name)) %>
+        <figure class="hw-verify-photo">
+          <%= link_to src, target: "_blank", rel: "noopener noreferrer", title: "Open full size" do %>
+            <img src="<%= src %>" alt="<%= labels[name] %>" loading="lazy" referrerpolicy="no-referrer">
+          <% end %>
+          <figcaption><%= labels[name] %></figcaption>
+        </figure>
+      <% end %>
+    </div>
+    <p class="hw-panel__text hw-panel__text--muted">Links expire after <%= VerificationRequest::DOCUMENT_URL_TTL.inspect %>; reload the page for fresh ones. Every photo opened is logged.</p>
+  <% end %>
+
+  <% if r.requested? %>
+    <%= form_with url: approve_admin_verification_request_path(r), method: :patch, data: { turbo: false }, id: "verification-decision" do |f| %>
+      <fieldset class="hw-checks hw-verify-checks">
+        <legend>Checklist (saved with the decision)</legend>
+        <% { "photo_clear" => "Photos clear, nothing cropped", "name_matches" => "Name matches the document",
+             "selfie_matches" => "Selfie = document face", "no_bad_history" => "No bad history" }.each do |key, label| %>
+          <label class="hw-check"><%= check_box_tag "checklist[#{key}]", "1", false, id: "checklist-#{key}" %> <%= label %></label>
+        <% end %>
+      </fieldset>
+      <div class="hw-verify-actions">
+        <div class="hw-form-row">
+          <%= select_tag :reason_code,
+                options_for_select(VerificationRequest::REJECT_REASONS.excluding("shop_sign_not_visible").map { |c| [ I18n.t("verification.reasons.#{c}", locale: :en), c ] }),
+                prompt: "Reject because…", class: "hw-select", id: "verify-reason" %>
+          <%= text_field_tag :reason_text, nil, placeholder: "Only for “Other”: sent as typed", class: "hw-input", dir: "auto" %>
+          <%= button_tag "Reject", type: "submit", formaction: reject_admin_verification_request_path(r), id: "verify-reject",
+                class: "button button--danger", data: { confirm: "Reject this request? #{user.full_name} gets the reason in their language." } %>
+        </div>
+        <%= button_tag "Approve ✓", type: "submit", id: "verify-approve", class: "button",
+              data: { confirm: "Give #{user.full_name} the Verified badge?" } %>
+      </div>
+    <% end %>
+  <% else %>
+    <p class="hw-verify-line" id="verify-decision">
+      <%= r.status.humanize %><% if r.decided_at %> on <%= l(r.decided_at, format: :short) %><% end %>
+      by <%= r.decided_by&.to_s || "—" %><% if r.reason_code %> · reason: <em dir="auto"><%= r.reason_for(:en) %></em><% end %>
+    </p>
+    <% if r.checklist.present? %>
+      <p class="hw-kv"><% r.checklist.each do |key, ticked| %><span><%= ticked ? "☑" : "☐" %> <%= key.humanize %></span><% end %></p>
+    <% end %>
+    <% if r.approved? && user.verified? %>
+      <h3 class="hw-panel__title hw-gap-top">Revoke the badge</h3>
+      <%= render "reason_form", url: revoke_admin_verification_request_path(r), reasons: VerificationRequest::REVOKE_REASONS,
+                 submit: "Revoke", confirm: "Remove the Verified badge from #{user.full_name}?" %>
+    <% end %>
+  <% end %>
+</section>
+
+<div class="hw-panels">
+  <section class="hw-panel" id="verification-history">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Earlier requests (<%= @history.size %>)</h2></div>
+    <% if @history.any? %>
+      <table class="hw-table">
+        <tbody>
+          <% @history.each do |h| %>
+            <tr>
+              <td><%= link_to "##{h.id}", admin_verification_request_path(h) %></td>
+              <td><%= render "status_badge", request: h %></td>
+              <td class="hw-nowrap hw-text-muted"><%= l(h.created_at.to_date) %></td>
+              <td dir="auto"><%= h.reason_code ? h.reason_for(:en) : "" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% else %>
+      <p class="hw-empty">First request.</p>
+    <% end %>
+  </section>
+
+  <section class="hw-panel" id="verification-audit">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Who did what</h2></div>
+    <% if @audit.any? %>
+      <table class="hw-table">
+        <tbody>
+          <% @audit.each do |log| %>
+            <tr>
+              <td class="hw-nowrap hw-text-muted"><%= l(log.created_at, format: :short) %></td>
+              <td><%= log.admin_label %></td>
+              <td><%= log.action.delete_prefix("verification_").humanize %></td>
+              <td class="hw-text-muted" dir="auto"><%= log.details %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% else %>
+      <p class="hw-empty">Nothing yet.</p>
+    <% end %>
+  </section>
+</div>

@@ -22,3 +22,6 @@ production:
   reveal_overdue_reviews:
     class: RevealOverdueReviewsJob
     schedule: every day at 5am
+  purge_verification_files:
+    class: PurgeVerificationFilesJob
+    schedule: every day at 2am

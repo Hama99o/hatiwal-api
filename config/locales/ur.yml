@@ -34,3 +34,16 @@ ur:
     # Ready-written Support messages (SupportNoticeJob).
     notices:
       user_verified: "مبارک ہو %{name}! ✅ آپ کا ہتیوال اکاؤنٹ اب تصدیق شدہ ہے۔ خریدار آپ کے نام کے ساتھ نیلا تصدیقی نشان دیکھیں گے اور آپ پر زیادہ بھروسہ کریں گے۔ ہتیوال کا حصہ بننے کا شکریہ!"
+      user_verification_rejected: "السلام علیکم %{name}۔ ہم نے تصدیقی نشان کے لیے آپ کی درخواست دیکھی، لیکن اس بار اسے منظور نہیں کر سکے۔ وجہ: %{reason}۔ آپ ابھی اپنی پروفائل سے دوبارہ کوشش کر سکتے ہیں؛ صرف ۲ منٹ لگتے ہیں۔"
+      user_badge_revoked: "السلام علیکم %{name}۔ ہم نے آپ کے ہتیوال اکاؤنٹ سے تصدیقی نشان ہٹا دیا ہے۔ وجہ: %{reason}۔ اگر آپ کو لگتا ہے کہ یہ غلطی ہے تو یہاں جواب دیں۔ آپ اپنی پروفائل سے دوبارہ درخواست دے سکتے ہیں۔"
+  # VER-1: verification decision reasons, shown to the person (Support
+  # message + status card). Keys = VerificationRequest::REJECT_REASONS + REVOKE_REASONS.
+  verification:
+    reasons:
+      photo_not_clear: "تصویر واضح نہیں ہے"
+      name_mismatch: "نام آپ کی دستاویز سے میل نہیں کھاتا"
+      selfie_mismatch: "سیلفی موجود نہیں یا دستاویز سے میل نہیں کھاتی"
+      document_not_accepted: "یہ دستاویز قبول نہیں ہے"
+      shop_sign_not_visible: "دکان کا بورڈ نظر نہیں آ رہا"
+      policy_violation: "ہمارے قواعد کی خلاف ورزی ہوئی"
+      other: "دیگر"

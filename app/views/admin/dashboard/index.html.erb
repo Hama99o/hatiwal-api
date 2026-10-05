@@ -37,7 +37,7 @@
 
 <%# Needs attention: the things to act on, before any number. Each item only
     appears when it is true, and links to where it is dealt with. %>
-<% if @stats[:reports_pending].positive? || dead_platforms.any? %>
+<% if @stats[:reports_pending].positive? || @stats[:verifications_waiting].positive? || dead_platforms.any? %>
   <div class="hw-alerts" id="attention">
     <% if @stats[:reports_pending].positive? %>
       <div class="hw-alert hw-alert--warning">
@@ -46,6 +46,15 @@
           <span class="hw-alert__title"><%= pluralize(@stats[:reports_pending], "report") %> waiting for review.</span>
         </div>
         <%= link_to "Review", admin_reports_path %>
+      </div>
+    <% end %>
+    <% if @stats[:verifications_waiting].positive? %>
+      <div class="hw-alert hw-alert--warning" id="attention-verifications">
+        <span class="hw-alert__dot"></span>
+        <div class="hw-alert__body">
+          <span class="hw-alert__title"><%= pluralize(@stats[:verifications_waiting], "verification request") %> waiting for a decision.</span>
+        </div>
+        <%= link_to "Review", admin_verification_requests_path %>
       </div>
     <% end %>
     <% dead_platforms.each do |platform, r| %>

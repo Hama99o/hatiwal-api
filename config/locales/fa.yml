@@ -28,3 +28,16 @@ fa:
     # Ready-written Support messages (SupportNoticeJob).
     notices:
       user_verified: "تبریک %{name}! ✅ حساب هتیوال شما اکنون تایید شد. خریداران نشان آبی تایید را کنار نام شما می‌بینند و بیشتر به شما اعتماد می‌کنند. سپاس که بخشی از هتیوال هستید!"
+      user_verification_rejected: "سلام %{name}. درخواست نشان تایید شما را بررسی کردیم، اما این بار نتوانستیم آن را تایید کنیم. دلیل: %{reason}. همین حالا می‌توانید از پروفایل خود دوباره تلاش کنید؛ فقط ۲ دقیقه وقت می‌گیرد."
+      user_badge_revoked: "سلام %{name}. نشان تایید را از حساب هتیوال شما برداشتیم. دلیل: %{reason}. اگر فکر می‌کنید اشتباه شده، همین‌جا پاسخ دهید. می‌توانید از پروفایل خود دوباره درخواست دهید."
+  # VER-1: verification decision reasons, shown to the person (Support
+  # message + status card). Keys = VerificationRequest::REJECT_REASONS + REVOKE_REASONS.
+  verification:
+    reasons:
+      photo_not_clear: "عکس واضح نیست"
+      name_mismatch: "نام با سند شما مطابقت ندارد"
+      selfie_mismatch: "سلفی وجود ندارد یا با سند مطابقت ندارد"
+      document_not_accepted: "این سند پذیرفته نمی‌شود"
+      shop_sign_not_visible: "تابلوی دکان دیده نمی‌شود"
+      policy_violation: "قوانین ما رعایت نشده"
+      other: "دیگر"

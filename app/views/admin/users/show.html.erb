@@ -20,6 +20,7 @@
   <span class="hw-badges">
     <span class="hw-badge <%= user.account_blocked? ? 'hw-badge--danger' : 'hw-badge--success' %>"><%= user.status.to_s.humanize %></span>
     <% if user.verified? %><span class="hw-badge hw-badge--brand">Verified</span><% end %>
+    <% if user.verification_requests.requested.exists? %><span class="hw-badge hw-badge--warning">Verification waiting</span><% end %>
     <% if user.seller_mode? %><span class="hw-badge hw-badge--gold">Seller</span><% end %>
     <% if active_count.positive? %><span class="hw-badge hw-badge--warning"><%= active_count %>/<%= threshold %> warnings</span><% end %>
     <% if reports.any? %><span class="hw-badge hw-badge--warning"><%= pluralize(reports.size, "report") %></span><% end %>
@@ -60,6 +61,29 @@
         </table>
       </div>
       <%= link_to "All messages →", admin_messages_path, class: "hw-link" %>
+    <% end %>
+  </section>
+
+  <%# VER-1: the Verified badge and the requests behind it. %>
+  <% ver_status = VerificationStatus.new(user) %>
+  <% ver_requests = user.verification_requests.where.not(status: :cancelled).recent.limit(5) %>
+  <section id="user-verification" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Verification — <%= ver_status.state.humanize %></h2></div>
+    <% if ver_requests.any? %>
+      <ul class="hw-list">
+        <% ver_requests.each do |vr| %>
+          <li><%= link_to "##{vr.id}", admin_verification_request_path(vr) %> <%= render "admin/verification_requests/status_badge", request: vr %>
+            <span class="hw-text-muted"><%= l(vr.created_at.to_date) %><%= " · #{vr.reason_for(:en)}" if vr.reason_code %></span></li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="hw-empty">Never applied<%= " (missing: #{user.verification_missing.join(', ')})" if user.verification_missing.any? && !user.verified? %>.</p>
+    <% end %>
+    <% if user.verified? && !user.support_account? %>
+      <p class="hw-panel__text hw-panel__text--muted">Remove the badge, with a reason sent to them in their language.</p>
+      <%= render "admin/verification_requests/reason_form", url: revoke_badge_admin_verification_requests_path(user_id: user.id),
+                 reasons: VerificationRequest::REVOKE_REASONS, submit: "Revoke badge", form_id: "revoke-badge",
+                 confirm: "Remove the Verified badge from #{user.full_name}?", method: :post %>
     <% end %>
   </section>
 

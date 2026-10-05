@@ -20,6 +20,7 @@ module Admin
         listings_draft:    Listing.where(status: :draft).count,
         reports_pending:   Report.where(status: :pending).count,
         reports_total:     Report.count,
+        verifications_waiting: VerificationRequest.requested.count,
         categories_total:  Category.count
       }
 

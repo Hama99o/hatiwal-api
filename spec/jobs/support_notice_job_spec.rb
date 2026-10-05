@@ -65,4 +65,40 @@ RSpec.describe SupportNoticeJob, type: :job do
   it "refuses an unknown notice key" do
     expect { described_class.enqueue(create(:user), :nope) }.to raise_error(ArgumentError)
   end
+
+  describe "VER-1 decisions" do
+    let(:admin) { create(:admin_user) }
+
+    it "tells a rejected user the reason, in their language" do
+      request = create(:verification_request, user: create(:user, :verification_eligible, firstname: "Gul", preferred_language: "fa"))
+      request.reject!(admin: admin, reason_code: "name_mismatch")
+
+      described_class.perform_now(request.subject_id, "user_verification_rejected")
+
+      body = notices_for(request.subject).sole.body
+      expect(body).to include(I18n.t("verification.reasons.name_mismatch", locale: :fa))
+      expect(body).to eq(I18n.t("support.notices.user_verification_rejected", locale: :fa, name: "Gul",
+                                                                                reason: I18n.t("verification.reasons.name_mismatch", locale: :fa)))
+    end
+
+    it "tells a user their badge was removed, with the reason" do
+      request = create(:verification_request)
+      request.approve!(admin: admin)
+      request.revoke!(admin: admin, reason_code: "other", reason_text: "Fake shop")
+
+      described_class.perform_now(request.subject_id, "user_badge_revoked")
+
+      expect(notices_for(request.subject).sole.body).to include("Fake shop")
+    end
+
+    it "sends no rejection once the person has applied again" do
+      user = create(:user, :verification_eligible)
+      create(:verification_request, user: user).reject!(admin: admin, reason_code: "photo_not_clear")
+      create(:verification_request, user: user)
+
+      described_class.perform_now(user.id, "user_verification_rejected")
+
+      expect(notices_for(user)).to be_empty
+    end
+  end
 end

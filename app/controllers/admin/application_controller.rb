@@ -15,7 +15,7 @@ module Admin
     protect_from_forgery with: :exception
 
     before_action :authenticate_admin_user!
-    helper_method :support_awaiting_reply_count
+    helper_method :support_awaiting_reply_count, :waiting_verifications_count
 
 
     private
@@ -49,6 +49,11 @@ module Admin
     # so a new message gets noticed without anyone opening the inbox.
     def support_awaiting_reply_count
       @support_awaiting_reply_count ||= Conversation.awaiting_support_reply.count
+    end
+
+    # Navigation badge: VER-1 verification requests waiting for a decision.
+    def waiting_verifications_count
+      @waiting_verifications_count ||= VerificationRequest.requested.count
     end
 
     # Record a moderation action for accountability. Failures here must never
