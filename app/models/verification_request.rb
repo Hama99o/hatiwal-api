@@ -12,7 +12,11 @@
 #     expires in DOCUMENT_URL_TTL.
 #   * purged FILES_KEPT_FOR after the decision (PurgeVerificationFilesJob);
 #     the decision, reason and checklist stay.
-#   * only the last 4 digits of the document number are stored.
+#   * the FULL document number is kept, encrypted (owner decision 2026-10-05):
+#     `document_number` (Active Record Encryption, non-deterministic; keys in
+#     config/initializers/active_record_encryption.rb) + `document_number_digest`
+#     (HMAC-SHA256, indexed) to spot the same ID on another account. Never in
+#     an API response or a log; apps show ••••document_last4.
 class VerificationRequest < ApplicationRecord
   SUBJECT_TYPES = [ User.name ].freeze
   FILES_KEPT_FOR = 90.days
@@ -21,6 +25,9 @@ class VerificationRequest < ApplicationRecord
   MAX_FILE_SIZE = 10.megabytes
   # Spec: 3 requests a day. Counts requests actually sent, not failed uploads.
   DAILY_LIMIT = 3
+  # A document number: digits only, a sensible length. No invented official
+  # formats (owner: "if unsure, accept 6–20 digits").
+  DOCUMENT_NUMBER_FORMAT = /\A\d{6,20}\z/
   FILES = %i[front back selfie].freeze
 
   # Preset rejection reasons, each translated for the person under
@@ -49,6 +56,9 @@ class VerificationRequest < ApplicationRecord
   has_one_attached :back
   has_one_attached :selfie
 
+  encrypts :document_number
+  before_validation :normalize_document_number
+
   validates :subject_type, inclusion: { in: SUBJECT_TYPES }
   validates :reason_code, inclusion: { in: REJECT_REASONS + REVOKE_REASONS }, allow_nil: true
   FILES.each do |name|
@@ -60,7 +70,7 @@ class VerificationRequest < ApplicationRecord
   with_options on: :create, if: :requested? do
     validates :document_type, inclusion: { in: USER_DOCUMENT_TYPES }
     validates :name_on_document, presence: true, length: { maximum: 120 }
-    validates :document_last4, format: { with: /\A\d{4}\z/ }
+    validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }
     validates :front, :selfie, presence: true
     validates :back, presence: true, if: :two_sided?
     validate :subject_must_be_eligible
@@ -69,6 +79,40 @@ class VerificationRequest < ApplicationRecord
   scope :recent, -> { order(created_at: :desc) }
   scope :for_users, -> { where(subject_type: User.name) }
   scope :purgeable, -> { where(files_purged_at: nil).where(decided_at: ...FILES_KEPT_FOR.ago) }
+
+  # HMAC of the normalized number with its own secret: equal numbers give equal
+  # digests on every account, and the digest alone reveals nothing.
+  def self.digest_for(number)
+    digits = normalize_number(number)
+    return nil if digits.blank?
+
+    OpenSSL::HMAC.hexdigest("SHA256", number_digest_key, digits)
+  end
+
+  # Persian/Arabic-Indic digits → ASCII; spaces, dashes and the like dropped.
+  def self.normalize_number(raw)
+    raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").gsub(/\D/, "")
+  end
+
+  # credentials.verification.number_hmac_key or ENV in production; derived from
+  # secret_key_base elsewhere (never committed).
+  def self.number_digest_key
+    key = Rails.application.credentials.dig(:verification, :number_hmac_key) || ENV["VERIFICATION_NUMBER_HMAC_KEY"]
+    return key if key.present?
+    raise "VERIFICATION_NUMBER_HMAC_KEY is not set" if Rails.env.production?
+
+    Rails.application.key_generator.generate_key("verification/number_digest", 32)
+  end
+
+  # Other accounts' requests with the same ID number (any status, deleted or
+  # banned accounts included). For the admin only; the applicant is never told.
+  def same_number_elsewhere
+    return self.class.none if document_number_digest.blank?
+
+    self.class.where(document_number_digest: document_number_digest)
+        .where.not(subject_type: subject_type, subject_id: subject_id)
+        .includes(:subject).order(created_at: :desc)
+  end
 
   def self.daily_limit_reached?(user)
     where(requested_by: user).where(created_at: 1.day.ago..).count >= DAILY_LIMIT
@@ -159,6 +203,15 @@ class VerificationRequest < ApplicationRecord
   end
 
   private
+
+  def normalize_document_number
+    return unless will_save_change_to_document_number? && document_number.present?
+
+    digits = self.class.normalize_number(document_number)
+    self.document_number = digits
+    self.document_last4 = digits.last(4)
+    self.document_number_digest = self.class.digest_for(digits)
+  end
 
   def decide!(status, admin, reason_code, reason_text, allowed, checklist: nil)
     code = reason_code.to_s

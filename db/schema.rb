@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -479,6 +479,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_160000) do
     t.datetime "decided_at"
     t.bigint "decided_by_id"
     t.string "document_last4", limit: 4
+    t.text "document_number"
+    t.string "document_number_digest"
     t.integer "document_type"
     t.datetime "files_purged_at"
     t.string "name_on_document"
@@ -492,6 +494,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_160000) do
     t.datetime "updated_at", null: false
     t.index ["decided_at"], name: "index_verification_requests_purgeable", where: "((files_purged_at IS NULL) AND (decided_at IS NOT NULL))"
     t.index ["decided_by_id"], name: "index_verification_requests_on_decided_by_id"
+    t.index ["document_number_digest"], name: "index_verification_requests_on_document_number_digest"
     t.index ["requested_by_id"], name: "index_verification_requests_on_requested_by_id"
     t.index ["status", "created_at"], name: "index_verification_requests_on_status_and_created_at"
     t.index ["subject_type", "subject_id"], name: "index_verification_requests_on_subject"

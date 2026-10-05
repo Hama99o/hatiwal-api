@@ -9,7 +9,7 @@ FactoryBot.define do
     status { :requested }
     document_type { :tazkira }
     name_on_document { user.full_name }
-    document_last4 { "4821" }
+    document_number { "1234564821" }
 
     after(:build) do |request|
       %i[front selfie].each do |name|

@@ -62,6 +62,8 @@ Rails.application.routes.draw do
         patch :approve
         patch :reject
         patch :revoke
+        # Reveal the full ID number for this request only (audit-logged, no-store).
+        post :reveal_number
         get "document/:token", action: :document, as: :document, constraints: { token: %r{[^/]+} }
       end
       collection do

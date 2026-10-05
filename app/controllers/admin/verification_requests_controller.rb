@@ -21,7 +21,7 @@ module Admin
       "all" => nil
     }.freeze
 
-    before_action :set_request, only: %i[show approve reject revoke document]
+    before_action :set_request, only: %i[show approve reject revoke document reveal_number]
 
     def index
       @filter = FILTERS.key?(params[:status]) ? params[:status] : "waiting"
@@ -37,6 +37,8 @@ module Admin
 
     def show
       @user = @verification.subject
+      # Same ID number on another account (owner decision): flagged here only.
+      @same_number = @verification.same_number_elsewhere.limit(10).to_a
       @history = @user.verification_requests.where.not(id: @verification.id).recent.includes(:decided_by)
       @audit = AdminAuditLog.where(target: @verification).recent.includes(:admin_user).limit(30)
     end
@@ -78,6 +80,16 @@ module Admin
       redirect_to admin_user_path(user), notice: "Badge removed. #{user.full_name} gets a message with the reason."
     rescue ArgumentError => e
       redirect_to admin_user_path(user), alert: e.message
+    end
+
+    # POST /admin/verification_requests/:id/reveal_number — the full ID number,
+    # for this request only. Logged first; never cached.
+    def reveal_number
+      AdminAuditLog.record!(admin_user: current_admin_user, action: "verification_number_view", target: @verification)
+      response.headers["Cache-Control"] = "no-store, private"
+      @revealed_number = @verification.document_number
+      show
+      render :show
     end
 
     # GET /admin/verification_requests/:id/document/:token — one ID photo.

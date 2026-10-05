@@ -34,7 +34,15 @@
     <div>
       <p class="hw-verify-line">
         <strong><%= r.document_type ? r.document_type.humanize : "Badge switched on by hand" %></strong>
-        <% if r.document_last4 %> · ••••<%= r.document_last4 %><% end %>
+        <% if @revealed_number %>
+          · <code id="verify-number-revealed"><%= @revealed_number %></code>
+        <% elsif r.document_last4 %>
+          · ••••<%= r.document_last4 %>
+          <% if r.document_number.present? %>
+            <%= button_to "Show number", reveal_number_admin_verification_request_path(r), method: :post, form: { style: "display:inline" },
+                  data: { turbo: false }, class: "button button--alt button--nav", id: "verify-show-number" %>
+          <% end %>
+        <% end %>
         · sent <%= time_ago_in_words(r.created_at) %> ago
       </p>
       <p class="hw-verify-line" dir="auto">
@@ -52,6 +60,21 @@
       </p>
     </div>
   </div>
+
+  <%# Same ID number on another account (owner decision 2026-10-05). The
+      applicant is never told; the admin decides. %>
+  <% if @same_number.any? %>
+    <div class="hw-callout hw-callout--danger" id="verify-same-number">
+      <% @same_number.map(&:subject).compact.uniq.each do |other| %>
+        <p class="hw-verify-line">
+          ⚠ This ID is already used by account
+          <%= link_to "##{other.id}", admin_user_path(other) %>
+          <% if other.respond_to?(:account_blocked?) && other.account_blocked? %><span class="hw-badge hw-badge--danger">blocked</span><% end %>
+          <% if other.respond_to?(:deleted_at) && other.deleted_at %><span class="hw-badge hw-badge--plain">deleted</span><% end %>
+        </p>
+      <% end %>
+    </div>
+  <% end %>
 
   <% if r.files_purged_at %>
     <p class="hw-callout" id="verify-photos-purged">Photos deleted on <%= l(r.files_purged_at.to_date) %> (they are kept <%= VerificationRequest::FILES_KEPT_FOR.inspect %> after the decision). The decision and checklist stay.</p>

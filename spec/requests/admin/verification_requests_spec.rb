@@ -119,4 +119,24 @@ RSpec.describe "Admin verification queue", type: :request do
     get admin_root_path
     expect(response.body).to include("attention-verifications", "1 verification request waiting")
   end
+
+  describe "the ID number" do
+    it "shows ••••last4, and the full number only on Show number, logged and not cached" do
+      get admin_verification_request_path(request_record)
+      expect(response.body).to include("••••4821")
+      expect(response.body).not_to include("1234564821")
+
+      expect { post reveal_number_admin_verification_request_path(request_record) }
+        .to change { AdminAuditLog.where(action: "verification_number_view", target: request_record, admin_user: admin).count }.by(1)
+      expect(response.body).to include("1234564821")
+      expect(response.headers["Cache-Control"]).to include("no-store")
+    end
+
+    it "warns when the same number is on another account, with blocked shown" do
+      other = create(:verification_request, document_number: request_record.document_number)
+      other.subject.update!(status: :banned)
+      get admin_verification_request_path(request_record)
+      expect(response.body).to include("verify-same-number", "##{other.subject.id}", "blocked")
+    end
+  end
 end

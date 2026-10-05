@@ -73,19 +73,19 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
         properties: {
           document_type: { type: :string, enum: VerificationRequest::USER_DOCUMENT_TYPES },
           name_on_document: { type: :string },
-          document_last4: { type: :string, pattern: "^\\d{4}$" },
+          document_number: { type: :string, pattern: "^\\d{6,20}$", description: "the FULL number; kept encrypted, never returned" },
           front: { type: :string, format: :binary },
           back: { type: :string, format: :binary, description: "e_tazkira, cnic, kart_melli only" },
           selfie: { type: :string, format: :binary, description: "holding the document" }
         },
-        required: %w[document_type name_on_document document_last4 front selfie]
+        required: %w[document_type name_on_document document_number front selfie]
       }
 
       let(:"access-token") { headers["access-token"] }
       let(:client)         { headers["client"] }
       let(:uid)            { headers["uid"] }
       let(:verification_request) do
-        { document_type: "tazkira", name_on_document: user.full_name, document_last4: "4821", front: image, selfie: image }
+        { document_type: "tazkira", name_on_document: user.full_name, document_number: "1234564821", front: image, selfie: image }
       end
 
       response "201", "sent; the card says under review, with no document" do
@@ -97,7 +97,7 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
 
       response "422", "a two-sided document needs its back" do
         let(:verification_request) do
-          { document_type: "cnic", name_on_document: user.full_name, document_last4: "4821", front: image, selfie: image }
+          { document_type: "cnic", name_on_document: user.full_name, document_number: "1234564821", front: image, selfie: image }
         end
         run_test!
       end
@@ -134,7 +134,7 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
 
   describe "POST /api/v1/verification_requests" do
     def apply(as: user, **attrs)
-      params = { document_type: "tazkira", name_on_document: "Umair Safi", document_last4: "4821", front: image, selfie: image }
+      params = { document_type: "tazkira", name_on_document: "Umair Safi", document_number: "1234564821", front: image, selfie: image }
       post "/api/v1/verification_requests", params: { verification_request: params.merge(attrs) }, headers: auth_headers_for(as)
     end
 
@@ -152,10 +152,36 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
       expect(response).to have_http_status(:unprocessable_entity)
     end
 
-    it "rejects a full document number (only the last 4 digits are stored)" do
-      apply(document_last4: "1234567890")
+    it "keeps the full number encrypted, shows only the last 4, and never returns it" do
+      apply(document_number: "۱۲۳ ۴۵۶-۴۸۲۱") # Persian digits, spaces and a dash
+      expect(response).to have_http_status(:created)
+      request = user.verification_requests.sole
+      expect(request.document_number).to eq("1234564821")
+      expect(request.document_last4).to eq("4821")
+      expect(response.body).not_to include("1234564821")
+      expect(response.body).not_to include(request.document_number_digest)
+      raw = VerificationRequest.connection.select_value("SELECT document_number FROM verification_requests WHERE id = #{request.id}")
+      expect(raw).not_to include("1234564821") # ciphertext in the database
+    end
+
+    it "rejects a number that is too short or too long" do
+      apply(document_number: "12345")
+      expect(response).to have_http_status(:unprocessable_entity)
+      apply(document_number: "1" * 21)
       expect(response).to have_http_status(:unprocessable_entity)
       expect(VerificationRequest.count).to eq(0)
+    end
+
+    it "never logs the number" do
+      filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
+      expect(filter.filter("verification_request" => { "document_number" => "1234564821" }).to_s).not_to include("1234564821")
+    end
+
+    it "does not tell the applicant when the same number is on another account" do
+      create(:verification_request) # same factory number, another account
+      apply
+      expect(response).to have_http_status(:created)
+      expect(response.body).not_to match(/already|duplicate|same/i)
     end
 
     it "rejects an unknown document type with a 422, not a 500" do

@@ -78,12 +78,14 @@ class User < ApplicationRecord
 
   # Account deletion: nothing of an ID document may outlive the account. Open
   # requests are cancelled (so none sits in the admin queue forever), every
-  # photo is deleted, and the name on the document + last 4 digits are blanked.
-  # Decisions (status, reason, dates) stay as anonymous history.
+  # photo is deleted, and the name on the document + the number are blanked.
+  # Decisions and the number's digest stay (ban evasion), nothing readable.
   def forget_verification_documents!
     verification_requests.find_each do |request|
       request.purge_files!
-      attrs = { name_on_document: nil, document_last4: nil, updated_at: Time.current }
+      # The number goes; its digest stays (with the decision), so a banned
+      # person cannot verify a new account with the same ID.
+      attrs = { name_on_document: nil, document_number: nil, document_last4: nil, updated_at: Time.current }
       attrs.merge!(status: VerificationRequest.statuses[:cancelled], decided_at: Time.current) if request.requested?
       request.update_columns(attrs)
     end

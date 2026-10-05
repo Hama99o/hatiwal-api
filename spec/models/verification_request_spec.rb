@@ -143,7 +143,8 @@ RSpec.describe VerificationRequest, type: :model do
 
       [ old.reload, waiting.reload ].each do |r|
         expect(r.files_count).to eq(0)
-        expect(r).to have_attributes(name_on_document: nil, document_last4: nil)
+        expect(r).to have_attributes(name_on_document: nil, document_number: nil, document_last4: nil)
+        expect(r.document_number_digest).to be_present # kept: a banned person can't re-verify
         expect(r.files_purged_at).to be_present
       end
       expect(waiting).to be_cancelled
@@ -151,6 +152,32 @@ RSpec.describe VerificationRequest, type: :model do
       expect(described_class.requested).not_to exist
       keys.each { |key| expect(ActiveStorage::Blob.service.exist?(key)).to be(false) }
       expect(user.reload).not_to be_verified
+    end
+  end
+
+  describe "the ID number" do
+    it "gives the same digest for the same number on different accounts" do
+      a = create(:verification_request, document_number: "1234564821")
+      b = create(:verification_request, document_number: "12 3456 4821")
+      expect(a.document_number_digest).to eq(b.document_number_digest)
+      expect(a.same_number_elsewhere).to contain_exactly(b)
+      expect(create(:verification_request, document_number: "9999994821").same_number_elsewhere).to be_empty
+    end
+
+    it "is encrypted at rest and filtered from inspect" do
+      request = create(:verification_request, document_number: "1234564821")
+      raw = described_class.connection.select_value("SELECT document_number FROM verification_requests WHERE id = #{request.id}")
+      expect(raw).not_to include("1234564821")
+      expect(request.inspect).not_to include("1234564821")
+    end
+
+    it "keeps only the digest after the account is deleted, still matching a new account" do
+      old = create(:verification_request, document_number: "1234564821")
+      old.subject.anonymize_account!
+      old.reload
+      expect(old.document_number).to be_nil
+      fresh = create(:verification_request, document_number: "1234564821")
+      expect(fresh.same_number_elsewhere).to contain_exactly(old)
     end
   end
 end
