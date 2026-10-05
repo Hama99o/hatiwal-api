@@ -275,3 +275,12 @@ Nothing changes for users until step 6.
   credentials. Nothing secret in git: the Firebase file was removed from
   `hatiwal-mobile`'s history on 2026-10-02.
 - **Updates:** unattended security upgrades. Images are rebuilt on every deploy.
+
+## Auth sessions (since 2026-10-05)
+
+Deployed from branch `hotfix-auth-session` (ad65050 + 072cbf1) on top of origin/main a33a48b. Also cherry-picked into release-1.1.6.
+- `change_headers_on_each_request = false`: no token rotation. A reply lost on a slow network can no longer log the user out.
+- `token_lifespan = 2.months` + `SessionKeepAlive` (ApplicationController after_action): each signed-in request pushes that device's expiry back, at most once a day, under a row lock that only touches that device's entry.
+- `remove_tokens_after_password_reset = true`: with static tokens, a password change is the kill switch for every other device.
+- Specs: spec/requests/api/v1/auth/session_stability_spec.rb.
+- **Next main deploy must include these commits.** origin/main does not have them yet; merge the hotfix branch or ship release-1.1.6.
