@@ -143,6 +143,14 @@ RSpec.describe "Api::V1::Shops", type: :request do
     expect(mine.reload.shop_id).to eq(shop.id)
   end
 
+  it "carries the share link https://<base>/s/<id> (Share my shop)" do
+    shop = create(:shop)
+    allow(ENV).to receive(:fetch).and_call_original
+    allow(ENV).to receive(:fetch).with("PUBLIC_SHARE_BASE_URL", nil).and_return("https://hatiwal.com")
+    get "/api/v1/shops/#{shop.id}"
+    expect(JSON.parse(response.body)["shop"]["share_url"]).to eq("https://hatiwal.com/s/#{shop.id}")
+  end
+
   it "shows a suspended shop to its owner, with the owner view" do
     shop = create(:shop, :suspended, owner: owner)
     get "/api/v1/shops/#{shop.id}", headers: headers
