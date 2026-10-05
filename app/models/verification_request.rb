@@ -26,9 +26,9 @@ class VerificationRequest < ApplicationRecord
   MAX_FILE_SIZE = 10.megabytes
   # Spec: 3 requests a day. Counts requests actually sent, not failed uploads.
   DAILY_LIMIT = 3
-  # A document number: digits only, a sensible length. No invented official
-  # formats (owner: "if unsure, accept 6–20 digits").
-  # Letters and digits, at least one digit (owner, 2026-10-05: IDs can carry letters).
+  # A document number: ASCII digits + upper-case letters after normalize_number,
+  # 5–20 long, at least one digit (owner, 2026-10-05: IDs can carry letters).
+  # No invented official formats.
   DOCUMENT_NUMBER_FORMAT = /\A(?=.*\d)[0-9A-Z]{5,20}\z/
   FILES = %i[front back selfie proof].freeze
 
@@ -70,10 +70,6 @@ class VerificationRequest < ApplicationRecord
     User.name => { front: "document_front", back: "document_back", selfie: "selfie" },
     Shop.name => { front: "document_front", back: "document_back", selfie: "selfie", proof: "business_proof" }
   }.freeze
-  # A business licence number keeps its letters ("KBL-2021/0456" → "KBL20210456");
-  # a person's ID number stays digits-only, so the same Tazkira matches across
-  # users and shops (same_number_elsewhere).
-  LICENCE_NUMBER_FORMAT = /\A[0-9A-Z]{3,40}\z/
   # The shop checklist (docs/SHOPS.md, "What the admin checks").
   SHOP_CHECKLIST = %w[photo_clear name_matches selfie_matches proof_valid address_right listings_clean no_bad_history].freeze
   # ── end SHOP-1 ──
@@ -116,17 +112,11 @@ class VerificationRequest < ApplicationRecord
     hmac(normalize_number(number))
   end
 
-  # SHOP-1: the HMAC of an already-normalized value (a licence keeps letters,
-  # so it must not go through normalize_number's digits-only filter).
+  # The HMAC of an already-normalized value.
   def self.hmac(normalized)
     return nil if normalized.blank?
 
     OpenSSL::HMAC.hexdigest("SHA256", number_digest_key, normalized)
-  end
-
-  # SHOP-1: a licence number → ASCII digits + upper-case letters, nothing else.
-  def self.normalize_licence(raw)
-    raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").upcase.gsub(/[^0-9A-Z]/, "")
   end
 
   # Persian/Arabic-Indic digits → ASCII, letters upper-cased; spaces, dashes and
@@ -257,8 +247,9 @@ class VerificationRequest < ApplicationRecord
   def normalize_document_number
     return unless will_save_change_to_document_number? && document_number.present?
 
-    # SHOP-1: a licence keeps its letters; every ID number is digits-only.
-    normalized = licence? ? self.class.normalize_licence(document_number) : self.class.normalize_number(document_number)
+    # One rule for people and shops, so the same e-Tazkira matches across both
+    # (same_number_elsewhere).
+    normalized = self.class.normalize_number(document_number)
     self.document_number = normalized
     self.document_last4 = normalized.last(4)
     self.document_number_digest = self.class.hmac(normalized)
