@@ -9,15 +9,16 @@ RSpec.describe "Shop verification", type: :request do
   let(:image)   { Rack::Test::UploadedFile.new(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg") }
   let(:apply_params) do
     { subject: "shop:#{shop.id}",
-      verification_request: { document_type: "e_tazkira", document_number: "1234564821", phone: "+93 70 123 4567",
-                              front: image, back: image, proof: image } }
+      verification_request: { document_type: "e_tazkira", name_on_document: owner.full_name, document_number: "1234564821",
+                              front: image, back: image, selfie: image, proof: image } }
   end
 
   path "/api/v1/verification_requests" do
     post "apply for Verified shop (subject=shop:<id>)" do
       tags "Shops"
-      description "A shop owner or manager applies: front = the shop front with its sign, back = the business " \
-                  "the owner's e-Tazkira (back) + its number, a proof of business (proof), phone = a number the team calls back. No selfie."
+      description "A shop owner or manager applies with EXACTLY the person's form, filled for the owner (e-Tazkira " \
+                  "front + back, a selfie holding it, the name and number on it) plus ONE required proof of business " \
+                  "(proof: licence, rental contract, tax paper…). No phone, no shop-front photo."
       consumes "multipart/form-data"
       produces "application/json"
       security [ { bearer: [] } ]
@@ -29,13 +30,14 @@ RSpec.describe "Shop verification", type: :request do
         type: :object,
         properties: {
           document_type: { type: :string, enum: VerificationRequest::SHOP_DOCUMENT_TYPES },
-          phone: { type: :string },
-          front: { type: :string, format: :binary, description: "the shop front, sign visible" },
-          back: { type: :string, format: :binary, description: "the owner's e-Tazkira" },
-          proof: { type: :string, format: :binary, description: "proof of business: licence, rental contract, tax paper…" },
-          document_number: { type: :string, description: "the owner's e-Tazkira number" }
+          name_on_document: { type: :string, description: "the owner's name as on the e-Tazkira" },
+          document_number: { type: :string, description: "the owner's e-Tazkira number" },
+          front: { type: :string, format: :binary, description: "the owner's e-Tazkira, front" },
+          back: { type: :string, format: :binary, description: "the owner's e-Tazkira, back" },
+          selfie: { type: :string, format: :binary, description: "the owner holding the e-Tazkira" },
+          proof: { type: :string, format: :binary, description: "proof of business: licence, rental contract, tax paper…" }
         },
-        required: %w[document_type document_number phone front back proof]
+        required: %w[document_type name_on_document document_number front back selfie proof]
       }
       let(:"access-token") { headers["access-token"] }
       let(:client)         { headers["client"] }
@@ -69,9 +71,16 @@ RSpec.describe "Shop verification", type: :request do
     expect(response.body).to include("logo").and include("live_product")
   end
 
-  it "needs the phone and both photos" do
+  it "needs the whole person's form AND the proof; no phone is asked" do
     apply(params: apply_params.merge(verification_request: { document_type: "passport" }))
     expect(response).to have_http_status(:unprocessable_entity)
+    %i[selfie proof name_on_document].each do |missing|
+      apply(params: apply_params.merge(verification_request: apply_params[:verification_request].except(missing)))
+      expect(response).to have_http_status(:unprocessable_entity), missing.to_s
+    end
+    apply
+    expect(response).to have_http_status(:created)
+    expect(shop.verification_requests.last).to have_attributes(phone: nil)
   end
 
   it "reads the shop's status card" do
@@ -98,16 +107,17 @@ RSpec.describe VerificationRequest, "for a shop", type: :model do
   let(:shop) { request.subject }
 
   it "approving verifies the shop (not the owner) and tells the owner" do
-    expect { request.approve!(admin: admin, checklist: { "shop_real" => "1" }) }
+    expect { request.approve!(admin: admin, checklist: { "proof_valid" => "1" }) }
       .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_verified")
     expect(shop.reload).to have_attributes(verified_by_id: admin.id)
     expect(shop.verified?).to be(true)
     expect(shop.owner.reload.verified).to be(false)
-    expect(request.reload.checklist).to include("shop_real" => true, "phone_works" => false)
+    expect(request.reload.checklist).to include("proof_valid" => true, "selfie_matches" => false)
+    expect(request.checklist.keys).not_to include("phone_works", "shop_real")
   end
 
   it "rejecting and revoking tell the owner too" do
-    expect { request.reject!(admin: admin, reason_code: "shop_sign_not_visible") }
+    expect { request.reject!(admin: admin, reason_code: "proof_not_accepted") }
       .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_verification_rejected")
     again = create(:shop_verification_request, shop: shop)
     again.approve!(admin: admin)
@@ -160,11 +170,12 @@ RSpec.describe "Admin — shop verification queue", type: :request do
 
     get admin_verification_request_path(request_record)
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("verify-shop-facts", "Shop front", "Pin is at the shop")
+    expect(response.body).to include("verify-shop-facts", "Selfie with document", "Proof of business", "Pin is at the shop")
+    expect(response.body).not_to include("Shop front", "Called: they answered")
   end
 
   it "approves a shop from the card" do
-    patch approve_admin_verification_request_path(request_record), params: { checklist: { shop_real: "1" } }
+    patch approve_admin_verification_request_path(request_record), params: { checklist: { proof_valid: "1" } }
     expect(request_record.subject.reload.verified?).to be(true)
   end
 end
@@ -183,6 +194,23 @@ RSpec.describe VerificationRequest, "shop document numbers", type: :model do
     no_proof.proof.detach
     expect(no_proof).not_to be_valid
     expect(build(:shop_verification_request, shop: shop, document_type: :licence)).not_to be_valid
+    no_selfie = build(:shop_verification_request, shop: shop)
+    no_selfie.selfie.detach
+    expect(no_selfie).not_to be_valid
+  end
+
+  it "keeps a legacy shop_sign_not_visible decision valid, but no longer offers it" do
+    expect(VerificationRequest::REJECT_REASONS).not_to include("shop_sign_not_visible")
+    old = create(:shop_verification_request)
+    old.update_columns(status: VerificationRequest.statuses[:rejected], reason_code: "shop_sign_not_visible")
+    expect(old.reload).to be_valid
+    expect(old.reason_for(:en)).to eq("The shop sign is not visible")
+  end
+
+  it "has the proof_not_accepted reason in all four locales" do
+    User::SUPPORTED_LANGUAGES.each do |l|
+      expect(I18n.t("verification.reasons.proof_not_accepted", locale: l, raise: true)).to be_present
+    end
   end
 end
 

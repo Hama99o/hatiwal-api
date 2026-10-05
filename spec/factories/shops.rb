@@ -34,13 +34,13 @@ FactoryBot.define do
     subject { shop }
     requested_by { shop.owner }
     status { :requested }
-    # Owner, 2026-10-05: the owner's e-Tazkira + its number + a proof of business.
+    # Owner, 2026-10-05: exactly the person's form for the OWNER + a proof of business.
     document_type { :e_tazkira }
+    name_on_document { shop.owner.full_name }
     document_number { "1234564821" }
-    phone { "+93 70 123 4567" }
 
     after(:build) do |request|
-      %i[front back proof].each do |name|
+      %i[front back selfie proof].each do |name|
         request.public_send(name).attach(io: Rails.root.join("spec/fixtures/files/test_image.jpg").open,
                                          filename: "#{name}.jpg", content_type: "image/jpeg")
       end

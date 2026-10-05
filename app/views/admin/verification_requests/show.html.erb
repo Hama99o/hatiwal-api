@@ -9,7 +9,7 @@
   names_match = r.name_on_document.to_s.squish.casecmp?(user.full_name.squish)
   reports_count = user.reports_against.size
   warnings_count = user.active_warnings_count
-  labels = shop ? { front: "Shop front", back: "Owner's e-Tazkira", proof: "Proof of business" } : { front: "Front", back: "Back", selfie: "Selfie with document" }
+  labels = { front: "Front", back: "Back", selfie: "Selfie with document", proof: "Proof of business" }
   subject_name = r.subject.full_name
 %>
 <% content_for(:title) { "Verification — #{subject_name}" } %>
@@ -106,9 +106,9 @@
       <fieldset class="hw-checks hw-verify-checks">
         <legend>Checklist (saved with the decision)</legend>
         <% checks = if shop
-                      { "shop_real" => "The shop is real (sign visible)", "name_matches" => "Sign / licence name = shop name",
-                        "address_right" => "Pin is at the shop", "owner_real" => "ID / licence name = the owner",
-                        "phone_works" => "Called: they answered as the shop", "listings_clean" => "Listings are clean",
+                      { "photo_clear" => "Photos clear, nothing cropped", "name_matches" => "Name matches the owner's e-Tazkira",
+                        "selfie_matches" => "Selfie = document face", "proof_valid" => "Proof shows the business is theirs",
+                        "address_right" => "Pin is at the shop", "listings_clean" => "Listings are clean",
                         "no_bad_history" => "No bad history" }
                     else
                       { "photo_clear" => "Photos clear, nothing cropped", "name_matches" => "Name matches the document",
@@ -121,7 +121,7 @@
       <div class="hw-verify-actions">
         <div class="hw-form-row">
           <%= select_tag :reason_code,
-                options_for_select((shop ? VerificationRequest::REJECT_REASONS : VerificationRequest::REJECT_REASONS.excluding("shop_sign_not_visible")).map { |c| [ I18n.t("verification.reasons.#{c}", locale: :en), c ] }),
+                options_for_select((shop ? VerificationRequest::REJECT_REASONS : VerificationRequest::REJECT_REASONS.excluding("proof_not_accepted")).map { |c| [ I18n.t("verification.reasons.#{c}", locale: :en), c ] }),
                 prompt: "Reject because…", class: "hw-select", id: "verify-reason" %>
           <%= text_field_tag :reason_text, nil, placeholder: "Only for “Other”: sent as typed", class: "hw-input", dir: "auto" %>
           <%= button_tag "Reject", type: "submit", formaction: reject_admin_verification_request_path(r), id: "verify-reject",

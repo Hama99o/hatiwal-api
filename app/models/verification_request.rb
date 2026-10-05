@@ -35,7 +35,10 @@ class VerificationRequest < ApplicationRecord
   # Preset rejection reasons, each translated for the person under
   # `verification.reasons.<code>` (all four locales; spec'd). `other` sends the
   # admin's free text as typed.
-  REJECT_REASONS = %w[photo_not_clear name_mismatch selfie_mismatch document_not_accepted shop_sign_not_visible other].freeze
+  REJECT_REASONS = %w[photo_not_clear name_mismatch selfie_mismatch document_not_accepted proof_not_accepted other].freeze
+  # No longer offered (shops stopped sending a shop-front photo, owner
+  # 2026-10-05) but still valid on rows already decided with it.
+  LEGACY_REASONS = %w[shop_sign_not_visible].freeze
   # Revoke takes the same codes minus the photo-quality ones, plus its own.
   REVOKE_REASONS = %w[name_mismatch document_not_accepted policy_violation other].freeze
   # What the admin ticks on the card; saved with the decision.
@@ -56,22 +59,23 @@ class VerificationRequest < ApplicationRecord
   # in the enum for old rows but can no longer be sent.
   USER_DOCUMENT_TYPES = %w[e_tazkira].freeze
   # ── SHOP-1 ──────────────────────────────────────────────────────────────────
-  # A shop sends the shop front (`front`), the OWNER's e-Tazkira (`back`) with
-  # its number, a REQUIRED proof that the business is theirs (`proof`: licence,
-  # rental contract, tax paper… any document; owner 2026-10-05) and a phone the
-  # team calls back. No selfie.
+  # A shop's application is EXACTLY the person's form, filled for the OWNER (their
+  # e-Tazkira front + back, a selfie holding it, the name and number on it), plus
+  # ONE required proof that the business is theirs (`proof`: licence, rental
+  # contract, tax paper… any document). No phone, no shop-front photo (owner,
+  # 2026-10-05).
   SHOP_DOCUMENT_TYPES = USER_DOCUMENT_TYPES
   # What each file IS, per subject — the admin card labels them with this.
   FILE_LABELS = {
     User.name => { front: "document_front", back: "document_back", selfie: "selfie" },
-    Shop.name => { front: "shop_front", back: "owner_e_tazkira", proof: "business_proof" }
+    Shop.name => { front: "document_front", back: "document_back", selfie: "selfie", proof: "business_proof" }
   }.freeze
   # A business licence number keeps its letters ("KBL-2021/0456" → "KBL20210456");
   # a person's ID number stays digits-only, so the same Tazkira matches across
   # users and shops (same_number_elsewhere).
   LICENCE_NUMBER_FORMAT = /\A[0-9A-Z]{3,40}\z/
   # The shop checklist (docs/SHOPS.md, "What the admin checks").
-  SHOP_CHECKLIST = %w[shop_real name_matches address_right owner_real phone_works listings_clean no_bad_history].freeze
+  SHOP_CHECKLIST = %w[photo_clear name_matches selfie_matches proof_valid address_right listings_clean no_bad_history].freeze
   # ── end SHOP-1 ──
 
   has_one_attached :front
@@ -83,27 +87,22 @@ class VerificationRequest < ApplicationRecord
   before_validation :normalize_document_number
 
   validates :subject_type, inclusion: { in: SUBJECT_TYPES }
-  validates :reason_code, inclusion: { in: REJECT_REASONS + REVOKE_REASONS }, allow_nil: true
+  validates :reason_code, inclusion: { in: REJECT_REASONS + REVOKE_REASONS + LEGACY_REASONS }, allow_nil: true
   FILES.each do |name|
     validates name, attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: MAX_FILE_SIZE }
   end
 
-  # What a fresh application must carry. Only on create: a decided request keeps
-  # its row after its files are purged.
-  with_options on: :create, if: -> { requested? && !shop_subject? } do
+  # What a fresh application must carry — for a person AND for a shop's owner.
+  # Only on create: a decided request keeps its row after its files are purged.
+  with_options on: :create, if: :requested? do
     validates :document_type, inclusion: { in: USER_DOCUMENT_TYPES }
     validates :name_on_document, presence: true, length: { maximum: 120 }
     validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }
     validates :front, :selfie, presence: true
     validates :back, presence: true, if: :two_sided?
   end
-  # SHOP-1 — what a shop's application must carry (see SHOP_DOCUMENT_TYPES).
-  with_options on: :create, if: -> { requested? && shop_subject? } do
-    validates :document_type, inclusion: { in: SHOP_DOCUMENT_TYPES }
-    validates :front, :back, :proof, presence: true
-    validates :phone, presence: true, length: { maximum: 30 }
-    validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }
-  end
+  # SHOP-1 — plus the proof of business.
+  validates :proof, presence: true, on: :create, if: -> { requested? && shop_subject? }
   validate :subject_must_be_eligible, on: :create, if: :requested?
 
   scope :recent, -> { order(created_at: :desc) }

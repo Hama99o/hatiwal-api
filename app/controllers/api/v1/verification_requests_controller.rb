@@ -74,6 +74,6 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
   end
 
   def request_params
-    params.require(:verification_request).permit(:document_type, :name_on_document, :document_number, :front, :back, :selfie, :proof, :phone)
+    params.require(:verification_request).permit(:document_type, :name_on_document, :document_number, :front, :back, :selfie, :proof)
   end
 end
