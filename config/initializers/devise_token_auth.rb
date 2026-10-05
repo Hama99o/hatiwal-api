@@ -5,11 +5,17 @@ DeviseTokenAuth.setup do |config|
   # client is responsible for keeping track of the changing tokens. Change
   # this to false to prevent the Authorization header from changing after
   # each request.
-  # config.change_headers_on_each_request = true
+  # OFF (owner, 2026-10-05: "once logged in it should not be lost when there is
+  # an API problem"). Rotating on every request logged people out on a slow or
+  # dropped connection: the server switched to a new token, the reply never
+  # reached the phone, and the phone's old token 401'd a few seconds later.
+  config.change_headers_on_each_request = false
 
   # By default, users will need to re-authenticate after 2 weeks. This setting
   # determines how long tokens will remain valid after they are issued.
-  # config.token_lifespan = 2.weeks
+  # A login ends after 2 months WITHOUT using the app. Every use pushes the
+  # expiry back (SessionKeepAlive), so a daily user is never logged out.
+  config.token_lifespan = 2.months
 
   # Limiting the token_cost to just 4 in testing will increase the performance of
   # your test suite dramatically. The possible cost value is within range from 4
