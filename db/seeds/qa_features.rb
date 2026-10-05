@@ -58,7 +58,8 @@ def qa_user(email:, firstname:, lastname:, place: nil, avatar: false, language: 
     firstname: firstname, lastname: lastname,
     province: own[:province], city: own[:city],
     latitude: own[:latitude], longitude: own[:longitude],
-    confirmed_at: user.confirmed_at || Time.current
+    confirmed_at: user.confirmed_at || Time.current,
+    preferred_language: language
   )
 
   if avatar && !user.avatar.attached?
@@ -123,6 +124,9 @@ loc_own = {
 loc_abroad = qa_user(email: "loc.abroad@hatiwal.test", firstname: "Farid", lastname: "Musafir", place: :dubai)
 # Nothing at all: own address empty, no guess -> Kabul (source "default").
 loc_none = qa_user(email: "loc.none@hatiwal.test", firstname: "Sima", lastname: "Khali")
+# Saved language "ur" (Urdu is HIDDEN, owner 2026-10-05): the app must open in
+# English for them, and Edit profile must still save.
+qa_user(email: "lang.ur@hatiwal.test", firstname: "Imran", lastname: "Urdu", place: :kabul, language: "ur")
 # A Pashto-language user with an own address, for the ps RTL flows.
 loc_ps = qa_user(email: "loc.ps@hatiwal.test", firstname: "Zarghuna", lastname: "Pashtun", place: :jalalabad, language: "ps")
 
@@ -389,7 +393,7 @@ end
 puts "=== QA Seed: check — no Support threads ==="
 # =============================================================================
 
-qa_ids = User.where("email LIKE 'loc.%@hatiwal.test' OR email LIKE 'ver.%@hatiwal.test' OR email LIKE 'shop.%@hatiwal.test'").pluck(:id)
+qa_ids = User.where("email LIKE 'loc.%@hatiwal.test' OR email LIKE 'ver.%@hatiwal.test' OR email LIKE 'shop.%@hatiwal.test' OR email LIKE 'lang.%@hatiwal.test'").pluck(:id)
 threads = Conversation.where(buyer_id: qa_ids).or(Conversation.where(seller_id: qa_ids)).count
 abort "  FAIL: #{threads} conversation(s) involve QA feature users — seeds must create none" if threads.positive?
 puts "  ok — #{qa_ids.size} QA feature users, 0 conversations"
