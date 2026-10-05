@@ -159,6 +159,9 @@ RSpec.describe VerificationRequest, type: :model do
 
   describe "the ID number" do
     it "gives the same digest for the same number on different accounts" do
+      # Letters are kept (passports, some IDs), upper-cased, separators dropped.
+      expect(create(:verification_request, document_number: "p 123-4567").document_number).to eq("P1234567")
+      expect(build(:verification_request, document_number: "ABCDEF")).not_to be_valid
       a = create(:verification_request, document_number: "1234564821")
       b = create(:verification_request, document_number: "12 3456 4821")
       expect(a.document_number_digest).to eq(b.document_number_digest)

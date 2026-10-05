@@ -165,7 +165,7 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
     end
 
     it "rejects a number that is too short or too long" do
-      apply(document_number: "12345")
+      apply(document_number: "1234")
       expect(response).to have_http_status(:unprocessable_entity)
       apply(document_number: "1" * 21)
       expect(response).to have_http_status(:unprocessable_entity)

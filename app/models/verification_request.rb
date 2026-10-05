@@ -28,7 +28,8 @@ class VerificationRequest < ApplicationRecord
   DAILY_LIMIT = 3
   # A document number: digits only, a sensible length. No invented official
   # formats (owner: "if unsure, accept 6–20 digits").
-  DOCUMENT_NUMBER_FORMAT = /\A\d{6,20}\z/
+  # Letters and digits, at least one digit (owner, 2026-10-05: IDs can carry letters).
+  DOCUMENT_NUMBER_FORMAT = /\A(?=.*\d)[0-9A-Z]{5,20}\z/
   FILES = %i[front back selfie].freeze
 
   # Preset rejection reasons, each translated for the person under
@@ -128,9 +129,10 @@ class VerificationRequest < ApplicationRecord
     raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").upcase.gsub(/[^0-9A-Z]/, "")
   end
 
-  # Persian/Arabic-Indic digits → ASCII; spaces, dashes and the like dropped.
+  # Persian/Arabic-Indic digits → ASCII, letters upper-cased; spaces, dashes and
+  # the like dropped. Same rule as the clients' normalizeDocumentNumber.
   def self.normalize_number(raw)
-    raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").gsub(/\D/, "")
+    raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").upcase.gsub(/[^0-9A-Z]/, "")
   end
 
   # credentials.verification.number_hmac_key or ENV in production; derived from
