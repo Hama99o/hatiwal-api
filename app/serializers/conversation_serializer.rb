@@ -15,6 +15,18 @@ class ConversationSerializer < ApplicationSerializer
   # That is a type change from "always a string", and it is only safe because
   # no client older than support messaging is ever served a support thread —
   # docs/SUPPORT_MESSAGING.md, "Why this cannot break v1.0.4".
+  # SHOP-1/2 — who the chat is with. A product's shop only while it is open (a
+  # closed shop's products went back to the owner). A "Message shop" chat is
+  # always with its shop, open or not, with `status`, so the buyer never falls
+  # back to the owner's personal name; the composer is shut by the API then.
+  def self.shop_block(conversation)
+    shop = conversation.chat_shop
+    return nil unless shop
+    return ShopSerializer.render_as_hash(shop, view: :card).merge(status: shop.status) if conversation.shop_chat?
+
+    shop.active? ? ShopSerializer.render_as_hash(shop, view: :card) : nil
+  end
+
   def self.viewer_role_for(conversation, opts)
     current_user = opts[:current_user]
     return nil unless current_user
@@ -53,7 +65,7 @@ class ConversationSerializer < ApplicationSerializer
     # `kind` before this field.
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c|
-      next nil if c.listing_deleted?
+      next nil if c.listing_deleted? || c.listing.nil?
       # TASK-J471: price/currency so the inbox row's PriceTag has something to
       # render — plain columns on an already-preloaded association (index
       # `.includes(listing: ...)`), so this adds no N+1.
@@ -75,7 +87,7 @@ class ConversationSerializer < ApplicationSerializer
     # render its own localized "Message deleted" preview text.
     # SHOP-1 — see :detailed. The inbox row shows the shop for the buyer, and
     # lets the seller's Chat tab tell shop chats from personal ones.
-    field(:shop) { |c| (shop = c.chat_shop)&.active? ? ShopSerializer.render_as_hash(shop, view: :card) : nil }
+    field(:shop) { |c| shop_block(c) }
     field(:last_message_body) { |c| lm = c.last_message; lm && !lm.deleted? ? lm.body : nil }
     field(:last_message_kind) { |c| c.last_message&.kind }
     field(:last_message_deleted) { |c| c.last_message&.deleted? || false }
@@ -128,7 +140,7 @@ class ConversationSerializer < ApplicationSerializer
     # `kind` before this field.
     field(:listing_deleted) { |c| c.listing_deleted? }
     field(:listing) do |c, opts|
-      next nil if c.listing_deleted?
+      next nil if c.listing_deleted? || c.listing.nil?
       # TASK-K729: category is included so the mobile thread's reserved/sold
       # recovery notice can offer a "Browse similar in {category}" CTA
       # (pre-filters Browse by category_id) instead of leaving a dead end.
@@ -179,7 +191,7 @@ class ConversationSerializer < ApplicationSerializer
     field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, verified: s.verified, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }
     # SHOP-1 — the chat is with a shop when its listing is: the buyer sees the
     # shop's name and logo, and replies go out as the shop.
-    field(:shop) { |c| (shop = c.chat_shop)&.active? ? ShopSerializer.render_as_hash(shop, view: :card) : nil }
+    field(:shop) { |c| shop_block(c) }
     # The thread screen shows the *other* person (name, avatar, tap-to-profile,
     # block toggle). Mirror the :list view so the detailed payload exposes it too
     # — without this the mobile Conversation screen silently hides those controls.

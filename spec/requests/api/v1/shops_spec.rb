@@ -84,7 +84,9 @@ RSpec.describe "Api::V1::Shops", type: :request do
         run_test! do
           json = JSON.parse(response.body)["shop"]
           expect(json).to include("name" => shop.name, "phone" => nil, "verified" => false, "listings_count" => 0)
-          expect(json.keys).not_to include("status", "role")
+          # SHOP-2: status is public (a non-member only ever sees an active shop); role stays members-only.
+          expect(json).to include("status" => "active")
+          expect(json.keys).not_to include("role", "phone_public")
         end
       end
 

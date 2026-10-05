@@ -44,7 +44,7 @@ class SendMessagePushJob < ApplicationJob
 
     result = Notifications::ExpoPushService.deliver(
       token: recipient.push_token,
-      title: title_for(sender, recipient),
+      title: title_for(sender, recipient, conversation),
       body: preview_for(message, recipient),
       # SHOP-1: `role` and `shopId` let the app switch "Selling as" to the shop
       # the chat belongs to when the push is tapped. Additive — old apps ignore them.
@@ -73,7 +73,11 @@ class SendMessagePushJob < ApplicationJob
   # stored name is English, though, and a push title is composed HERE and shown
   # by the OS verbatim — a client can't relabel it — so Support's title is
   # localized to the recipient like the body.
-  def title_for(sender, recipient)
+  def title_for(sender, recipient, conversation)
+    # SHOP-1/2: the shop side writes AS the shop — the buyer sees the shop's
+    # name, never the owner's personal one.
+    shop = conversation.chat_shop
+    return shop.name if shop&.active? && sender.id == conversation.seller_id
     return sender.full_name unless sender.support_account?
 
     I18n.with_locale(recipient_locale(recipient)) { I18n.t("push.support.title") }

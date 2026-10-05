@@ -1,5 +1,14 @@
 class Conversations::StartService
-  Error = Class.new(StandardError)
+  # `code` (e.g. :blocked / :blocked_by) is the stable token the apps translate;
+  # the message stays English prose for older clients.
+  class Error < StandardError
+    attr_reader :code
+
+    def initialize(message = nil, code: nil)
+      super(message)
+      @code = code
+    end
+  end
 
   def initialize(buyer:, listing:, message_body:)
     @buyer        = buyer
@@ -10,8 +19,8 @@ class Conversations::StartService
   def call
     return existing_conversation if existing_conversation
 
-    raise Error, "you have blocked this user" if @buyer.blocked?(@listing.user)
-    raise Error, "you have been blocked by this user" if @listing.user.blocked?(@buyer)
+    raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(@listing.user)
+    raise Error.new("you have been blocked by this user", code: :blocked_by) if @listing.user.blocked?(@buyer)
 
     # SF-B1 — `live?`, not `active?`: a reserved listing is still on the market
     # (it is back in the feed and in search), so refusing the first message on it

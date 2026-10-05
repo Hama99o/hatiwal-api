@@ -2,7 +2,16 @@
 # product. Find-or-create, one per buyer and shop (a unique partial index backs
 # it up). The seller side is the shop's owner; phase 3 adds the team.
 class Conversations::StartShopService
-  Error = Class.new(StandardError)
+  # `code` (e.g. :blocked / :blocked_by) is the stable token the apps translate;
+  # the message stays English prose for older clients.
+  class Error < StandardError
+    attr_reader :code
+
+    def initialize(message = nil, code: nil)
+      super(message)
+      @code = code
+    end
+  end
   OwnShop = Class.new(Error)
 
   attr_reader :created
@@ -14,11 +23,11 @@ class Conversations::StartShopService
   end
 
   def call
-    raise OwnShop, "you cannot message your own shop" if @shop.owner_id == @buyer.id || @shop.member?(@buyer)
+    raise OwnShop.new("you cannot message your own shop", code: :own_shop) if @shop.owner_id == @buyer.id || @shop.member?(@buyer)
 
     owner = @shop.owner
-    raise Error, "you have blocked this user" if @buyer.blocked?(owner)
-    raise Error, "you have been blocked by this user" if owner.blocked?(@buyer)
+    raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(owner)
+    raise Error.new("you have been blocked by this user", code: :blocked_by) if owner.blocked?(@buyer)
 
     existing = find_existing
     return existing.tap { add_message(existing) } if existing

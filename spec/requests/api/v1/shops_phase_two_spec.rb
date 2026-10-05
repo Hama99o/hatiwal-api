@@ -155,11 +155,51 @@ RSpec.describe "Shops phase 2", type: :request do
       expect(Conversation.find(id).messages.last.body).to eq("Salaam")
     end
 
-    it "refuses a blocked pair either way" do
+    it "refuses a blocked pair either way, with a code the apps translate" do
       create(:block, blocker: owner, blocked: buyer)
       message_shop(message: "hi")
       expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["code"]).to eq("blocked_by")
+      Block.delete_all
+      create(:block, blocker: buyer, blocked: owner)
+      message_shop(message: "hi")
+      expect(JSON.parse(response.body)["code"]).to eq("blocked")
       expect(Conversation.where(shop: shop).count).to eq(0)
+    end
+
+    it "the listing chat says blocked / blocked_by with the same codes" do
+      listing = create(:listing, :active, user: owner)
+      create(:block, blocker: owner, blocked: buyer)
+      post "/api/v1/listings/#{listing.id}/conversations", params: { message: "hi" }.to_json, headers: json(auth_headers_for(buyer))
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(JSON.parse(response.body)["code"]).to eq("blocked_by")
+    end
+
+    it "is never a 'removed listing' chat, and keeps showing the SHOP (with status) even once suspended" do
+      message_shop(message: "Salaam")
+      c = JSON.parse(response.body)["conversation"]
+      expect(c).to include("listing" => nil, "listing_deleted" => false)
+      expect(c["shop"]).to include("id" => shop.id, "status" => "active")
+      shop.suspended!
+      get "/api/v1/conversations", headers: auth_headers_for(buyer)
+      row = JSON.parse(response.body)["conversations"].find { |x| x["id"] == c["id"] }
+      expect(row).to include("listing_deleted" => false)
+      expect(row["shop"]).to include("name" => shop.name, "status" => "suspended")
+    end
+
+    it "the shop page tells a buyer the shop's status (the apps gate Message shop on it)" do
+      get "/api/v1/shops/#{shop.id}", headers: auth_headers_for(buyer)
+      expect(JSON.parse(response.body)["shop"]).to include("status" => "active")
+    end
+
+    it "the owner's reply is pushed under the SHOP's name, never the owner's" do
+      message_shop(message: "Salaam")
+      conversation = Conversation.find(JSON.parse(response.body)["conversation"]["id"])
+      reply = conversation.messages.create!(user: owner, body: "Yes, come by", kind: :text)
+      buyer.update!(push_token: "ExponentPushToken[b]")
+      allow(Notifications::ExpoPushService).to receive(:deliver).and_return(Struct.new(:error).new(nil))
+      SendMessagePushJob.perform_now(reply.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver).with(hash_including(title: shop.name))
     end
 
     it "the owner sees it under the shop's Chat tab, never under Me; the push carries the shop" do

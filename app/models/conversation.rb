@@ -178,7 +178,10 @@ class Conversation < ApplicationRecord
 
   # Returns true when the associated listing has been removed (admin-removed or
   # hard-deleted and nullified).
+  # A "Message shop" chat (SHOP-2) never had a listing: nothing was deleted.
   def listing_deleted?
+    return false if shop_chat?
+
     listing.nil? || listing.removed?
   end
 

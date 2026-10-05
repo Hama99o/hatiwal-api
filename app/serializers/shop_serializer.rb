@@ -26,6 +26,9 @@ class ShopSerializer < ApplicationSerializer
     fields :description, :category_id, :latitude, :longitude, :address_line, :hours, :created_at
     field(:cover_url) { |s| s.cover_url }
     field(:phone) { |s| s.phone_public ? s.phone : nil }
+    # SHOP-2: the apps gate "Message shop" on it. A non-member only ever gets an
+    # active shop (#show 404s the rest), so it reveals nothing.
+    field(:status) { |s| s.status }
     field(:category) { |s| CategorySerializer.render_as_hash(s.category) }
     # Lists pass `listings_counts:` (Shop.live_listings_counts, one grouped
     # query); a single shop page counts its own.

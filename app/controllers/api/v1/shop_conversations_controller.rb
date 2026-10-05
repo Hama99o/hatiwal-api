@@ -15,9 +15,7 @@ class Api::V1::ShopConversationsController < Api::V1::BaseController
     conversation = service.call
     render_blue(ConversationSerializer, conversation, view: :detailed, status: service.created ? :created : :ok,
                                                       options: { current_user: current_user })
-  rescue Conversations::StartShopService::OwnShop => e
-    render_unprocessable_entity(e, code: :own_shop)
   rescue Conversations::StartShopService::Error => e
-    render_unprocessable_entity(e)
+    render_unprocessable_entity(e, code: e.code)
   end
 end
