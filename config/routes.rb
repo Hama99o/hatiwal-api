@@ -176,6 +176,8 @@ Rails.application.routes.draw do
         put   "/me",          to: "profiles#update_me"
         patch "/me",          to: "profiles#update_me"
         post  "/me/restore",  to: "profiles#restore",   as: :restore_me
+        # LOC-1 — a clue about where the user is (never their own address).
+        patch "/me/location_guess", to: "location_guesses#update", as: :me_location_guess
 
         # Saved searches — MUST be declared before the "/:id" wildcard below,
         # otherwise GET /users/saved_searches is captured as profiles#show

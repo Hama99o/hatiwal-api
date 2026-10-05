@@ -113,6 +113,11 @@ class UserSerializer < ApplicationSerializer
     # toggle knows to show "off" state. Owner can set a new future date via PUT /users/me.
     field(:is_away) { |u| u.away? }
     field(:away_until) { |u| u.away? ? u.away_until&.iso8601 : nil }
+    # LOC-1 — where the Bazaar and the map pickers centre for this user:
+    # own address → guessed → Kabul (User#effective_location). The clients read
+    # this block and never re-implement the rule. Only in :me — the guessed
+    # location must never reach :public, :minimal or a listing.
+    field(:location) { |u| u.effective_location }
   end
 
   view :minimal do

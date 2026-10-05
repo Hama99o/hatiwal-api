@@ -305,6 +305,11 @@ class User < ApplicationRecord
         bio: nil,
         city: nil,
         province: nil,
+        guessed_latitude: nil,
+        guessed_longitude: nil,
+        guessed_province: nil,
+        guessed_source: nil,
+        guessed_at: nil,
         push_token: nil,
         password: SecureRandom.hex(32), # unusable; old credentials no longer work
         deleted_at: Time.current,
@@ -456,6 +461,85 @@ class User < ApplicationRecord
     end
 
     result
+  end
+
+  # ── LOC-1: own address + guessed location ───────────────────────────────────
+  # (hatiwal-mobile/docs/USER_LOCATION.md)
+  #
+  # OWN address: latitude/longitude/province/city — set by the user only.
+  # GUESSED location: guessed_* — learned from what the user does; the newest
+  # clue replaces the last. A guess NEVER overwrites the own address, and is
+  # never in a public serializer.
+  #
+  # The rule, own → guess → Kabul, lives HERE only. Clients read the result from
+  # `location` in the :me view and never re-implement it.
+  module LocationSource
+    OWN = "own"
+    GUESS = "guess"
+    DEFAULT = "default"
+  end
+
+  module GuessSource
+    LISTING = "listing"
+    SEARCH_AREA = "search_area"
+    GPS = "gps"
+    ALL = [ LISTING, SEARCH_AREA, GPS ].freeze
+  end
+
+  # The own address as a point inside the countries we serve, or nil: the saved
+  # map point when it is inside, else the capital of the province (or of a
+  # province written as the city). An address abroad counts as no address.
+  def own_location
+    if ServiceArea.include?(latitude, longitude)
+      return { latitude: latitude.to_f, longitude: longitude.to_f,
+               province: province.presence || ServiceArea.nearest_province(latitude, longitude) }
+    end
+
+    name = [ province, city ].find { |v| ServiceArea.province_center(v) }
+    return nil unless name
+
+    lat, lng = ServiceArea.province_center(name)
+    { latitude: lat, longitude: lng, province: name }
+  end
+
+  def own_location?
+    own_location.present?
+  end
+
+  def guessed_location
+    return nil unless ServiceArea.include?(guessed_latitude, guessed_longitude)
+
+    { latitude: guessed_latitude.to_f, longitude: guessed_longitude.to_f, province: guessed_province }
+  end
+
+  # own → guess → Kabul, with which one was used.
+  def effective_location
+    if (own = own_location)
+      own.merge(source: LocationSource::OWN)
+    elsif (guess = guessed_location)
+      guess.merge(source: LocationSource::GUESS)
+    else
+      ServiceArea::DEFAULT.merge(source: LocationSource::DEFAULT)
+    end
+  end
+
+  # Records a clue about where the user is. Returns true when it was saved,
+  # false when it was ignored: the user has an own address, the source is not
+  # one we know, or the point is outside Afghanistan/Pakistan/Iran.
+  def record_location_guess!(latitude:, longitude:, source:, province: nil)
+    return false unless GuessSource::ALL.include?(source.to_s)
+    return false unless ServiceArea.include?(latitude, longitude)
+    return false if own_location?
+
+    named = ServiceArea.province_center(province) ? province.to_s.strip : nil
+    update_columns(
+      guessed_latitude: latitude.to_f.round(6),
+      guessed_longitude: longitude.to_f.round(6),
+      guessed_province: named || ServiceArea.nearest_province(latitude, longitude),
+      guessed_source: source.to_s,
+      guessed_at: Time.current
+    )
+    true
   end
 
   private

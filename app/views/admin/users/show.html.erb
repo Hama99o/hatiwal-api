@@ -108,6 +108,44 @@
     <% end %>
   </section>
 
+  <%# LOC-1 — own address vs guessed location (hatiwal-mobile/docs/USER_LOCATION.md).
+      The guess is admin-only: never in a public serializer. %>
+  <% effective = user.effective_location %>
+  <section id="user-location" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Location — own vs guessed</h2></div>
+    <p class="hw-panel__text hw-panel__text--muted">
+      The Bazaar uses own address → guessed → Kabul. Now using:
+      <span class="hw-badge hw-badge--plain"><%= effective[:source] %></span>
+      <%= effective[:province] || "—" %> (<%= effective[:latitude] %>, <%= effective[:longitude] %>)
+    </p>
+    <div class="hw-split">
+      <div>
+        <strong>Own address (set by the user)</strong>
+        <% if user.province.present? || user.city.present? || user.latitude.present? %>
+          <ul class="hw-list">
+            <li dir="auto">Province: <%= user.province.presence || "—" %> · City: <%= user.city.presence || "—" %></li>
+            <li>Point: <%= user.latitude.present? ? "#{user.latitude}, #{user.longitude}" : "—" %></li>
+            <% unless user.own_location? %><li>Outside the service area — not used</li><% end %>
+          </ul>
+        <% else %>
+          <p class="hw-empty">None</p>
+        <% end %>
+      </div>
+      <div>
+        <strong>Guessed (learned by the app)</strong>
+        <% if user.guessed_latitude.present? %>
+          <ul class="hw-list">
+            <li dir="auto">Province: <%= user.guessed_province.presence || "—" %></li>
+            <li>Point: <%= user.guessed_latitude %>, <%= user.guessed_longitude %></li>
+            <li>From: <%= user.guessed_source.to_s.humanize %> · <%= user.guessed_at && l(user.guessed_at, format: :short) %></li>
+          </ul>
+        <% else %>
+          <p class="hw-empty">None</p>
+        <% end %>
+      </div>
+    </div>
+  </section>
+
   <section class="hw-panel">
     <div class="hw-panel__head"><h2 class="hw-panel__title">Reports against this user (<%= reports.size %>)</h2></div>
     <% if reports.any? %>

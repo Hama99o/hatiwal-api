@@ -40,6 +40,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing
 
     if @listing.save
+      @listing.record_owner_location_guess!
       # TASK-R418 (CR fix, CYCLE-4): every owner-scoped single-listing render
       # in this controller uses :owner_detailed, not just show/reserve/sold —
       # a freshly created draft never has a sale (Listing#current_sale
@@ -61,6 +62,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     # re-upload. See attach_new_images / purge_removed_images.
     if @listing.update(listing_params.except(:images)) && attach_new_images
       purge_removed_images
+      @listing.record_owner_location_guess! if @listing.saved_change_to_latitude? || @listing.saved_change_to_longitude?
       # TASK-R418 (CR fix, CYCLE-4): :owner_detailed — a seller editing the
       # title/description/photos of a RESERVED or SOLD listing must keep
       # seeing the `sale` block in the response, not have it silently

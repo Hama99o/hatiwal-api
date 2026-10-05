@@ -1047,6 +1047,21 @@ class Listing < ApplicationRecord
     "#{base.chomp('/')}/l/#{listing.id}"
   end
 
+  # LOC-1 — the seller just placed this listing on the map, so that is the
+  # newest clue about where they live (hatiwal-mobile/docs/USER_LOCATION.md).
+  # Called by the seller's own create/update, never by a callback: an admin
+  # moving a listing, or the seeds, must not move anyone's guess. User#record_location_guess!
+  # ignores it when the seller has an own address or the point is abroad.
+  def record_owner_location_guess!
+    return false if latitude.blank? || longitude.blank?
+
+    user.record_location_guess!(
+      latitude: latitude, longitude: longitude,
+      source: User::GuessSource::LISTING,
+      province: ServiceArea.province_in_text(location)
+    )
+  end
+
   private
 
   # Rounds to the nearest GRID_DEGREES. `nil` in, `nil` out: a listing without

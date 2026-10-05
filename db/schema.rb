@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_01_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -412,6 +412,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_01_190000) do
     t.string "encrypted_password", default: "", null: false
     t.integer "failed_attempts", default: 0, null: false
     t.string "firstname", default: "", null: false
+    t.datetime "guessed_at"
+    t.decimal "guessed_latitude", precision: 10, scale: 6
+    t.decimal "guessed_longitude", precision: 10, scale: 6
+    t.string "guessed_province"
+    t.string "guessed_source"
     t.string "image"
     t.string "last_app_platform"
     t.string "last_app_version"
