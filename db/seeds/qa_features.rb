@@ -1,6 +1,6 @@
 # =============================================================================
 # Hatiwal QA seeds for the features in flight: LOC-1 (own address + guessed
-# location), VER-1 (verification requests). SHOP-1 comes later.
+# location), VER-1 (verification requests), SHOP-1 (shops, selling as).
 #
 # Run:  bundle exec rake db:seed:qa_features
 #       (also run by `./qa/qa.sh seed` in hatiwal-mobile, after reset_e2e)
@@ -148,7 +148,7 @@ QA_LISTINGS = {
   kandahar:  [ [ "Kandahar QA — Pomegranates crate", 1_500, "food" ], [ "Kandahar QA — Embroidered dress", 4_000, "clothes" ], [ "Kandahar QA — Generator 5 kVA", 42_000, "tools" ] ]
 }.freeze
 
-fallback_category = Category.order(:position).first
+fallback_category = Category.order(:position).first || abort("qa_features needs categories: run `bin/rails db:seed` first")
 loc_listing_count = 0
 QA_LISTINGS.each do |place, items|
   seller = loc_own.fetch(place)
@@ -284,10 +284,95 @@ else
 end
 
 # =============================================================================
+puts "=== QA Seed: SHOP-1 shops ==="
+# =============================================================================
+# Contract: hatiwal-mobile/qa/api_contract/SHOPS_2026-10.md. Status, verified_at
+# and active_shop_id are written as columns: the model and admin paths may queue
+# Support notices (shop_verified…), which seeds must never send.
+
+if defined?(Shop) && Shop.table_exists?
+  shop_cat = ->(slug) { Category.find_by(slug: slug) || fallback_category }
+  sat_to_thu = %w[sat sun mon tue wed thu].index_with { [ %w[08:00 18:00] ] }.merge("fri" => [])
+
+  qa_shop = lambda do |owner, name:, place:, slug:, hours: {}, status: "active", verified: false, phone: nil|
+    p = QA_PLACES.fetch(place)
+    shop = Shop.find_or_initialize_by(owner: owner)
+    shop.assign_attributes(name: name, category: shop_cat.call(slug), latitude: p[:latitude], longitude: p[:longitude],
+                           province: p[:province], city: p[:city], address_line: "#{p[:city]} QA bazaar, shop 7",
+                           description: "QA seed shop.", hours: hours, phone: phone, phone_public: phone.present?)
+    shop.save!
+    shop.update_columns(status: Shop.statuses[status], verified_at: (verified ? 3.days.ago : nil), updated_at: Time.current)
+    shop.logo.attach(qa_blob(QA_SAMPLES.join("avatar.png"), "qa-shop-logo-#{shop.id}.png", "image/png")) unless shop.logo.attached?
+    shop
+  end
+
+  qa_shop_listing = lambda do |user, shop, title, price, slug, place|
+    p = QA_PLACES.fetch(place)
+    l = Listing.find_or_initialize_by(user: user, title: title)
+    l.assign_attributes(category: shop_cat.call(slug), description: "QA seed listing.", price: price, currency: "AFN",
+                        location: "#{p[:city]}, #{p[:province]}", latitude: p[:latitude], longitude: p[:longitude], quantity: 1)
+    l.save! if l.new_record? || l.changed?
+    l.update_columns(shop_id: shop&.id, status: Listing.statuses[:active], published_at: l.published_at || 1.day.ago,
+                     reserved_at: nil, sold_at: nil, sold_units: 0, expires_at: nil, removed_at: nil)
+    l.images.attach(qa_blob(QA_PHOTO, "qa-shop-#{l.id}.jpg", "image/jpeg")) if !l.images.attached? && File.exist?(QA_PHOTO)
+    l
+  end
+
+  # No shop at all: every shop surface must look exactly like before SHOP-1.
+  shop_none = qa_user(email: "shop.none@hatiwal.test", firstname: "Basir", lastname: "Noshop", place: :kabul, avatar: true)
+  Shop.where(owner: shop_none).destroy_all
+
+  # Unverified shop, Sat–Thu 08–18, Friday closed; SELLING AS the shop.
+  owner = qa_user(email: "shop.owner@hatiwal.test", firstname: "Umair", lastname: "Shopkeeper", place: :kabul, avatar: true)
+  cosmetics = qa_shop.call(owner, name: "Kabul QA Cosmetics", place: :kabul, slug: "beauty", hours: sat_to_thu, phone: "+93700000111")
+  # Mixed: 3 products in the shop, 2 personal listings of the same person.
+  [ [ "Kabul QA Cosmetics — Lipstick set", 900, "beauty" ], [ "Kabul QA Cosmetics — Perfume 50 ml", 2_500, "beauty" ],
+    [ "Kabul QA Cosmetics — Face cream", 700, "beauty" ] ].each { |t, pr, sl| qa_shop_listing.call(owner, cosmetics, t, pr, sl, :kabul) }
+  [ [ "Umair personal QA — Old phone", 3_000, "electronics" ], [ "Umair personal QA — Chair", 1_200, "home" ] ]
+    .each { |t, pr, sl| qa_shop_listing.call(owner, nil, t, pr, sl, :kabul) }
+  owner.update_column(:active_shop_id, cosmetics.id)
+
+  # Verified shop in Herat; selling as ME (active_shop_id unset).
+  vowner = qa_user(email: "shop.verified@hatiwal.test", firstname: "Zahra", lastname: "Verifiedshop", place: :herat, avatar: true)
+  carpets = qa_shop.call(vowner, name: "Herat QA Carpets", place: :herat, slug: "home",
+                         hours: Shop::DAYS.index_with { [ %w[09:00 12:00], %w[14:00 19:00] ] }, verified: true)
+  [ [ "Herat QA Carpets — Silk rug 2x3", 85_000, "home" ], [ "Herat QA Carpets — Kilim runner", 14_000, "home" ] ]
+    .each { |t, pr, sl| qa_shop_listing.call(vowner, carpets, t, pr, sl, :herat) }
+  vowner.update_column(:active_shop_id, nil)
+
+  # Suspended shop whose owner still has it as active_shop_id: a STALE choice,
+  # so `selling_as_shop` must come back null and the shop must not be public.
+  sowner = qa_user(email: "shop.suspended@hatiwal.test", firstname: "Jawid", lastname: "Suspended", place: :mazar, avatar: true)
+  phones = qa_shop.call(sowner, name: "Mazar QA Phones", place: :mazar, slug: "electronics", status: "suspended")
+  qa_shop_listing.call(sowner, phones, "Mazar QA Phones — Charger", 400, "electronics", :mazar)
+  sowner.update_column(:active_shop_id, phones.id)
+
+  # Shop verification (VER-1 for shops): Cosmetics waiting, Carpets approved.
+  # Same rule as the user fixtures: rows written directly, no approve!.
+  if VerificationRequest::SUBJECT_TYPES.include?(Shop.name)
+    { cosmetics => [ "requested", nil ], carpets => [ "approved", 3.days ] }.each do |shop, (status, ago)|
+      VerificationRequest.where(subject: shop).where.not(status: status).destroy_all
+      r = VerificationRequest.find_or_initialize_by(subject: shop, status: status)
+      r.assign_attributes(requested_by: shop.owner, document_type: "licence", phone: "+93700000222",
+                          decided_at: ago&.ago, decided_by: (AdminUser.order(:id).first if ago),
+                          checklist: ago ? VerificationRequest::SHOP_CHECKLIST.index_with { true } : {})
+      r.front.attach(qa_blob(QA_SAMPLES.join("shop_front.png"), "qa-sample-shop-front.png", "image/png")) unless r.front.attached?
+      r.back.attach(qa_blob(QA_SAMPLES.join("document_front.png"), "qa-sample-licence.png", "image/png")) unless r.back.attached?
+      r.save!
+    end
+    puts "  shop verification: Kabul QA Cosmetics requested, Herat QA Carpets approved"
+  end
+  puts "  shops: #{[ cosmetics, carpets, phones ].map { |s| "#{s.name} (#{s.status}#{', verified' if s.verified_at})" }.join(' · ')}"
+  puts "  shop.owner sells as the shop; shop.verified as Me; shop.suspended has a stale active shop; shop.none has none"
+else
+  puts "  SKIP shops: shops table not migrated yet (SHOP-1)"
+end
+
+# =============================================================================
 puts "=== QA Seed: check — no Support threads ==="
 # =============================================================================
 
-qa_ids = User.where("email LIKE 'loc.%@hatiwal.test' OR email LIKE 'ver.%@hatiwal.test'").pluck(:id)
+qa_ids = User.where("email LIKE 'loc.%@hatiwal.test' OR email LIKE 'ver.%@hatiwal.test' OR email LIKE 'shop.%@hatiwal.test'").pluck(:id)
 threads = Conversation.where(buyer_id: qa_ids).or(Conversation.where(seller_id: qa_ids)).count
 abort "  FAIL: #{threads} conversation(s) involve QA feature users — seeds must create none" if threads.positive?
 puts "  ok — #{qa_ids.size} QA feature users, 0 conversations"
