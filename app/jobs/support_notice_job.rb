@@ -19,7 +19,10 @@ class SupportNoticeJob < ApplicationJob
     user_verified: ->(user) { user.verified? },
     # VER-1: the latest decision must still be the one the message is about.
     user_verification_rejected: ->(user) { user.latest_verification_request&.rejected? },
-    user_badge_revoked: ->(user) { !user.verified? && user.latest_verification_request&.revoked? }
+    user_badge_revoked: ->(user) { !user.verified? && user.latest_verification_request&.revoked? },
+    # UPD-1: "please update" for app builds too old to be blocked (1.1.5 and
+    # older). Once per user per target version: AppUpdateNotice.
+    app_update_available: ->(_user) { true }
   }.freeze
 
   def self.enqueue(user, key)

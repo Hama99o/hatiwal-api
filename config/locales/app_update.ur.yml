@@ -1,0 +1,11 @@
+# UPD-1 messages (hatiwal-mobile/docs/FORCE_UPDATE.md). Own file so it never
+# collides with edits to ur.yml.
+ur:
+  support:
+    notices:
+      app_update_available: "📲 ہتیوال کا نیا ورژن تیار ہے۔ براہِ کرم App Store / Google Play سے اسے اپ ڈیٹ کریں تاکہ سب کچھ ٹھیک چلتا رہے۔"
+  activerecord:
+    errors:
+      models:
+        app_release_setting:
+          not_released: "%{platform} کے لیے %{version} ابھی جاری نہیں ہوا"

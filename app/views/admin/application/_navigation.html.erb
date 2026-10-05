@@ -34,6 +34,9 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/verification_requests') ? 'active' : 'inactive'}" do %>
     Verifications<% if waiting_ver.positive? %> <span class="nav-badge" title="<%= pluralize(waiting_ver, 'request') %> waiting"><%= waiting_ver %></span><% end %>
   <% end %>
+  <%# UPD-1 %>
+  <%= link_to "App versions", admin_app_versions_path, id: "nav-app-versions",
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/app_versions') ? 'active' : 'inactive'}" %>
   <%= link_to "Warnings", admin_user_warnings_path,
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/user_warnings') ? 'active' : 'inactive'}" %>
   <%= link_to "Blocks", admin_blocks_path,

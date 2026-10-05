@@ -1,0 +1,94 @@
+<%# UPD-1 — App versions: force update (min), reminder (latest), released
+    builds, and who is on what. hatiwal-mobile/docs/FORCE_UPDATE.md %>
+<% content_for(:title) { "App versions" } %>
+
+<header class="hw-page-header">
+  <div>
+    <h1 class="hw-page-header__title main-content__page-title">App versions</h1>
+    <p class="hw-page-header__subtitle">
+      Below <strong>minimum</strong>: the app is blocked until it updates. Below <strong>latest</strong>: a reminder banner.
+      A minimum or latest can never be above the <strong>released</strong> build. Builds 1.1.5 and older (before the gate, which ships in 1.1.6) cannot be blocked —
+      message them instead (below).
+    </p>
+  </div>
+</header>
+
+<%= form_with model: @setting, url: admin_app_versions_path, method: :patch, data: { turbo: false }, id: "app-versions-form" do |f| %>
+  <div class="hw-panels">
+    <% AppReleaseSetting::PLATFORMS.each do |platform| %>
+      <section class="hw-panel" id="app-versions-<%= platform %>">
+        <div class="hw-panel__head"><h2 class="hw-panel__title"><%= platform == "ios" ? "iOS" : "Android" %></h2></div>
+        <% %w[released_version latest_version min_version].each do |field| %>
+          <label class="hw-field">
+            <span><%= field.humanize %></span>
+            <%= f.text_field :"#{platform}_#{field}", class: "hw-input", placeholder: "e.g. 1.1.7", inputmode: "decimal",
+                  id: "#{platform}-#{field.dasherize}" %>
+          </label>
+        <% end %>
+        <label class="hw-field">
+          <span>Store URL</span>
+          <%= f.text_field :"#{platform}_store_url", class: "hw-input", placeholder: AppReleaseSetting::DEFAULT_STORE_URLS[platform] %>
+        </label>
+        <p class="hw-kv" id="app-versions-<%= platform %>-impact">
+          <span class="<%= 'hw-text-danger' if @affected[platform][:blocked].positive? %>">Blocked now: <%= @affected[platform][:blocked] %> users</span>
+          <span>Reminded: <%= @affected[platform][:reminded] %> users</span>
+        </p>
+      </section>
+    <% end %>
+  </div>
+
+  <% if @raised.present? %>
+    <p class="hw-callout" id="app-versions-confirm">
+      This RAISES the minimum on <%= @raised.map { |p| p == "ios" ? "iOS" : "Android" }.to_sentence %>:
+      <% @raised.each do |p| %>
+        <strong><%= @affected[p][:blocked] %></strong> <%= p == "ios" ? "iOS" : "Android" %> users will be blocked until they update.
+      <% end %>
+      <label class="hw-check"><%= check_box_tag :confirm_raise, "1", params[:confirm_raise] == "1", id: "confirm-raise" %> I understand</label>
+    </p>
+  <% end %>
+  <% if @mass_block.present? %>
+    <p class="hw-callout hw-callout--danger" id="app-versions-mass-block">
+      <% @mass_block.each do |p| %>
+        This blocks <strong><%= @affected[p][:blocked_percent] %>%</strong> of <%= p == "ios" ? "iOS" : "Android" %> users who reported a version.
+      <% end %>
+      Is that a typo? <label class="hw-check"><%= check_box_tag :confirm_mass_block, "1", false, id: "confirm-mass-block" %> Yes, block them</label>
+    </p>
+  <% end %>
+  <div class="hw-form-row">
+    <%= text_field_tag :note, params[:note], class: "hw-input", placeholder: "Why (kept in the audit log)" %>
+    <%= f.submit "Save", class: "button", id: "app-versions-save" %>
+  </div>
+<% end %>
+
+<section class="hw-panel hw-panel--wide hw-gap-top" id="app-versions-usage">
+  <div class="hw-panel__head"><h2 class="hw-panel__title">Who is on which build</h2></div>
+  <div class="hw-split">
+    <% AppReleaseSetting::PLATFORMS.each do |platform| %>
+      <div>
+        <strong><%= platform == "ios" ? "iOS" : "Android" %></strong>
+        <% if @usage[platform].any? %>
+          <ul class="hw-list">
+            <% @usage[platform].each do |version, count| %>
+              <li><%= version %> — <%= count %></li>
+            <% end %>
+          </ul>
+        <% else %>
+          <p class="hw-empty">No reports yet.</p>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+  <p class="hw-panel__text hw-panel__text--muted">Plus <%= @legacy_count %> users on builds that report no version (1.0.4 and older).</p>
+</section>
+
+<section class="hw-panel hw-panel--wide hw-gap-top" id="app-versions-message">
+  <div class="hw-panel__head"><h2 class="hw-panel__title">Message users on old versions</h2></div>
+  <p class="hw-panel__text hw-panel__text--muted">
+    Sends the Support message “A new version of Hatiwal is ready…” in each user's language, once per user per target version.
+  </p>
+  <%= form_with url: message_old_versions_admin_app_versions_path, method: :post, data: { turbo: false }, class: "hw-form-row" do %>
+    <%= select_tag :platform, options_for_select([ [ "iOS", "ios" ], [ "Android", "android" ] ]), class: "hw-select" %>
+    <%= text_field_tag :target_version, @setting.android_latest_version.presence || @setting.ios_latest_version, class: "hw-input", placeholder: "below version, e.g. 1.1.6" %>
+    <%= submit_tag "Send", class: "button", data: { confirm: "Send the update message to every user below this version?" } %>
+  <% end %>
+</section>
