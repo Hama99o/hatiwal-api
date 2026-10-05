@@ -3,6 +3,7 @@ class ApplicationController < ActionController::API
   include Pundit::Authorization
   include Pagy::Backend
   include RateLimitable
+  include SessionKeepAlive
 
   rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
