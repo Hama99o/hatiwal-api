@@ -265,6 +265,10 @@ class Shop < ApplicationRecord
       end
       logo.purge if logo.attached?
       cover.purge if cover.attached?
+      # SHOP-3 (owner default, 2026-10-06): the shop's goods belong to the shop,
+      # so a product a STAFF member posted goes to the OWNER, never to the staff
+      # member's personal listings. Then every product leaves the closed shop.
+      listings.where.not(user_id: owner_id).update_all(user_id: owner_id, updated_at: Time.current)
       listings.update_all(shop_id: nil, updated_at: Time.current)
       User.where(active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
       # SHOP-3: pending invites die with the shop; each Staff member is told.

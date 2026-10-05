@@ -49,4 +49,13 @@ RSpec.describe "Shop team products and sales", type: :request do
     put "/api/v1/my/listings/#{product.id}", params: { listing: { title: "Nope" } }.to_json, headers: h(staff)
     expect(response).to have_http_status(:not_found)
   end
+
+  it "closing the shop gives a STAFF-posted product to the OWNER, not to the staff member" do
+    staff_product = create(:listing, :active, user: staff, shop: shop)
+    product
+    shop.close!
+    expect(staff_product.reload).to have_attributes(user_id: owner.id, shop_id: nil)
+    expect(product.reload).to have_attributes(user_id: owner.id, shop_id: nil)
+    expect(staff.listings).to be_empty
+  end
 end
