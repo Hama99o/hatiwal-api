@@ -6,9 +6,12 @@ class Api::V1::BlocksController < Api::V1::BaseController
                     .order(created_at: :desc)
                     .map(&:blocked)
 
+    # One query each for the response stats and listing counts of the whole
+    # list (no N+1), and every row here is blocked by definition.
+    User.preload_public_stats(blocked_users)
     render_blue_collection(
       UserSerializer, blocked_users,
-      view: :public, options: { current_user: current_user }
+      view: :public, options: { current_user: current_user, blocked_ids: blocked_users.map(&:id).to_set }
     )
   end
 

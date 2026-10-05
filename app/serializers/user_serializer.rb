@@ -22,7 +22,7 @@ class UserSerializer < ApplicationSerializer
     # this exact class of bug (TASK-B903, expired listings inflating the count);
     # SF-B1's widening of `browsable` to include reserved listings reopened it,
     # so this now tracks `live` too.
-    field(:listings_count) { |u| u.listings.live.not_expired.count }
+    field(:listings_count) { |u| u.live_listings_count }
     # TASK-TX02 — denormalized counters (users.sold_count / users.bought_count),
     # bumped by Transaction#bump_trust_counters! on every completed sale. Plain
     # column reads: zero extra queries here, so a public-profile load AND a list
@@ -37,7 +37,8 @@ class UserSerializer < ApplicationSerializer
     # toggle in sync on first open without a separate API call. Defaults to false
     # when no viewer context is available (e.g. unauthenticated — should not
     # happen in practice since the endpoint requires auth).
-    field(:blocked) { |u, opts| opts[:current_user]&.blocked?(u) || false }
+    # A list that already knows the answer passes `blocked_ids` (GET /blocks: all of them).
+    field(:blocked) { |u, opts| opts[:blocked_ids] ? opts[:blocked_ids].include?(u.id) : (opts[:current_user]&.blocked?(u) || false) }
 
     # Response rate trust signal — nil when threshold (5 conversations) not met.
     field(:response_rate_percent) { |u| u.response_rate_percent }

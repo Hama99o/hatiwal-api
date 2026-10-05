@@ -514,6 +514,11 @@ class User < ApplicationRecord
     seller_response_stats.time_label
   end
 
+  # What GET /listings?user_id= returns (`browsable` = live + not expired).
+  def live_listings_count
+    @live_listings_count ||= listings.live.not_expired.count
+  end
+
   # ── Shareable deep-link URL ──────────────────────────────────────────────────
   # Returns an https profile share URL when PUBLIC_SHARE_BASE_URL env var is
   # configured, otherwise nil (the mobile app falls back to hatiwal://seller/<id>).
@@ -699,11 +704,28 @@ class User < ApplicationRecord
     @seller_response_stats ||= compute_seller_response_stats
   end
 
-  def compute_seller_response_stats
-    window_convos = seller_conversations
-                    .where(created_at: 90.days.ago..)
-                    .includes(:messages)
-                    .to_a   # materialise once; all further work is in-memory
+  # A LIST of public profiles (GET /blocks) in a fixed number of queries: the
+  # response stats from one window query for all of them, and the live listing
+  # counts from one grouped count. Each user then reads its own memo, so the
+  # serializer stays the same for one profile and for many.
+  def self.preload_public_stats(users)
+    users = Array(users)
+    return users if users.empty?
+
+    ids = users.map(&:id)
+    convos = Conversation.where(seller_id: ids, created_at: 90.days.ago..).includes(:messages).group_by(&:seller_id)
+    counts = Listing.where(user_id: ids).live.not_expired.group(:user_id).count
+    users.each do |u|
+      u.instance_variable_set(:@seller_response_stats, u.send(:compute_seller_response_stats, convos.fetch(u.id, [])))
+      u.instance_variable_set(:@live_listings_count, counts.fetch(u.id, 0))
+    end
+  end
+
+  def compute_seller_response_stats(preloaded = nil)
+    window_convos = preloaded || seller_conversations
+                                 .where(created_at: 90.days.ago..)
+                                 .includes(:messages)
+                                 .to_a # materialise once; all further work is in-memory
 
     if window_convos.size < 5
       return ResponseStats.new(rate_percent: nil, time_label: nil)
