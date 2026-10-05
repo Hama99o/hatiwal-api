@@ -35,7 +35,7 @@ ur:
           attributes:
             base:
               outside_service_area: "افغانستان، پاکستان یا ایران میں ہونی چاہیے"
-              one_shop_per_user: "آپ کی پہلے سے ایک دکان ہے"
+              duplicate_shop: "یہ دکان آپ کی پہلے سے ہے: قریب میں یہی نام یا یہی پتہ"
             hours:
               malformed: "درست اوقاتِ کار نہیں ہیں"
         listing:

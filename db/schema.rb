@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_210000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -214,9 +214,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_200000) do
     t.datetime "seller_archived_at"
     t.datetime "seller_deleted_at"
     t.bigint "seller_id", null: false
+    t.bigint "shop_id"
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
     t.index ["buyer_deleted_at"], name: "index_conversations_on_buyer_deleted_at"
+    t.index ["buyer_id", "shop_id"], name: "index_conversations_one_shop_chat_per_buyer", unique: true, where: "((listing_id IS NULL) AND (shop_id IS NOT NULL))"
     t.index ["buyer_id"], name: "index_conversations_on_buyer_id"
     t.index ["buyer_id"], name: "index_conversations_one_support_thread_per_user", unique: true, where: "(kind = 1)"
     t.index ["last_message_at"], name: "index_conversations_on_last_message_at"
@@ -224,6 +226,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_200000) do
     t.index ["listing_id"], name: "index_conversations_on_listing_id"
     t.index ["seller_deleted_at"], name: "index_conversations_on_seller_deleted_at"
     t.index ["seller_id"], name: "index_conversations_on_seller_id"
+    t.index ["shop_id"], name: "index_conversations_on_shop_id"
     t.index ["status"], name: "index_conversations_on_status"
   end
 
@@ -419,7 +422,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_200000) do
     t.bigint "verified_by_id"
     t.index ["category_id"], name: "index_shops_on_category_id"
     t.index ["owner_id"], name: "index_shops_on_owner_id"
-    t.index ["owner_id"], name: "index_shops_one_open_per_owner", unique: true, where: "(status <> 3)"
     t.index ["province"], name: "index_shops_on_province"
     t.index ["status", "verified_at"], name: "index_shops_on_status_and_verified_at"
     t.index ["verified_by_id"], name: "index_shops_on_verified_by_id"
@@ -591,6 +593,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_200000) do
   add_foreign_key "blocks", "users", column: "blocker_id"
   add_foreign_key "categories", "categories", column: "parent_id", on_delete: :restrict
   add_foreign_key "conversations", "listings"
+  add_foreign_key "conversations", "shops", on_delete: :nullify
   add_foreign_key "conversations", "users", column: "buyer_id"
   add_foreign_key "conversations", "users", column: "seller_id"
   add_foreign_key "hidden_listings", "listings"

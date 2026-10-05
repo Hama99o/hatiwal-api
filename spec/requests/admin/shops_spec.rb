@@ -95,7 +95,7 @@ RSpec.describe "Admin shops", type: :request do
     shop.update_columns(verified_at: Time.current)
     expect do
       post remove_badge_admin_shop_path(shop), params: { reason_code: "policy_violation" }
-    end.to have_enqueued_job(SupportNoticeJob).with(owner.id, "shop_badge_removed")
+    end.to have_enqueued_job(SupportNoticeJob).with(owner.id, "shop_badge_removed", shop.id)
     expect(shop.reload.verified?).to be(false)
   end
 

@@ -108,7 +108,7 @@ RSpec.describe VerificationRequest, "for a shop", type: :model do
 
   it "approving verifies the shop (not the owner) and tells the owner" do
     expect { request.approve!(admin: admin, checklist: { "proof_valid" => "1" }) }
-      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_verified")
+      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_verified", shop.id)
     expect(shop.reload).to have_attributes(verified_by_id: admin.id)
     expect(shop.verified?).to be(true)
     expect(shop.owner.reload.verified).to be(false)
@@ -118,11 +118,11 @@ RSpec.describe VerificationRequest, "for a shop", type: :model do
 
   it "rejecting and revoking tell the owner too" do
     expect { request.reject!(admin: admin, reason_code: "proof_not_accepted") }
-      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_verification_rejected")
+      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_verification_rejected", shop.id)
     again = create(:shop_verification_request, shop: shop)
     again.approve!(admin: admin)
     expect { again.revoke!(admin: admin, reason_code: "policy_violation") }
-      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_badge_removed")
+      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_badge_removed", shop.id)
     expect(shop.reload.verified?).to be(false)
   end
 
@@ -227,7 +227,7 @@ RSpec.describe "Shop edit after verification", type: :request do
   it "the owner renaming the shop drops the badge and tells them, in their language" do
     expect do
       patch "/api/v1/shops/#{shop.id}", params: { shop: { name: "Renamed" } }.to_json, headers: headers
-    end.to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_reverify_needed")
+    end.to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_reverify_needed", shop.id)
     expect(shop.reload.verified?).to be(false)
     get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: headers
     expect(JSON.parse(response.body)["verification_status"]).to include("status" => "none", "name_changed" => true)

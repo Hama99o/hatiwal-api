@@ -35,7 +35,7 @@ fa:
           attributes:
             base:
               outside_service_area: "باید در افغانستان، پاکستان یا ایران باشد"
-              one_shop_per_user: "شما از قبل یک دوکان دارید"
+              duplicate_shop: "این دوکان را از قبل دارید: همین نام در نزدیکی یا همین آدرس"
             hours:
               malformed: "ساعات کاری معتبر نیستند"
         listing:

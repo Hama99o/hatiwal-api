@@ -84,18 +84,14 @@ RSpec.describe "SHOP-1 review", type: :request do
     end
   end
 
-  it "the database refuses a second open shop even past the validation (two quick taps)" do
+  it "SHOP-2: an owner may open a second, different shop" do
     owner = create(:user)
     create(:shop, owner: owner)
-    second = build(:shop, owner: owner)
-    expect { second.save(validate: false) }.to raise_error(ActiveRecord::RecordNotUnique)
-
-    allow_any_instance_of(Shop).to receive(:one_shop_per_owner) # rubocop:disable RSpec/AnyInstance
-    post "/api/v1/shops", params: { shop: { name: "Twice", category_id: create(:category).id, latitude: 34.35, longitude: 62.2,
-                                            address_line: "x" } }.to_json,
+    post "/api/v1/shops", params: { shop: { name: "Second shop", category_id: create(:category).id, latitude: 34.35, longitude: 62.2,
+                                            address_line: "Another street" } }.to_json,
                           headers: auth_headers_for(owner).merge("Content-Type" => "application/json")
-    expect(response).to have_http_status(:unprocessable_entity)
-    expect(JSON.parse(response.body)["code"]).to eq("shop_limit_reached")
+    expect(response).to have_http_status(:created)
+    expect(owner.owned_shops.count).to eq(2)
   end
 
   it "move_listings refuses a shop that is not open" do

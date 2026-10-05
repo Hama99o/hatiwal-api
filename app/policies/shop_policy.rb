@@ -11,6 +11,8 @@ class ShopPolicy < ApplicationPolicy
   def update? = EDITORS.include?(role)
   def destroy? = role == "owner"
   def member? = record.member?(user)
+  # SHOP-2: "Message shop" without a product (own shop refused by the service, with its code).
+  def message? = user.present? && record.active?
   # Moving listings in or out is managing products: every member may (phase 3).
   def move_listings? = member?
 

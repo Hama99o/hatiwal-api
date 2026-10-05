@@ -195,6 +195,8 @@ Rails.application.routes.draw do
       # SHOP-1 — shops (hatiwal-mobile/docs/SHOPS.md)
       resources :shops, only: %i[index show create update destroy] do
         member { post :move_listings }
+        # SHOP-2 — "Message shop" from the shop page (no product): find-or-create.
+        resources :conversations, only: %i[create], controller: "shop_conversations"
       end
 
       # Reviews (double-blind, on a sold Transaction)

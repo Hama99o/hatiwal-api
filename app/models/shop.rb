@@ -15,6 +15,11 @@ class Shop < ApplicationRecord
   PAKISTAN_PROVINCES = [ "Punjab", "Sindh", "Khyber Pakhtunkhwa", "Balochistan", "Islamabad", "Gilgit-Baltistan", "Azad Kashmir" ].freeze
   TIME_FORMAT = /\A([01]\d|2[0-3]):[0-5]\d\z/
   LOGO_MAX_SIZE = 5.megabytes
+  # SHOP-2 — "the same shop can't be added twice" (one owner's own shops only):
+  # the same normalized name this close, or the same address in the same city
+  # (within ADDRESS_NEAR_KM when a city isn't stored).
+  DUPLICATE_NAME_RADIUS_KM = 0.2
+  ADDRESS_NEAR_KM = 5.0
 
   belongs_to :owner, class_name: User.name, inverse_of: :owned_shops
   belongs_to :category
@@ -48,7 +53,7 @@ class Shop < ApplicationRecord
   validates :cover, attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: LOGO_MAX_SIZE }
   validate :location_in_service_area
   validate :hours_well_formed
-  validate :one_shop_per_owner, on: :create
+  validate :not_a_duplicate_of_own_shop
 
   before_validation :fill_province_from_point
   before_create :apply_approval_switch
@@ -78,13 +83,42 @@ class Shop < ApplicationRecord
     shop_members.exists?(user_id: user.id)
   end
 
-  # The one failure the shop form must name in the user's own words, as a
-  # stable token for the 422 body (`code`); nil for anything else.
+  # The failures the shop form must name in the user's own words, as a stable
+  # token for the 422 body (`code`); nil for anything else.
   def error_code
     base = errors.details[:base].map { |d| d[:error] }
-    return :shop_limit_reached if base.include?(:one_shop_per_user)
+    return :shop_duplicate if base.include?(:duplicate_shop)
 
     :outside_service_area if base.include?(:outside_service_area)
+  end
+
+  # SHOP-2 — the owner's open shop this one would duplicate, or nil.
+  attr_reader :duplicate_shop
+
+  # Case, spaces, punctuation and zero-width marks ignored; Arabic and Persian
+  # letter variants (ي/ی, ك/ک, ة/ه, أ/إ/آ → ا) and digits folded, so
+  # "Safi  Store!" = "safi store" and "صافي" = "صافی".
+  def self.normalize_for_duplicate(text)
+    text.to_s.unicode_normalize(:nfkc)
+        .tr("يىكةأإآ۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "یيکهااا01234567890123456789").tr("ي", "ی")
+        .downcase.gsub(/[\p{P}\p{S}\p{Cf}\s]+/, "")
+  end
+
+  # Great-circle distance in km (the shop count per owner is tiny: done in Ruby).
+  def self.distance_km(lat1, lng1, lat2, lng2)
+    return Float::INFINITY if [ lat1, lng1, lat2, lng2 ].any?(&:nil?)
+
+    rad = Math::PI / 180
+    dlat = (lat2.to_f - lat1.to_f) * rad
+    dlng = (lng2.to_f - lng1.to_f) * rad
+    a = (Math.sin(dlat / 2)**2) + (Math.cos(lat1.to_f * rad) * Math.cos(lat2.to_f * rad) * (Math.sin(dlng / 2)**2))
+    6371.0 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  end
+
+  # Serializes one owner's shop writes, so two identical "Open my shop" taps
+  # can't both pass the duplicate check. Call inside a transaction.
+  def self.lock_owner!(owner_id)
+    connection.execute(sanitize_sql_array([ "SELECT pg_advisory_xact_lock(?, ?)", 4_202, owner_id.to_i ]))
   end
 
   def verified? = verified_at.present?
@@ -293,9 +327,26 @@ class Shop < ApplicationRecord
     end
   end
 
-  # Phase 1 rule: one shop per user (lifted in phase 2).
-  def one_shop_per_owner
-    errors.add(:base, :one_shop_per_user) if owner && Shop.where.not(status: :closed).exists?(owner_id: owner.id)
+  # SHOP-2: several shops per owner, but never the same one twice.
+  def not_a_duplicate_of_own_shop
+    @duplicate_shop = nil
+    return if owner_id.nil? || closed?
+    return unless new_record? || will_save_change_to_name? || will_save_change_to_address_line? ||
+                  will_save_change_to_latitude? || will_save_change_to_longitude? || will_save_change_to_city?
+
+    @duplicate_shop = Shop.where(owner_id: owner_id).where.not(status: :closed).where.not(id: id).find { |other| duplicate_of?(other) }
+    errors.add(:base, :duplicate_shop) if @duplicate_shop
+  end
+
+  def duplicate_of?(other)
+    km = self.class.distance_km(latitude, longitude, other.latitude, other.longitude)
+    same_name = (n = self.class.normalize_for_duplicate(name)).present? && n == self.class.normalize_for_duplicate(other.name)
+    return true if same_name && km <= DUPLICATE_NAME_RADIUS_KM
+
+    same_address = (a = self.class.normalize_for_duplicate(address_line)).present? && a == self.class.normalize_for_duplicate(other.address_line)
+    return false unless same_address
+
+    city.present? && other.city.present? ? self.class.normalize_for_duplicate(city) == self.class.normalize_for_duplicate(other.city) : km <= ADDRESS_NEAR_KM
   end
 
   # The province always follows the pin (the pin is the truth; a typed

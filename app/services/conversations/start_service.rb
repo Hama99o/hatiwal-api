@@ -20,19 +20,25 @@ class Conversations::StartService
     raise Error, "cannot start a conversation on your own listing" if @listing.user_id == @buyer.id
     raise Error, "message cannot be blank" if @message_body.blank?
 
-    ActiveRecord::Base.transaction do
-      conversation = Conversation.create!(
+    message = nil
+    conversation = ActiveRecord::Base.transaction do
+      created = Conversation.create!(
         listing: @listing,
         buyer:   @buyer,
         seller:  @listing.user
       )
-      conversation.messages.create!(
+      message = created.messages.create!(
         user: @buyer,
         body: @message_body,
         kind: :text
       )
-      conversation
+      created
     end
+    # The buyer's first message reaches the seller like every other one: live
+    # in an open app, and as a push. It used to do neither.
+    BroadcastMessageJob.perform_later(message.id)
+    SendMessagePushJob.perform_later(message.id)
+    conversation
   end
 
   private

@@ -128,7 +128,9 @@ class UserSerializer < ApplicationSerializer
     field(:shops) do |u|
       next [] unless u.shop_memberships_count.positive?
 
-      u.shop_members.includes(shop: { logo_attachment: :blob }).map do |m|
+      # SHOP-2: owned first, then oldest first — a stable "Sell as" order.
+      u.shop_members.includes(shop: { logo_attachment: :blob }).joins(:shop)
+       .order(Arel.sql("CASE WHEN shops.owner_id = #{u.id.to_i} THEN 0 ELSE 1 END"), "shops.created_at", "shops.id").map do |m|
         ShopSerializer.render_as_hash(m.shop, view: :card).merge(role: m.role, status: m.shop.status)
       end
     end

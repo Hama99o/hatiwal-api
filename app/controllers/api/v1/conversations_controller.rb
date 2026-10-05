@@ -48,6 +48,7 @@ class Api::V1::ConversationsController < Api::V1::BaseController
                     :latest_message,
                     { listing: { images_attachments: { blob: { variant_records: { image_attachment: :blob } } },
                                  shop: { logo_attachment: :blob } },
+                      shop: { logo_attachment: :blob }, # SHOP-2: listing-less shop chats
                       buyer: { avatar_attachment: :blob },
                       seller: { avatar_attachment: :blob } }
                   )

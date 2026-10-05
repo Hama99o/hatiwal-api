@@ -98,11 +98,12 @@ RSpec.describe "Api::V1::Shops", type: :request do
 
   def json_headers = headers.merge("Content-Type" => "application/json")
 
-  it "refuses a second shop, with a code the form can translate" do
-    create(:shop, owner: owner)
+  it "refuses the same shop twice, with a code the form can translate and the shop it duplicates" do
+    first = create(:shop, owner: owner, name: shop_body[:shop][:name], latitude: shop_body[:shop][:latitude],
+                          longitude: shop_body[:shop][:longitude])
     post "/api/v1/shops", params: shop_body.to_json, headers: json_headers
     expect(response).to have_http_status(:unprocessable_entity)
-    expect(JSON.parse(response.body)["code"]).to eq("shop_limit_reached")
+    expect(JSON.parse(response.body)).to include("code" => "shop_duplicate", "duplicate_shop_id" => first.id)
   end
 
   it "names a location abroad with its own code" do

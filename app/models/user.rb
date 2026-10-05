@@ -651,6 +651,7 @@ class User < ApplicationRecord
   def unread_counts
     identity = Arel.sql(
       "CASE WHEN conversations.buyer_id = #{id.to_i} THEN 'buying' " \
+      "WHEN conversations.shop_id IS NOT NULL THEN conversations.shop_id::text " \
       "WHEN listings.shop_id IS NULL THEN 'selling_me' ELSE listings.shop_id::text END"
     )
     raw = Message.joins(:conversation)

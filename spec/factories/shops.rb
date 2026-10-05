@@ -8,7 +8,8 @@ FactoryBot.define do
     description { "Beauty products, Shar-e-Naw" }
     latitude { 34.3529 }
     longitude { 62.204 }
-    address_line { "Near Kabul Bank, 3rd floor" }
+    # Distinct per shop: one owner's shops with the same address are duplicates (SHOP-2).
+    sequence(:address_line) { |n| "Near Kabul Bank, shop #{n}" }
     phone { "+93 70 123 4567" }
     hours { { "sat" => [ %w[08:00 18:00] ], "fri" => [] } }
 

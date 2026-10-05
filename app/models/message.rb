@@ -38,7 +38,8 @@ class Message < ApplicationRecord
               max_size: MAX_ATTACHMENT_SIZE
             }
   validate :kind_must_not_be_system_when_user_authored
-  validate :kind_allowed_in_support_thread, if: -> { conversation&.kind_support? }
+  # SHOP-2: a shop chat has no product, so no offers or deal kinds either.
+  validate :kind_allowed_in_support_thread, if: -> { conversation&.kind_support? || conversation&.shop_chat? }
   validate :responds_to_must_be_in_same_conversation, if: -> { responds_to_id.present? }
 
   # ── SF-B11: an offer carries how many units it is for ───────────────────────
@@ -228,6 +229,6 @@ class Message < ApplicationRecord
   def kind_allowed_in_support_thread
     return if Conversation::SUPPORT_MESSAGE_KINDS.include?(kind.to_s)
 
-    errors.add(:kind, "is not allowed in a support conversation")
+    errors.add(:kind, conversation.shop_chat? ? "is not allowed in a chat without a product" : "is not allowed in a support conversation")
   end
 end

@@ -21,6 +21,11 @@ class Api::V1::MessagesController < Api::V1::BaseController
   end
 
   def create
+    # SHOP-2: a chat with a suspended/closed shop stays readable, but is shut.
+    if @conversation.shop_chat? && !@conversation.shop&.active?
+      return render_unprocessable_entity(I18n.t("shops.errors.not_open"), code: :shop_unavailable)
+    end
+
     authorize @conversation, :send_message?
 
     @message = @conversation.messages.new(safe_message_params)

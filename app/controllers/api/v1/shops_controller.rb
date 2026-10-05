@@ -1,7 +1,7 @@
 # SHOP-1 — shops (hatiwal-mobile/docs/SHOPS.md).
 #
 #   GET    /api/v1/shops/:id                 public shop page (guests too)
-#   POST   /api/v1/shops                     open your shop (one per user, phase 1)
+#   POST   /api/v1/shops                     open a shop (several per user, never the same twice: SHOP-2)
 #   PATCH  /api/v1/shops/:id                 edit (owner / manager)
 #   DELETE /api/v1/shops/:id                 close (owner): soft, Shop#close!; its products become personal
 #   POST   /api/v1/shops/:id/move_listings   put your listings into the shop, or back
@@ -34,24 +34,29 @@ class Api::V1::ShopsController < Api::V1::BaseController
   def create
     shop = current_user.owned_shops.new(shop_params)
     authorize shop
-    if shop.save
+    saved = Shop.transaction do
+      Shop.lock_owner!(current_user.id)
+      shop.save
+    end
+    if saved
       render_blue(ShopSerializer, shop, view: :owner, status: :created, options: { current_user: current_user })
     else
-      render_unprocessable_entity(shop, code: shop.error_code)
+      render_shop_errors(shop)
     end
-  rescue ActiveRecord::RecordNotUnique
-    # Lost the race with a second "Open my shop" tap: the unique index said no.
-    render_unprocessable_entity(I18n.t("activerecord.errors.models.shop.attributes.base.one_shop_per_user"), code: :shop_limit_reached)
   end
 
   def update
     authorize @shop
-    if @shop.update(shop_params)
+    saved = Shop.transaction do
+      Shop.lock_owner!(@shop.owner_id)
+      @shop.update(shop_params)
+    end
+    if saved
       # A verified shop's new name/address is not what the badge vouched for.
-      SupportNoticeJob.enqueue(@shop.owner, :shop_reverify_needed) if @shop.drop_badge_after_identity_change!
+      SupportNoticeJob.enqueue(@shop.owner, :shop_reverify_needed, shop: @shop) if @shop.drop_badge_after_identity_change!
       render_blue(ShopSerializer, @shop, view: :owner, options: { current_user: current_user })
     else
-      render_unprocessable_entity(@shop, code: @shop.error_code)
+      render_shop_errors(@shop)
     end
   end
 
@@ -72,6 +77,12 @@ class Api::V1::ShopsController < Api::V1::BaseController
   end
 
   private
+
+  # SHOP-2: a duplicate names the shop it duplicates, so the app can offer it.
+  def render_shop_errors(shop)
+    extra = shop.duplicate_shop ? { duplicate_shop_id: shop.duplicate_shop.id } : {}
+    render_unprocessable_entity(shop, code: shop.error_code, extra: extra)
+  end
 
   def set_shop
     @shop = Shop.find(params[:id])

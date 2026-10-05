@@ -120,13 +120,14 @@ class ApplicationController < ActionController::API
   # showing an English sentence from the API. Mirrors the `account_suspended`
   # convention #reject_blocked_user! below already uses. Purely additive — every
   # existing caller omits it and gets exactly the payload it always did.
-  def render_unprocessable_entity(record_or_message, code: nil)
+  def render_unprocessable_entity(record_or_message, code: nil, extra: {})
     body = if record_or_message.respond_to?(:errors)
              { errors: record_or_message.errors.full_messages }
     else
              { error: record_or_message.to_s }
     end
     body[:code] = code if code.present?
+    body.merge!(extra)
     render json: body, status: :unprocessable_entity
   end
 

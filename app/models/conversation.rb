@@ -1,5 +1,9 @@
 class Conversation < ApplicationRecord
   belongs_to :listing, optional: true
+  # SHOP-2 — a "Message shop" chat from the shop page: no listing, the shop
+  # instead (one per buyer and shop). A chat about a shop's PRODUCT keeps
+  # shop_id nil: it belongs to the shop through its listing.
+  belongs_to :shop, optional: true
   belongs_to :buyer,  class_name: User.name, foreign_key: :buyer_id
   belongs_to :seller, class_name: User.name, foreign_key: :seller_id
   has_many :messages, dependent: :destroy
@@ -42,10 +46,12 @@ class Conversation < ApplicationRecord
   # SHOP-1 — the Chat tab follows who you sell as: a shop's chats are the ones
   # whose listing belongs to the shop; personal chats are the rest (including
   # support threads, which have no listing).
-  scope :for_shop, ->(shop_id) { where(listing_id: Listing.where(shop_id: shop_id).select(:id)) }
+  # SHOP-2: plus the shop's listing-less chats.
+  scope :for_shop, ->(shop_id) { where(listing_id: Listing.where(shop_id: shop_id).select(:id)).or(where(shop_id: shop_id)) }
   scope :without_shop, lambda {
-    where("conversations.listing_id IS NULL OR NOT EXISTS " \
-          "(SELECT 1 FROM listings l WHERE l.id = conversations.listing_id AND l.shop_id IS NOT NULL)")
+    where(shop_id: nil)
+      .where("conversations.listing_id IS NULL OR NOT EXISTS " \
+             "(SELECT 1 FROM listings l WHERE l.id = conversations.listing_id AND l.shop_id IS NOT NULL)")
   }
   scope :support_first, -> { order(kind: :desc) }
 
@@ -62,6 +68,7 @@ class Conversation < ApplicationRecord
   validates :listing_id, uniqueness: { scope: :buyer_id, message: "already has a conversation with this buyer", allow_nil: true }
   validate :buyer_is_not_seller
   validate :support_thread_shape, if: :kind_support?
+  validate :shop_chat_shape, if: :shop_id?
 
   # NULLS LAST matters. A conversation is created the moment a buyer opens a
   # thread from a listing, before any message is sent, so `last_message_at` is
@@ -174,6 +181,12 @@ class Conversation < ApplicationRecord
   def listing_deleted?
     listing.nil? || listing.removed?
   end
+
+  # SHOP-2 — a "Message shop" chat (no product).
+  def shop_chat? = shop_id.present? && listing_id.nil?
+
+  # The shop this chat is with: its own (a shop chat) or its product's.
+  def chat_shop = shop_chat? ? shop : listing&.shop
 
   def participant?(user)
     buyer_id == user.id || seller_id == user.id
@@ -342,6 +355,12 @@ class Conversation < ApplicationRecord
 
   def buyer_is_not_seller
     errors.add(:base, "buyer and seller must be different users") if buyer_id == seller_id
+  end
+
+  def shop_chat_shape
+    errors.add(:listing_id, "must be empty on a shop chat") if listing_id.present?
+    errors.add(:kind, "must be listing on a shop chat") unless kind_listing?
+    errors.add(:seller_id, "must be the shop's owner") if new_record? && shop && seller_id != shop.owner_id
   end
 
   def support_thread_shape

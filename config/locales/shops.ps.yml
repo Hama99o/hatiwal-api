@@ -35,7 +35,7 @@ ps:
           attributes:
             base:
               outside_service_area: "باید په افغانستان، پاکستان یا ایران کې وي"
-              one_shop_per_user: "تاسو مخکې یو دوکان لرئ"
+              duplicate_shop: "دا دوکان مو مخکې لرئ: همدا نوم نږدې یا همدا پته"
             hours:
               malformed: "د خلاصېدو سم وختونه نه دي"
         listing:

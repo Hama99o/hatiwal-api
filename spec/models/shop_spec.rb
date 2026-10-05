@@ -29,11 +29,12 @@ RSpec.describe Shop, type: :model do
       end
     end
 
-    it "allows one shop per user (phase 1)" do
-      create(:shop, owner: owner)
-      second = build(:shop, owner: owner)
+    it "allows several shops per user (SHOP-2), never the same one twice" do
+      create(:shop, owner: owner, name: "Safi Store")
+      expect(build(:shop, owner: owner, name: "Other Store")).to be_valid
+      second = build(:shop, owner: owner, name: "Safi Store")
       expect(second).not_to be_valid
-      expect(second.errors.details[:base]).to include(error: :one_shop_per_user)
+      expect(second.errors.details[:base]).to include(error: :duplicate_shop)
     end
 
     it "has its messages in all four locales" do
@@ -41,7 +42,7 @@ RSpec.describe Shop, type: :model do
         I18n.with_locale(locale) do
           shop = described_class.new
           shop.errors.add(:base, :outside_service_area)
-          shop.errors.add(:base, :one_shop_per_user)
+          shop.errors.add(:base, :duplicate_shop)
           shop.errors.add(:hours, :malformed)
           listing = Listing.new
           listing.errors.add(:shop, :not_a_member)

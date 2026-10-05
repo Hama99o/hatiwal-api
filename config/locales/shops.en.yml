@@ -35,7 +35,7 @@ en:
           attributes:
             base:
               outside_service_area: "must be in Afghanistan, Pakistan or Iran"
-              one_shop_per_user: "You already have a shop"
+              duplicate_shop: "You already have this shop: the same name nearby or the same address"
             hours:
               malformed: "are not valid opening hours"
         listing:

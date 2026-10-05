@@ -175,14 +175,14 @@ class VerificationRequest < ApplicationRecord
               checklist: clean_checklist(checklist), reason_code: nil, reason_text: nil)
       subject.verification_granted!(admin)
     end
-    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:verified))
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:verified), shop: (subject if shop_subject?))
   end
 
   def reject!(admin:, reason_code:, reason_text: nil, checklist: {})
     raise ArgumentError, "only a waiting request can be rejected" unless requested?
 
     decide!(:rejected, admin, reason_code, reason_text, REJECT_REASONS, checklist: checklist)
-    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:rejected))
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:rejected), shop: (subject if shop_subject?))
   end
 
   def revoke!(admin:, reason_code:, reason_text: nil)
@@ -192,7 +192,7 @@ class VerificationRequest < ApplicationRecord
       decide!(:revoked, admin, reason_code, reason_text, REVOKE_REASONS)
       subject.verification_withdrawn!
     end
-    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:revoked))
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:revoked), shop: (subject if shop_subject?))
   end
 
   # Revoke a badge that was switched on by hand (no approved request to revoke):
