@@ -1,0 +1,67 @@
+require "rails_helper"
+
+# A login must survive a slow or dropped connection, and an active user must
+# never be logged out; 2 months away logs out (owner, 2026-10-05).
+RSpec.describe "Session stability", type: :request do
+  include ActiveSupport::Testing::TimeHelpers
+
+  let(:password) { "password123" }
+  let!(:user) { create(:user, password: password) }
+
+  def sign_in_headers
+    post "/api/v1/auth/sign_in", params: { email: user.email, password: password }, as: :json
+    expect(response).to have_http_status(:ok)
+    response.headers.slice("access-token", "client", "uid", "token-type")
+  end
+
+  def me(headers)
+    get "/api/v1/users/me", headers: headers
+    response
+  end
+
+  it "keeps the same token across requests, so a reply lost in transit can't log the user out" do
+    headers = sign_in_headers
+
+    travel 1.minute do
+      expect(me(headers)).to have_http_status(:ok)
+      # Nothing new to remember: the phone keeps working with what it has.
+      expect(response.headers["access-token"].to_s.strip).to be_empty.or eq(headers["access-token"])
+    end
+
+    # The reply above "never arrived"; the phone retries with its original
+    # token much later and is still signed in.
+    travel 2.hours do
+      expect(me(headers)).to have_http_status(:ok)
+    end
+  end
+
+  it "never logs out a user who keeps using the app (sliding 2 months)" do
+    headers = sign_in_headers
+
+    # Used every 40 days for 8 months: each use pushes the expiry back.
+    1.upto(6) do |i|
+      travel_to((40 * i).days.from_now) do
+        expect(me(headers)).to have_http_status(:ok)
+      end
+    end
+  end
+
+  it "logs out after 2 months without using the app" do
+    headers = sign_in_headers
+
+    travel_to(59.days.from_now) { expect(me(headers)).to have_http_status(:ok) }
+    # 59 days later again = 59 days after the last use: still fine.
+    travel_to(118.days.from_now) { expect(me(headers)).to have_http_status(:ok) }
+    # Then 62 days with no use at all.
+    travel_to(180.days.from_now) { expect(me(headers)).to have_http_status(:unauthorized) }
+  end
+
+  it "writes the new expiry at most once a day per device" do
+    headers = sign_in_headers
+    travel_to(2.days.from_now) { me(headers) }
+
+    expect do
+      travel_to(2.days.from_now + 3.hours) { me(headers) }
+    end.not_to(change { user.reload.updated_at })
+  end
+end
