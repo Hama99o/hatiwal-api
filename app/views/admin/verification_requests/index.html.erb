@@ -8,13 +8,14 @@
   <nav class="hw-segmented" aria-label="Kind">
     <%= link_to "Users", admin_verification_requests_path(kind: "users", status: @filter),
           class: "growth-period #{'growth-period--active' if @kind == 'users'}" %>
-    <span class="growth-period hw-text-muted" title="Verified shops come with SHOP-1">Shops</span>
+    <%= link_to "Shops", admin_verification_requests_path(kind: "shops", status: @filter),
+          class: "growth-period #{'growth-period--active' if @kind == 'shops'}", id: "verification-kind-shops" %>
   </nav>
 </header>
 
 <nav class="hw-segmented hw-gap-bottom" aria-label="Status" id="verification-filters">
   <% { "waiting" => "Waiting", "approved" => "Approved", "rejected" => "Rejected", "revoked" => "Revoked", "all" => "All" }.each do |key, label| %>
-    <%= link_to "#{label} (#{@counts[key]})", admin_verification_requests_path(status: key),
+    <%= link_to "#{label} (#{@counts[key]})", admin_verification_requests_path(status: key, kind: @kind),
           class: "growth-period #{'growth-period--active' if @filter == key}", id: "verification-filter-#{key}" %>
   <% end %>
 </nav>
@@ -29,7 +30,12 @@
         <% @requests.each do |r| %>
           <% user = r.subject %>
           <tr>
+            <% if r.shop_subject? %>
+              <%# SHOP-1: a shop row names the shop and links its owner. %>
+              <td class="hw-nowrap" dir="auto">🏪 <%= user.name %> <span class="hw-text-muted">#<%= user.id %> · owner <%= link_to user.owner.full_name, admin_user_path(user.owner) %></span></td>
+            <% else %>
             <td class="hw-nowrap" dir="auto"><%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user) %> <span class="hw-text-muted">#<%= user.id %></span></td>
+            <% end %>
             <td class="hw-nowrap"><%= r.document_type ? r.document_type.humanize : "—" %><% if r.document_last4 %> · ••••<%= r.document_last4 %><% end %></td>
             <td><%= render "status_badge", request: r %></td>
             <td class="hw-nowrap hw-text-muted"><%= time_ago_in_words(r.created_at) %> ago</td>

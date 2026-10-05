@@ -170,6 +170,21 @@
     </div>
   </section>
 
+  <%# SHOP-1 — the shops this user owns or works in. %>
+  <% memberships = user.shop_members.includes(:shop) %>
+  <section id="user-shops" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Shops (<%= memberships.size %>)</h2></div>
+    <% if memberships.any? %>
+      <ul class="hw-list">
+        <% memberships.each do |m| %>
+          <li dir="auto"><%= link_to m.shop.name, admin_shop_path(m.shop) %> <span class="hw-text-muted">· <%= m.role %> · <%= m.shop.status %><%= " · verified" if m.shop.verified? %></span></li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="hw-empty">No shop.</p>
+    <% end %>
+  </section>
+
   <section class="hw-panel">
     <div class="hw-panel__head"><h2 class="hw-panel__title">Reports against this user (<%= reports.size %>)</h2></div>
     <% if reports.any? %>

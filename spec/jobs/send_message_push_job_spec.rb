@@ -136,4 +136,25 @@ RSpec.describe SendMessagePushJob, type: :job do
 
     expect(seller.reload.push_token).to be_nil
   end
+
+  # SHOP-1 — the app switches "Selling as" on a tap (role + shopId).
+  describe "identity in the push data" do
+    before { allow(Notifications::ExpoPushService).to receive(:deliver).and_return(result) }
+
+    it "tells the seller it is a selling chat, with the shop" do
+      shop = create(:shop, owner: seller)
+      shop_conversation = create(:conversation, buyer: buyer, listing: create(:listing, :active, user: seller, shop: shop))
+      msg = create(:message, conversation: shop_conversation, user: buyer)
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver)
+        .with(hash_including(data: hash_including(role: "selling", shopId: shop.id)))
+    end
+
+    it "tells the buyer it is a buying chat, and a personal listing has no shop" do
+      msg = create(:message, conversation: conversation, user: seller)
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver)
+        .with(hash_including(data: hash_including(role: "buying", shopId: nil)))
+    end
+  end
 end

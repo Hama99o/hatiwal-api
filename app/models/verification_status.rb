@@ -38,6 +38,10 @@ class VerificationStatus
   # (User#drop_badge_after_name_change!): the card says "verify again".
   # Derived, not stored: approved, no badge, and the name no longer matches.
   def name_changed?
+    # SHOP-1: a shop's badge only comes off without a decision when the owner
+    # changed its name or address (Shop#drop_badge_after_identity_change!) — an
+    # admin removal writes a `revoked` row instead.
+    return state == "none" && request&.approved? if subject.is_a?(Shop)
     return false unless state == "none" && request&.approved? && request.name_on_document.present?
 
     !request.name_on_document.squish.casecmp?(subject.full_name.squish)

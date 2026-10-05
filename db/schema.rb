@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -253,6 +253,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.datetime "removed_at"
     t.string "removed_reason"
     t.datetime "reserved_at"
+    t.bigint "shop_id"
     t.datetime "sold_at"
     t.integer "sold_units", default: 0, null: false
     t.integer "status", default: 0, null: false
@@ -267,6 +268,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.index ["latitude", "longitude"], name: "index_listings_on_point_browsable", where: "((latitude IS NOT NULL) AND (longitude IS NOT NULL) AND (removed_at IS NULL))"
     t.index ["price"], name: "index_listings_on_price"
     t.index ["removed_at"], name: "index_listings_on_removed_at"
+    t.index ["shop_id", "status", "published_at"], name: "index_listings_on_shop_id_and_status_and_published_at"
+    t.index ["shop_id"], name: "index_listings_on_shop_id"
     t.index ["status", "created_at"], name: "index_listings_on_status_and_created_at"
     t.index ["status", "views_count"], name: "index_listings_on_status_and_views_count"
     t.index ["status"], name: "index_listings_on_status"
@@ -358,6 +361,45 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.index ["user_id"], name: "index_saved_searches_on_user_id"
   end
 
+  create_table "shop_members", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "invited_by_id"
+    t.integer "role", default: 0, null: false
+    t.bigint "shop_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["invited_by_id"], name: "index_shop_members_on_invited_by_id"
+    t.index ["shop_id", "user_id"], name: "index_shop_members_on_shop_id_and_user_id", unique: true
+    t.index ["shop_id"], name: "index_shop_members_on_shop_id"
+    t.index ["user_id"], name: "index_shop_members_on_user_id"
+  end
+
+  create_table "shops", force: :cascade do |t|
+    t.string "address_line"
+    t.bigint "category_id", null: false
+    t.string "city"
+    t.datetime "created_at", null: false
+    t.string "description"
+    t.jsonb "hours", default: {}, null: false
+    t.decimal "latitude", precision: 10, scale: 6
+    t.decimal "longitude", precision: 10, scale: 6
+    t.string "name", null: false
+    t.bigint "owner_id", null: false
+    t.string "phone"
+    t.boolean "phone_public", default: false, null: false
+    t.string "province"
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.datetime "verified_at"
+    t.bigint "verified_by_id"
+    t.index ["category_id"], name: "index_shops_on_category_id"
+    t.index ["owner_id"], name: "index_shops_on_owner_id"
+    t.index ["owner_id"], name: "index_shops_one_open_per_owner", unique: true, where: "(status <> 3)"
+    t.index ["province"], name: "index_shops_on_province"
+    t.index ["status", "verified_at"], name: "index_shops_on_status_and_verified_at"
+    t.index ["verified_by_id"], name: "index_shops_on_verified_by_id"
+  end
+
   create_table "transactions", force: :cascade do |t|
     t.bigint "buyer_id"
     t.datetime "completed_at"
@@ -392,6 +434,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
   end
 
   create_table "users", force: :cascade do |t|
+    t.bigint "active_shop_id"
     t.boolean "allow_password_change", default: false
     t.boolean "auto_blocked", default: false, null: false
     t.decimal "avg_rating", precision: 3, scale: 2
@@ -444,6 +487,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.string "reset_password_token"
     t.integer "review_count", default: 0, null: false
     t.boolean "seller_mode", default: false, null: false
+    t.integer "shop_memberships_count", default: 0, null: false
     t.boolean "show_address_publicly", default: true, null: false
     t.boolean "show_phone_publicly", default: true, null: false
     t.integer "sign_in_count", default: 0, null: false
@@ -457,6 +501,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.datetime "updated_at", null: false
     t.boolean "verified", default: false, null: false
     t.string "whatsapp_number"
+    t.index ["active_shop_id"], name: "index_users_on_active_shop_id"
     t.index ["avg_rating"], name: "index_users_on_avg_rating"
     t.index ["city"], name: "index_users_on_city"
     t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
@@ -527,6 +572,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
   add_foreign_key "listing_views", "listings"
   add_foreign_key "listing_views", "users"
   add_foreign_key "listings", "categories"
+  add_foreign_key "listings", "shops"
   add_foreign_key "listings", "users"
   add_foreign_key "messages", "admin_users"
   add_foreign_key "messages", "conversations"
@@ -540,11 +586,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
   add_foreign_key "saved_listings", "users"
   add_foreign_key "saved_searches", "categories"
   add_foreign_key "saved_searches", "users"
+  add_foreign_key "shop_members", "shops"
+  add_foreign_key "shop_members", "users"
+  add_foreign_key "shop_members", "users", column: "invited_by_id"
+  add_foreign_key "shops", "admin_users", column: "verified_by_id"
+  add_foreign_key "shops", "categories"
+  add_foreign_key "shops", "users", column: "owner_id"
   add_foreign_key "transactions", "listings"
   add_foreign_key "transactions", "users", column: "buyer_id"
   add_foreign_key "transactions", "users", column: "seller_id"
   add_foreign_key "user_warnings", "admin_users"
   add_foreign_key "user_warnings", "users"
+  add_foreign_key "users", "shops", column: "active_shop_id", on_delete: :nullify
   add_foreign_key "verification_requests", "admin_users", column: "decided_by_id"
   add_foreign_key "verification_requests", "users", column: "requested_by_id"
 end

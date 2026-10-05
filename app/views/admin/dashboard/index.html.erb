@@ -93,6 +93,17 @@
   </div>
 </section>
 
+<%# SHOP-1 %>
+<section class="hw-section" id="dashboard-shops">
+  <div class="hw-section__head"><h2 class="hw-section__title">Shops</h2></div>
+  <div class="hw-metrics">
+    <div class="hw-metric hw-metric--primary"><span class="hw-metric__label">Shops</span><span class="hw-metric__value"><%= link_to @stats[:shops_total], admin_shops_path %></span></div>
+    <div class="hw-metric"><span class="hw-metric__label">New this week</span><span class="hw-metric__value"><%= @stats[:shops_new_week] %></span></div>
+    <div class="hw-metric"><span class="hw-metric__label">Verified</span><span class="hw-metric__value"><%= @stats[:shops_verified] %></span></div>
+    <div class="hw-metric<%= ' hw-metric--attention' if @stats[:shop_verifications_waiting].positive? %>"><span class="hw-metric__label">Verification waiting</span><span class="hw-metric__value"><%= link_to @stats[:shop_verifications_waiting], admin_verification_requests_path(kind: "shops") %></span></div>
+  </div>
+</section>
+
 <section class="hw-section" id="growth">
   <div class="hw-section__head">
     <h2 class="hw-section__title">Growth — <%= period_cfg[:label].downcase %></h2>

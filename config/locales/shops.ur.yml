@@ -1,0 +1,41 @@
+# SHOP-1 messages (hatiwal-mobile/docs/SHOPS.md). Own file so it never
+# collides with edits to ur.yml.
+ur:
+  support:
+    notices:
+      shop_verified: "مبارک ہو! ✅ %{shop} اب ہتیوال پر تصدیق شدہ دکان ہے۔ خریدار یہ نشان آپ کی دکان اور مصنوعات پر دیکھیں گے۔"
+      shop_verification_rejected: "ہم ابھی %{shop} کی تصدیق نہیں کر سکے: %{reason}۔ آپ «میری دکان ← تصدیق کروائیں» سے نئی درخواست بھیج سکتے ہیں۔"
+      shop_badge_removed: "%{shop} کا تصدیقی نشان ہٹا دیا گیا: %{reason}۔ اگر کوئی سوال ہو تو یہاں جواب دیں۔"
+      shop_reverify_needed: "آپ نے %{shop} کا نام یا پتہ بدلا، اس لیے تصدیق شدہ دکان کا نشان ہٹا دیا گیا۔ دوبارہ حاصل کرنے کے لیے «میری دکان ← تصدیق کروائیں» سے نئی درخواست بھیجیں۔"
+  shops:
+    errors:
+      cannot_sell_as: "آپ اس دکان کے طور پر فروخت نہیں کر سکتے"
+      not_open: "یہ دکان کھلی نہیں ہے"
+  activerecord:
+    models:
+      shop: "دکان"
+    attributes:
+      shop:
+        name: "دکان کا نام"
+        description: "تفصیل"
+        category: "زمرہ"
+        address_line: "پتہ"
+        latitude: "مقام"
+        longitude: "مقام"
+        logo: "لوگو"
+        cover: "کور تصویر"
+        phone: "فون"
+        hours: "اوقاتِ کار"
+    errors:
+      models:
+        shop:
+          attributes:
+            base:
+              outside_service_area: "افغانستان، پاکستان یا ایران میں ہونی چاہیے"
+              one_shop_per_user: "آپ کی پہلے سے ایک دکان ہے"
+            hours:
+              malformed: "درست اوقاتِ کار نہیں ہیں"
+        listing:
+          attributes:
+            shop:
+              not_a_member: "وہ دکان نہیں جس کے لیے آپ فروخت کرتے ہیں"

@@ -21,6 +21,9 @@ class Api::V1::ListingsController < Api::V1::BaseController
     listings = policy_scope(Listing.browsable)
     listings = listings.not_hidden_for(current_user)
     listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
+    # SHOP-1 — the Bazaar "Shops" filter, and a shop page's Products tab.
+    listings = listings.from_shops if params[:seller_type] == Listing::SELLER_TYPE_SHOP
+    listings = listings.by_shop(params[:shop_id]) if params[:shop_id].present?
     listings = listings.search(params[:search]) if params[:search].present?
     listings = listings.by_category(params[:category_id]) if params[:category_id].present?
     listings = listings.by_condition(params[:condition]) if params[:condition].present?
@@ -84,6 +87,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
       :price_histories,
       :sale_transactions,
       { user: { avatar_attachment: :blob },
+        shop: { logo_attachment: :blob },
         images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
     )
 
@@ -98,6 +102,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
   def show
     return render_not_found if blocked_pair_show?
     return render_not_found if removed_for_viewer?
+    return render_not_found if closed_shop_for_viewer?
 
     @listing.register_view!(current_user)
     viewed = current_user ? ListingView.exists?(user_id: current_user.id, listing_id: @listing.id) : false
@@ -151,7 +156,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
                    # SF-B2 — preloaded for the base `held_units` field; see
                    # Listing#open_sale's loaded-array guard.
                    :sale_transactions,
-                   { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+                   { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                  )
     render_blue_collection(
       ListingSerializer,
@@ -231,6 +236,12 @@ class Api::V1::ListingsController < Api::V1::BaseController
   # (who can still see it — e.g. to learn it was removed).
   def removed_for_viewer?
     @listing.removed? && @listing.user_id != current_user&.id
+  end
+
+  # SHOP-1: a suspended / pending / closed shop's products are unavailable to
+  # everyone but their seller — the same rule as `browsable`.
+  def closed_shop_for_viewer?
+    @listing.shop_id.present? && !@listing.shop&.active? && @listing.user_id != current_user&.id
   end
 
   def set_listing

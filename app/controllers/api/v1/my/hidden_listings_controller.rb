@@ -14,7 +14,7 @@ class Api::V1::My::HiddenListingsController < Api::V1::BaseController
                                     # the list would fire one extra query per card (Listing#open_sale
                                     # reads the loaded array when it is present).
                                     :sale_transactions,
-                                    { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+                                    { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                                   ])
 
     # TASK-BE-SAVEDLIST (FlowApp #255) — no `saved_ids:`/`saved_by_listing_id:`

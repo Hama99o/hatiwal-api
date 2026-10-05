@@ -1,0 +1,41 @@
+# SHOP-1 messages (hatiwal-mobile/docs/SHOPS.md). Own file so it never
+# collides with edits to ps.yml.
+ps:
+  support:
+    notices:
+      shop_verified: "مبارک شه! ✅ %{shop} اوس په هټیوال کې تایید شوی دوکان دی. پېرودونکي به دا نښه ستاسو په دوکان او توکو ووینی."
+      shop_verification_rejected: "مونږ لا %{shop} تایید نه کړای شو: %{reason}. تاسو له «زما دوکان ← تایید یې کړئ» څخه نوې غوښتنه لېږلی شئ."
+      shop_badge_removed: "د %{shop} د تایید نښه لرې شوه: %{reason}. که پوښتنه لرئ، دلته ځواب راکړئ."
+      shop_reverify_needed: "تاسو د %{shop} نوم یا پته بدله کړه، نو د تایید شوي دوکان نښه یې لرې شوه. د بېرته ترلاسه کولو لپاره له «زما دوکان ← تایید یې کړئ» څخه نوې غوښتنه ولېږئ."
+  shops:
+    errors:
+      cannot_sell_as: "تاسو د دې دوکان په نوم نه شئ پلورلی"
+      not_open: "دا دوکان خلاص نه دی"
+  activerecord:
+    models:
+      shop: "دوکان"
+    attributes:
+      shop:
+        name: "د دوکان نوم"
+        description: "تشریح"
+        category: "کټګوري"
+        address_line: "پته"
+        latitude: "ځای"
+        longitude: "ځای"
+        logo: "لوګو"
+        cover: "د پوښ انځور"
+        phone: "تلیفون"
+        hours: "د خلاصېدو وختونه"
+    errors:
+      models:
+        shop:
+          attributes:
+            base:
+              outside_service_area: "باید په افغانستان، پاکستان یا ایران کې وي"
+              one_shop_per_user: "تاسو مخکې یو دوکان لرئ"
+            hours:
+              malformed: "د خلاصېدو سم وختونه نه دي"
+        listing:
+          attributes:
+            shop:
+              not_a_member: "هغه دوکان نه دی چې تاسو ورته پلورئ"

@@ -1,0 +1,141 @@
+<%# SHOP-1 — a shop's admin page (hatiwal-mobile/docs/SHOPS.md, "Admin"):
+    one panel per job — moderation, verification, members, products, reports,
+    history — then every field. Every action is written to AdminAuditLog. %>
+<%
+  shop = page.resource
+  owner = shop.owner
+  members = shop.shop_members.includes(:user).order(:role, :created_at)
+  products_total = shop.listings.count
+  products_live = shop.live_listings_count
+  products = shop.listings.order(created_at: :desc).limit(10)
+  listing_reports = Report.where(reportable_type: Listing.name, reportable_id: shop.listings.select(:id))
+  owner_reports = owner.reports_against
+  latest_request = shop.latest_verification_request
+  history = AdminAuditLog.where(target: shop).or(AdminAuditLog.where(target: shop.verification_requests))
+                         .recent.includes(:admin_user).limit(30)
+%>
+
+<% content_for(:header_middle) do %>
+  <span class="hw-badges">
+    <span class="hw-badge <%= shop.active? ? 'hw-badge--success' : 'hw-badge--danger' %>"><%= shop.status.humanize %></span>
+    <% if shop.verified? %><span class="hw-badge hw-badge--brand">Verified shop</span><% end %>
+    <% if latest_request&.requested? %><span class="hw-badge hw-badge--warning">Verification waiting</span><% end %>
+  </span>
+<% end %>
+
+<% content_for(:before_main) do %>
+<div class="hw-panels">
+  <section id="shop-identity" class="hw-panel hw-panel--brand">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Shop</h2></div>
+    <div class="hw-verify-head">
+      <% if shop.logo.attached? %><%= image_tag url_for(shop.logo), class: "hw-verify-avatar", alt: "" %><% end %>
+      <div>
+        <p class="hw-verify-line" dir="auto"><strong><%= shop.name %></strong> · <%= shop.category&.name_en %></p>
+        <p class="hw-verify-line" dir="auto"><%= [ shop.address_line, shop.city, shop.province ].compact_blank.join(", ") %>
+          (<%= shop.latitude %>, <%= shop.longitude %>)</p>
+        <p class="hw-kv">
+          <span>Owner <%= link_to owner.full_name, admin_user_path(owner), dir: "auto" %></span>
+          <span>Phone <%= shop.phone.presence || "—" %><%= " (public)" if shop.phone_public %></span>
+          <span>Opened <%= l(shop.created_at.to_date) %></span>
+        </p>
+      </div>
+    </div>
+    <% if shop.cover.attached? %><%= image_tag url_for(shop.cover), class: "hw-shop-cover", alt: "", style: "max-width:100%;border-radius:8px" %><% end %>
+  </section>
+
+  <section id="shop-moderation" class="hw-panel hw-panel--danger">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Moderation</h2></div>
+    <% if shop.suspended? %>
+      <p class="hw-panel__text">Suspended: hidden from search; its members sell as themselves.</p>
+      <%= button_to "Reactivate", reactivate_admin_shop_path(shop), method: :patch, id: "shop-reactivate", class: "button",
+            form: { data: { turbo: false } } %>
+    <% else %>
+      <p class="hw-panel__text hw-panel__text--muted">Suspending hides the shop and all its products from search at once.</p>
+      <%= form_with url: suspend_admin_shop_path(shop), method: :patch, data: { turbo: false }, id: "shop-suspend" do %>
+        <%= text_field_tag :reason, nil, placeholder: "Reason (kept in the audit log)", class: "hw-input" %>
+        <%= submit_tag "Suspend", class: "button button--danger", data: { confirm: "Suspend #{shop.name}?" } %>
+      <% end %>
+    <% end %>
+  </section>
+
+  <section id="shop-verification" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Verification</h2></div>
+    <% if shop.verified? %>
+      <p class="hw-panel__text">Verified shop since <%= l(shop.verified_at, format: :short) %><% if shop.verified_by %> by <%= shop.verified_by %><% end %>.</p>
+      <%= render "admin/verification_requests/reason_form", url: remove_badge_admin_shop_path(shop),
+                 reasons: VerificationRequest::REVOKE_REASONS, submit: "Remove badge", method: :post, form_id: "shop-remove-badge",
+                 confirm: "Remove the Verified shop badge from #{shop.name}?" %>
+    <% elsif latest_request %>
+      <p class="hw-panel__text"><%= render "admin/verification_requests/status_badge", request: latest_request %>
+        <%= link_to "Open the request →", admin_verification_request_path(latest_request) %></p>
+    <% else %>
+      <p class="hw-empty">No request yet.</p>
+    <% end %>
+  </section>
+
+  <section id="shop-members" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Members (<%= members.size %>)</h2></div>
+    <table class="hw-table">
+      <tbody>
+        <% members.each do |m| %>
+          <tr>
+            <td dir="auto"><%= link_to m.user.full_name, admin_user_path(m.user) %></td>
+            <td><%= m.role.humanize %></td>
+            <td>
+              <% unless m.owner? %>
+                <%= button_to "Remove", remove_member_admin_shop_path(shop, member_id: m.id), method: :delete,
+                      class: "button button--alt", form: { data: { turbo: false, confirm: "Remove #{m.user.full_name} from #{shop.name}?" } } %>
+              <% end %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="shop-products" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Products (<%= products_live %> live · <%= products_total %> in all)</h2></div>
+    <% if products.any? %>
+      <ul class="hw-list">
+        <% products.each do |l| %>
+          <li dir="auto"><%= link_to l.title, admin_listing_path(l) %> <span class="hw-text-muted">· <%= l.status %></span></li>
+        <% end %>
+      </ul>
+      <p><%= link_to "All products →", admin_listings_path(shop_id: shop.id) %></p>
+    <% else %>
+      <p class="hw-empty">No products yet.</p>
+    <% end %>
+  </section>
+
+  <section id="shop-reports" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Reports</h2></div>
+    <p class="hw-kv">
+      <span class="<%= 'hw-text-danger' if listing_reports.exists? %>">Against its products <%= listing_reports.count %></span>
+      <span class="<%= 'hw-text-danger' if owner_reports.any? %>">Against the owner <%= owner_reports.size %></span>
+    </p>
+  </section>
+
+  <section id="shop-history" class="hw-panel hw-panel--wide">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">History</h2></div>
+    <% if history.any? %>
+      <table class="hw-table">
+        <tbody>
+          <% history.each do |log| %>
+            <tr>
+              <td class="hw-nowrap hw-text-muted"><%= l(log.created_at, format: :short) %></td>
+              <td><%= log.admin_label %></td>
+              <td><%= log.action.humanize %></td>
+              <td class="hw-text-muted" dir="auto"><%= log.details %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% else %>
+      <p class="hw-empty">Nothing yet.</p>
+    <% end %>
+  </section>
+</div>
+<h2 class="hw-section__title hw-record-title">All fields</h2>
+<% end %>
+
+<%= render template: "administrate/application/show", locals: { page: page } %>

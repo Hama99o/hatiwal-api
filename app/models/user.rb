@@ -26,6 +26,13 @@ class User < ApplicationRecord
   enum :status, { active: 0, suspended: 1, banned: 2 }
 
   has_many :listings, dependent: :destroy
+  # SHOP-1 (docs/SHOPS.md in hatiwal-mobile). Owned shops go with the account;
+  # memberships are the right to sell AS a shop. `active_shop` is who the user
+  # sells as ("Selling as"); nil = Me. Always read it through #selling_shop.
+  has_many :owned_shops, class_name: Shop.name, foreign_key: :owner_id, dependent: :destroy, inverse_of: :owner
+  has_many :shop_members, dependent: :destroy
+  has_many :shops, through: :shop_members
+  belongs_to :active_shop, class_name: Shop.name, optional: true
   has_many :saved_listings, dependent: :destroy
   has_many :saved_listing_items, through: :saved_listings, source: :listing
   has_many :hidden_listings, dependent: :destroy
@@ -90,6 +97,11 @@ class User < ApplicationRecord
       request.update_columns(attrs)
     end
   end
+  # ── SHOP-1: the subject hooks VerificationRequest calls (a Shop has the same) ──
+  def verification_granted!(_admin) = update!(verified: true)
+  def verification_withdrawn! = update!(verified: false)
+  def verification_notice_recipient = self
+  def verification_notice_key(decision) = { verified: :user_verified, rejected: :user_verification_rejected, revoked: :user_badge_revoked }.fetch(decision)
   # ── end VER-1 ──
 
   validates :firstname, presence: true
@@ -364,6 +376,10 @@ class User < ApplicationRecord
       )
       avatar.purge_later if avatar.attached?
       forget_verification_documents! # VER-1
+      # SHOP-1: their shops leave with them; memberships elsewhere end.
+      owned_shops.where.not(status: :closed).find_each(&:close!)
+      shop_members.destroy_all
+      assign_attributes(active_shop_id: nil)
       assign_attributes(verified: false)
       save!(validate: false)
     end
@@ -589,6 +605,54 @@ class User < ApplicationRecord
       guessed_at: Time.current
     )
     true
+  end
+
+  # ── SHOP-1: "Selling as" ────────────────────────────────────────────────────
+  # The shop this user is selling as, or nil for Me. Checked against the
+  # membership AND the shop's status on every call, so a stored choice can never
+  # act for a shop the user has left, or one that was suspended or deleted; a
+  # stale choice is cleared and the user falls back to Me.
+  def selling_shop
+    return nil if active_shop_id.nil?
+
+    shop = active_shop
+    return shop if shop&.active? && shop.member?(self)
+
+    update_column(:active_shop_id, nil)
+    nil
+  end
+
+  # Switch who the user sells as. nil = Me. Returns false (and changes nothing)
+  # for a shop they are not a member of, or one that is not active.
+  def sell_as!(shop)
+    return false if shop && !(shop.active? && shop.member?(self))
+
+    update!(active_shop: shop)
+  end
+
+  # Unread messages per identity, in ONE grouped query, for the "Selling as"
+  # pill and sheet: { buying:, selling_me:, shops: { shop_id => n } }. Same
+  # rules as unread_message_count (archived chats are silent; your own
+  # messages never count). A support thread has no listing and counts as buying.
+  def unread_counts
+    identity = Arel.sql(
+      "CASE WHEN conversations.buyer_id = #{id.to_i} THEN 'buying' " \
+      "WHEN listings.shop_id IS NULL THEN 'selling_me' ELSE listings.shop_id::text END"
+    )
+    raw = Message.joins(:conversation)
+                 .joins("LEFT JOIN listings ON listings.id = conversations.listing_id")
+                 .where(conversation_id: Conversation.for_user(id).not_archived_for(self).select(:id), read_at: nil)
+                 .where.not(user_id: id)
+                 .group(identity).count
+    shops = raw.except("buying", "selling_me").transform_keys(&:to_s)
+    { buying: raw.fetch("buying", 0), selling_me: raw.fetch("selling_me", 0), shops: shops }
+  end
+
+  # The seller-side listings for whoever the user is selling as: the shop's
+  # products, or their personal (shop-less) listings as Me.
+  def listings_for_selling_identity
+    shop = selling_shop
+    shop ? shop.listings.where(user_id: id) : listings.where(shop_id: nil)
   end
 
   private

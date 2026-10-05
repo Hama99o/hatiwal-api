@@ -46,7 +46,11 @@ class SendMessagePushJob < ApplicationJob
       token: recipient.push_token,
       title: title_for(sender, recipient),
       body: preview_for(message, recipient),
-      data: { type: "message", conversationId: conversation.id, messageId: message.id }
+      # SHOP-1: `role` and `shopId` let the app switch "Selling as" to the shop
+      # the chat belongs to when the push is tapped. Additive — old apps ignore them.
+      data: { type: "message", conversationId: conversation.id, messageId: message.id,
+              role: recipient.id == conversation.seller_id ? "selling" : "buying",
+              shopId: conversation.listing&.shop_id }
     )
 
     # Expo reports the device is gone — drop the stale token so we stop retrying.

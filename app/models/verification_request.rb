@@ -18,7 +18,8 @@
 #     (HMAC-SHA256, indexed) to spot the same ID on another account. Never in
 #     an API response or a log; apps show ••••document_last4.
 class VerificationRequest < ApplicationRecord
-  SUBJECT_TYPES = [ User.name ].freeze
+  # SHOP-1: a Shop applies through the same model (docs/SHOPS.md "Verified shops").
+  SUBJECT_TYPES = [ User.name, Shop.name ].freeze
   FILES_KEPT_FOR = 90.days
   DOCUMENT_URL_TTL = 5.minutes
   DOCUMENT_TOKEN_PURPOSE = :admin_verification_document
@@ -51,6 +52,24 @@ class VerificationRequest < ApplicationRecord
   TWO_SIDED = %w[e_tazkira cnic kart_melli].freeze
   # What a person may apply with (licence is for shops).
   USER_DOCUMENT_TYPES = %w[tazkira e_tazkira cnic kart_melli passport].freeze
+  # ── SHOP-1 ──────────────────────────────────────────────────────────────────
+  # A shop sends a photo of the shop front (`front`), a photo of the business
+  # licence or the owner's ID (`back`, typed by document_type) and a phone the
+  # team calls back. No selfie, no name/last-4: the admin compares the sign and
+  # licence with the shop page instead.
+  SHOP_DOCUMENT_TYPES = (%w[licence] + USER_DOCUMENT_TYPES).freeze
+  # What each file IS, per subject — the admin card labels them with this.
+  FILE_LABELS = {
+    User.name => { front: "document_front", back: "document_back", selfie: "selfie" },
+    Shop.name => { front: "shop_front", back: "licence_or_id" }
+  }.freeze
+  # A business licence number keeps its letters ("KBL-2021/0456" → "KBL20210456");
+  # a person's ID number stays digits-only, so the same Tazkira matches across
+  # users and shops (same_number_elsewhere).
+  LICENCE_NUMBER_FORMAT = /\A[0-9A-Z]{3,40}\z/
+  # The shop checklist (docs/SHOPS.md, "What the admin checks").
+  SHOP_CHECKLIST = %w[shop_real name_matches address_right owner_real phone_works listings_clean no_bad_history].freeze
+  # ── end SHOP-1 ──
 
   has_one_attached :front
   has_one_attached :back
@@ -67,26 +86,46 @@ class VerificationRequest < ApplicationRecord
 
   # What a fresh application must carry. Only on create: a decided request keeps
   # its row after its files are purged.
-  with_options on: :create, if: :requested? do
+  with_options on: :create, if: -> { requested? && !shop_subject? } do
     validates :document_type, inclusion: { in: USER_DOCUMENT_TYPES }
     validates :name_on_document, presence: true, length: { maximum: 120 }
     validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }
     validates :front, :selfie, presence: true
     validates :back, presence: true, if: :two_sided?
-    validate :subject_must_be_eligible
   end
+  # SHOP-1 — what a shop's application must carry (see SHOP_DOCUMENT_TYPES).
+  with_options on: :create, if: -> { requested? && shop_subject? } do
+    validates :document_type, inclusion: { in: SHOP_DOCUMENT_TYPES }
+    validates :front, :back, presence: true
+    validates :phone, presence: true, length: { maximum: 30 }
+    # Optional for a shop; when given it is checked like the kind of document it is.
+    validates :document_number, format: { with: LICENCE_NUMBER_FORMAT }, allow_blank: true, if: :licence?
+    validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }, allow_blank: true, unless: :licence?
+  end
+  validate :subject_must_be_eligible, on: :create, if: :requested?
 
   scope :recent, -> { order(created_at: :desc) }
   scope :for_users, -> { where(subject_type: User.name) }
+  scope :for_shops, -> { where(subject_type: Shop.name) }
   scope :purgeable, -> { where(files_purged_at: nil).where(decided_at: ...FILES_KEPT_FOR.ago) }
 
   # HMAC of the normalized number with its own secret: equal numbers give equal
   # digests on every account, and the digest alone reveals nothing.
   def self.digest_for(number)
-    digits = normalize_number(number)
-    return nil if digits.blank?
+    hmac(normalize_number(number))
+  end
 
-    OpenSSL::HMAC.hexdigest("SHA256", number_digest_key, digits)
+  # SHOP-1: the HMAC of an already-normalized value (a licence keeps letters,
+  # so it must not go through normalize_number's digits-only filter).
+  def self.hmac(normalized)
+    return nil if normalized.blank?
+
+    OpenSSL::HMAC.hexdigest("SHA256", number_digest_key, normalized)
+  end
+
+  # SHOP-1: a licence number → ASCII digits + upper-case letters, nothing else.
+  def self.normalize_licence(raw)
+    raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").upcase.gsub(/[^0-9A-Z]/, "")
   end
 
   # Persian/Arabic-Indic digits → ASCII; spaces, dashes and the like dropped.
@@ -120,6 +159,13 @@ class VerificationRequest < ApplicationRecord
 
   def two_sided? = TWO_SIDED.include?(document_type.to_s)
 
+  def shop_subject? = subject_type == Shop.name
+
+  def checklist_keys = shop_subject? ? SHOP_CHECKLIST : CHECKLIST
+
+  # The admin's label for one of this request's files (SHOP-1: per subject).
+  def file_label(name) = FILE_LABELS.fetch(subject_type, FILE_LABELS[User.name]).fetch(name.to_sym, name.to_s)
+
   def files_count = FILES.count { |name| public_send(name).attached? }
 
   def attached_files = FILES.select { |name| public_send(name).attached? }
@@ -135,16 +181,16 @@ class VerificationRequest < ApplicationRecord
     transaction do
       update!(status: :approved, decided_by: admin, decided_at: Time.current,
               checklist: clean_checklist(checklist), reason_code: nil, reason_text: nil)
-      subject.update!(verified: true)
+      subject.verification_granted!(admin)
     end
-    SupportNoticeJob.enqueue(subject, :user_verified)
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:verified))
   end
 
   def reject!(admin:, reason_code:, reason_text: nil, checklist: {})
     raise ArgumentError, "only a waiting request can be rejected" unless requested?
 
     decide!(:rejected, admin, reason_code, reason_text, REJECT_REASONS, checklist: checklist)
-    SupportNoticeJob.enqueue(subject, :user_verification_rejected)
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:rejected))
   end
 
   def revoke!(admin:, reason_code:, reason_text: nil)
@@ -152,17 +198,19 @@ class VerificationRequest < ApplicationRecord
 
     transaction do
       decide!(:revoked, admin, reason_code, reason_text, REVOKE_REASONS)
-      subject.update!(verified: false)
+      subject.verification_withdrawn!
     end
-    SupportNoticeJob.enqueue(subject, :user_badge_revoked)
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:revoked))
   end
 
   # Revoke a badge that was switched on by hand (no approved request to revoke):
   # a decided row is written so the reason shows on the person's status card.
-  def self.revoke_badge!(user, admin:, reason_code:, reason_text: nil)
+  # SHOP-1: `subject` may be a Shop; the row is then written in its owner's name.
+  def self.revoke_badge!(subject, admin:, reason_code:, reason_text: nil)
     transaction do
-      request = user.verification_requests.approved.recent.first ||
-                user.verification_requests.create!(requested_by: user, status: :approved, decided_at: Time.current)
+      requester = subject.is_a?(Shop) ? subject.owner : subject
+      request = subject.verification_requests.approved.recent.first ||
+                subject.verification_requests.create!(requested_by: requester, status: :approved, decided_at: Time.current)
       request.revoke!(admin: admin, reason_code: reason_code, reason_text: reason_text)
       request
     end
@@ -207,10 +255,11 @@ class VerificationRequest < ApplicationRecord
   def normalize_document_number
     return unless will_save_change_to_document_number? && document_number.present?
 
-    digits = self.class.normalize_number(document_number)
-    self.document_number = digits
-    self.document_last4 = digits.last(4)
-    self.document_number_digest = self.class.digest_for(digits)
+    # SHOP-1: a licence keeps its letters; every ID number is digits-only.
+    normalized = licence? ? self.class.normalize_licence(document_number) : self.class.normalize_number(document_number)
+    self.document_number = normalized
+    self.document_last4 = normalized.last(4)
+    self.document_number_digest = self.class.hmac(normalized)
   end
 
   def decide!(status, admin, reason_code, reason_text, allowed, checklist: nil)
@@ -226,11 +275,12 @@ class VerificationRequest < ApplicationRecord
 
   def clean_checklist(raw)
     hash = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : raw.to_h
-    CHECKLIST.index_with { |key| ActiveModel::Type::Boolean.new.cast(hash[key] || hash[key.to_sym]) || false }
+    checklist_keys.index_with { |key| ActiveModel::Type::Boolean.new.cast(hash[key] || hash[key.to_sym]) || false }
   end
 
+  # Users and (SHOP-1) shops both answer verified? and verification_missing.
   def subject_must_be_eligible
-    return unless subject.is_a?(User)
+    return unless subject.respond_to?(:verification_missing)
 
     errors.add(:subject, :already_verified) if subject.verified?
     missing = subject.verification_missing

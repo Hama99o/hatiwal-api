@@ -2,18 +2,22 @@
     each one served is written to the audit log (shown at the bottom). %>
 <%
   r = @verification
-  user = @user
+  # SHOP-1: for a shop request, `user` is the shop's OWNER (the person behind
+  # it) and the shop's own facts come from the _shop_facts partial.
+  shop = r.shop_subject? ? r.subject : nil
+  user = shop ? shop.owner : @user
   names_match = r.name_on_document.to_s.squish.casecmp?(user.full_name.squish)
   reports_count = user.reports_against.size
   warnings_count = user.active_warnings_count
-  labels = { front: "Front", back: "Back", selfie: "Selfie with document" }
+  labels = shop ? { front: "Shop front", back: "Licence or ID" } : { front: "Front", back: "Back", selfie: "Selfie with document" }
+  subject_name = r.subject.full_name
 %>
-<% content_for(:title) { "Verification — #{user.full_name}" } %>
+<% content_for(:title) { "Verification — #{subject_name}" } %>
 
 <header class="hw-page-header">
   <div>
     <h1 class="hw-page-header__title main-content__page-title">
-      Verification — <%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto" %>
+      Verification — <% if shop %><span dir="auto">🏪 <%= shop.name %></span> · owner <% end %><%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto" %>
       <%= render "status_badge", request: r %>
     </h1>
     <p class="hw-page-header__subtitle">
@@ -27,6 +31,9 @@
 </header>
 
 <section class="hw-panel hw-panel--wide" id="verification-card">
+  <% if shop %>
+    <%= render "shop_facts", shop: shop, request: r %>
+  <% else %>
   <div class="hw-verify-head">
     <% if user.avatar.attached? %>
       <%= image_tag url_for(user.avatar), class: "hw-verify-avatar", alt: "" %>
@@ -60,6 +67,7 @@
       </p>
     </div>
   </div>
+  <% end %>
 
   <%# Same ID number on another account (owner decision 2026-10-05). The
       applicant is never told; the admin decides. %>
@@ -97,22 +105,30 @@
     <%= form_with url: approve_admin_verification_request_path(r), method: :patch, data: { turbo: false }, id: "verification-decision" do |f| %>
       <fieldset class="hw-checks hw-verify-checks">
         <legend>Checklist (saved with the decision)</legend>
-        <% { "photo_clear" => "Photos clear, nothing cropped", "name_matches" => "Name matches the document",
-             "selfie_matches" => "Selfie = document face", "no_bad_history" => "No bad history" }.each do |key, label| %>
+        <% checks = if shop
+                      { "shop_real" => "The shop is real (sign visible)", "name_matches" => "Sign / licence name = shop name",
+                        "address_right" => "Pin is at the shop", "owner_real" => "ID / licence name = the owner",
+                        "phone_works" => "Called: they answered as the shop", "listings_clean" => "Listings are clean",
+                        "no_bad_history" => "No bad history" }
+                    else
+                      { "photo_clear" => "Photos clear, nothing cropped", "name_matches" => "Name matches the document",
+                        "selfie_matches" => "Selfie = document face", "no_bad_history" => "No bad history" }
+                    end %>
+        <% checks.each do |key, label| %>
           <label class="hw-check"><%= check_box_tag "checklist[#{key}]", "1", false, id: "checklist-#{key}" %> <%= label %></label>
         <% end %>
       </fieldset>
       <div class="hw-verify-actions">
         <div class="hw-form-row">
           <%= select_tag :reason_code,
-                options_for_select(VerificationRequest::REJECT_REASONS.excluding("shop_sign_not_visible").map { |c| [ I18n.t("verification.reasons.#{c}", locale: :en), c ] }),
+                options_for_select((shop ? VerificationRequest::REJECT_REASONS : VerificationRequest::REJECT_REASONS.excluding("shop_sign_not_visible")).map { |c| [ I18n.t("verification.reasons.#{c}", locale: :en), c ] }),
                 prompt: "Reject because…", class: "hw-select", id: "verify-reason" %>
           <%= text_field_tag :reason_text, nil, placeholder: "Only for “Other”: sent as typed", class: "hw-input", dir: "auto" %>
           <%= button_tag "Reject", type: "submit", formaction: reject_admin_verification_request_path(r), id: "verify-reject",
-                class: "button button--danger", data: { confirm: "Reject this request? #{user.full_name} gets the reason in their language." } %>
+                class: "button button--danger", data: { confirm: "Reject this request? #{shop ? "The owner of #{subject_name}" : user.full_name} gets the reason in their language." } %>
         </div>
         <%= button_tag "Approve ✓", type: "submit", id: "verify-approve", class: "button",
-              data: { confirm: "Give #{user.full_name} the Verified badge?" } %>
+              data: { confirm: "Give #{subject_name} the Verified badge?" } %>
       </div>
     <% end %>
   <% else %>
@@ -123,10 +139,10 @@
     <% if r.checklist.present? %>
       <p class="hw-kv"><% r.checklist.each do |key, ticked| %><span><%= ticked ? "☑" : "☐" %> <%= key.humanize %></span><% end %></p>
     <% end %>
-    <% if r.approved? && user.verified? %>
+    <% if r.approved? && r.subject.verified? %>
       <h3 class="hw-panel__title hw-gap-top">Revoke the badge</h3>
       <%= render "reason_form", url: revoke_admin_verification_request_path(r), reasons: VerificationRequest::REVOKE_REASONS,
-                 submit: "Revoke", confirm: "Remove the Verified badge from #{user.full_name}?" %>
+                 submit: "Revoke", confirm: "Remove the Verified badge from #{subject_name}?" %>
     <% end %>
   <% end %>
 </section>

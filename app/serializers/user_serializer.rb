@@ -118,6 +118,20 @@ class UserSerializer < ApplicationSerializer
     # this block and never re-implement the rule. Only in :me — the guessed
     # location must never reach :public, :minimal or a listing.
     field(:location) { |u| u.effective_location }
+    # SHOP-1 — who the user sells as in Seller mode (null = Me), already checked
+    # against membership and the shop's status (User#selling_shop), and the
+    # shops they can sell as, for the "Sell as" sheet. Two small queries.
+    # Users with no shop (almost everyone) cost ZERO extra queries here:
+    # shop_memberships_count is a column (ShopMember counter_cache).
+    field(:selling_as_shop) { |u| (shop = u.selling_shop) && ShopSerializer.render_as_hash(shop, view: :card) }
+    field(:unread_counts) { |u| u.shop_memberships_count.positive? ? u.unread_counts : nil }
+    field(:shops) do |u|
+      next [] unless u.shop_memberships_count.positive?
+
+      u.shop_members.includes(shop: { logo_attachment: :blob }).map do |m|
+        ShopSerializer.render_as_hash(m.shop, view: :card).merge(role: m.role, status: m.shop.status)
+      end
+    end
   end
 
   view :minimal do

@@ -125,6 +125,9 @@ class ListingSerializer < ApplicationSerializer
       u = l.user
       { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
     end
+    # SHOP-1 — present when the listing was posted as a shop: the card shows the
+    # shop name + "Shop" chip and the button reads "Message shop". nil = personal.
+    field(:shop) { |l| l.shop&.active? ? ShopSerializer.render_as_hash(l.shop, view: :card) : nil }
     # Reuses CategorySerializer (TASK-K729 dedup fix) instead of hand-rolling
     # the same {id, name_en, name_ps, name_fa, slug} shape a 3rd time — see
     # the identical field in :seller_list and :detailed below.
@@ -152,7 +155,7 @@ class ListingSerializer < ApplicationSerializer
   # to answer, so this view is left alone rather than fed a `saved_ids:` Set
   # it has no use for.
   view :seller_list do
-    fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at, :negotiable
+    fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at, :negotiable, :shop_id
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
     # Use .size (not .count) so that when conversations are eager-loaded via
@@ -198,6 +201,7 @@ class ListingSerializer < ApplicationSerializer
 
       opts[:current_user]&.listing_views&.exists?(listing_id: l.id) || false
     end
+    field(:shop) { |l| l.shop&.active? ? ShopSerializer.render_as_hash(l.shop, view: :card) : nil }
     field(:seller) do |l, opts|
       u = l.user
       viewer = opts[:current_user]

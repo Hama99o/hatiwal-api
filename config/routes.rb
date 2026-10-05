@@ -57,6 +57,15 @@ Rails.application.routes.draw do
     resources :user_warnings, only: [ :index, :show ]
     # VER-1: the verification queue. `document` streams one ID photo for a
     # token that expires in 5 minutes; every view is audit-logged.
+    # SHOP-1 — shops: moderate, not edit.
+    resources :shops, only: %i[index show] do
+      member do
+        patch :suspend
+        patch :reactivate
+        post :remove_badge
+        delete "members/:member_id", action: :remove_member, as: :remove_member
+      end
+    end
     resources :verification_requests, only: %i[index show] do
       member do
         patch :approve
@@ -176,6 +185,11 @@ Rails.application.routes.draw do
       # Reports
       resources :reports, only: [ :create, :index ]
 
+      # SHOP-1 — shops (hatiwal-mobile/docs/SHOPS.md)
+      resources :shops, only: %i[index show create update destroy] do
+        member { post :move_listings }
+      end
+
       # Reviews (double-blind, on a sold Transaction)
       resources :transactions, only: [] do
         # POST /api/v1/transactions/:transaction_id/reviews
@@ -200,6 +214,8 @@ Rails.application.routes.draw do
         post  "/me/restore",  to: "profiles#restore",   as: :restore_me
         # LOC-1 — a clue about where the user is (never their own address).
         patch "/me/location_guess", to: "location_guesses#update", as: :me_location_guess
+        # SHOP-1 — who the user sells as (null = Me).
+        patch "/me/selling_as", to: "selling_as#update", as: :me_selling_as
 
         # Saved searches — MUST be declared before the "/:id" wildcard below,
         # otherwise GET /users/saved_searches is captured as profiles#show
@@ -226,6 +242,7 @@ Rails.application.routes.draw do
 
       # Seller / owner mode
       namespace :my do
+        get "shops", to: "shops#index", as: :shops
         resources :listings do
           member do
             put :publish

@@ -19,7 +19,7 @@ class Api::V1::My::SavedListingsController < Api::V1::BaseController
                                    # SF-B2 — preloaded for the base `held_units` field; see
                                    # Listing#open_sale's loaded-array guard.
                                    :sale_transactions,
-                                   { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+                                   { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
                                  ])
 
     # Filled in by the transform block below (which runs BEFORE the response is
