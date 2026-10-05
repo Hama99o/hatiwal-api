@@ -321,6 +321,10 @@ if defined?(Shop) && Shop.table_exists?
   # No shop at all: every shop surface must look exactly like before SHOP-1.
   shop_none = qa_user(email: "shop.none@hatiwal.test", firstname: "Basir", lastname: "Noshop", place: :kabul, avatar: true)
   Shop.where(owner: shop_none).destroy_all
+  # Opens a shop in maestro/shops/create_shop; the seed takes it away again.
+  shop_new = qa_user(email: "shop.new@hatiwal.test", firstname: "Nazir", lastname: "Newshop", place: :kabul, avatar: true)
+  shop_new.update_column(:active_shop_id, nil)
+  Shop.where(owner: shop_new).find_each { |s| s.listings.update_all(shop_id: nil); s.destroy! }
 
   # Unverified shop, Sat–Thu 08–18, Friday closed; SELLING AS the shop.
   owner = qa_user(email: "shop.owner@hatiwal.test", firstname: "Umair", lastname: "Shopkeeper", place: :kabul, avatar: true)
