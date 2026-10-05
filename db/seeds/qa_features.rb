@@ -317,11 +317,13 @@ if defined?(Shop) && Shop.table_exists?
   shop_cat = ->(slug) { Category.find_by(slug: slug) || fallback_category }
   sat_to_thu = %w[sat sun mon tue wed thu].index_with { [ %w[08:00 18:00] ] }.merge("fri" => [])
 
-  qa_shop = lambda do |owner, name:, place:, slug:, hours: {}, status: "active", verified: false, phone: nil|
+  # Found by owner AND name: since SHOP-2 an owner may run several shops. Two
+  # shops of one owner need different addresses (the duplicate rule), hence `unit`.
+  qa_shop = lambda do |owner, name:, place:, slug:, hours: {}, status: "active", verified: false, phone: nil, unit: 7|
     p = QA_PLACES.fetch(place)
-    shop = Shop.find_or_initialize_by(owner: owner)
-    shop.assign_attributes(name: name, category: shop_cat.call(slug), latitude: p[:latitude], longitude: p[:longitude],
-                           province: p[:province], city: p[:city], address_line: "#{p[:city]} QA bazaar, shop 7",
+    shop = Shop.find_or_initialize_by(owner: owner, name: name)
+    shop.assign_attributes(category: shop_cat.call(slug), latitude: p[:latitude], longitude: p[:longitude],
+                           province: p[:province], city: p[:city], address_line: "#{p[:city]} QA bazaar, shop #{unit}",
                            description: "QA seed shop.", hours: hours, phone: phone, phone_public: phone.present?)
     shop.save!
     shop.update_columns(status: Shop.statuses[status], verified_at: (verified ? 3.days.ago : nil), updated_at: Time.current)
@@ -358,6 +360,37 @@ if defined?(Shop) && Shop.table_exists?
   [ [ "Umair personal QA — Old phone", 3_000, "electronics" ], [ "Umair personal QA — Chair", 1_200, "home" ] ]
     .each { |t, pr, sl| qa_shop_listing.call(owner, nil, t, pr, sl, :kabul) }
   owner.update_column(:active_shop_id, cosmetics.id)
+
+  # SHOP-2: shop.owner runs THREE shops (owned, oldest first in /me shops[]):
+  # Cosmetics (above, unverified), a verified one and a pending one. Different
+  # names and addresses, so the duplicate rule never fires on them; re-opening
+  # "Kabul QA Cosmetics" at its pin is the duplicate flow's case.
+  phones_corner = qa_shop.call(owner, name: "Kabul QA Phone Corner", place: :kabul, slug: "electronics", hours: sat_to_thu,
+                                      verified: true, unit: 12)
+  qa_shop_listing.call(owner, phones_corner, "Kabul QA Phone Corner — Earbuds", 1200, "electronics", :kabul)
+  shoes = qa_shop.call(owner, name: "Kabul QA Shoes", place: :kabul, slug: "clothes", status: "pending", unit: 21)
+  # created_at decides the /me order: Cosmetics, then Phone Corner, then Shoes.
+  cosmetics.update_column(:created_at, 3.days.ago) if cosmetics.created_at > 3.days.ago
+  phones_corner.update_column(:created_at, 2.days.ago) if phones_corner.created_at > 2.days.ago
+  shoes.update_column(:created_at, 1.day.ago) if shoes.created_at > 1.day.ago
+
+  # SHOP-2 "Message shop": shop.buyer already has a listing-less chat with
+  # Cosmetics (one text message), so the buyer side (shop in the header and the
+  # inbox) and the owner side (under Cosmetics' Chat tab) have data.
+  sbuyer = qa_user(email: "shop.buyer@hatiwal.test", firstname: "Farid", lastname: "Shopbuyer", place: :kabul, avatar: true)
+  Block.where(blocker: [ sbuyer, owner ], blocked: [ sbuyer, owner ]).delete_all
+  shop_chat = nil
+  if qa_column?(Conversation, :shop_id)
+    shop_chat = Conversation.find_or_create_by!(shop: cosmetics, buyer: sbuyer, listing_id: nil) { |c| c.seller = owner }
+    # Seed rows only: Message#create! queues no push (the services do that).
+    shop_chat.messages.create!(user: sbuyer, body: "Salaam, do you have rose water?", kind: :text) if shop_chat.messages.none?
+  end
+
+  # SHOP-2 blocked case: shop.owner has blocked shop.blocked, so "Message shop"
+  # on Cosmetics is refused (422, the listing chat's message). No chat exists.
+  sblocked = qa_user(email: "shop.blocked@hatiwal.test", firstname: "Karim", lastname: "Blockedbuyer", place: :kabul, avatar: true)
+  Conversation.where(buyer: sblocked).destroy_all
+  Block.find_or_create_by!(blocker: owner, blocked: sblocked)
 
   # Verified shop in Herat; selling as ME (active_shop_id unset).
   vowner = qa_user(email: "shop.verified@hatiwal.test", firstname: "Zahra", lastname: "Verifiedshop", place: :herat, avatar: true)
@@ -414,6 +447,8 @@ if defined?(Shop) && Shop.table_exists?
   end
   puts "  shops: #{[ cosmetics, carpets, phones, bakery ].map { |s| "#{s.name} (#{s.status}#{', verified' if s.verified_at})" }.join(' · ')}"
   puts "  shop.owner sells as the shop; shop.verified as Me; shop.suspended has a stale active shop; shop.none has none"
+  puts "  SHOP-2: shop.owner runs #{[ cosmetics, phones_corner, shoes ].map { |s| "#{s.name} (#{s.status}#{', verified' if s.verified_at})" }.join(', ')}"
+  puts "  SHOP-2: shop.buyer has #{shop_chat ? "chat ##{shop_chat.id} with #{cosmetics.name}" : 'no shop chat (conversations.shop_id not migrated)'}; shop.owner blocked shop.blocked"
 else
   puts "  SKIP shops: shops table not migrated yet (SHOP-1)"
 end
@@ -423,6 +458,9 @@ puts "=== QA Seed: check — no Support threads ==="
 # =============================================================================
 
 qa_ids = User.where("email LIKE 'loc.%@hatiwal.test' OR email LIKE 'ver.%@hatiwal.test' OR email LIKE 'shop.%@hatiwal.test' OR email LIKE 'lang.%@hatiwal.test'").pluck(:id)
-threads = Conversation.where(buyer_id: qa_ids).or(Conversation.where(seller_id: qa_ids)).count
-abort "  FAIL: #{threads} conversation(s) involve QA feature users — seeds must create none" if threads.positive?
-puts "  ok — #{qa_ids.size} QA feature users, 0 conversations"
+threads = Conversation.where(buyer_id: qa_ids).or(Conversation.where(seller_id: qa_ids))
+# SHOP-2: the ONE deliberate exception is shop.buyer's "Message shop" chat (a
+# listing-less shop chat, never a Support thread).
+threads = threads.where(shop_id: nil) if qa_column?(Conversation, :shop_id)
+abort "  FAIL: #{threads.count} conversation(s) involve QA feature users — seeds must create none" if threads.exists?
+puts "  ok — #{qa_ids.size} QA feature users, 0 conversations besides the SHOP-2 shop chat"
