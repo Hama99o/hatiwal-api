@@ -283,6 +283,20 @@ class User < ApplicationRecord
     super && !account_blocked? && !deleted?
   end
 
+  # The device changing the password (its devise_token_auth client id). Set by
+  # Api::V1::Auth::PasswordsController#update.
+  attr_accessor :password_change_client
+
+  # A password change keeps ONLY the device that made it. devise_token_auth's
+  # default keeps the token with the latest expiry, and with SessionKeepAlive
+  # that is simply the most recently active device, which can be the leaked
+  # token the change is meant to kill.
+  def remove_tokens_after_password_reset
+    return super unless should_remove_tokens_after_password_reset? && password_change_client.present? && tokens.present?
+
+    self.tokens = tokens.slice(password_change_client)
+  end
+
   # Devise sends its notifications with deliver_now, which would put an SMTP
   # round-trip inside the signup request and — worse — turn a mail failure into a
   # 500 on an account that was actually created. Queue them instead.
