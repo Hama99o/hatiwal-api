@@ -394,13 +394,17 @@ if defined?(Shop) && Shop.table_exists?
       VerificationRequest.where(subject: shop).where.not(status: status).destroy_all
       r = VerificationRequest.find_or_initialize_by(subject: shop, status: status)
       shop_doc = (defined?(VerificationRequest::SHOP_DOCUMENT_TYPES) ? VerificationRequest::SHOP_DOCUMENT_TYPES.first : "licence")
-      r.assign_attributes(requested_by: shop.owner, document_type: shop_doc, phone: "+93700000222",
+      # ad2c42f — the person's form for the OWNER (e-Tazkira front + back, selfie,
+      # name, number) plus one proof of business. No phone, no shop-front photo.
+      r.assign_attributes(requested_by: shop.owner, document_type: shop_doc,
                           decided_at: ago&.ago, decided_by: (AdminUser.order(:id).first if ago),
                           checklist: ago ? VerificationRequest::SHOP_CHECKLIST.index_with { true } : {})
-      r.front.attach(qa_blob(QA_SAMPLES.join("shop_front.png"), "qa-sample-shop-front.png", "image/png")) unless r.front.attached?
-      r.back.attach(qa_blob(QA_SAMPLES.join("document_front.png"), "qa-sample-owner-id.png", "image/png")) unless r.back.attached?
+      r.name_on_document = shop.owner.full_name if r.respond_to?(:name_on_document) && r.name_on_document.blank?
+      r.front.attach(qa_blob(QA_SAMPLES.join("document_front.png"), "qa-sample-owner-id-front.png", "image/png")) unless r.front.attached?
+      r.back.attach(qa_blob(QA_SAMPLES.join("document_back.png"), "qa-sample-owner-id-back.png", "image/png")) unless r.back.attached?
+      r.selfie.attach(qa_blob(QA_SAMPLES.join("selfie.png"), "qa-sample-owner-selfie.png", "image/png")) unless r.selfie.attached?
       if r.respond_to?(:proof) && !r.proof.attached?
-        r.proof.attach(qa_blob(QA_SAMPLES.join("document_back.png"), "qa-sample-business-proof.png", "image/png"))
+        r.proof.attach(qa_blob(QA_SAMPLES.join("shop_front.png"), "qa-sample-business-proof.png", "image/png"))
       end
       r.document_number = "00000000#{format('%04d', shop.owner_id % 10_000)}" if r.respond_to?(:document_number) && r.document_number.blank?
       r.save!
