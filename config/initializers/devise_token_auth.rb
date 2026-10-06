@@ -19,7 +19,15 @@ DeviseTokenAuth.setup do |config|
   # determines how long tokens will remain valid after they are issued.
   # A login ends after 2 months WITHOUT using the app. Every use pushes the
   # expiry back (SessionKeepAlive), so a daily user is never logged out.
-  config.token_lifespan = 2.months
+  #
+  # A FIXED length (2.months.to_i seconds, 60.87 days), not calendar months.
+  # devise_token_auth stamps a new token `now + token_lifespan` (calendar: Oct 6
+  # → Dec 6 is 61 days) but, once a user has more than max_number_of_devices
+  # tokens, clean_old_tokens drops every token later than
+  # `now + token_lifespan.to_i` — the token being issued included. Every
+  # sign-in past 10 devices then answered 200 with no auth headers (P0,
+  # 2026-10-06; spec/requests/api/v1/auth/sign_in_device_cap_spec.rb).
+  config.token_lifespan = 2.months.to_i.seconds
 
   # Limiting the token_cost to just 4 in testing will increase the performance of
   # your test suite dramatically. The possible cost value is within range from 4

@@ -311,6 +311,8 @@ class User < ApplicationRecord
     self.tokens = tokens.slice(password_change_client)
   end
 
+  prepend DeviceTokenCap
+
   # Devise sends its notifications with deliver_now, which would put an SMTP
   # round-trip inside the signup request and — worse — turn a mail failure into a
   # 500 on an account that was actually created. Queue them instead.
