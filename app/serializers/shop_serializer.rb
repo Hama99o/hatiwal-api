@@ -42,9 +42,9 @@ class ShopSerializer < ApplicationSerializer
     field(:time_zone) { |s| s.time_zone }
     field(:owner) { |s| { id: s.owner_id, name: s.owner.full_name } }
     field(:share_url) { |s| Shop.share_url_for(s) }
-    # The reviews of the owner count for the shop in phase 1.
-    field(:avg_rating) { |s| s.owner.avg_rating&.to_f }
-    field(:review_count) { |s| s.owner.review_count }
+    # The SHOP's own reviews (Shop#reviews), never the owner's personal ones.
+    field(:avg_rating) { |s| s.review_stats.first }
+    field(:review_count) { |s| s.review_stats.last }
   end
 
   view :owner do

@@ -6,6 +6,11 @@
 class Transaction < ApplicationRecord
   # SHOP-3: the member who recorded a shop sale (the seller is the owner).
   belongs_to :recorded_by, class_name: User.name, optional: true
+  # The shop whose product this sale was, PINNED when the sale (or hold) is
+  # recorded: a shop's reviews are the reviews of its sales (owner, 2026-10-06),
+  # and they must not move when the product changes shop later.
+  belongs_to :shop, optional: true
+  before_validation(on: :create) { self.shop_id ||= listing&.shop_id }
   belongs_to :listing
   belongs_to :seller, class_name: User.name
   # SF-B3 — OPTIONAL. `buyer_id` is nil for "sold to someone not on Hatiwal":

@@ -381,6 +381,21 @@ class Shop < ApplicationRecord
 
   def live_listings_count = listings.live.not_expired.not_removed.count
 
+  # A shop's reviews (owner, 2026-10-06): what BUYERS wrote about sales of THIS
+  # shop's products (sale pinned to the shop when it was recorded). Never a
+  # review of the owner as a buyer, never the owner's personal sales.
+  def reviews
+    Review.visible.of_seller.joins(:sale).where(transactions: { shop_id: id })
+  end
+
+  # [average rating (Float or nil), count] in one query.
+  def review_stats
+    @review_stats ||= begin
+      avg, count = reviews.pick(Arel.sql("AVG(reviews.rating)"), Arel.sql("COUNT(reviews.id)"))
+      [ avg&.to_f&.round(1), count.to_i ]
+    end
+  end
+
   # The products `viewer` actually sees on this shop's page: the same rule as
   # GET /listings?shop_id= (a blocked pair's products and the viewer's own
   # "Not interested" hides drop out). A guest sees them all. The shop page's

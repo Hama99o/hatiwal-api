@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_06_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -470,6 +470,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
     t.integer "quantity", default: 1, null: false
     t.bigint "recorded_by_id"
     t.bigint "seller_id", null: false
+    t.bigint "shop_id"
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
     t.index ["buyer_id"], name: "index_transactions_on_buyer_id"
@@ -477,6 +478,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
     t.index ["listing_id"], name: "index_transactions_on_listing_id_while_open", unique: true, where: "(status = 0)"
     t.index ["recorded_by_id"], name: "index_transactions_on_recorded_by_id"
     t.index ["seller_id"], name: "index_transactions_on_seller_id"
+    t.index ["shop_id"], name: "index_transactions_on_shop_id"
     t.index ["status"], name: "index_transactions_on_status"
     t.check_constraint "quantity >= 1", name: "transactions_quantity_positive"
   end
@@ -664,6 +666,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_120000) do
   add_foreign_key "shops", "categories"
   add_foreign_key "shops", "users", column: "owner_id"
   add_foreign_key "transactions", "listings"
+  add_foreign_key "transactions", "shops", on_delete: :nullify
   add_foreign_key "transactions", "users", column: "buyer_id"
   add_foreign_key "transactions", "users", column: "recorded_by_id", on_delete: :nullify
   add_foreign_key "transactions", "users", column: "seller_id"
