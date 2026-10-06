@@ -953,6 +953,43 @@ paths:
           description: sale removed, stock restored, listing re-opened
         '422':
           description: the sale already has a review
+  "/api/v1/my/shop_invites":
+    get:
+      summary: my pending invitations
+      tags:
+      - Shops — team
+      description: Pending, unexpired EMAIL invitations addressed to the caller's
+        CONFIRMED email, for open shops they are not in yet. An unconfirmed email
+        sees none; link invites never show (no addressee). Answer with POST /shop_invites/{token}/accept
+        or /decline. me.pending_shop_invites_count is the badge.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: the invitations
+        '401':
+          description: signed out
   "/api/v1/reports":
     get:
       summary: list the current user's reports

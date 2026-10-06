@@ -499,6 +499,18 @@ if defined?(Shop) && Shop.table_exists?
       invite.save!(validate: false) # an already-expired row is a fixture, not an invite being made
     end
 
+    # "My invitations" (1.1.6): shop.team.invitee has a CONFIRMED email and one
+    # pending email invite (qa-team-mine), so the list and the me badge show 1.
+    # A dedicated account: a badge on shop.none would change its no-shop flows.
+    # Reset every run (the membership above is already removed if they joined).
+    invitee = qa_user(email: "shop.team.invitee@hatiwal.test", firstname: "Parwana", lastname: "Invitee", place: :kabul, avatar: true)
+    ShopInvite.where(email: invitee.email).where.not(token: "qa-team-mine").delete_all
+    mine = ShopInvite.find_or_initialize_by(token: "qa-team-mine")
+    mine.assign_attributes(shop: team_shop, invited_by: towner, email: invitee.email, role: :staff, status: :pending,
+                           expires_at: 7.days.from_now, accepted_by: nil, decided_at: nil)
+    mine.save!
+    puts "  My invitations: shop.team.invitee has #{ShopInvite.addressed_to(invitee).count} pending (qa-team-mine)"
+
     Block.where(blocker: tbuyer).delete_all
     Block.find_or_create_by!(blocker: tbuyer, blocked: tstaff)
 

@@ -268,6 +268,8 @@ Rails.application.routes.draw do
       # Seller / owner mode
       namespace :my do
         get "shops", to: "shops#index", as: :shops
+        # Invitations addressed to my confirmed email (answer by token).
+        get "shop_invites", to: "shop_invites#index", as: :shop_invites
         resources :listings do
           member do
             put :publish

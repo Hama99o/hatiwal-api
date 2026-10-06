@@ -82,6 +82,8 @@ class UserSerializer < ApplicationSerializer
     # unconfirmed one, which is why nothing was ever gated on it
     # (docs/EMAIL_CONFIRMATION.md).
     field(:email_confirmed) { |u| u.confirmed_at.present? }
+    # The badge on "My invitations" (GET /my/shop_invites, same scope).
+    field(:pending_shop_invites_count) { |u| ShopInvite.addressed_to(u).count }
     # Dashboard stats for the user's own profile.
     # SF-B1 — `live`, matching `listings_count` above and the widened
     # `browsable`/"Active" tab. A held listing is still one of the seller's items

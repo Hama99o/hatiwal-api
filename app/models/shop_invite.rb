@@ -35,6 +35,17 @@ class ShopInvite < ApplicationRecord
   validates :expires_at, presence: true
 
   scope :live, -> { pending.where("shop_invites.expires_at > ?", Time.current) }
+  # "My invitations" (1.1.6): the live EMAIL invites addressed to this user's
+  # CONFIRMED address, for shops still open that they are not in yet. A link
+  # invite has no addressee, so it never shows here; an unconfirmed address sees
+  # nothing (anyone can type any email at sign-up). Emails are stored downcased.
+  scope :addressed_to, lambda { |user|
+    next none unless user&.email_confirmed? && user.email.present?
+
+    live.where(email: user.email.strip.downcase)
+        .joins(:shop).merge(Shop.active)
+        .where.not(shop_id: ShopMember.where(user_id: user.id).select(:shop_id))
+  }
   scope :pending_first, -> { order(Arel.sql("CASE WHEN shop_invites.status = 0 THEN 0 ELSE 1 END"), created_at: :desc) }
 
   def self.public_url(token)

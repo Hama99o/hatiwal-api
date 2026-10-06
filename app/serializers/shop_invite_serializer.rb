@@ -12,6 +12,16 @@ class ShopInviteSerializer < ApplicationSerializer
     field(:created_at) { |i| i.created_at.iso8601 }
   end
 
+  # GET /my/shop_invites: an invitation addressed to the viewer. The token is
+  # theirs to answer with (POST /shop_invites/:token/accept | decline).
+  view :mine do
+    fields :id, :role, :token
+    field(:shop) { |i| ShopSerializer.render_as_hash(i.shop, view: :card) }
+    field(:inviter_name) { |i| i.invited_by.full_name }
+    field(:expires_at) { |i| i.expires_at.iso8601 }
+    field(:created_at) { |i| i.created_at.iso8601 }
+  end
+
   view :public do
     field(:shop) { |i| ShopSerializer.render_as_hash(i.shop, view: :card) }
     field(:inviter_name) { |i| i.invited_by.full_name }
