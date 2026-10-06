@@ -487,6 +487,11 @@ if defined?(Shop) && Shop.table_exists?
     qa_shop_listing.call(towner, team_shop, "Kabul QA Team Shop — Scarf", 650, "clothes", :kabul)
     qa_shop_listing.call(tstaff, team_shop, "Kabul QA Team Shop — Shawl (posted by staff)", 900, "clothes", :kabul)
 
+    # Invites that FLOWS created (team_invite, invitations_*) would pile up on
+    # the owner's Team screen run after run; only the fixed-token ones stay.
+    fixed_tokens = %w[qa-team-link qa-team-email qa-team-expired qa-team-used qa-team-cancelled qa-team-mine]
+    stray = ShopInvite.where(shop: team_shop).where.not(token: fixed_tokens).delete_all
+    puts "  SHOP-3: removed #{stray} invite(s) left by flows" if stray.positive?
     { "qa-team-link" => [ nil, :pending, 7.days.from_now ],
       "qa-team-email" => [ "shop.team.newbie@hatiwal.test", :pending, 7.days.from_now ],
       "qa-team-expired" => [ nil, :pending, 1.hour.ago ],
