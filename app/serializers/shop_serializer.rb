@@ -32,7 +32,8 @@ class ShopSerializer < ApplicationSerializer
     field(:category) { |s| CategorySerializer.render_as_hash(s.category) }
     # Lists pass `listings_counts:` (Shop.live_listings_counts, one grouped
     # query); a single shop page counts its own.
-    field(:listings_count) { |s, opts| opts[:listings_counts] ? opts[:listings_counts].fetch(s.id, 0) : s.live_listings_count }
+    # As the viewer sees them (blocks, hidden), like GET /listings?shop_id=.
+    field(:listings_count) { |s, opts| opts[:listings_counts] ? opts[:listings_counts].fetch(s.id, 0) : s.listings_visible_to(opts[:current_user]).count }
     field(:verified_at) { |s| s.verified_at&.iso8601 }
     # Decided here, in the shop's own time zone, so no client guesses with the
     # phone's clock. open_now is null when the shop states no hours.

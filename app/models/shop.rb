@@ -274,9 +274,24 @@ class Shop < ApplicationRecord
 
   def live_listings_count = listings.live.not_expired.not_removed.count
 
-  # Live product counts for many shops in ONE grouped query: { shop_id => n }.
-  def self.live_listings_counts(shop_ids)
-    Listing.live.not_expired.not_removed.where(shop_id: shop_ids).group(:shop_id).count
+  # The products `viewer` actually sees on this shop's page: the same rule as
+  # GET /listings?shop_id= (a blocked pair's products and the viewer's own
+  # "Not interested" hides drop out). A guest sees them all. The shop page's
+  # "Products (n)" must never count what the list below it won't show (it gave
+  # a block away to the blocked person).
+  def listings_visible_to(viewer)
+    self.class.visible_live_listings(viewer).where(shop_id: id)
+  end
+
+  # Live product counts for many shops in ONE grouped query: { shop_id => n },
+  # as `viewer` sees them (nil = everyone's count).
+  def self.live_listings_counts(shop_ids, viewer: nil)
+    visible_live_listings(viewer).where(shop_id: shop_ids).group(:shop_id).count
+  end
+
+  def self.visible_live_listings(viewer)
+    scope = Listing.live.not_expired.not_removed
+    viewer ? scope.excluding_blocked_pairs(viewer).not_hidden_for(viewer) : scope
   end
 
   # Opening hours from the client: a Hash (JSON body) or a JSON string
