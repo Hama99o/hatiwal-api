@@ -13,9 +13,20 @@ module Api
         # notifications for the departing user. Without this, a second account
         # logging in on the same device shares the token and receives
         # notifications intended for the logged-out account.
+        #
+        # P0 login race (2026-10-06): DTA deletes this client from the user it
+        # loaded at the START of the request and saves the whole `tokens` hash.
+        # A sign-in of the same user committing in between (the app signing out
+        # and straight back in) was wiped by that stale save, so the sign-in
+        # answered 200 with no auth headers and a dead session. Re-read the row
+        # under a lock first: the delete then runs on the current tokens, and
+        # DTA's sign-in (create_and_assign_token, also with_lock) waits for it.
         def destroy
           current_user&.update_column(:push_token, nil)
-          super
+          ActiveRecord::Base.transaction do
+            @resource&.lock!
+            super
+          end
         end
 
         private
