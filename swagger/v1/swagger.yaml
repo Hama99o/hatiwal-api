@@ -60,6 +60,219 @@ paths:
                 required:
                 - platform
                 - status
+  "/api/v1/shops":
+    post:
+      summary: open your shop
+      tags:
+      - Shops
+      description: Only name, category and location (pin + address line) are required.
+        One shop per user (phase 1). The location must be in Afghanistan, Pakistan
+        or Iran. Live at once unless SHOP_APPROVAL_REQUIRED is on, when it starts
+        `pending`. Multipart for logo/cover; `hours` may be JSON.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '403':
+          description: email not confirmed
+        '201':
+          description: shop opened
+        '422':
+          description: outside the service area, or a second shop
+        '401':
+          description: requires authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      minLength: 2
+                      maxLength: 50
+                    description:
+                      type: string
+                      maxLength: 160
+                    category_id:
+                      type: integer
+                    latitude:
+                      type: number
+                    longitude:
+                      type: number
+                    province:
+                      type: string
+                    city:
+                      type: string
+                    address_line:
+                      type: string
+                    phone:
+                      type: string
+                    phone_public:
+                      type: boolean
+                    hours:
+                      type: object
+                      example:
+                        sat:
+                        - - '08:00'
+                          - '18:00'
+                        fri: []
+                  required:
+                  - name
+                  - category_id
+                  - latitude
+                  - longitude
+                  - address_line
+              required:
+              - shop
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                shop:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      minLength: 2
+                      maxLength: 50
+                    description:
+                      type: string
+                      maxLength: 160
+                    category_id:
+                      type: integer
+                    latitude:
+                      type: number
+                    longitude:
+                      type: number
+                    province:
+                      type: string
+                    city:
+                      type: string
+                    address_line:
+                      type: string
+                    phone:
+                      type: string
+                    phone_public:
+                      type: boolean
+                    hours:
+                      type: object
+                      example:
+                        sat:
+                        - - '08:00'
+                          - '18:00'
+                        fri: []
+                  required:
+                  - name
+                  - category_id
+                  - latitude
+                  - longitude
+                  - address_line
+              required:
+              - shop
+  "/api/v1/verification_requests":
+    post:
+      summary: apply for the Verified badge (multipart)
+      tags:
+      - Verification
+      description: 3 requests sent per day. Answers the status card; never a document.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '403':
+          description: email not confirmed
+        '201':
+          description: sent; the card says under review, with no document
+        '422':
+          description: a two-sided document needs its back
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                document_type:
+                  type: string
+                  enum:
+                  - e_tazkira
+                name_on_document:
+                  type: string
+                document_number:
+                  type: string
+                  pattern: "^\\d{6,20}$"
+                  description: the FULL number; kept encrypted, never returned
+                front:
+                  type: string
+                  format: binary
+                back:
+                  type: string
+                  format: binary
+                  description: the back of the e-Tazkira
+                selfie:
+                  type: string
+                  format: binary
+                  description: holding the document
+              required:
+              - document_type
+              - name_on_document
+              - document_number
+              - front
+              - back
+              - selfie
+  "/api/v1/auth/confirmation":
+    post:
+      summary: send the confirmation link again
+      tags:
+      - Auth
+      description: Resends the confirmation email. 5 per hour per IP (then 429).
+      parameters: []
+      responses:
+        '200':
+          description: sent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+              required:
+              - email
   "/api/v1/listings":
     get:
       summary: browse active listings
@@ -1136,6 +1349,31 @@ paths:
       responses:
         '200':
           description: sent again
+  "/api/v1/shops/{shop_id}/reviews":
+    get:
+      summary: the shop's reviews (public)
+      tags:
+      - Shops
+      description: Buyers' reviews of sales of this shop's products, newest first,
+        paginated. A review of the owner as a buyer or of the owner's personal sales
+        never appears. The shop page's avg_rating / review_count come from the same
+        set. 404 for a closed shop.
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: the shop's reviews
+        '404':
+          description: a closed shop
   "/api/v1/shops/{shop_id}/members":
     get:
       summary: the team (every member)
@@ -1207,6 +1445,60 @@ paths:
       responses:
         '204':
           description: removed, told and logged
+    patch:
+      summary: change a member's role (owner)
+      tags:
+      - Shops — team
+      description: 'role: manager | staff. Owner only (403 forbidden). The owner''s
+        own role only changes by a transfer (422 cannot_change_owner); 422 invalid_role;
+        404 not_a_member. Audit role_changed; push shop_membership_changed {reason:
+        role_changed} to the person.'
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the member with the new role
+        '403':
+          description: not the owner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum:
+                  - manager
+                  - staff
+              required:
+              - role
   "/api/v1/shops/{shop_id}/membership":
     delete:
       summary: leave the shop (staff)
@@ -1240,15 +1532,24 @@ paths:
           description: left
         '422':
           description: the owner can't leave
-  "/api/v1/verification_requests":
+  "/api/v1/shops/{shop_id}/transfer":
     post:
-      summary: apply for the Verified badge (multipart)
+      summary: hand the shop to a member (owner)
       tags:
-      - Verification
-      description: 3 requests sent per day. Answers the status card; never a document.
+      - Shops — team
+      description: 'The member becomes the owner; the old owner stays as a manager;
+        shop chats move to the new owner (their seller is the owner); a Verified badge
+        is dropped (it vouched for the old owner''s e-Tazkira). → { shop (owner view,
+        the caller''s new role), me }. 422: cannot_transfer_to_self, not_a_member,
+        shop_unavailable, verification_pending. 403 forbidden for anyone but the owner.'
       security:
       - bearer: []
       parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
       - name: access-token
         in: header
         required: true
@@ -1265,44 +1566,20 @@ paths:
         schema:
           type: string
       responses:
-        '201':
-          description: sent; the card says under review, with no document
+        '200':
+          description: transferred
         '422':
-          description: a two-sided document needs its back
+          description: to yourself
       requestBody:
         content:
-          multipart/form-data:
+          application/json:
             schema:
               type: object
               properties:
-                document_type:
-                  type: string
-                  enum:
-                  - e_tazkira
-                name_on_document:
-                  type: string
-                document_number:
-                  type: string
-                  pattern: "^\\d{6,20}$"
-                  description: the FULL number; kept encrypted, never returned
-                front:
-                  type: string
-                  format: binary
-                back:
-                  type: string
-                  format: binary
-                  description: the back of the e-Tazkira
-                selfie:
-                  type: string
-                  format: binary
-                  description: holding the document
+                user_id:
+                  type: integer
               required:
-              - document_type
-              - name_on_document
-              - document_number
-              - front
-              - back
-              - selfie
+              - user_id
   "/api/v1/shops/{shop_id}/conversations":
     post:
       summary: Message shop (a chat without a product)
@@ -1350,132 +1627,6 @@ paths:
               properties:
                 message:
                   type: string
-  "/api/v1/shops":
-    post:
-      summary: open your shop
-      tags:
-      - Shops
-      description: Only name, category and location (pin + address line) are required.
-        One shop per user (phase 1). The location must be in Afghanistan, Pakistan
-        or Iran. Live at once unless SHOP_APPROVAL_REQUIRED is on, when it starts
-        `pending`. Multipart for logo/cover; `hours` may be JSON.
-      security:
-      - bearer: []
-      parameters:
-      - name: access-token
-        in: header
-        required: true
-        schema:
-          type: string
-      - name: client
-        in: header
-        required: true
-        schema:
-          type: string
-      - name: uid
-        in: header
-        required: true
-        schema:
-          type: string
-      responses:
-        '201':
-          description: shop opened
-        '422':
-          description: outside the service area, or a second shop
-        '401':
-          description: requires authentication
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                shop:
-                  type: object
-                  properties:
-                    name:
-                      type: string
-                      minLength: 2
-                      maxLength: 50
-                    description:
-                      type: string
-                      maxLength: 160
-                    category_id:
-                      type: integer
-                    latitude:
-                      type: number
-                    longitude:
-                      type: number
-                    province:
-                      type: string
-                    city:
-                      type: string
-                    address_line:
-                      type: string
-                    phone:
-                      type: string
-                    phone_public:
-                      type: boolean
-                    hours:
-                      type: object
-                      example:
-                        sat:
-                        - - '08:00'
-                          - '18:00'
-                        fri: []
-                  required:
-                  - name
-                  - category_id
-                  - latitude
-                  - longitude
-                  - address_line
-              required:
-              - shop
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                shop:
-                  type: object
-                  properties:
-                    name:
-                      type: string
-                      minLength: 2
-                      maxLength: 50
-                    description:
-                      type: string
-                      maxLength: 160
-                    category_id:
-                      type: integer
-                    latitude:
-                      type: number
-                    longitude:
-                      type: number
-                    province:
-                      type: string
-                    city:
-                      type: string
-                    address_line:
-                      type: string
-                    phone:
-                      type: string
-                    phone_public:
-                      type: boolean
-                    hours:
-                      type: object
-                      example:
-                        sat:
-                        - - '08:00'
-                          - '18:00'
-                        fri: []
-                  required:
-                  - name
-                  - category_id
-                  - latitude
-                  - longitude
-                  - address_line
-              required:
-              - shop
   "/api/v1/shops/{id}":
     parameters:
     - name: id

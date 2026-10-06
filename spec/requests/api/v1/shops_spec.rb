@@ -2,7 +2,7 @@ require "swagger_helper"
 
 # SHOP-1 — hatiwal-mobile/docs/SHOPS.md
 RSpec.describe "Api::V1::Shops", type: :request do
-  let(:owner)    { create(:user) }
+  let(:owner)    { create(:user, :confirmed) }
   let(:headers)  { auth_headers_for(owner) }
   let(:category) { create(:category) }
   let(:shop_body) do
@@ -167,7 +167,7 @@ RSpec.describe "Api::V1::Shops", type: :request do
 end
 
 RSpec.describe "SHOP-1 — selling as, my shops, feed, chats", type: :request do
-  let(:owner)    { create(:user) }
+  let(:owner)    { create(:user, :confirmed) }
   let(:headers)  { auth_headers_for(owner) }
   let(:json_headers) { headers.merge("Content-Type" => "application/json") }
   let!(:shop)    { create(:shop, owner: owner) }

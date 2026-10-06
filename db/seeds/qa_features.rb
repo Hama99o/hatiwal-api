@@ -518,6 +518,18 @@ else
 end
 
 # =============================================================================
+puts "=== QA Seed: email gate (1.1.6) ==="
+# =============================================================================
+# Opening a shop or applying for Verified needs a confirmed email (403
+# email_unconfirmed). shop.gate has a photo and a full name, so the email is
+# the ONLY thing missing: the gate is what the app shows, never another rule.
+# Reset to UNCONFIRMED every run (a flow may tap the link or confirm it).
+gate = qa_user(email: "shop.gate@hatiwal.test", firstname: "Gulalai", lastname: "Gatekhan", place: :kabul, avatar: true)
+gate.update_columns(confirmed_at: nil, confirmation_token: nil, confirmation_sent_at: nil)
+gate_shops = defined?(Shop) && Shop.table_exists? ? Shop.where(owner_id: gate.id).count : 0
+puts "  shop.gate@hatiwal.test UNCONFIRMED (no shop expected; owns #{gate_shops})"
+
+# =============================================================================
 puts "=== QA Seed: check — no Support threads ==="
 # =============================================================================
 

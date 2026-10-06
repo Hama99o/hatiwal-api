@@ -137,6 +137,17 @@ class ApplicationController < ActionController::API
     render json: { error: message.to_s, code: code }, status: status
   end
 
+  # 403 { code: "email_unconfirmed" }: the app shows "confirm your email first"
+  # with a resend button (POST /api/v1/auth/confirmation).
+  def require_confirmed_email!
+    return if current_user.nil? || current_user.email_confirmed?
+
+    # In the caller's own language (the API does not switch locale per request).
+    locale = current_user.preferred_language.presence
+    locale = I18n.default_locale unless locale && I18n.locale_available?(locale)
+    render_coded_error(I18n.t("accounts.email_unconfirmed", locale: locale), code: :email_unconfirmed, status: :forbidden)
+  end
+
   def render_not_found
     render json: { error: "Not found" }, status: :not_found
   end

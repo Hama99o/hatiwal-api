@@ -1,0 +1,4 @@
+# Owner rule (1.1.6): a confirmed email before opening a shop or applying for Verified.
+ps:
+  accounts:
+    email_unconfirmed: 'لومړی خپل برېښنالیک تایید کړئ: مونږ تاسو ته یو لینک ولېږه. بیا یې لېږلی شئ.'

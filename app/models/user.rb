@@ -64,6 +64,11 @@ class User < ApplicationRecord
 
   # What stops this person applying, as stable keys the clients translate.
   # Empty = may apply.
+  # Owner rule (1.1.6): opening a shop and applying for Verified need a
+  # CONFIRMED email, or the address may be wrong. Google sign-in sets
+  # confirmed_at (the address is proven by Google).
+  def email_confirmed? = confirmed_at.present?
+
   def verification_missing
     missing = []
     missing << "email_confirmed" if confirmed_at.blank?

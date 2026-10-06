@@ -65,7 +65,7 @@ RSpec.describe "Shop verification", type: :request do
   end
 
   it "says what is missing for a shop without a logo or products" do
-    bare = create(:shop, owner: create(:user))
+    bare = create(:shop, owner: create(:user, :confirmed))
     apply(as: auth_headers_for(bare.owner), params: apply_params.merge(subject: "shop:#{bare.id}"))
     expect(response).to have_http_status(:unprocessable_entity)
     expect(response.body).to include("logo").and include("live_product")

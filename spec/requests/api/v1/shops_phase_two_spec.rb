@@ -6,7 +6,7 @@ require "swagger_helper"
 RSpec.describe "Shops phase 2", type: :request do
   include ActiveJob::TestHelper
 
-  let(:owner) { create(:user) }
+  let(:owner) { create(:user, :confirmed) }
   let(:category) { create(:category) }
   let(:herat) { { latitude: 34.3529, longitude: 62.204 } }
 

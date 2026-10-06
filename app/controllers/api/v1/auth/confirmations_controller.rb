@@ -23,6 +23,11 @@ module Api
       # param is honoured only while it points at the configured host, and
       # anything else falls back to the configured URL.
       class ConfirmationsController < DeviseTokenAuth::ConfirmationsController
+        # POST /api/v1/auth/confirmation {email} resends the confirmation email
+        # (the "confirm your email first" gate's button). Every call sends real
+        # mail, so it is limited like the password reset.
+        throttle to: 5, within: 1.hour, by: :ip, only: :create
+
         private
 
         def redirect_options

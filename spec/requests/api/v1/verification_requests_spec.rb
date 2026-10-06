@@ -216,7 +216,7 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
     end
 
     it "refuses a user who is not eligible yet" do
-      newcomer = create(:user)
+      newcomer = create(:user, :confirmed)
       apply(as: newcomer)
       expect(response).to have_http_status(:unprocessable_entity)
     end

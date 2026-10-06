@@ -34,7 +34,10 @@ class ConversationSerializer < ApplicationSerializer
   def self.person_block(conversation, person)
     shop = conversation.shop_face if person.id == conversation.seller_id
     if shop
-      return { id: person.id, name: shop.name, city: shop.city, verified: shop.verified?, avatar_url: shop.logo_url, as_shop: true }
+      # city: the shop's city, else its province (always filled from the pin), so
+      # it is a string like a person's: apps older than shops render it as such.
+      return { id: person.id, name: shop.name, city: shop.city.presence || shop.province, verified: shop.verified?,
+               avatar_url: shop.logo_url, as_shop: true }
     end
 
     { id: person.id, name: person.full_name, city: person.city, verified: person.verified,

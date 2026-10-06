@@ -19,6 +19,7 @@ FactoryBot.define do
 
     # Logo + a live product: what Shop#verification_missing asks for.
     trait :verification_eligible do
+      association :owner, factory: %i[user confirmed]
       after(:create) do |shop|
         shop.logo.attach(io: Rails.root.join("spec/fixtures/files/test_image.jpg").open, filename: "logo.jpg", content_type: "image/jpeg")
         FactoryBot.create(:listing, :active, user: shop.owner, shop: shop)

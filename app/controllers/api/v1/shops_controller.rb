@@ -12,6 +12,8 @@ class Api::V1::ShopsController < Api::V1::BaseController
 
   # Opening shops is rare; this only stops a script.
   throttle to: 10, within: 1.day, by: :user, only: :create
+  # Owner rule (1.1.6): a confirmed email before opening a shop.
+  before_action :require_confirmed_email!, only: :create
 
   # GET /api/v1/shops[?verified=true] — open shops, for the web sitemap
   # (verified ones go in it). Minimal rows; paginated.

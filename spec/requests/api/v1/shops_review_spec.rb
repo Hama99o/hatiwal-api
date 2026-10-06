@@ -85,7 +85,7 @@ RSpec.describe "SHOP-1 review", type: :request do
   end
 
   it "SHOP-2: an owner may open a second, different shop" do
-    owner = create(:user)
+    owner = create(:user, :confirmed)
     create(:shop, owner: owner)
     post "/api/v1/shops", params: { shop: { name: "Second shop", category_id: create(:category).id, latitude: 34.35, longitude: 62.2,
                                             address_line: "Another street" } }.to_json,

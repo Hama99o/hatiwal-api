@@ -5,6 +5,8 @@
 # document. `subject=me` (default) or, SHOP-1, `subject=shop:<id>` for a shop the
 # caller manages.
 class Api::V1::VerificationRequestsController < Api::V1::BaseController
+  # Owner rule (1.1.6): a confirmed email before applying, for a person or a shop.
+  before_action :require_confirmed_email!, only: :create
   # Spec: 3 requests per day per user. Counted on requests actually SENT
   # (VerificationRequest::DAILY_LIMIT), so blurry uploads that fail validation
   # don't lock anyone out. This throttle is only the anti-script backstop.
