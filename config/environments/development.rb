@@ -38,10 +38,20 @@ Rails.application.configure do
   # Set localhost to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "localhost", port: 3007 }
 
-  # Gmail SMTP settings are inherited from application.rb (credentials).
-  # In development, delivery_method defaults to :smtp so real emails are sent.
-  # Override to :test locally if you want to suppress email delivery.
-  config.action_mailer.delivery_method = :smtp
+  # MAIL_DELIVERY picks how mail leaves a development server:
+  #   smtp (default)  real mail through the Gmail SMTP settings in application.rb
+  #                   (the owner's own dev testing, unchanged)
+  #   test            nothing leaves the box (QA/dev servers: invites, sign-up
+  #                   confirmations and Resend go to *.test addresses)
+  #   letter_opener   opens each mail locally, only if that gem is installed
+  # Anything else stops the boot, so a typo never silently sends real mail.
+  mail_delivery = ENV.fetch("MAIL_DELIVERY", "smtp")
+  allowed = %w[smtp test]
+  allowed << "letter_opener" if Gem.loaded_specs.key?("letter_opener")
+  unless allowed.include?(mail_delivery)
+    raise ArgumentError, "MAIL_DELIVERY=#{mail_delivery.inspect} is not one of #{allowed.join(', ')}"
+  end
+  config.action_mailer.delivery_method = mail_delivery.to_sym
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log
