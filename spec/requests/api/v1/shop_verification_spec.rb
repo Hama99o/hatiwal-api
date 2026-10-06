@@ -224,6 +224,18 @@ RSpec.describe "Shop edit after verification", type: :request do
 
   before { verification.approve!(admin: admin) }
 
+  it "a shop's card says when the photos of a decided request were deleted (request.files_purged)" do
+    rejected = create(:shop, :verification_eligible, owner: shop.owner)
+    request = create(:shop_verification_request, shop: rejected)
+    request.reject!(admin: admin, reason_code: "photo_not_clear")
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{rejected.id}" }, headers: headers
+    expect(JSON.parse(response.body).dig("verification_status", "request")).to include("files_purged" => false)
+
+    request.purge_files!
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{rejected.id}" }, headers: headers
+    expect(JSON.parse(response.body).dig("verification_status", "request")).to include("files_purged" => true, "files_count" => 0)
+  end
+
   it "the owner renaming the shop drops the badge and tells them, in their language" do
     expect do
       patch "/api/v1/shops/#{shop.id}", params: { shop: { name: "Renamed" } }.to_json, headers: headers

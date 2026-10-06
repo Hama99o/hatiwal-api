@@ -1925,7 +1925,7 @@ paths:
         '401':
           description: requires authentication
         '200':
-          description: under review, without any document
+          description: rejected, its photos deleted after the keep period (request.files_purged)
   "/api/v1/verification_requests/{id}":
     delete:
       summary: cancel a waiting request (its photos are deleted at once)

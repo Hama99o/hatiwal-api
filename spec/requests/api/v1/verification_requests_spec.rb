@@ -51,8 +51,24 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
         run_test! do |response|
           status = response.parsed_body["verification_status"]
           expect(status["status"]).to eq("requested")
-          expect(status["request"]).to include("document_type" => "e_tazkira", "document_last4" => "4821", "files_count" => 3)
+          expect(status["request"]).to include("document_type" => "e_tazkira", "document_last4" => "4821", "files_count" => 3,
+                                               "files_purged" => false)
           expect_no_documents(response.body)
+        end
+      end
+
+      response "200", "rejected, its photos deleted after the keep period (request.files_purged)" do
+        before do
+          request = create(:verification_request, :two_sided, user: user)
+          request.reject!(admin: create(:admin_user), reason_code: "photo_not_clear")
+          request.update_columns(decided_at: (VerificationRequest::FILES_KEPT_FOR + 1.day).ago)
+          request.purge_files!
+        end
+
+        run_test! do |response|
+          status = response.parsed_body["verification_status"]
+          expect(status["status"]).to eq("rejected")
+          expect(status["request"]).to include("files_purged" => true, "files_count" => 0, "reason_code" => "photo_not_clear")
         end
       end
     end

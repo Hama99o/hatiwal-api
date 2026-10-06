@@ -18,6 +18,9 @@ class VerificationStatusSerializer < ApplicationSerializer
       name_on_document: r.name_on_document,
       document_last4: r.document_last4,
       files_count: r.files_count,
+      # The photos were deleted FILES_KEPT_FOR after the decision: the card says
+      # so instead of inferring it from files_count 0.
+      files_purged: r.files_purged_at.present?,
       reason_code: r.reason_code,
       created_at: r.created_at,
       decided_at: r.decided_at
