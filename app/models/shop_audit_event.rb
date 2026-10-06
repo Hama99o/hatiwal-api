@@ -2,7 +2,7 @@
 # "Phase 3 — the team"). Server-side only: the admin shop page lists them; no
 # app screen this phase.
 class ShopAuditEvent < ApplicationRecord
-  ACTIONS = %w[invited invite_cancelled joined declined removed left].freeze
+  ACTIONS = %w[invited invite_cancelled joined declined removed left role_changed transferred].freeze
 
   belongs_to :shop
   belongs_to :actor, class_name: User.name, optional: true

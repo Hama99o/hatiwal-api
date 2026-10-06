@@ -19,7 +19,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
                                      # sender as the shop (MessageSerializer): one load, not one per message
                                      conversation: [ { shop: { logo_attachment: :blob } }, { listing: { shop: { logo_attachment: :blob } } } ])
                            .newest_first
-    paginate_blue(MessageSerializer, messages, extra: { view: :default })
+    paginate_blue(MessageSerializer, messages, extra: { view: :default, current_user: current_user })
   end
 
   def create
@@ -44,7 +44,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
     if @message.save
       BroadcastMessageJob.perform_later(@message.id)   # in-app real-time (open app)
       SendMessagePushJob.perform_later(@message.id)     # push notification (closed app)
-      render_blue(MessageSerializer, @message, view: :default, status: :created)
+      render_blue(MessageSerializer, @message, view: :default, status: :created, options: { current_user: current_user })
     else
       # SF-B11: `code:` carries the ONE message failure the sender has to act on
       # — `offer_quantity_above_available_units`, when they offered for more units
@@ -64,7 +64,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
     authorize @message
     @message.soft_delete!
     BroadcastMessageJob.perform_later(@message.id) # real-time tombstone flip for the other participant
-    render_blue(MessageSerializer, @message, view: :default)
+    render_blue(MessageSerializer, @message, view: :default, options: { current_user: current_user })
   end
 
   def mark_read

@@ -16,9 +16,15 @@ class ShopPolicy < ApplicationPolicy
   # Moving listings in or out is managing products: every member may (phase 3).
   def move_listings? = member?
   # SHOP-3 — the team (docs/SHOPS.md, "Permission matrix"): every member sees
-  # the list; only the owner invites, cancels invites and removes people.
+  # the list; the owner and managers invite, cancel invites and remove STAFF
+  # (Shop#remove_team_member! keeps a manager off managers and the owner).
   def team? = member?
-  def manage_team? = role == "owner"
+  def manage_team? = EDITORS.include?(role)
+  # Owner only: roles, ownership, and the Verified application (it is the
+  # owner's own e-Tazkira).
+  def change_role? = role == "owner"
+  def transfer? = role == "owner"
+  def apply_verification? = role == "owner"
 
   class Scope < ApplicationPolicy::Scope
     def resolve

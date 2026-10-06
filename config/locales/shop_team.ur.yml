@@ -6,6 +6,8 @@ ur:
       shop_member_joined: '%{name} %{shop} میں شامل ہو گئے۔'
       shop_membership_changed_removed: آپ کو %{shop} سے ہٹا دیا گیا۔ اب آپ دوبارہ اپنے نام سے بیچ رہے ہیں۔
       shop_membership_changed_closed: '%{shop} بند ہو گئی۔ اب آپ دوبارہ اپنے نام سے بیچ رہے ہیں۔'
+      shop_membership_changed_role_changed: '%{shop} میں آپ کا کردار بدل گیا۔ دیکھنے کے لیے ہتیوال کھولیں۔'
+      shop_owner_changed: '%{name} نے آپ کو %{shop} کا مالک بنا دیا۔'
   shops:
     team:
       errors:
@@ -22,3 +24,7 @@ ur:
         team_full: ٹیم مکمل ہے (۲۰ افراد)
         too_many_invites: آج بہت زیادہ دعوتیں بھیجی گئیں۔ کل دوبارہ کوشش کریں۔
         invite_email_unconfirmed: پہلے اپنی ای میل کی تصدیق کریں، پھر یہ دعوت دوبارہ کھولیں
+        cannot_change_owner: مالک کا کردار صرف منتقلی سے بدلتا ہے
+        invalid_role: یہ کردار موجود نہیں
+        cannot_transfer_to_self: یہ دکان پہلے سے آپ کی ہے
+        verification_pending: تصدیق شدہ دکان کی ایک درخواست زیرِ انتظار ہے۔ پہلے اسے منسوخ کریں۔

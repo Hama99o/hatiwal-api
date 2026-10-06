@@ -117,16 +117,63 @@ class Shop < ApplicationRecord
     invite
   end
 
-  # The owner removes a Staff member; the owner can't be removed.
+  # The owner removes anyone but themselves; a manager removes STAFF only.
   def remove_team_member!(user, by:)
     member = shop_members.find_by(user_id: user.id)
     raise ShopInvite::Refused.new(:not_a_member, status: :not_found) unless member
     raise ShopInvite::Refused.new(:owner_cannot_leave) if member.owner?
+    raise ShopInvite::Refused.new(:forbidden, status: :forbidden) if !owner?(by) && !member.staff?
 
     drop_member!(member, :removed, actor: by)
   end
 
-  # A Staff member leaves; the owner can't (transfer is "Later").
+  # The owner changes a member's role (manager ⇄ staff). The owner's own role
+  # only changes by a transfer.
+  def change_role!(user, role:, by:)
+    member = shop_members.find_by(user_id: user.id)
+    raise ShopInvite::Refused.new(:not_a_member, status: :not_found) unless member
+    raise ShopInvite::Refused.new(:cannot_change_owner) if member.owner?
+    raise ShopInvite::Refused.new(:invalid_role) unless %w[manager staff].include?(role.to_s)
+    return member if member.role == role.to_s
+
+    from = member.role
+    transaction do
+      member.update!(role: role.to_s)
+      ShopAuditEvent.record!(self, :role_changed, actor: by, target_user: user, from: from, to: role.to_s)
+    end
+    ShopTeamPushJob.perform_later("shop_membership_changed", user.id, id, by.id, "role_changed")
+    member
+  end
+
+  # The owner hands the shop to an existing member, who becomes the owner; the
+  # old owner stays as a MANAGER. Shop chats follow (their seller is the owner).
+  # A Verified badge is dropped: it vouched for the old owner's e-Tazkira.
+  def transfer_ownership!(new_owner, by:)
+    raise ShopInvite::Refused.new(:cannot_transfer_to_self) if new_owner.id == owner_id
+    raise ShopInvite::Refused.new(:shop_unavailable) unless active?
+
+    target = shop_members.find_by(user_id: new_owner.id)
+    raise ShopInvite::Refused.new(:not_a_member) unless target
+    raise ShopInvite::Refused.new(:verification_pending) if verification_requests.requested.exists?
+
+    old_owner_id = owner_id
+    was_verified = verified?
+    transaction do
+      lock!
+      shop_members.find_by!(user_id: old_owner_id).update!(role: :manager)
+      target.update!(role: :owner)
+      chats = Conversation.where(shop_id: id).or(Conversation.where(listing_id: listings.select(:id)))
+      chats.where(seller_id: old_owner_id).where.not(buyer_id: new_owner.id)
+           .update_all(seller_id: new_owner.id, updated_at: Time.current)
+      update_columns(owner_id: new_owner.id, verified_at: nil, verified_by_id: nil, updated_at: Time.current)
+      ShopAuditEvent.record!(self, :transferred, actor: by, target_user: new_owner, from: old_owner_id, to: new_owner.id,
+                                                 badge_dropped: was_verified)
+    end
+    ShopTeamPushJob.perform_later("shop_owner_changed", new_owner.id, id, by.id)
+    reload
+  end
+
+  # A Staff member or a manager leaves; the owner can't (transfer first).
   def leave!(user)
     member = shop_members.find_by(user_id: user.id)
     raise ShopInvite::Refused.new(:not_a_member, status: :forbidden) unless member

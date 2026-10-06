@@ -6,6 +6,8 @@ ps:
       shop_member_joined: '%{name} له %{shop} سره یوځای شو.'
       shop_membership_changed_removed: تاسو له %{shop} څخه لرې شوئ. اوس بیا د ځان په توګه پلورئ.
       shop_membership_changed_closed: '%{shop} بند شو. اوس بیا د ځان په توګه پلورئ.'
+      shop_membership_changed_role_changed: په %{shop} کې ستاسو رول بدل شو. د لیدو لپاره هټیوال پرانیزئ.
+      shop_owner_changed: '%{name} تاسو د %{shop} مالک کړئ.'
   shops:
     team:
       errors:
@@ -22,3 +24,7 @@ ps:
         team_full: ټیم بشپړ دی (۲۰ کسان)
         too_many_invites: نن ډېرې بلنې لېږل شوې. سبا بیا هڅه وکړئ.
         invite_email_unconfirmed: لومړی خپل برېښنالیک تایید کړئ، بیا دا بلنه پرانیزئ
+        cannot_change_owner: د مالک رول یوازې د لېږد له لارې بدلېږي
+        invalid_role: دا رول نشته
+        cannot_transfer_to_self: دا دوکان مخکې ستاسو دی
+        verification_pending: د تایید شوي دوکان یوه غوښتنه انتظار کې ده. لومړی یې لغوه کړئ.

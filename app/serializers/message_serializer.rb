@@ -20,6 +20,22 @@ class MessageSerializer < ApplicationSerializer
     { id: m.user_id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
   end
 
+  # SHOP-3 "replied by": WHICH teammate wrote a shop message, for the shop's
+  # team only (their own messages included, apps-6a). The key is ABSENT for the
+  # buyer and for anyone outside the shop. A viewer qualifies when it is on the
+  # chat's seller side (REST: `current_user`), or the payload goes to the
+  # members-only live stream (`team: true`, BroadcastMessageJob).
+  field(:sent_by, if: ->(_name, m, opts) { sent_by_visible?(m, opts) }) do |m|
+    { id: m.user_id, name: m.user.full_name }
+  end
+
+  def self.sent_by_visible?(message, opts)
+    conversation = message.conversation
+    return false unless conversation&.written_as_shop?(message.user_id)
+
+    opts[:team] == true || (opts[:current_user].present? && conversation.seller_side?(opts[:current_user]))
+  end
+
   # Attachment URL: suppressed when deleted
   field(:attachment_url) { |m| m.deleted? ? nil : (m.attachment.attached? ? m.attachment.url : nil) }
 

@@ -5,14 +5,17 @@
 #                           (only an EMAIL invite pushes, and only its bound,
 #                           confirmed account can accept it)
 #   shop_member_joined      to the owner, when someone joins
-#   shop_membership_changed to a person removed (reason "removed") or whose
-#                           shop closed (reason "closed"): the app drops them
-#                           back to Me and refetches /me
+#   shop_membership_changed to a person removed (reason "removed"), whose
+#                           shop closed ("closed"), or whose role changed
+#                           ("role_changed"): the app refetches /me (and drops
+#                           back to Me unless it is a role change)
+#   shop_owner_changed      to the member who now OWNS the shop (a transfer)
 # Silently no-ops when there is no one to tell; never raises.
 class ShopTeamPushJob < ApplicationJob
   queue_as :default
 
-  KINDS = %w[shop_invite shop_member_joined shop_membership_changed].freeze
+  KINDS = %w[shop_invite shop_member_joined shop_membership_changed shop_owner_changed].freeze
+  MEMBERSHIP_REASONS = %w[removed closed role_changed].freeze
 
   def perform(kind, recipient_id, shop_id, actor_id = nil, reason = nil, invite_id = nil)
     return unless KINDS.include?(kind)
@@ -24,7 +27,7 @@ class ShopTeamPushJob < ApplicationJob
     actor = User.find_by(id: actor_id)
     locale = recipient.preferred_language.presence&.to_sym
     locale = I18n.default_locale unless locale && I18n.locale_available?(locale)
-    key = kind == "shop_membership_changed" ? "#{kind}_#{reason == 'closed' ? 'closed' : 'removed'}" : kind
+    key = kind == "shop_membership_changed" ? "#{kind}_#{MEMBERSHIP_REASONS.include?(reason) ? reason : 'removed'}" : kind
     body = I18n.with_locale(locale) { I18n.t("push.shop_team.#{key}", shop: shop.name, name: actor&.firstname.presence || actor&.full_name.to_s) }
 
     result = Notifications::ExpoPushService.deliver(

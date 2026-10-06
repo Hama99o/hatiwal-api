@@ -198,8 +198,9 @@ Rails.application.routes.draw do
         # SHOP-2 — "Message shop" from the shop page (no product): find-or-create.
         resources :conversations, only: %i[create], controller: "shop_conversations"
         # SHOP-3 — the team.
-        resources :members, only: %i[index destroy], controller: "shop_members", param: :user_id
+        resources :members, only: %i[index update destroy], controller: "shop_members", param: :user_id
         delete :membership, to: "shop_members#leave"
+        post :transfer, to: "shop_members#transfer"
         resources :invites, only: %i[index create destroy], controller: "shop_invites" do
           member { post :resend }
         end

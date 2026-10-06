@@ -6,6 +6,8 @@ fa:
       shop_member_joined: '%{name} به %{shop} پیوست.'
       shop_membership_changed_removed: شما از %{shop} حذف شدید. اکنون دوباره به عنوان خودتان می‌فروشید.
       shop_membership_changed_closed: '%{shop} بسته شد. اکنون دوباره به عنوان خودتان می‌فروشید.'
+      shop_membership_changed_role_changed: نقش شما در %{shop} تغییر کرد. برای دیدن آن هتیوال را باز کنید.
+      shop_owner_changed: '%{name} شما را مالک %{shop} کرد.'
   shops:
     team:
       errors:
@@ -22,3 +24,7 @@ fa:
         team_full: تیم پر است (۲۰ نفر)
         too_many_invites: امروز دعوت‌های زیادی فرستاده شده. فردا دوباره امتحان کنید.
         invite_email_unconfirmed: اول ایمیل خود را تایید کنید، سپس این دعوت را دوباره باز کنید
+        cannot_change_owner: نقش مالک فقط با انتقال تغییر می‌کند
+        invalid_role: این نقش وجود ندارد
+        cannot_transfer_to_self: این دوکان از قبل مال شماست
+        verification_pending: یک درخواست دوکان تایید شده در انتظار است. اول آن را لغو کنید.

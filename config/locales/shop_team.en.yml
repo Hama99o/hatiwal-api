@@ -6,6 +6,8 @@ en:
       shop_member_joined: '%{name} joined %{shop}.'
       shop_membership_changed_removed: You were removed from %{shop}. You are selling as yourself again.
       shop_membership_changed_closed: '%{shop} is closed. You are selling as yourself again.'
+      shop_membership_changed_role_changed: Your role in %{shop} changed. Open Hatiwal to see it.
+      shop_owner_changed: '%{name} made you the owner of %{shop}.'
   shops:
     team:
       errors:
@@ -22,3 +24,7 @@ en:
         team_full: The team is full (20 people)
         too_many_invites: Too many invites today. Try again tomorrow.
         invite_email_unconfirmed: Confirm your email first, then open this invite again
+        cannot_change_owner: The owner's role can only change by a transfer
+        invalid_role: That role doesn't exist
+        cannot_transfer_to_self: You already own this shop
+        verification_pending: A Verified shop request is waiting. Cancel it first.

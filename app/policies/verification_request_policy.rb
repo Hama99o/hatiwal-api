@@ -23,6 +23,6 @@ class VerificationRequestPolicy < ApplicationPolicy
   def owner?
     return false unless record.requested_by == user
 
-    record.subject.is_a?(Shop) ? ShopPolicy.new(user, record.subject).update? : record.subject == user
+    record.subject.is_a?(Shop) ? ShopPolicy.new(user, record.subject).apply_verification? : record.subject == user
   end
 end
