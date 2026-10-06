@@ -114,4 +114,32 @@ RSpec.describe "Shop team chats", type: :request do
     expect(chat.participant?(staff)).to be(true)
     expect(chat.participant?(create(:user))).to be(false)
   end
+
+  describe "the chat's shop is pinned when it starts (owner rule, 2026-10-06)" do
+    it "a PERSONAL chat stays personal when its product later moves into the shop: staff never see it" do
+      personal = create(:listing, :active, user: owner)
+      personal_chat = Conversations::StartService.new(buyer: buyer, listing: personal, message_body: "Is it yours?").call
+      expect(personal_chat.shop_id).to be_nil
+
+      shop.move_listings!(owner, [ personal.id ], to_shop: true)
+      expect(personal.reload.shop_id).to eq(shop.id)
+
+      get "/api/v1/conversations", params: { shop_id: shop.id }, headers: auth_headers_for(staff)
+      expect(json["conversations"].pluck("id")).not_to include(personal_chat.id)
+      get "/api/v1/conversations/#{personal_chat.id}", headers: auth_headers_for(staff)
+      expect(response).to have_http_status(:not_found)
+      # Only the shop's own chat (the buyer's "Salaam") counts for staff, not this one.
+      expect(staff.reload.unread_counts[:shops]).to eq(shop.id.to_s => 1)
+      # The owner still has it, as a personal chat (seller = them, no shop face).
+      get "/api/v1/conversations/#{personal_chat.id}", headers: auth_headers_for(owner)
+      expect(json["conversation"]["shop"]).to be_nil
+    end
+
+    it "a chat about a shop product stays the shop's when the product moves out" do
+      expect(chat.shop_id).to eq(shop.id)
+      shop.move_listings!(staff, [ product.id ], to_shop: false)
+      get "/api/v1/conversations", params: { shop_id: shop.id }, headers: auth_headers_for(staff)
+      expect(json["conversations"].pluck("id")).to include(chat.id)
+    end
+  end
 end

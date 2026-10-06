@@ -162,7 +162,7 @@ class Shop < ApplicationRecord
       lock!
       shop_members.find_by!(user_id: old_owner_id).update!(role: :manager)
       target.update!(role: :owner)
-      chats = Conversation.where(shop_id: id).or(Conversation.where(listing_id: listings.select(:id)))
+      chats = Conversation.where(shop_id: id)
       chats.where(seller_id: old_owner_id).where.not(buyer_id: new_owner.id)
            .update_all(seller_id: new_owner.id, updated_at: Time.current)
       update_columns(owner_id: new_owner.id, verified_at: nil, verified_by_id: nil, updated_at: Time.current)

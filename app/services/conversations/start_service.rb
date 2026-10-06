@@ -38,6 +38,10 @@ class Conversations::StartService
       # shop's owner whoever posted it (docs/SHOPS.md, "Phase 3 — the team").
       created = Conversation.create!(
         listing: @listing,
+        # PINNED here: the chat belongs to the shop the product is in NOW, and
+        # keeps that even if the product moves later (a personal chat stays
+        # personal; staff never see it).
+        shop_id: @listing.shop_id,
         buyer:   @buyer,
         seller:  chat_seller
       )

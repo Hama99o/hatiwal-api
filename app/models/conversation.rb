@@ -47,12 +47,11 @@ class Conversation < ApplicationRecord
   # whose listing belongs to the shop; personal chats are the rest (including
   # support threads, which have no listing).
   # SHOP-2: plus the shop's listing-less chats.
-  scope :for_shop, ->(shop_id) { where(listing_id: Listing.where(shop_id: shop_id).select(:id)).or(where(shop_id: shop_id)) }
-  scope :without_shop, lambda {
-    where(shop_id: nil)
-      .where("conversations.listing_id IS NULL OR NOT EXISTS " \
-             "(SELECT 1 FROM listings l WHERE l.id = conversations.listing_id AND l.shop_id IS NOT NULL)")
-  }
+  # The chat's shop is PINNED when it starts (conversations.shop_id): a chat that
+  # began on a personal product stays personal even if the product later moves
+  # into a shop (the buyer wrote to a person; staff never see personal chats).
+  scope :for_shop, ->(shop_id) { where(shop_id: shop_id) }
+  scope :without_shop, -> { where(shop_id: nil) }
   scope :support_first, -> { order(kind: :desc) }
 
   # Support threads whose latest word is the user's: they have a message from
@@ -68,7 +67,7 @@ class Conversation < ApplicationRecord
   validates :listing_id, uniqueness: { scope: :buyer_id, message: "already has a conversation with this buyer", allow_nil: true }
   validate :buyer_is_not_seller
   validate :support_thread_shape, if: :kind_support?
-  validate :shop_chat_shape, if: :shop_id?
+  validate :shop_chat_shape, if: -> { shop_id? && listing_id.nil? }
 
   # NULLS LAST matters. A conversation is created the moment a buyer opens a
   # thread from a listing, before any message is sent, so `last_message_at` is
@@ -95,8 +94,7 @@ class Conversation < ApplicationRecord
     (conversations.seller_id = :u OR EXISTS (
       SELECT 1 FROM shop_members sm
        WHERE sm.user_id = :u
-         AND sm.shop_id = COALESCE(conversations.shop_id,
-               (SELECT l.shop_id FROM listings l WHERE l.id = conversations.listing_id))))
+         AND sm.shop_id = conversations.shop_id))
   SQL
 
   # Messages `:u` hasn't read that count as inbound: not their own, and, on
@@ -104,8 +102,7 @@ class Conversation < ApplicationRecord
   INBOUND_MESSAGE_SQL = <<~SQL.squish.freeze
     messages.user_id <> :u AND (conversations.buyer_id = :u OR messages.user_id NOT IN (
       SELECT sm.user_id FROM shop_members sm
-       WHERE sm.shop_id = COALESCE(conversations.shop_id,
-               (SELECT l.shop_id FROM listings l WHERE l.id = conversations.listing_id))))
+       WHERE sm.shop_id = conversations.shop_id))
   SQL
 
   # A user with no shop (almost everyone) gets the plain, shop-free SQL: the
@@ -155,7 +152,7 @@ class Conversation < ApplicationRecord
       .joins("LEFT JOIN listings   ON listings.id  = conversations.listing_id")
       .joins("LEFT JOIN users AS b ON b.id         = conversations.buyer_id")
       .joins("LEFT JOIN users AS s ON s.id         = conversations.seller_id")
-      .joins("LEFT JOIN shops AS sh ON sh.id       = COALESCE(conversations.shop_id, listings.shop_id)")
+      .joins("LEFT JOIN shops AS sh ON sh.id       = conversations.shop_id")
       .where(
         # SHOP-2: a chat with a shop is found by the shop's name, never by the
         # owner's personal one (that would tell the buyer who is behind it).
@@ -230,7 +227,10 @@ class Conversation < ApplicationRecord
   def shop_chat? = shop_id.present? && listing_id.nil?
 
   # The shop this chat is with: its own (a shop chat) or its product's.
-  def chat_shop = shop_chat? ? shop : listing&.shop
+  # The shop this chat is with: the one PINNED when it started (both a
+  # Message-shop chat and a chat about a shop's product), never the product's
+  # current shop.
+  def chat_shop = shop
 
   # The shop the SELLER side speaks as, or nil. Owner, 2026-10-05: whatever is
   # done as the shop shows the shop, never the person — so the buyer gets the

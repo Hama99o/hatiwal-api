@@ -7,6 +7,8 @@ FactoryBot.define do
 
     after(:build) do |conv|
       conv.seller = conv.listing.user
+      # Like Conversations::StartService: the chat's shop is pinned at start.
+      conv.shop_id ||= conv.listing&.shop_id
     end
   end
 end

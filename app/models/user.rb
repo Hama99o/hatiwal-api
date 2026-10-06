@@ -656,11 +656,9 @@ class User < ApplicationRecord
   def unread_counts
     identity = Arel.sql(
       "CASE WHEN conversations.buyer_id = #{id.to_i} THEN 'buying' " \
-      "WHEN conversations.shop_id IS NOT NULL THEN conversations.shop_id::text " \
-      "WHEN listings.shop_id IS NULL THEN 'selling_me' ELSE listings.shop_id::text END"
+      "WHEN conversations.shop_id IS NOT NULL THEN conversations.shop_id::text ELSE 'selling_me' END"
     )
     raw = Message.joins(:conversation)
-                 .joins("LEFT JOIN listings ON listings.id = conversations.listing_id")
                  .where(conversation_id: Conversation.for_user(self).not_archived_for(self).select(:id), read_at: nil)
                  .where(Conversation.inbound_message_sql_for(self), u: id)
                  .group(identity).count
