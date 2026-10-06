@@ -112,7 +112,7 @@ class Shop < ApplicationRecord
       created
     end
     if email && (invitee = User.find_by("LOWER(email) = ?", email)) && invitee.confirmed_at.present?
-      ShopTeamPushJob.perform_later("shop_invite", invitee.id, id, by.id)
+      ShopTeamPushJob.perform_later("shop_invite", invitee.id, id, by.id, nil, invite.id)
     end
     invite
   end

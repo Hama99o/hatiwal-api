@@ -169,7 +169,7 @@ RSpec.describe "Shop invites", type: :request do
   it "pushes an existing CONFIRMED account invited by email, never an unconfirmed one" do
     confirmed = create(:user, confirmed_at: Time.current)
     unconfirmed = create(:user, confirmed_at: nil)
-    expect { invite({ email: confirmed.email }) }.to have_enqueued_job(ShopTeamPushJob).with("shop_invite", confirmed.id, shop.id, owner.id)
+    expect { invite({ email: confirmed.email }) }.to have_enqueued_job(ShopTeamPushJob).with("shop_invite", confirmed.id, shop.id, owner.id, nil, kind_of(Integer))
     expect { invite({ email: unconfirmed.email }) }.not_to have_enqueued_job(ShopTeamPushJob)
   end
 
@@ -197,5 +197,23 @@ RSpec.describe "Shop invites", type: :request do
     create(:shop_invite, :expired, shop: shop)
     get "/api/v1/shops/#{shop.id}/invites", headers: headers
     expect(json["shop_invites"].first["status"]).to eq("expired")
+  end
+
+  it "the shop_invite push carries the invite token, only for the bound confirmed account" do
+    confirmed = create(:user, confirmed_at: Time.current, push_token: "ExponentPushToken[i]")
+    invite = create(:shop_invite, shop: shop, email: confirmed.email)
+    sent = []
+    allow(Notifications::ExpoPushService).to receive(:deliver) { |**kw| sent << kw; Struct.new(:error).new(nil) }
+
+    ShopTeamPushJob.perform_now("shop_invite", confirmed.id, shop.id, owner.id, nil, invite.id)
+    expect(sent.last[:data]).to include(type: "shop_invite", shopId: shop.id, token: invite.token)
+
+    other = create(:user, confirmed_at: Time.current, push_token: "ExponentPushToken[o]")
+    ShopTeamPushJob.perform_now("shop_invite", other.id, shop.id, owner.id, nil, invite.id)
+    expect(sent.last[:data]).not_to have_key(:token)
+
+    invite.cancel!(owner)
+    ShopTeamPushJob.perform_now("shop_invite", confirmed.id, shop.id, owner.id, nil, invite.id)
+    expect(sent.last[:data]).not_to have_key(:token)
   end
 end
