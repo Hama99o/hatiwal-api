@@ -42,7 +42,7 @@ RSpec.describe "Sign-up from a shop invite", type: :request do
     expect(zahra.confirmed_at).to be_nil
 
     post "/api/v1/shop_invites/#{invite.token}/accept", headers: auth_headers_for(zahra)
-    expect(JSON.parse(response.body)["code"]).to eq("invite_wrong_account")
+    expect(JSON.parse(response.body)["code"]).to eq("invite_email_unconfirmed")
 
     zahra.update_column(:confirmed_at, Time.current)
     post "/api/v1/shop_invites/#{invite.token}/accept", headers: auth_headers_for(zahra)

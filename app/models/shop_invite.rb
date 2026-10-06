@@ -59,6 +59,9 @@ class ShopInvite < ApplicationRecord
     return Refused.new(:invite_expired, status: :gone) if expired?
     return Refused.new(:shop_unavailable) unless shop.active?
     return Refused.new(:already_member) if shop.member?(user)
+    # The invite's own address, not confirmed yet: say so (the person can fix it),
+    # rather than "this invite is for another account".
+    return Refused.new(:invite_email_unconfirmed, status: :forbidden) if email_unconfirmed_for?(user)
     return Refused.new(:invite_wrong_account, status: :forbidden) unless for_account?(user)
     return Refused.new(:team_full) if shop.team_full?
 
@@ -70,6 +73,10 @@ class ShopInvite < ApplicationRecord
     return true if link?
 
     user.confirmed_at.present? && user.email.to_s.strip.casecmp?(email)
+  end
+
+  def email_unconfirmed_for?(user)
+    !link? && user.confirmed_at.blank? && user.email.to_s.strip.casecmp?(email)
   end
 
   def accept!(user)

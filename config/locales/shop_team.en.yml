@@ -21,3 +21,4 @@ en:
         forbidden: Only the shop's owner can do this
         team_full: The team is full (20 people)
         too_many_invites: Too many invites today. Try again tomorrow.
+        invite_email_unconfirmed: Confirm your email first, then open this invite again

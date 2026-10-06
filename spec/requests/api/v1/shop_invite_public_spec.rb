@@ -151,14 +151,14 @@ RSpec.describe "Opening a shop invite", type: :request do
     ali = create(:user, email: "ali@example.com", confirmed_at: nil)
     by_email = create(:shop_invite, shop: shop, email: "ALI@example.com")
     accept(as: ali, token: by_email.token)
-    expect(json["code"]).to eq("invite_wrong_account")
+    expect([ response.status, json["code"] ]).to eq([ 403, "invite_email_unconfirmed" ])
     ali.update_column(:confirmed_at, Time.current)
     accept(as: ali, token: by_email.token)
     expect(response).to have_http_status(:ok)
   end
 
   it "every code has a sentence in 4 locales" do
-    codes = %w[already_member invite_expired invite_used invite_cancelled invite_wrong_account cannot_invite_self
+    codes = %w[already_member invite_expired invite_used invite_cancelled invite_wrong_account invite_email_unconfirmed cannot_invite_self
                shop_unavailable owner_cannot_leave not_a_member forbidden team_full too_many_invites]
     User::SUPPORTED_LANGUAGES.each do |locale|
       codes.each { |c| expect(I18n.t("shops.team.errors.#{c}", locale: locale, raise: true)).to be_present }
