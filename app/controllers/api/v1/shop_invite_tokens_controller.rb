@@ -11,8 +11,11 @@ class Api::V1::ShopInviteTokensController < Api::V1::BaseController
   include ShopTeamErrors
 
   skip_before_action :authenticate_user!, only: :show
-  # Guessing tokens is not a thing anyone should get to practise.
-  throttle to: 60, within: 1.hour, by: :ip, only: :show
+  # Only stops flooding. Guessing is hopeless (192-bit random tokens), and the
+  # web's join page fetches through its own server, so every web visitor shares
+  # that server's IP: a tight per-IP limit would show valid invites as broken
+  # to everyone at once (d8 review of shop-3-web, 2026-10-06).
+  throttle to: 600, within: 1.hour, by: :ip, only: :show
   before_action :set_invite
 
   def show
