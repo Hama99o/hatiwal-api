@@ -32,6 +32,15 @@ class User < ApplicationRecord
   has_many :owned_shops, class_name: Shop.name, foreign_key: :owner_id, dependent: :destroy, inverse_of: :owner
   has_many :shop_members, dependent: :destroy
   has_many :shops, through: :shop_members
+  # SHOP-3 team rows that point at the user without being theirs. Accounts are
+  # anonymized, not destroyed, but a hard destroy (the QA seed) must not hit the
+  # foreign keys: an accepted invite stays as history, the invites they sent go.
+  has_many :accepted_shop_invites, class_name: ShopInvite.name, foreign_key: :accepted_by_id,
+                                   dependent: :nullify, inverse_of: :accepted_by
+  has_many :sent_shop_invites, class_name: ShopInvite.name, foreign_key: :invited_by_id,
+                               dependent: :destroy, inverse_of: :invited_by
+  has_many :invited_shop_members, class_name: ShopMember.name, foreign_key: :invited_by_id,
+                                  dependent: :nullify, inverse_of: :invited_by
   belongs_to :active_shop, class_name: Shop.name, optional: true
   has_many :saved_listings, dependent: :destroy
   has_many :saved_listing_items, through: :saved_listings, source: :listing
