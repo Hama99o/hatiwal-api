@@ -449,6 +449,48 @@ if defined?(Shop) && Shop.table_exists?
   puts "  shop.owner sells as the shop; shop.verified as Me; shop.suspended has a stale active shop; shop.none has none"
   puts "  SHOP-2: shop.owner runs #{[ cosmetics, phones_corner, shoes ].map { |s| "#{s.name} (#{s.status}#{', verified' if s.verified_at})" }.join(', ')}"
   puts "  SHOP-2: shop.buyer has #{shop_chat ? "chat ##{shop_chat.id} with #{cosmetics.name}" : 'no shop chat (conversations.shop_id not migrated)'}; shop.owner blocked shop.blocked"
+
+  # SHOP-3 — the team (hatiwal-mobile/docs/SHOPS.md, "Phase 3 — the team"):
+  # shop.team.owner runs "Kabul QA Team Shop" with ONE Staff (shop.team.staff),
+  # and five invites with FIXED tokens, so flows can open hatiwal://join/<token>:
+  #   qa-team-link       a live link        (join as a new or logged-in account)
+  #   qa-team-email      an email invite for shop.team.newbie@hatiwal.test (no account yet: sign up → confirm → join)
+  #   qa-team-expired    expired            (T6 invite_expired)
+  #   qa-team-used       already used       (T6 invite_used)
+  #   qa-team-cancelled  cancelled          (T6 invite_cancelled)
+  # shop.team.buyer has blocked shop.team.staff personally. No conversations.
+  if defined?(ShopInvite) && ShopInvite.table_exists?
+    towner = qa_user(email: "shop.team.owner@hatiwal.test", firstname: "Tamana", lastname: "Teamowner", place: :kabul, avatar: true)
+    tstaff = qa_user(email: "shop.team.staff@hatiwal.test", firstname: "Ali", lastname: "Teamstaff", place: :kabul, avatar: true)
+    tbuyer = qa_user(email: "shop.team.buyer@hatiwal.test", firstname: "Bashir", lastname: "Teambuyer", place: :kabul, avatar: true)
+    User.where(email: "shop.team.newbie@hatiwal.test").find_each(&:destroy!) # the sign-up flow creates it fresh
+    Conversation.where(buyer: [ tstaff, tbuyer ]).or(Conversation.where(seller: [ towner, tstaff ])).destroy_all
+    [ towner, tstaff ].each { |u| u.update_columns(active_shop_id: nil) }
+
+    team_shop = qa_shop.call(towner, name: "Kabul QA Team Shop", place: :kabul, slug: "clothes", hours: sat_to_thu, unit: 31)
+    team_shop.shop_members.where.not(user_id: [ towner.id, tstaff.id ]).destroy_all
+    team_shop.shop_members.find_or_create_by!(user: tstaff) { |m| m.role = :staff; m.invited_by = towner }
+    qa_shop_listing.call(towner, team_shop, "Kabul QA Team Shop — Scarf", 650, "clothes", :kabul)
+    qa_shop_listing.call(tstaff, team_shop, "Kabul QA Team Shop — Shawl (posted by staff)", 900, "clothes", :kabul)
+
+    { "qa-team-link" => [ nil, :pending, 7.days.from_now ],
+      "qa-team-email" => [ "shop.team.newbie@hatiwal.test", :pending, 7.days.from_now ],
+      "qa-team-expired" => [ nil, :pending, 1.hour.ago ],
+      "qa-team-used" => [ nil, :accepted, 5.days.from_now ],
+      "qa-team-cancelled" => [ nil, :cancelled, 5.days.from_now ] }.each do |token, (email, status, expires_at)|
+      invite = ShopInvite.find_or_initialize_by(token: token)
+      invite.assign_attributes(shop: team_shop, invited_by: towner, email: email, role: :staff, status: status,
+                               expires_at: expires_at, accepted_by: (status == :accepted ? tstaff : nil),
+                               decided_at: (status == :pending ? nil : 1.day.ago))
+      invite.save!(validate: false) # an already-expired row is a fixture, not an invite being made
+    end
+
+    Block.where(blocker: tbuyer).delete_all
+    Block.find_or_create_by!(blocker: tbuyer, blocked: tstaff)
+    puts "  SHOP-3: #{team_shop.name} — owner shop.team.owner, staff shop.team.staff; invites qa-team-link / -email / -expired / -used / -cancelled; shop.team.buyer blocked shop.team.staff"
+  else
+    puts "  SKIP SHOP-3: shop_invites not migrated yet"
+  end
 else
   puts "  SKIP shops: shops table not migrated yet (SHOP-1)"
 end

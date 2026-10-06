@@ -4,6 +4,8 @@
 # listing's conversations (TASK-TX01). Legacy reserve/sold calls that omit a
 # buyer never touch this table.
 class Transaction < ApplicationRecord
+  # SHOP-3: the member who recorded a shop sale (the seller is the owner).
+  belongs_to :recorded_by, class_name: User.name, optional: true
   belongs_to :listing
   belongs_to :seller, class_name: User.name
   # SF-B3 — OPTIONAL. `buyer_id` is nil for "sold to someone not on Hatiwal":
@@ -201,7 +203,8 @@ class Transaction < ApplicationRecord
   def seller_matches_listing_owner
     return if listing.blank? || seller_id.blank?
 
-    errors.add(:seller_id, "must be the listing's owner") unless seller_id == listing.user_id
+    # SHOP-3: a shop product's sale is the shop owner's (Listing#sale_seller_id).
+    errors.add(:seller_id, "must be the listing's owner") unless seller_id == listing.sale_seller_id
   end
 
   # The buyer must have an existing conversation with the seller on this

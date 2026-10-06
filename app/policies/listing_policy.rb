@@ -75,5 +75,6 @@ class ListingPolicy < ApplicationPolicy
 
   private
 
-  def owner? = record.user_id == user.id
+  # The poster, or (SHOP-3) any member of the product's shop.
+  def owner? = record.manageable_by?(user)
 end

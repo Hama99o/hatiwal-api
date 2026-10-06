@@ -23,6 +23,13 @@ class Api::V1::MessagesController < Api::V1::BaseController
   end
 
   def create
+    # SHOP-3: a team member blocked by (or blocking) the buyer, or a shop whose
+    # owner and buyer block each other: refused with the same codes as starting a chat.
+    if (code = @conversation.team_block_code(current_user))
+      message = code == :blocked ? "you have blocked this user" : "you have been blocked by this user"
+      return render_unprocessable_entity(message, code: code)
+    end
+
     # SHOP-2: a chat with a suspended/closed shop stays readable, but is shut.
     if @conversation.shop_chat? && !@conversation.shop&.active?
       return render_unprocessable_entity(I18n.t("shops.errors.not_open"), code: :shop_unavailable)
@@ -62,9 +69,8 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
   def mark_read
     authorize @conversation, :read_messages?
-    @conversation.messages
+    @conversation.inbound_messages_for(current_user)
                  .where(read_at: nil)
-                 .where.not(user: current_user)
                  .update_all(read_at: Time.current)
     head :no_content
   end

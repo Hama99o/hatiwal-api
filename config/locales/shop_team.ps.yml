@@ -1,0 +1,24 @@
+# SHOP-3 — the team (hatiwal-mobile/docs/SHOPS.md, "Phase 3 — the team").
+ps:
+  push:
+    shop_team:
+      shop_invite: '%{name} تاسو رابلي چې د کارکوونکي په توګه له %{shop} سره یوځای شئ. د ځواب لپاره هټیوال پرانیزئ.'
+      shop_member_joined: '%{name} له %{shop} سره یوځای شو.'
+      shop_membership_changed_removed: تاسو له %{shop} څخه لرې شوئ. اوس بیا د ځان په توګه پلورئ.
+      shop_membership_changed_closed: '%{shop} بند شو. اوس بیا د ځان په توګه پلورئ.'
+  shops:
+    team:
+      errors:
+        already_member: دا کس مخکې په دوکان کې دی
+        invite_expired: د دې بلنې وخت تېر شوی
+        invite_used: دا بلنه مخکې کارول شوې
+        invite_cancelled: دا بلنه لغوه شوې
+        invite_wrong_account: دا بلنه د بل حساب لپاره ده
+        cannot_invite_self: تاسو ځان نه شئ رابللی
+        shop_unavailable: دا دوکان خلاص نه دی
+        owner_cannot_leave: مالک دوکان نه شي پرېښودلی
+        not_a_member: تاسو په دې دوکان کې نه یاست
+        forbidden: یوازې د دوکان مالک دا کار کولی شي
+        team_full: ټیم بشپړ دی (۲۰ کسان)
+        too_many_invites: نن ډېرې بلنې لېږل شوې. سبا بیا هڅه وکړئ.
+        invite_email_unconfirmed: لومړی خپل برېښنالیک تایید کړئ، بیا دا بلنه پرانیزئ

@@ -294,7 +294,9 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   private
 
   def set_listing
-    @listing = current_user.listings.find(params[:id])
+    # SHOP-3: a shop's products are every member's to manage.
+    @listing = current_user.manageable_listings.find(params[:id])
+    @listing.acting_user = current_user
   end
 
   # `buyer_id`/`final_price`/`clear_buyer`/`quantity` are accepted flat (not

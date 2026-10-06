@@ -14,7 +14,7 @@ class ConversationPolicy < ApplicationPolicy
 
   class Scope < ApplicationPolicy::Scope
     def resolve
-      scope.for_user(user.id)
+      scope.for_user(user)
     end
   end
 

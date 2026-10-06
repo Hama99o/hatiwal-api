@@ -15,6 +15,10 @@ class ShopPolicy < ApplicationPolicy
   def message? = user.present? && record.active?
   # Moving listings in or out is managing products: every member may (phase 3).
   def move_listings? = member?
+  # SHOP-3 — the team (docs/SHOPS.md, "Permission matrix"): every member sees
+  # the list; only the owner invites, cancels invites and removes people.
+  def team? = member?
+  def manage_team? = role == "owner"
 
   class Scope < ApplicationPolicy::Scope
     def resolve

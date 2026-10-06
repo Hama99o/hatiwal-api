@@ -13,7 +13,8 @@ class MessageSerializer < ApplicationSerializer
   # name and logo, never the owner's (ConversationSerializer.person_block).
   field(:sender) do |m|
     u = m.user
-    shop = m.conversation&.shop_face if m.user_id == m.conversation&.seller_id
+    # SHOP-3: any member of the chat's shop writes as the shop, not only the seller.
+    shop = m.conversation&.shop_face if m.conversation&.written_as_shop?(m.user_id)
     next { id: m.user_id, name: shop.name, avatar_url: shop.logo_url, as_shop: true } if shop
 
     { id: m.user_id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil }

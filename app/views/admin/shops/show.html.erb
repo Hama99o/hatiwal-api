@@ -5,6 +5,8 @@
   shop = page.resource
   owner = shop.owner
   members = shop.shop_members.includes(:user).order(:role, :created_at)
+  team_events = shop.audit_events.recent.includes(:actor, :target_user).limit(30)
+  pending_invites = shop.invites.live.count
   products_total = shop.listings.count
   products_live = shop.live_listings_count
   products = shop.listings.order(created_at: :desc).limit(10)
@@ -91,6 +93,28 @@
         <% end %>
       </tbody>
     </table>
+  </section>
+
+  <%# SHOP-3: the team's history (server-side only; no app screen this phase). %>
+  <section id="shop-team-log" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Team history</h2>
+      <span class="hw-text-muted"><%= pending_invites %> invite<%= "s" unless pending_invites == 1 %> pending</span></div>
+    <% if team_events.any? %>
+      <table class="hw-table">
+        <tbody>
+          <% team_events.each do |e| %>
+            <tr>
+              <td class="hw-nowrap hw-text-muted"><%= l(e.created_at, format: :short) %></td>
+              <td><%= e.action.humanize %></td>
+              <td dir="auto"><%= e.actor ? link_to(e.actor.full_name, admin_user_path(e.actor)) : (e.data["by_admin"] ? "Admin" : "—") %></td>
+              <td dir="auto"><%= e.target_user ? link_to(e.target_user.full_name, admin_user_path(e.target_user)) : "" %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% else %>
+      <p class="hw-empty">No team changes yet.</p>
+    <% end %>
   </section>
 
   <section id="shop-products" class="hw-panel">

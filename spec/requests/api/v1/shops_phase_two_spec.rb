@@ -220,9 +220,15 @@ RSpec.describe "Shops phase 2", type: :request do
     it "takes plain messages only: no offers without a product" do
       message_shop
       id = JSON.parse(response.body)["conversation"]["id"]
-      post "/api/v1/conversations/#{id}/messages", params: { message: { kind: "offer", body: "500" } }.to_json,
+      # Top-level kind/body (MessagesController#safe_message_params). A text
+      # goes through; an offer is refused for its KIND, not a missing body.
+      post "/api/v1/conversations/#{id}/messages", params: { kind: "text", body: "Hello" }.to_json,
+                                                   headers: json(auth_headers_for(buyer))
+      expect(response).to have_http_status(:created)
+      post "/api/v1/conversations/#{id}/messages", params: { kind: "offer", body: "500" }.to_json,
                                                    headers: json(auth_headers_for(buyer))
       expect(response).to have_http_status(:unprocessable_entity)
+      expect(response.body).to include("not allowed in a chat without a product")
     end
 
     it "a suspended shop: the chat stays readable, new messages are refused with shop_unavailable" do
@@ -231,7 +237,7 @@ RSpec.describe "Shops phase 2", type: :request do
       shop.suspended!
       get "/api/v1/conversations/#{id}/messages", headers: auth_headers_for(buyer)
       expect(response).to have_http_status(:ok)
-      post "/api/v1/conversations/#{id}/messages", params: { message: { kind: "text", body: "Still there?" } }.to_json,
+      post "/api/v1/conversations/#{id}/messages", params: { kind: "text", body: "Still there?" }.to_json,
                                                    headers: json(auth_headers_for(buyer))
       expect(response).to have_http_status(:unprocessable_entity)
       expect(JSON.parse(response.body)["code"]).to eq("shop_unavailable")

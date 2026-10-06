@@ -1,0 +1,24 @@
+# SHOP-3 — the team (hatiwal-mobile/docs/SHOPS.md, "Phase 3 — the team").
+fa:
+  push:
+    shop_team:
+      shop_invite: '%{name} شما را دعوت می‌کند که به عنوان کارمند به %{shop} بپیوندید. برای پاسخ هتیوال را باز کنید.'
+      shop_member_joined: '%{name} به %{shop} پیوست.'
+      shop_membership_changed_removed: شما از %{shop} حذف شدید. اکنون دوباره به عنوان خودتان می‌فروشید.
+      shop_membership_changed_closed: '%{shop} بسته شد. اکنون دوباره به عنوان خودتان می‌فروشید.'
+  shops:
+    team:
+      errors:
+        already_member: این شخص از قبل در دوکان است
+        invite_expired: مهلت این دعوت تمام شده است
+        invite_used: این دعوت قبلاً استفاده شده است
+        invite_cancelled: این دعوت لغو شده است
+        invite_wrong_account: این دعوت برای حساب دیگری است
+        cannot_invite_self: نمی‌توانید خودتان را دعوت کنید
+        shop_unavailable: این دوکان باز نیست
+        owner_cannot_leave: مالک نمی‌تواند دوکان را ترک کند
+        not_a_member: شما در این دوکان نیستید
+        forbidden: فقط مالک دوکان می‌تواند این کار را انجام دهد
+        team_full: تیم پر است (۲۰ نفر)
+        too_many_invites: امروز دعوت‌های زیادی فرستاده شده. فردا دوباره امتحان کنید.
+        invite_email_unconfirmed: اول ایمیل خود را تایید کنید، سپس این دعوت را دوباره باز کنید

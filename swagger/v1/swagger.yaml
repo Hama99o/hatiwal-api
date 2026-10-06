@@ -918,6 +918,328 @@ paths:
       responses:
         '200':
           description: returns only visible reviews
+  "/api/v1/shop_invites/{token}":
+    get:
+      summary: the invite, for anyone holding the link (public)
+      tags:
+      - Shops — team
+      description: No login needed (the web join page). Only the shop's card, the
+        inviter's name, the role, the status (pending / accepted / declined / cancelled
+        / expired) and the expiry.
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the invite card
+        '404':
+          description: an unknown token
+  "/api/v1/shop_invites/{token}/accept":
+    post:
+      summary: join the shop as Staff
+      tags:
+      - Shops — team
+      description: "→ { shop_member, me }. Refused: invite_used / invite_cancelled
+        / invite_expired (410), invite_wrong_account (403), already_member, shop_unavailable,
+        team_full (422)."
+      security:
+      - bearer: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: joined
+        '410':
+          description: already used
+  "/api/v1/shop_invites/{token}/decline":
+    post:
+      summary: say no to the invite
+      tags:
+      - Shops — team
+      description: Logged (declined). The invite can't be used after. Same refusal
+        codes as accept.
+      security:
+      - bearer: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: declined
+  "/api/v1/shops/{shop_id}/invites":
+    parameters:
+    - name: shop_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    - name: access-token
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: client
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: uid
+      in: header
+      required: true
+      schema:
+        type: string
+    post:
+      summary: invite someone as Staff (owner)
+      tags:
+      - Shops — team
+      description: 'No email = a plain link (the main path, shared on WhatsApp). An
+        email invite binds to that CONFIRMED email. No phone (phones are not verified).
+        Refused: cannot_invite_self, already_member, team_full, shop_unavailable (422);
+        forbidden / not_a_member (403); too_many_invites (429, 20 a day per shop).'
+      security:
+      - bearer: []
+      parameters: []
+      responses:
+        '201':
+          description: a link invite
+        '403':
+          description: staff can't invite
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+    get:
+      summary: the owner's invites, pending first
+      tags:
+      - Shops — team
+      security:
+      - bearer: []
+      responses:
+        '200':
+          description: invites
+  "/api/v1/shops/{shop_id}/invites/{id}":
+    delete:
+      summary: cancel an invite (owner)
+      tags:
+      - Shops — team
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: cancelled (logged)
+  "/api/v1/shops/{shop_id}/invites/{id}/resend":
+    post:
+      summary: push an email invite again (owner)
+      tags:
+      - Shops — team
+      description: Email invites only (a link is shared again by the app). Pushes
+        the invited account if it exists and its email is confirmed. 410 when the
+        invite is no longer pending.
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: sent again
+  "/api/v1/shops/{shop_id}/members":
+    get:
+      summary: the team (every member)
+      tags:
+      - Shops — team
+      description: 'Owner first, then by join date. Each member: user {id, name, avatar_url},
+        role, joined_at. Never an email or a phone.'
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the list, read-only for staff
+        '403':
+          description: not a member
+  "/api/v1/shops/{shop_id}/members/{user_id}":
+    delete:
+      summary: remove a Staff member (owner)
+      tags:
+      - Shops — team
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: removed, told and logged
+  "/api/v1/shops/{shop_id}/membership":
+    delete:
+      summary: leave the shop (staff)
+      tags:
+      - Shops — team
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: left
+        '422':
+          description: the owner can't leave
   "/api/v1/verification_requests":
     post:
       summary: apply for the Verified badge (multipart)

@@ -131,6 +131,12 @@ class ApplicationController < ActionController::API
     render json: body, status: :unprocessable_entity
   end
 
+  # An error with a stable `code` the apps translate, at any status (SHOP-3:
+  # 403 / 410 / 429 carry codes too, not only 422s).
+  def render_coded_error(message, code:, status:)
+    render json: { error: message.to_s, code: code }, status: status
+  end
+
   def render_not_found
     render json: { error: "Not found" }, status: :not_found
   end
