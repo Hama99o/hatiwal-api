@@ -463,13 +463,27 @@ if defined?(Shop) && Shop.table_exists?
     towner = qa_user(email: "shop.team.owner@hatiwal.test", firstname: "Tamana", lastname: "Teamowner", place: :kabul, avatar: true)
     tstaff = qa_user(email: "shop.team.staff@hatiwal.test", firstname: "Ali", lastname: "Teamstaff", place: :kabul, avatar: true)
     tbuyer = qa_user(email: "shop.team.buyer@hatiwal.test", firstname: "Bashir", lastname: "Teambuyer", place: :kabul, avatar: true)
+    # 1.1.6 "Later" items: a MANAGER (team_roles, team_manager_view, team_transfer).
+    tmanager = qa_user(email: "shop.team.manager@hatiwal.test", firstname: "Mina", lastname: "Teammanager", place: :kabul, avatar: true)
     User.where(email: "shop.team.newbie@hatiwal.test").find_each(&:destroy!) # the sign-up flow creates it fresh
-    Conversation.where(buyer: [ tstaff, tbuyer ]).or(Conversation.where(seller: [ towner, tstaff ])).destroy_all
-    [ towner, tstaff ].each { |u| u.update_columns(active_shop_id: nil) }
+    team = [ towner, tstaff, tmanager ]
+    Conversation.where(buyer: [ tstaff, tbuyer ]).or(Conversation.where(seller: team))
+                .or(Conversation.where(buyer: shop_none, shop: Shop.where(name: "Kabul QA Team Shop"))).destroy_all
+    team.each { |u| u.update_columns(active_shop_id: nil) }
 
+    # team_transfer is destructive: it hands the shop to another member. Give it
+    # back to shop.team.owner first, so qa_shop finds it instead of opening a
+    # second "Kabul QA Team Shop".
+    if (handed_over = Shop.where(name: "Kabul QA Team Shop").where.not(status: :closed).where.not(owner_id: towner.id).first)
+      handed_over.update_columns(owner_id: towner.id, updated_at: Time.current)
+    end
     team_shop = qa_shop.call(towner, name: "Kabul QA Team Shop", place: :kabul, slug: "clothes", hours: sat_to_thu, unit: 31)
-    team_shop.shop_members.where.not(user_id: [ towner.id, tstaff.id ]).destroy_all
-    team_shop.shop_members.find_or_create_by!(user: tstaff) { |m| m.role = :staff; m.invited_by = towner }
+    team_shop.shop_members.where.not(user_id: team.map(&:id)).destroy_all
+    { towner => :owner, tstaff => :staff, tmanager => :manager }.each do |user, role|
+      member = team_shop.shop_members.find_or_initialize_by(user: user)
+      member.invited_by ||= towner unless role == :owner
+      member.update!(role: role)
+    end
     qa_shop_listing.call(towner, team_shop, "Kabul QA Team Shop — Scarf", 650, "clothes", :kabul)
     qa_shop_listing.call(tstaff, team_shop, "Kabul QA Team Shop — Shawl (posted by staff)", 900, "clothes", :kabul)
 
@@ -487,7 +501,15 @@ if defined?(Shop) && Shop.table_exists?
 
     Block.where(blocker: tbuyer).delete_all
     Block.find_or_create_by!(blocker: tbuyer, blocked: tstaff)
-    puts "  SHOP-3: #{team_shop.name} — owner shop.team.owner, staff shop.team.staff; invites qa-team-link / -email / -expired / -used / -cancelled; shop.team.buyer blocked shop.team.staff"
+
+    # chat_replied_by: shop.none (Basir) messaged the shop; Ali (staff) and
+    # Tamana (owner) replied. Not shop.team.buyer: they blocked Ali.
+    replied_chat = Conversation.create!(shop: team_shop, buyer: shop_none, seller: towner)
+    [ [ shop_none, "Do you deliver to Karte Seh?" ], [ tstaff, "Salaam, yes, every afternoon." ],
+      [ towner, "Thanks!" ] ].each_with_index do |(author, body), i|
+      replied_chat.messages.create!(user: author, body: body, kind: :text, created_at: (30 - (i * 10)).minutes.ago)
+    end
+    puts "  SHOP-3: #{team_shop.name} — owner shop.team.owner, manager shop.team.manager, staff shop.team.staff; Basir chat ##{replied_chat.id}; invites qa-team-link / -email / -expired / -used / -cancelled; shop.team.buyer blocked shop.team.staff"
   else
     puts "  SKIP SHOP-3: shop_invites not migrated yet"
   end
