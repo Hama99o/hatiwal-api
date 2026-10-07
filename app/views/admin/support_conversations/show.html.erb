@@ -44,6 +44,21 @@
           <% end %>
         <% end %>
         <div class="hw-bubble__meta">
+          <% unless from_support %>
+            <%# Where the person wrote from (one thread for every mode and shop). %>
+            <% ctx = m.context || {} %>
+            <span class="hw-badge hw-badge--plain" data-context="<%= ctx['shop_id'] ? 'shop' : ctx['mode'].presence || 'unknown' %>">
+              <% if ctx["shop_id"] && (ctx_shop = Shop.find_by(id: ctx["shop_id"])) %>
+                as <%= link_to ctx_shop.name, admin_shop_path(ctx_shop) %> (<%= ctx["role"].to_s.humanize %>)
+              <% elsif ctx["mode"] == "seller" %>
+                as seller (Me)
+              <% elsif ctx["mode"] == "buyer" %>
+                as buyer
+              <% else %>
+                unknown (older app)
+              <% end %>
+            </span>
+          <% end %>
           <%= from_support ? "Support#{" · #{m.admin_user.email}" if m.admin_user}" : user.full_name %>
           · <%= l(m.created_at, format: :short) %>
         </div>

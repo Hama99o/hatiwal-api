@@ -85,6 +85,14 @@ class Message < ApplicationRecord
   # single-item listing byte-identical end to end: a stale or over-eager client
   # cannot invent a new 422 on a flow that works today.
   before_validation :discard_meaningless_offer_quantity
+  # Support (owner, 2026-10-07): ONE thread per person, written from any mode or
+  # shop. A user message there records where it was written from, so the admin
+  # can tell: {"mode" => "buyer"|"seller", "shop_id" => id, "role" => role}.
+  # Anywhere else it is dropped. The role is read from the membership when sent.
+  CONTEXT_MODES = %w[buyer seller].freeze
+  INVALID_CONTEXT_CODE = "invalid_message_context".freeze
+  before_validation :normalize_support_context, on: :create
+  validate :support_context_fits_sender, on: :create, if: -> { context.present? }
 
   # A positive integer when present. The `less_than_or_equal_to` ceiling is the
   # listing's own `available_units`, enforced below where the listing is in hand.
@@ -140,11 +148,36 @@ class Message < ApplicationRecord
   # is what it returned before this ticket.
   def error_code
     return OFFER_QUANTITY_ABOVE_AVAILABLE_CODE if errors.where(:offer_quantity, OFFER_QUANTITY_ABOVE_AVAILABLE).any?
+    return INVALID_CONTEXT_CODE if errors.include?(:context)
 
     nil
   end
 
   private
+
+  def normalize_support_context
+    return self.context = nil unless conversation&.kind_support? && user_id.present? && user_id == conversation.buyer_id
+    return self.context = nil if context.blank?
+
+    raw = context.respond_to?(:to_h) ? context.to_h.stringify_keys : {}
+    shop_id = raw["shop_id"].presence&.to_i
+    normalized = { "mode" => raw["mode"].to_s, "shop_id" => shop_id }.compact
+    if shop_id && (member = ShopMember.find_by(shop_id: shop_id, user_id: user_id))
+      normalized["role"] = member.role
+    end
+    self.context = normalized
+  end
+
+  # A known mode; a shop only as a seller, and only one of the SENDER's shops.
+  # (Staff writing as a shop still write in their OWN Support thread: the
+  # thread is the person's; the shop is only a label.)
+  def support_context_fits_sender
+    errors.add(:context, "has an unknown mode") unless CONTEXT_MODES.include?(context["mode"])
+    return unless context["shop_id"]
+
+    errors.add(:context, "names a shop only when selling") if context["mode"] == "buyer"
+    errors.add(:context, "names a shop the sender is not in") unless context["role"]
+  end
 
   # Prevents any user-authored message from being stored with kind :system.
   # Server-generated system messages bypass this by setting user to a system

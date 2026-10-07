@@ -86,7 +86,13 @@ RSpec.describe "Api::V1::Messages offer quantity (SF-B11)", type: :request do
           responds_to_id: { type: :integer, nullable: true,
                             description: "Message being answered — must be in the SAME conversation" },
           offer_quantity: { type: :integer, nullable: true,
-                            description: "SF-B11 — units this offer is for; null means unspecified" }
+                            description: "SF-B11 — units this offer is for; null means unspecified" },
+          context: { type: :object, nullable: true,
+                     description: "Support thread only (1.1.6): where the message is written from. " \
+                                  "mode buyer|seller; shop_id only with seller, and only a shop the sender is in. " \
+                                  "Ignored in any other thread; an invalid one → 422 code invalid_message_context. " \
+                                  "Older apps send none (shown to the admin as unknown).",
+                     properties: { mode: { type: :string, enum: Message::CONTEXT_MODES }, shop_id: { type: :integer, nullable: true } } }
         },
         required: [ "body" ]
       }

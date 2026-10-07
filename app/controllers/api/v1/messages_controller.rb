@@ -103,6 +103,8 @@ class Api::V1::MessagesController < Api::V1::BaseController
   def safe_message_params
     permitted = params.permit(:body, :responds_to_id, :offer_quantity)
     raw_kind  = params[:kind].presence
+    # Support: where the message was written from (Message#normalize_support_context).
+    permitted[:context] = params[:context].permit(:mode, :shop_id).to_h if params[:context].respond_to?(:permit)
 
     permitted[:kind] = resolved_kind(raw_kind)
     permitted
