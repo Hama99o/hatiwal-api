@@ -14,6 +14,9 @@ class ListingPolicy < ApplicationPolicy
   # Authenticated seller action — counts are scoped to current_user.listings
   # in the controller, so any signed-in user is authorised to call this.
   def status_counts? = true
+  # A seller's numbers (My::AnalyticsController): any signed-in user, for Me or
+  # a shop they are on — the controller resolves which, and refuses the rest.
+  def seller_analytics? = true
 
   def update?    = owner?
   def destroy?   = owner?

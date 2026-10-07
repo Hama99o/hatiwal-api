@@ -288,9 +288,13 @@ Rails.application.routes.draw do
           # Must be a COLLECTION route so it is matched BEFORE /my/listings/:id.
           collection do
             get :status_counts, to: "listing_status_counts#show"
+            # "Relaunch all" (item 2): every expired listing of Me / a shop.
+            post :relaunch_expired, to: "analytics#relaunch_expired"
           end
         end
 
+        # GET /my/analytics?shop_id= — a seller's numbers, Me or one shop (item 2).
+        resource :analytics, only: [ :show ], controller: "analytics"
         resources :saved_listings, only: [ :index ]
         resources :viewed_listings, only: [ :index ]
         resources :hidden_listings, only: [ :index ]
