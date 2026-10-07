@@ -110,7 +110,10 @@
   <% end %>
 
   <% if r.requested? %>
-    <%= form_with url: approve_admin_verification_request_path(r), method: :patch, data: { turbo: false }, id: "verification-decision" do |f| %>
+    <%# Session token, not the per-form one: Reject posts this same form to another
+        action (formaction), and a per-form token only fits the Approve URL. %>
+    <%= form_with url: approve_admin_verification_request_path(r), method: :patch, data: { turbo: false }, id: "verification-decision",
+                  authenticity_token: form_authenticity_token do |f| %>
       <fieldset class="hw-checks hw-verify-checks">
         <legend>Checklist (saved with the decision)</legend>
         <% checks = if shop
