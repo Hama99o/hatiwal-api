@@ -42,6 +42,18 @@ RSpec.describe "Api::V1::My::Listings relaunch", type: :request do
         run_test! { expect(response).to have_http_status(:forbidden) }
       end
 
+      response "422", "the listing fails validation" do
+        # A legacy row invalid under a later rule (see listing_lifecycle_errors_spec).
+        let(:record) do
+          create(:listing, :active, user: seller, expires_at: 2.days.ago).tap { |l| l.update_column(:latitude, 91) }
+        end
+
+        run_test! do |response|
+          expect(JSON.parse(response.body)["errors"]).to be_present
+          expect(record.reload.expires_at).to be < Time.current
+        end
+      end
+
       response "200", "successful" do
         run_test! do |response|
           body = JSON.parse(response.body)["listing"]

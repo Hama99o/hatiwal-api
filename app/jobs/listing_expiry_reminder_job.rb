@@ -60,7 +60,9 @@ class ListingExpiryReminderJob < ApplicationJob
 
     result = Notifications::ExpoPushService.deliver(
       token: user.push_token, title: title, body: body,
-      data: { type: "listing_expiry", listingId: listing.id, reminder: reminder.to_s }
+      # `shopId` (null = Me): the app switches to Seller mode as that identity
+      # before opening the listing, exactly as for a selling chat.
+      data: { type: "listing_expiry", listingId: listing.id, shopId: listing.shop_id, reminder: reminder.to_s }
     )
     user.update_column(:push_token, nil) if result.error.to_s == "DeviceNotRegistered"
   end

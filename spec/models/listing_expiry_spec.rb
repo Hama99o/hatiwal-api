@@ -97,29 +97,45 @@ RSpec.describe Listing, "expiry (90 days)", type: :model do
     end
   end
 
-  describe "data migration: existing live listings get 90 days from creation" do
+  describe "data migration: existing live listings get 90 days from going live" do
     require Rails.root.join("db/migrate/20261007130100_extend_live_listings_to_ninety_days")
 
-    it "extends, never shortens, is idempotent, and leaves drafts/sold/no-expiry alone" do
-      created = 20.days.ago
-      short   = create(:listing, :active, user: seller, created_at: created, expires_at: created + 30.days)
-      held    = create(:listing, :reserved, user: seller, created_at: created, expires_at: created + 30.days)
-      later   = create(:listing, :active, user: seller, created_at: created, expires_at: created + 120.days)
-      old     = create(:listing, :active, user: seller, created_at: 100.days.ago, expires_at: 70.days.ago)
-      never   = create(:listing, :active, user: seller, created_at: created, expires_at: nil)
-      sold    = create(:listing, :sold, user: seller, created_at: created, expires_at: created + 30.days)
+    def live(status = :active, created:, published:, expires:)
+      create(:listing, status, user: seller, created_at: created, expires_at: expires).tap do |l|
+        l.update_columns(published_at: published) # nil = a row from before published_at existed
+      end
+    end
 
+    def run_migration
       migration = ExtendLiveListingsToNinetyDays.new
       migration.verbose = false
-      2.times { migration.up }
+      migration.up
+    end
 
-      expect(short.reload.expires_at).to be_within(1.second).of(created + 90.days)
-      expect(held.reload.expires_at).to be_within(1.second).of(created + 90.days)
-      expect(later.reload.expires_at).to be_within(1.second).of(created + 120.days)
+    it "counts from published_at, falls back to created_at, only extends, and is idempotent" do
+      created   = 60.days.ago
+      published = 20.days.ago
+      from_pub  = live(created: created, published: published, expires: published + 30.days)
+      held      = live(:reserved, created: created, published: published, expires: published + 30.days)
+      legacy    = live(created: created, published: nil, expires: created + 30.days)
+      later     = live(created: created, published: published, expires: published + 120.days)
+      old       = live(created: 130.days.ago, published: 100.days.ago, expires: 70.days.ago)
+      never     = live(created: created, published: published, expires: nil)
+      sold      = create(:listing, :sold, user: seller, created_at: created, expires_at: published + 30.days)
+      draft     = create(:listing, :draft, user: seller, created_at: created, expires_at: published + 30.days)
+
+      2.times { run_migration }
+
+      # A draft that sat 40 days before going live still gets its full 90.
+      expect(from_pub.reload.expires_at).to be_within(1.second).of(published + 90.days)
+      expect(held.reload.expires_at).to be_within(1.second).of(published + 90.days)
+      expect(legacy.reload.expires_at).to be_within(1.second).of(created + 90.days)
+      expect(later.reload.expires_at).to be_within(1.second).of(published + 120.days)
       expect(old.reload.expires_at).to be_within(1.second).of(10.days.ago)
-      expect(old).to be_expired
+      expect(old).to be_expired # still in Expired, with Relaunch — not deleted
       expect(never.reload.expires_at).to be_nil
-      expect(sold.reload.expires_at).to be_within(1.second).of(created + 30.days)
+      expect(sold.reload.expires_at).to be_within(1.second).of(published + 30.days)
+      expect(draft.reload.expires_at).to be_within(1.second).of(published + 30.days)
     end
   end
 end

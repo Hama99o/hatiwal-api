@@ -797,45 +797,6 @@ paths:
                       type: integer
                       description: Total units; may not be below sold_units
         required: true
-  "/api/v1/my/listings/{id}/relaunch":
-    parameters:
-    - name: id
-      in: path
-      required: true
-      schema:
-        type: integer
-    put:
-      summary: relaunch one of the caller's own listings (renew + weekly bump)
-      tags:
-      - Listings
-      description: |
-        Restarts the 90-day run (like renew), and moves the listing back to the
-        top of the newest-first feed if it was last moved at least 7 days ago.
-        `bumped` says whether this call moved it; `next_bump_at` when it next can
-        (null = now). Photos, chats and the listing itself are kept.
-      parameters:
-      - name: access-token
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: client
-        in: header
-        required: false
-        schema:
-          type: string
-      - name: uid
-        in: header
-        required: false
-        schema:
-          type: string
-      responses:
-        '401':
-          description: unauthorized
-        '403':
-          description: not the caller's listing, or not live
-        '200':
-          description: successful
   "/api/v1/my/reviews/pending":
     get:
       summary: sold sales the caller still owes a review on

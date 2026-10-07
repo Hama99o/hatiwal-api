@@ -22,7 +22,7 @@ RSpec.describe ListingExpiryReminderJob, type: :job do
       token: "ExponentPushToken[abc]",
       title: I18n.t("push.listing_expiry.week_title", locale: :ps),
       body: I18n.t("push.listing_expiry.body", locale: :ps, title: "Bike"),
-      data: { type: "listing_expiry", listingId: listing.id, reminder: "week" }
+      data: { type: "listing_expiry", listingId: listing.id, shopId: nil, reminder: "week" }
     )
     expect(listing.reload.expiry_reminder_week_for).to eq(listing.expires_at)
   end
@@ -46,7 +46,7 @@ RSpec.describe ListingExpiryReminderJob, type: :job do
 
     expect(Notifications::ExpoPushService).to have_received(:deliver).twice
     expect(Notifications::ExpoPushService).to have_received(:deliver)
-      .with(hash_including(data: { type: "listing_expiry", listingId: listing.id, reminder: "day" }))
+      .with(hash_including(data: { type: "listing_expiry", listingId: listing.id, shopId: nil, reminder: "day" }))
   end
 
   it "a listing first seen inside the last day gets only the 1-day reminder" do
@@ -106,5 +106,8 @@ RSpec.describe ListingExpiryReminderJob, type: :job do
 
     expect { described_class.perform_now }
       .to have_enqueued_job(SupportNoticeJob).with(seller.id, "listing_expires_week", shop.id, hash_including("listing_id" => listing.id))
+    # The push names the shop, so the app opens it as that shop, in Seller mode.
+    expect(Notifications::ExpoPushService).to have_received(:deliver)
+      .with(hash_including(data: hash_including(type: "listing_expiry", listingId: listing.id, shopId: shop.id)))
   end
 end
