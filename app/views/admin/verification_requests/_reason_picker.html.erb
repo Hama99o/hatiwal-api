@@ -33,7 +33,8 @@
   <% else %>
     <p class="hw-field__error" id="<%= prefix %>-error" role="alert" hidden></p>
   <% end %>
-  <p class="hw-reason-preview" id="<%= prefix %>-preview" aria-live="polite" <%= "hidden" unless selected %>>
+  <%# Nothing to preview until there is a reason: "Other" waits for its text (never an empty “”). %>
+  <p class="hw-reason-preview" id="<%= prefix %>-preview" aria-live="polite" <%= "hidden" if !selected || (other && text.blank?) %>>
     <%= recipient.firstname.presence || recipient.full_name %> will get:
     <q dir="auto" class="hw-reason-preview__text"><%= other ? text : previews[selected] %></q>
     <span class="hw-text-muted">(<%= locale %>)</span>
@@ -54,7 +55,7 @@
       var other = code === "other";
       otherBox.hidden = !other;
       text.required = other;
-      preview.hidden = !code;
+      preview.hidden = !code || (other && !text.value.trim());
       quote.textContent = other ? text.value : (previews[code] || "");
     }
     select.addEventListener("change", update);

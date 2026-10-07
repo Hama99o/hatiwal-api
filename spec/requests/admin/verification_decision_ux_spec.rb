@@ -49,6 +49,8 @@ RSpec.describe "Admin verification — the decision area", type: :request do
       expect(body).to include("Write the reason for “Other”: it is sent to Fatima Karimi as you type it.")
       expect(body).not_to match(/id="verify-reject-other"[^>]*hidden/)
       expect(body).to match(/<option selected="selected" value="other">/)
+      # No empty “” preview while "Other" has no text yet.
+      expect(body).to match(/id="verify-reject-preview"[^>]*hidden/)
       expect(request_record.reload).to be_requested
     end
 
