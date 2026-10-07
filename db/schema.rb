@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -220,13 +220,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_100000) do
     t.index ["buyer_deleted_at"], name: "index_conversations_on_buyer_deleted_at"
     t.index ["buyer_id", "shop_id"], name: "index_conversations_one_shop_chat_per_buyer", unique: true, where: "((listing_id IS NULL) AND (shop_id IS NOT NULL))"
     t.index ["buyer_id"], name: "index_conversations_on_buyer_id"
-    t.index ["buyer_id"], name: "index_conversations_one_support_thread_per_user", unique: true, where: "(kind = 1)"
+    t.index ["buyer_id"], name: "index_conversations_one_support_thread_per_person", unique: true, where: "((kind = 1) AND (shop_id IS NULL))"
     t.index ["last_message_at"], name: "index_conversations_on_last_message_at"
     t.index ["listing_id", "buyer_id"], name: "index_conversations_on_listing_id_and_buyer_id", unique: true
     t.index ["listing_id"], name: "index_conversations_on_listing_id"
     t.index ["seller_deleted_at"], name: "index_conversations_on_seller_deleted_at"
     t.index ["seller_id"], name: "index_conversations_on_seller_id"
     t.index ["shop_id"], name: "index_conversations_on_shop_id"
+    t.index ["shop_id"], name: "index_conversations_one_support_thread_per_shop", unique: true, where: "((kind = 1) AND (shop_id IS NOT NULL))"
     t.index ["status"], name: "index_conversations_on_status"
   end
 

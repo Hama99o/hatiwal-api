@@ -14,7 +14,9 @@ RSpec.describe "Support notices for shop team events", type: :job do
   let(:owner) { create(:user, :confirmed, firstname: "Tamana", lastname: "Owner", preferred_language: "en") }
   let(:shop) { create(:shop, owner: owner, name: "Kabul Cosmetics") }
 
-  def notices_for(user) = Conversation.kind_support.find_by(buyer_id: user.id)&.messages.to_a.map(&:body)
+  def notices_for(user) = Conversation.person_support.find_by(buyer_id: user.id)&.messages.to_a.map(&:body)
+  # Owner, 2026-10-12: notices about THE SHOP go to the shop's own thread.
+  def shop_notices = Conversation.shop_support.find_by(shop_id: shop.id)&.messages.to_a.map(&:body)
 
   def run_support_jobs
     perform_enqueued_jobs(only: SupportNoticeJob)
@@ -30,12 +32,13 @@ RSpec.describe "Support notices for shop team events", type: :job do
                                                   role: I18n.t("support.team_roles.staff", locale: :ps)) ])
   end
 
-  it "joining tells the owner who joined, and welcomes the new member" do
+  it "joining tells the shop's team who joined (the shop's thread), and welcomes the new member (their own)" do
     member = create(:user, :confirmed, firstname: "Ali", lastname: "Khan", preferred_language: "fa")
     create(:shop_invite, shop: shop).accept!(member)
     run_support_jobs
 
-    expect(notices_for(owner)).to eq([ "Ali Khan joined Kabul Cosmetics as Staff." ])
+    expect(shop_notices).to eq([ "Ali Khan joined Kabul Cosmetics as Staff." ])
+    expect(notices_for(owner)).to be_blank
     expect(notices_for(member)).to eq([ I18n.t("support.notices.shop_joined", locale: :fa, shop: "Kabul Cosmetics") ])
   end
 

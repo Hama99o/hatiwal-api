@@ -92,7 +92,7 @@ class Admin::SendMessage
   def validate_in_app
     refusal = Conversation.admin_message_refusal(@user)
     @errors << "In-app: #{refusal}." if refusal
-    thread = Conversation.kind_support.find_by(buyer_id: @user.id)
+    thread = Conversation.person_support.find_by(buyer_id: @user.id)
     @errors << "In-app: the support conversation is closed. Reopen it first." if thread&.closed?
   end
 
@@ -111,7 +111,7 @@ class Admin::SendMessage
     # back the whole send rather than deliver half of it.
     raise ArgumentError, "support gate refused user #{@user.id}" unless thread
 
-    thread.messages.create!(user: thread.seller, admin_user: @admin, kind: :text, body: body)
+    thread.messages.create!(user: thread.support_user, admin_user: @admin, kind: :text, body: body)
   end
 
   def deliver

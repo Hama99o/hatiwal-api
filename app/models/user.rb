@@ -671,20 +671,26 @@ class User < ApplicationRecord
   end
 
   # Unread messages per identity, in ONE grouped query, for the "Selling as"
-  # pill and sheet: { buying:, selling_me:, shops: { shop_id => n } }. Same
-  # rules as unread_message_count (archived chats are silent; your own
-  # messages never count). A support thread has no listing and counts as buying.
+  # pill and sheet: { buying:, selling_me:, support:, shops: { shop_id => n } }.
+  # Same rules as unread_message_count (archived chats are silent; your own
+  # messages never count). Owner, 2026-10-12 (Support per identity):
+  # - support: the person's OWN Support thread. Buyer mode and Seller as Me
+  #   both show it, so it is counted in `buying` too: the Buyer badge is
+  #   `buying`, the Seller-as-Me badge is `selling_me + support`;
+  # - a shop's own Support thread counts in that shop's entry.
   def unread_counts
     identity = Arel.sql(
-      "CASE WHEN conversations.buyer_id = #{id.to_i} THEN 'buying' " \
+      "CASE WHEN conversations.kind = #{Conversation.kinds[:support]} AND conversations.shop_id IS NULL THEN 'support' " \
+      "WHEN conversations.buyer_id = #{id.to_i} THEN 'buying' " \
       "WHEN conversations.shop_id IS NOT NULL THEN conversations.shop_id::text ELSE 'selling_me' END"
     )
     raw = Message.joins(:conversation)
                  .where(conversation_id: Conversation.for_user(self).not_archived_for(self).select(:id), read_at: nil)
                  .where(Conversation.inbound_message_sql_for(self), u: id)
                  .group(identity).count
-    shops = raw.except("buying", "selling_me").transform_keys(&:to_s)
-    { buying: raw.fetch("buying", 0), selling_me: raw.fetch("selling_me", 0), shops: shops }
+    support = raw.fetch("support", 0)
+    shops = raw.except("buying", "selling_me", "support").transform_keys(&:to_s)
+    { buying: raw.fetch("buying", 0) + support, selling_me: raw.fetch("selling_me", 0), support: support, shops: shops }
   end
 
   # The seller-side listings for whoever the user is selling as: the shop's

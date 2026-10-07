@@ -3,7 +3,7 @@
 <header class="hw-page-header">
   <div>
     <h1 class="hw-page-header__title main-content__page-title">Support (<%= @total %>)</h1>
-    <p class="hw-page-header__subtitle">Conversations users started with Hatiwal Support. Awaiting a reply come first.</p>
+    <p class="hw-page-header__subtitle">Every person's and every shop's thread with Hatiwal Support. Awaiting a reply come first.</p>
   </div>
 </header>
 
@@ -20,7 +20,7 @@
     <table id="support-inbox">
       <thead>
         <tr>
-          <th>User</th>
+          <th>Person or shop</th>
           <th>Last message</th>
           <th>Unread</th>
           <th>Status</th>
@@ -31,7 +31,15 @@
         <% @conversations.each do |c| %>
           <% unread = @unread_counts[c.id].to_i %>
           <tr class="<%= 'hw-inbox-row--unread' if unread.positive? %>">
-            <td class="hw-nowrap" dir="auto"><%= link_to c.buyer.full_name.presence || "User ##{c.buyer_id}", admin_support_conversation_path(c) %></td>
+            <td class="hw-nowrap" dir="auto">
+              <% if c.shop_support? %>
+                <%# A shop's own thread (owner, 2026-10-12): its team writes there. %>
+                <span class="hw-badge hw-badge--brand">Shop</span>
+                <%= link_to c.shop.name, admin_support_conversation_path(c), class: "hw-support-shop" %>
+              <% else %>
+                <%= link_to c.buyer.full_name.presence || "User ##{c.buyer_id}", admin_support_conversation_path(c) %>
+              <% end %>
+            </td>
             <td class="hw-text-muted" dir="auto"><%= c.latest_message&.body.to_s.truncate(80) %></td>
             <td><% if unread.positive? %><span class="hw-count"><%= unread %></span><% end %></td>
             <td><span class="hw-badge <%= c.open? ? 'hw-badge--success' : 'hw-badge--plain' %>"><%= c.status %></span></td>

@@ -39,7 +39,7 @@ class WelcomeSupportMessageJob < ApplicationJob
     # second welcome.
     return if thread.messages.exists?
 
-    message = thread.messages.create!(user: thread.seller, kind: :text, body: welcome_text(user))
+    message = thread.messages.create!(user: thread.support_user, kind: :text, body: welcome_text(user))
     BroadcastMessageJob.perform_later(message.id)
     SendMessagePushJob.perform_later(message.id)
   end

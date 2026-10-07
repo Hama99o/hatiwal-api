@@ -254,7 +254,8 @@ RSpec.describe "Shops phase 2", type: :request do
       second = create(:shop, :verification_eligible, owner: owner, name: "Second Shop", latitude: 34.40, longitude: 62.3)
       request_record = create(:shop_verification_request, shop: second)
       perform_enqueued_jobs(only: SupportNoticeJob) { request_record.approve!(admin: admin) }
-      body = Conversation.kind_support.find_by(buyer_id: owner.id).messages.last.body
+      # Owner, 2026-10-12: in the SECOND shop's own Support thread.
+      body = Conversation.shop_support.find_by(shop_id: second.id).messages.last.body
       expect(body).to include("Second Shop")
       expect(body).not_to include("First Shop")
     end
@@ -264,7 +265,7 @@ RSpec.describe "Shops phase 2", type: :request do
       create(:shop_verification_request, shop: shop).approve!(admin: admin)
       clear_enqueued_jobs
       SupportNoticeJob.perform_now(owner.id, "shop_verified")
-      expect(Conversation.kind_support.find_by(buyer_id: owner.id).messages.last.body).to include(shop.name)
+      expect(Conversation.shop_support.find_by(shop_id: shop.id).messages.last.body).to include(shop.name)
     end
   end
 

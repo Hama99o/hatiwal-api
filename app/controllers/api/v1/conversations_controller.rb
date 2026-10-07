@@ -165,14 +165,20 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   # the inbox to just the caller's buyer threads or just their seller threads.
   # Any absent or unrecognised value is a no-op — the full mixed inbox is the
   # existing (and default) behaviour, never a 500 or an accidentally-empty list.
+  # Owner, 2026-10-12: every identity shows ITS Support thread, pinned first
+  # (support_first), and never another's:
+  # - buying: the buying chats + the person's own Support thread (buyer side);
+  # - selling: the selling chats + the person's own Support thread (Seller as
+  #   Me) and the shops' threads, which the shop_id filter then narrows:
+  #   shop_id=none keeps only the person's, shop_id=<id> only that shop's.
   def apply_role_filter(scope)
-    # The Buying/Selling tabs are about listings. A support thread has the user
-    # as `buyer`, so without kind_listing it would land in "Buying".
     case params[:role]
     when ROLES[:buying]
-      scope.as_buyer_for(current_user).kind_listing
+      scope.as_buyer_for(current_user)
     when ROLES[:selling]
-      scope.as_seller_for(current_user).kind_listing
+      scope.where("(conversations.kind = :support AND (conversations.buyer_id = :u OR #{Conversation.seller_side_sql_for(current_user)}))
+                   OR (conversations.kind = :listing AND #{Conversation.seller_side_sql_for(current_user)})",
+                  u: current_user.id, support: Conversation.kinds[:support], listing: Conversation.kinds[:listing])
     else
       scope
     end

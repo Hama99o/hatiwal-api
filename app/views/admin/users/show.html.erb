@@ -10,7 +10,7 @@
   active_count = user.active_warnings_count
   threshold = User::WARNING_BLOCK_THRESHOLD
   outreaches = user.admin_outreaches.includes(:admin_email, :admin_user).recent.limit(10)
-  support_thread = Conversation.kind_support.find_by(buyer_id: user.id)
+  support_thread = Conversation.person_support.find_by(buyer_id: user.id)
   reports = user.reports_against
   blocked = user.blocked_users
   blocked_by = user.blocking_users

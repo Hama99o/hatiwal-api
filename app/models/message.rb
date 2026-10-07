@@ -85,10 +85,13 @@ class Message < ApplicationRecord
   # single-item listing byte-identical end to end: a stale or over-eager client
   # cannot invent a new 422 on a flow that works today.
   before_validation :discard_meaningless_offer_quantity
-  # Support (owner, 2026-10-07): ONE thread per person, written from any mode or
-  # shop. A user message there records where it was written from, so the admin
-  # can tell: {"mode" => "buyer"|"seller", "shop_id" => id, "role" => role}.
-  # Anywhere else it is dropped. The role is read from the membership when sent.
+  # Support context: where a user message in a Support thread was written from,
+  # for the admin. Owner, 2026-10-12: Support is separated per identity, so
+  # - a person's own thread takes {"mode" => "buyer"|"seller"} from the app (a
+  #   shop never writes there: it has its own thread);
+  # - a shop's thread stamps it itself: {"mode" => "seller", "shop_id", "role"},
+  #   the role the member had when they wrote.
+  # Anywhere else it is dropped.
   CONTEXT_MODES = %w[buyer seller].freeze
   INVALID_CONTEXT_CODE = "invalid_message_context".freeze
   before_validation :normalize_support_context, on: :create
@@ -156,27 +159,27 @@ class Message < ApplicationRecord
   private
 
   def normalize_support_context
-    return self.context = nil unless conversation&.kind_support? && user_id.present? && user_id == conversation.buyer_id
-    return self.context = nil if context.blank?
+    return self.context = nil unless conversation&.kind_support? && user_id.present?
+    return self.context = shop_support_context if conversation.shop_support?
+    return self.context = nil if user_id != conversation.buyer_id || context.blank?
 
     raw = context.respond_to?(:to_h) ? context.to_h.stringify_keys : {}
-    shop_id = raw["shop_id"].presence&.to_i
-    normalized = { "mode" => raw["mode"].to_s, "shop_id" => shop_id }.compact
-    if shop_id && (member = ShopMember.find_by(shop_id: shop_id, user_id: user_id))
-      normalized["role"] = member.role
-    end
-    self.context = normalized
+    self.context = { "mode" => raw["mode"].to_s, "shop_id" => raw["shop_id"].presence&.to_i }.compact
   end
 
-  # A known mode; a shop only as a seller, and only one of the SENDER's shops.
-  # (Staff writing as a shop still write in their OWN Support thread: the
-  # thread is the person's; the shop is only a label.)
-  def support_context_fits_sender
-    errors.add(:context, "has an unknown mode") unless CONTEXT_MODES.include?(context["mode"])
-    return unless context["shop_id"]
+  # A member writing in their shop's thread (nil for the Support account).
+  def shop_support_context
+    member = ShopMember.find_by(shop_id: conversation.shop_id, user_id: user_id)
+    member && { "mode" => "seller", "shop_id" => conversation.shop_id, "role" => member.role }
+  end
 
-    errors.add(:context, "names a shop only when selling") if context["mode"] == "buyer"
-    errors.add(:context, "names a shop the sender is not in") unless context["role"]
+  # A person's own thread: a known mode, and never a shop (a shop has its own
+  # thread). A shop's thread stamps its context itself, so it is always valid.
+  def support_context_fits_sender
+    return if conversation.shop_support?
+
+    errors.add(:context, "has an unknown mode") unless CONTEXT_MODES.include?(context["mode"])
+    errors.add(:context, "names a shop: a shop writes in its own Support thread") if context["shop_id"]
   end
 
   # Prevents any user-authored message from being stored with kind :system.

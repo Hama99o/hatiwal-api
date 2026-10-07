@@ -45,6 +45,37 @@ break during development: the inbox pin as a `CASE` expression made every
 `?search=` a 500 (`SELECT DISTINCT` rejects it). See that spec before touching
 these serializers.
 
+## Support per identity (owner, 2026-10-12)
+
+Reverses the 2026-10-07 "one mixed thread + a `context` per message". Hatiwal Support is
+**separated per identity** (`hatiwal-mobile/docs/OWNER_ITEMS_2026-10-12.md`, item 4):
+
+| Thread | Shape | Shown in | Carries |
+|---|---|---|---|
+| The person's own | `kind: support`, `shop_id: null`, buyer = the person, seller = the Support account | Buyer mode and Seller as Me | the person's notices: verification, invites to them, joined / removed / role / ownership about them, app update, a personal listing's expiry |
+| A shop's own (one per shop) | `kind: support`, `shop_id` = the shop, **buyer = the Support account, seller = the shop's owner** | only while that shop is selected | the shop's notices: shop verification and re-verify, "X joined the shop", a shop listing's expiry |
+
+- A shop's thread is the shop team's, exactly like the shop's chats (`Conversation::SELLER_SIDE_SQL`): every member reads and replies, a teammate's message is never "unread" for the others, the team sees who replied (`sent_by`), and a transfer moves it to the new owner.
+- `POST /api/v1/support_conversation`: no params gives the caller's own thread; `shop_id=<id>` gives that shop's (members only, else 403). Idempotent.
+- `GET /api/v1/conversations` pins each identity's thread first, and only that one:
+  - `role=buying`: the person's thread;
+  - `role=selling&shop_id=none`: the person's thread (Seller as Me);
+  - `role=selling&shop_id=<id>`: that shop's thread.
+- Badges (`me.unread_counts`):
+  - `support` = the person's thread, also counted in `buying`;
+  - the Seller-as-Me badge is `selling_me + support`;
+  - `shops[id]` includes the shop's own thread.
+- Push: a Support message in a shop's thread reaches the whole team with `role: "selling"` and `shopId`.
+- `messages.context`:
+  - a person's thread takes `{mode: buyer|seller}` and refuses a `shop_id` (422 `invalid_message_context`): a shop writes in its own thread;
+  - a shop's thread stamps `{mode: seller, shop_id, role}` itself, so the admin sees the member's role.
+- Admin: the Support list shows shop threads under the shop's name ("Shop" badge). A shop thread shows which member wrote each message and their role, and a reply goes to the whole team.
+- Migration `20261007120000_support_thread_per_shop`:
+  - the unique indexes become one thread per person and one per shop;
+  - messages written from a shop in the interim mixed thread (`context.shop_id`) move to that shop's thread;
+  - it's idempotent, and a no-op in production (no shops yet).
+- `shop_chat` is `false` on a shop's Support thread: it is a Support thread, not a "Message shop" chat.
+
 ## Why this cannot break v1.0.4
 
 v1.0.4 is live, can only talk to production, and sends no version header, so

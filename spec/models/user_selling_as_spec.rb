@@ -64,11 +64,21 @@ RSpec.describe User, "#unread_counts" do
 
     queries = 0
     counts = ActiveSupport::Notifications.subscribed(->(*) { queries += 1 }, "sql.active_record") { user.unread_counts }
-    expect(counts).to eq(buying: 2, selling_me: 1, shops: { shop.id.to_s => 3 })
+    expect(counts).to eq(buying: 2, selling_me: 1, support: 0, shops: { shop.id.to_s => 3 })
     expect(queries).to eq(1)
   end
 
   it "is all zeros for a user with nothing unread" do
-    expect(user.unread_counts).to eq(buying: 0, selling_me: 0, shops: {})
+    expect(user.unread_counts).to eq(buying: 0, selling_me: 0, support: 0, shops: {})
+  end
+
+  # Owner, 2026-10-12: Support per identity. The person's own thread is shown in
+  # Buyer mode and Seller as Me (so it is in `buying` and in `support`); a
+  # shop's own thread counts only in that shop's entry.
+  it "counts the person's Support thread as support (and buying), a shop's thread in the shop" do
+    support = User.support_account!
+    unread_in(Conversation.support_thread_for!(user), from: support, n: 2)
+    unread_in(Conversation.shop_support_thread_for!(shop), from: support)
+    expect(user.unread_counts).to eq(buying: 2, selling_me: 0, support: 2, shops: { shop.id.to_s => 1 })
   end
 end

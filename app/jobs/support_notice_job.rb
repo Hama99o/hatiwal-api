@@ -31,7 +31,20 @@ class SupportNoticeJob < ApplicationJob
     app_update_available: ->(_user) { true }
   }.freeze
 
+  # Listing expiry reminders (ListingExpiryReminderJob, owner 2026-10-12): to
+  # whoever can renew the listing. Sent only while the listing is still live,
+  # still theirs, and still on the SAME expiry the reminder was for (a renew
+  # in between makes it moot). The push comes from ListingExpiryReminderJob
+  # (it opens the listing with Renew), so this one does not push. A shop's
+  # listing reminds in the shop's own thread.
+  LISTING_NOTICES = %i[listing_expires_week listing_expires_day].freeze
+
   SHOP_NOTICES = %i[shop_verified shop_verification_rejected shop_badge_removed shop_reverify_needed].freeze
+
+  # Owner, 2026-10-12: Support is per identity. These are about THE SHOP, so they
+  # go to the shop's own Support thread (its whole team reads it); every other
+  # notice is about the person and goes to their own thread.
+  SHOP_THREAD_NOTICES = (SHOP_NOTICES + %i[shop_member_joined]).freeze
 
   # SHOP-3 team events (owner, 2026-10-07: "the same system as for users"),
   # alongside ShopTeamPushJob. key => what must STILL hold when the job runs:
@@ -52,11 +65,15 @@ class SupportNoticeJob < ApplicationJob
 
   # `shop:` names the shop a shop notice is about (SHOP-2: an owner may have several).
   # Team notices also pass `actor:` (the other person) and/or `invite:`.
-  def self.enqueue(user, key, shop: nil, actor: nil, invite: nil)
-    raise ArgumentError, "unknown support notice: #{key}" unless NOTICES.key?(key.to_sym) || TEAM_NOTICES.key?(key.to_sym)
+  def self.enqueue(user, key, shop: nil, actor: nil, invite: nil, listing: nil)
+    unless NOTICES.key?(key.to_sym) || TEAM_NOTICES.key?(key.to_sym) || LISTING_NOTICES.include?(key.to_sym)
+      raise ArgumentError, "unknown support notice: #{key}"
+    end
     return unless user&.persisted?
 
-    if TEAM_NOTICES.key?(key.to_sym)
+    if LISTING_NOTICES.include?(key.to_sym)
+      perform_later(user.id, key.to_s, listing.shop_id, { "listing_id" => listing.id, "expires_at" => listing.expires_at&.iso8601(6) })
+    elsif TEAM_NOTICES.key?(key.to_sym)
       perform_later(user.id, key.to_s, shop.id, { "actor_id" => actor&.id, "invite_id" => invite&.id }.compact)
     else
       shop ? perform_later(user.id, key.to_s, shop.id) : perform_later(user.id, key.to_s)
@@ -65,6 +82,7 @@ class SupportNoticeJob < ApplicationJob
 
   def perform(user_id, key, shop_id = nil, team = {})
     key = key.to_sym
+    return perform_listing(user_id, key, team) if LISTING_NOTICES.include?(key)
     return perform_team(user_id, key, shop_id, team) if TEAM_NOTICES.key?(key)
 
     still_true = NOTICES[key]
@@ -76,7 +94,7 @@ class SupportNoticeJob < ApplicationJob
     shop = shop_for(user, key, shop_id)
     return unless SHOP_NOTICES.include?(key) ? still_true.call(user, shop) : still_true.call(user)
 
-    deliver(user, notice_text(user, key, shop))
+    deliver(user, notice_text(user, key, shop), shop: (shop if SHOP_THREAD_NOTICES.include?(key)))
   end
 
   private
@@ -92,19 +110,38 @@ class SupportNoticeJob < ApplicationJob
     invite = ShopInvite.find_by(id: team["invite_id"], shop_id: shop.id) if team["invite_id"]
     return unless TEAM_NOTICES[key].call(user, shop, actor, invite)
 
-    deliver(user, team_text(user, key, shop, actor, invite))
+    deliver(user, team_text(user, key, shop, actor, invite), shop: (shop if SHOP_THREAD_NOTICES.include?(key)))
   end
 
-  def deliver(user, body)
-    thread = Conversation.admin_support_thread_for(user)
+  def perform_listing(user_id, key, data)
+    user = User.find_by(id: user_id)
+    return if user.nil? || user.support_account? || user.deleted_at.present?
+
+    listing = Listing.find_by(id: data["listing_id"])
+    return unless listing&.live? && listing.removed_at.nil? && listing.manageable_by?(user)
+    return unless listing.expires_at&.future? && data["expires_at"].present? &&
+                  listing.expires_at.to_i == Time.zone.parse(data["expires_at"]).to_i
+
+    text = I18n.with_locale(locale_for(user)) do
+      I18n.t("support.notices.#{key}", name: user.firstname.presence || user.full_name, title: listing.title)
+    end
+    deliver(user, text, shop: (listing.shop if listing.shop_id), push: false)
+  end
+
+  # Into the shop's thread when `shop` is given, else the person's own; both
+  # through the gate, written by the Support account. `push: false` when the
+  # caller sends its own push (e.g. a listing-expiry reminder).
+  def deliver(user, body, shop: nil, push: true)
+    thread = shop ? Conversation.admin_shop_support_thread_for(shop) : Conversation.admin_support_thread_for(user)
     return unless thread
 
+    author = thread.support_user
     # A retried job must not post the same notice twice.
-    return if thread.messages.where(user: thread.seller, body: body).where("created_at > ?", 1.hour.ago).exists?
+    return if thread.messages.where(user: author, body: body).where("created_at > ?", 1.hour.ago).exists?
 
-    message = thread.messages.create!(user: thread.seller, kind: :text, body: body)
+    message = thread.messages.create!(user: author, kind: :text, body: body)
     BroadcastMessageJob.perform_later(message.id)
-    SendMessagePushJob.perform_later(message.id)
+    SendMessagePushJob.perform_later(message.id) if push
   end
 
   # Same fallback as WelcomeSupportMessageJob#welcome_text.

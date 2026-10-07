@@ -13,17 +13,30 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
     post "open (or return) the caller's thread with Hatiwal Support" do
       tags "Conversations"
       description "Idempotent. Creates the caller's support conversation on first call, returns it after. " \
-                  "Rendered like GET /conversations/:id (kind: \"support\", listing: null, viewer_role: null)."
+                  "Rendered like GET /conversations/:id (kind: \"support\", listing: null, viewer_role: null). " \
+                  "Owner, 2026-10-12: Support is per identity. Without shop_id, the caller's own thread (Buyer " \
+                  "mode and Seller as Me); with shop_id, that SHOP's thread (members only, 403 otherwise), shared " \
+                  "by its team and shown only while that shop is selected. GET /conversations pins each identity's " \
+                  "thread first (role=buying, role=selling&shop_id=none, role=selling&shop_id=<id>); " \
+                  "me.unread_counts.support is the person's thread's unread (also inside buying)."
       produces "application/json"
       security [ { bearer: [] } ]
 
       parameter name: :"access-token", in: :header, type: :string, required: true
       parameter name: :client,         in: :header, type: :string, required: true
       parameter name: :uid,            in: :header, type: :string, required: true
+      parameter name: :shop_id, in: :query, type: :integer, required: false,
+                description: "A shop the caller is a member of: that shop's own Support thread"
 
       let(:"access-token") { headers["access-token"] }
       let(:client)         { headers["client"] }
       let(:uid)            { headers["uid"] }
+      let(:shop_id)        { nil }
+
+      response "403", "shop_id names a shop the caller is not a member of" do
+        let(:shop_id) { create(:shop).id }
+        run_test!
+      end
 
       response "401", "requires authentication" do
         let(:"access-token") { nil }
@@ -109,13 +122,17 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
       expect(JSON.parse(response.body)["conversations"].map { |c| c["id"] }).to eq([ support_id ])
     end
 
-    it "keeps the support thread out of the Buying and Selling tabs" do
+    # Owner, 2026-10-12: the person's own Support thread belongs to Buyer mode
+    # AND Seller as Me, so both role views carry it, pinned first (once: the
+    # 1.1.5 app shows a role view exactly as served, with no extra pin).
+    it "pins the person's support thread first in the Buying and Selling views" do
       support_id = open_support["id"]
 
       %w[buying selling].each do |role|
         get "/api/v1/conversations", params: { role: role }, headers: headers
         ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
-        expect(ids).not_to include(support_id)
+        expect(ids.first).to eq(support_id)
+        expect(ids.count(support_id)).to eq(1)
       end
     end
 

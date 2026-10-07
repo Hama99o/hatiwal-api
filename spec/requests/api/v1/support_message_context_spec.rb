@@ -1,7 +1,9 @@
 require "rails_helper"
 
-# Owner, 2026-10-07: ONE Support thread per person, written from any mode or
-# shop; every user message records where it was written from, for the admin.
+# Support message context: where a user message in a Support thread was written
+# from, for the admin. Owner, 2026-10-12: Support is per identity, so a person's
+# own thread records Buyer mode or Seller as Me, and a shop writes in its OWN
+# thread (spec/requests/api/v1/support_per_identity_spec.rb), never in a person's.
 RSpec.describe "Support message context", type: :request do
   include Devise::Test::IntegrationHelpers
 
@@ -9,40 +11,35 @@ RSpec.describe "Support message context", type: :request do
   let(:shop) { create(:shop, owner: user, name: "Gul Cosmetics") }
   let(:thread) { Conversation.support_thread_for!(user) }
 
-  def send_support(context, as: user)
-    post "/api/v1/conversations/#{thread.id}/messages", params: { body: "Salaam", context: context }.compact.to_json,
-                                                        headers: auth_headers_for(as).merge("Content-Type" => "application/json")
+  def send_support(context, as: user, to: thread)
+    post "/api/v1/conversations/#{to.id}/messages", params: { body: "Salaam", context: context }.compact.to_json,
+                                                    headers: auth_headers_for(as).merge("Content-Type" => "application/json")
   end
 
   def json = JSON.parse(response.body)
 
-  it "stores buyer, seller (Me) and a shop with the sender's role" do
+  it "a person's thread stores Buyer mode and Seller as Me" do
     send_support({ mode: "buyer" })
     send_support({ mode: "seller" })
-    send_support({ mode: "seller", shop_id: shop.id })
     expect(response).to have_http_status(:created)
-    expect(thread.messages.order(:id).pluck(:context)).to eq([
-      { "mode" => "buyer" }, { "mode" => "seller" }, { "mode" => "seller", "shop_id" => shop.id, "role" => "owner" }
-    ])
+    expect(thread.messages.order(:id).pluck(:context)).to eq([ { "mode" => "buyer" }, { "mode" => "seller" } ])
   end
 
-  it "a staff member writing as the shop writes in THEIR OWN thread, labelled with their role" do
-    staff = create(:user).tap { |u| shop.shop_members.create!(user: u, role: :staff) }
-    own = Conversation.support_thread_for!(staff)
-    post "/api/v1/conversations/#{own.id}/messages", params: { body: "Hi", context: { mode: "seller", shop_id: shop.id } }.to_json,
-                                                     headers: auth_headers_for(staff).merge("Content-Type" => "application/json")
-    expect(own.messages.last.context).to include("shop_id" => shop.id, "role" => "staff")
-    expect(thread.messages).to be_empty # never the owner's thread
-  end
-
-  it "refuses a shop the sender is not in, a shop as buyer, and an unknown mode (422, coded)" do
-    other = create(:shop)
-    [ { mode: "seller", shop_id: other.id }, { mode: "buyer", shop_id: shop.id }, { mode: "admin" } ].each do |ctx|
+  it "refuses a shop in a person's thread (a shop has its own), and an unknown mode (422, coded)" do
+    [ { mode: "seller", shop_id: shop.id }, { mode: "admin" } ].each do |ctx|
       send_support(ctx)
       expect(response).to have_http_status(:unprocessable_entity), ctx.inspect
       expect(json["code"]).to eq("invalid_message_context")
     end
     expect(thread.messages).to be_empty
+  end
+
+  it "a shop's thread stamps the member and role itself, whatever the app sends" do
+    staff = create(:user).tap { |u| shop.shop_members.create!(user: u, role: :staff) }
+    shop_thread = Conversation.shop_support_thread_for!(shop)
+    send_support({ mode: "buyer" }, as: staff, to: shop_thread)
+    expect(response).to have_http_status(:created)
+    expect(shop_thread.messages.last.context).to eq("mode" => "seller", "shop_id" => shop.id, "role" => "staff")
   end
 
   it "an older app sends no context: accepted, stored as nil" do
@@ -63,17 +60,14 @@ RSpec.describe "Support message context", type: :request do
   describe "the admin thread view" do
     let(:admin) { create(:admin_user) }
 
-    it "shows where each user message was written from, with a shop link; unknown for older apps" do
+    it "a person's thread: where each message was written from; unknown for older apps" do
       send_support({ mode: "buyer" })
       send_support({ mode: "seller" })
-      send_support({ mode: "seller", shop_id: shop.id })
       send_support(nil)
 
       sign_in admin, scope: :admin_user
       get admin_support_conversation_path(thread)
-      body = response.body
-      expect(body).to include("as buyer", "as seller (Me)", "unknown (older app)")
-      expect(body).to include(%(href="#{admin_shop_path(shop)}">Gul Cosmetics</a> (Owner)))
+      expect(response.body).to include("as buyer", "as seller (Me)", "unknown (older app)")
     end
   end
 end

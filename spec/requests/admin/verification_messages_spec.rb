@@ -16,7 +16,12 @@ RSpec.describe "Admin verification — decisions and Support messages", type: :r
   end
 
   def support_text_for(user)
-    Conversation.kind_support.find_by(buyer_id: user.id)&.messages&.order(:id)&.last&.body
+    Conversation.person_support.find_by(buyer_id: user.id)&.messages&.order(:id)&.last&.body
+  end
+
+  # Owner, 2026-10-12: a shop's verification is told in the SHOP's own thread.
+  def shop_support_text(shop)
+    Conversation.shop_support.find_by(shop_id: shop.id)&.messages&.order(:id)&.last&.body
   end
 
   def decide(request, action, params = {})
@@ -81,14 +86,15 @@ RSpec.describe "Admin verification — decisions and Support messages", type: :r
       decide(request_record, :approve, checklist: { proof_valid: "1" })
       expect(shop.reload.verified?).to be(true)
       expect(owner.reload.verified).to be(false)
-      expect(support_text_for(owner)).to include("تبریک", shop.name)
+      expect(shop_support_text(shop)).to include("تبریک", shop.name)
+      expect(support_text_for(owner)).to be_nil
       expect(flash[:notice]).to include("#{owner.full_name} gets a Support message in Dari")
     end
 
     it "reject: the owner gets the proof reason in Pashto and where to try again" do
       owner.update!(preferred_language: "ps")
       decide(request_record, :reject, reason_code: "proof_not_accepted")
-      expect(support_text_for(owner)).to include(shop.name, "د سوداګرۍ ثبوت ونه منل شو", "زما دوکان")
+      expect(shop_support_text(shop)).to include(shop.name, "د سوداګرۍ ثبوت ونه منل شو", "زما دوکان")
       expect(shop.reload.verified?).to be(false)
     end
 

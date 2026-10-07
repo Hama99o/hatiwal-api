@@ -57,17 +57,31 @@ class Conversation < ApplicationRecord
   # Support threads whose latest word is the user's: they have a message from
   # the user (always the buyer on a support thread) that Support hasn't read.
   # Counted per THREAD, so one chatty user can't swamp the admin badge.
+  # Support threads whose latest word is the user's: an unread message that
+  # Support didn't write (the person on their thread, any member on a shop's).
   scope :awaiting_support_reply, lambda {
     kind_support.where(Message.where(read_at: nil)
                               .where("messages.conversation_id = conversations.id")
-                              .where("messages.user_id = conversations.buyer_id")
+                              .where(NOT_FROM_SUPPORT_SQL)
                               .arel.exists)
   }
+
+  # A message written by the person (or, on a shop's thread, a member), not by
+  # the Hatiwal Support account.
+  NOT_FROM_SUPPORT_SQL = "messages.user_id NOT IN (SELECT id FROM users WHERE users.support_account)".freeze
+
+  # Owner, 2026-10-12: Support is SEPARATED per identity. A person's own thread
+  # (no shop: Buyer mode and Seller as Me) and one thread PER SHOP, shown only
+  # when that shop is selected. A shop's thread has the Support account on the
+  # BUYER side and the shop's owner on the seller side, so the team shares it
+  # like the shop's chats (SELLER_SIDE_SQL), and a transfer moves it with them.
+  scope :person_support, -> { kind_support.where(shop_id: nil) }
+  scope :shop_support, -> { kind_support.where.not(shop_id: nil) }
 
   validates :listing_id, uniqueness: { scope: :buyer_id, message: "already has a conversation with this buyer", allow_nil: true }
   validate :buyer_is_not_seller
   validate :support_thread_shape, if: :kind_support?
-  validate :shop_chat_shape, if: -> { shop_id? && listing_id.nil? }
+  validate :shop_chat_shape, if: :shop_chat?
 
   # NULLS LAST matters. A conversation is created the moment a buyer opens a
   # thread from a listing, before any message is sent, so `last_message_at` is
@@ -224,7 +238,19 @@ class Conversation < ApplicationRecord
   end
 
   # SHOP-2 — a "Message shop" chat (no product).
-  def shop_chat? = shop_id.present? && listing_id.nil?
+  def shop_chat? = kind_listing? && shop_id.present? && listing_id.nil?
+
+  # Support (owner, 2026-10-12): a shop's own thread, or a person's.
+  def shop_support? = kind_support? && shop_id.present?
+  def person_support? = kind_support? && shop_id.nil?
+
+  # The Hatiwal Support account in this thread: the buyer on a shop's thread,
+  # the seller on a person's.
+  def support_user
+    return nil unless kind_support?
+
+    shop_support? ? buyer : seller
+  end
 
   # The shop this chat is with: its own (a shop chat) or its product's.
   # The shop this chat is with: the one PINNED when it started (both a
@@ -362,7 +388,7 @@ class Conversation < ApplicationRecord
   # has) or by an admin when SUPPORT_ADMIN_INITIATE is on — see
   # docs/SUPPORT_MESSAGING.md for why that distinction is the safety.
   def self.support_thread_for!(user)
-    existing = kind_support.find_by(buyer_id: user.id)
+    existing = person_support.find_by(buyer_id: user.id)
     # Asking for support again brings a thread the user archived or deleted
     # back into their inbox. Otherwise "Contact support" would return a thread
     # their inbox hides.
@@ -370,7 +396,18 @@ class Conversation < ApplicationRecord
 
     create!(kind: :support, buyer: user, seller: User.support_account!)
   rescue ActiveRecord::RecordNotUnique
-    kind_support.find_by!(buyer_id: user.id)
+    person_support.find_by!(buyer_id: user.id)
+  end
+
+  # A shop's thread, created on first call: asked for by a member (POST
+  # /support_conversation with shop_id), like a person's own.
+  def self.shop_support_thread_for!(shop)
+    existing = shop_support.find_by(shop_id: shop.id)
+    return existing.tap(&:resurface_support_thread!) if existing
+
+    create!(kind: :support, shop: shop, buyer: User.support_account!, seller: shop.owner)
+  rescue ActiveRecord::RecordNotUnique
+    shop_support.find_by!(shop_id: shop.id)
   end
 
   # ── The admin-side gate (docs/SUPPORT_MESSAGING.md) ─────────────────────
@@ -397,9 +434,27 @@ class Conversation < ApplicationRecord
   def self.admin_message_refusal(user)
     return "the Support account" if user.support_account?
     return "the account is deleted" if user.deleted_at.present?
-    return nil if kind_support.exists?(buyer_id: user.id) || admin_initiate_enabled?
+    return nil if person_support.exists?(buyer_id: user.id) || admin_initiate_enabled?
 
     "needs the app update with support messaging (SUPPORT_ADMIN_INITIATE)"
+  end
+
+  # The same gate for a shop's thread. Shops exist only on apps that have
+  # support messaging, so a closed shop is the one refusal beyond the switch.
+  def self.admin_shop_message_refusal(shop)
+    return "the shop is closed" if shop.closed?
+    return nil if shop_support.exists?(shop_id: shop.id) || admin_initiate_enabled?
+
+    "needs the app update with support messaging (SUPPORT_ADMIN_INITIATE)"
+  end
+
+  def self.admin_shop_support_thread_for(shop)
+    return nil if admin_shop_message_refusal(shop)
+
+    shop_support.find_by(shop_id: shop.id) ||
+      create!(kind: :support, shop: shop, buyer: User.support_account!, seller: shop.owner)
+  rescue ActiveRecord::RecordNotUnique
+    shop_support.find_by(shop_id: shop.id)
   end
 
   # The ONLY way admin code may obtain a support thread: the existing one, or a
@@ -408,10 +463,10 @@ class Conversation < ApplicationRecord
   def self.admin_support_thread_for(user)
     return nil unless admin_can_message?(user)
 
-    kind_support.find_by(buyer_id: user.id) ||
+    person_support.find_by(buyer_id: user.id) ||
       create!(kind: :support, buyer: user, seller: User.support_account!)
   rescue ActiveRecord::RecordNotUnique
-    kind_support.find_by(buyer_id: user.id)
+    person_support.find_by(buyer_id: user.id)
   end
 
   # A support thread the user archived or deleted comes back when anything new
@@ -461,7 +516,12 @@ class Conversation < ApplicationRecord
 
   def support_thread_shape
     errors.add(:listing_id, "must be empty on a support thread") if listing_id.present?
-    errors.add(:seller_id, "must be the Support account on a support thread") unless seller&.support_account?
-    errors.add(:buyer_id, "cannot be the Support account") if buyer&.support_account?
+    if shop_id.present?
+      errors.add(:buyer_id, "must be the Support account on a shop's support thread") unless buyer&.support_account?
+      errors.add(:seller_id, "must be the shop's owner") if new_record? && shop && seller_id != shop.owner_id
+    else
+      errors.add(:seller_id, "must be the Support account on a support thread") unless seller&.support_account?
+      errors.add(:buyer_id, "cannot be the Support account") if buyer&.support_account?
+    end
   end
 end

@@ -1,13 +1,27 @@
-<% user = @conversation.buyer %>
-<% content_for(:title) { "Support — #{user.full_name}" } %>
+<%# Owner, 2026-10-12: Support is per identity. A shop's thread is read and
+    answered by its team, so it is headed by the shop and every message says
+    which member wrote it; a person's thread by the person. %>
+<% shop = @conversation.shop if @conversation.shop_support? %>
+<% user = shop ? shop.owner : @conversation.buyer %>
+<% support_id = @conversation.support_user&.id %>
+<% content_for(:title) { "Support — #{shop ? shop.name : user.full_name}" } %>
 
 <header class="hw-page-header">
   <div>
     <h1 class="hw-page-header__title main-content__page-title">
-      Support — <%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto" %>
+      <% if shop %>
+        Support — shop <%= link_to shop.name, admin_shop_path(shop), dir: "auto", id: "support-thread-shop" %>
+      <% else %>
+        Support — <%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto" %>
+      <% end %>
     </h1>
     <p class="hw-page-header__subtitle">
-      <%= user.email %> · language: <%= user.preferred_language.presence || "—" %> ·
+      <% if shop %>
+        The shop's own thread: its whole team reads it and any member may reply. Owner:
+        <%= link_to user.full_name, admin_user_path(user), dir: "auto" %> · language: <%= user.preferred_language.presence || "—" %> ·
+      <% else %>
+        <%= user.email %> · language: <%= user.preferred_language.presence || "—" %> ·
+      <% end %>
       <span class="hw-badge <%= @conversation.open? ? 'hw-badge--success' : 'hw-badge--plain' %>"><%= @conversation.status %></span>
     </p>
   </div>
@@ -23,7 +37,7 @@
   </div>
 </header>
 
-<% if user.push_token.blank? %>
+<% if !shop && user.push_token.blank? %>
   <p id="support-no-push" class="hw-callout hw-callout--warning">
     This user can't receive push notifications (no push token<%= " — Android builds have no Firebase yet" if user.last_app_platform == "android" %>).
     Your reply will reach them only when they next open the app.
@@ -33,7 +47,7 @@
 <section class="hw-card">
   <div id="support-thread" class="hw-thread">
     <% @messages.each do |m| %>
-      <% from_support = m.user_id == @conversation.seller_id %>
+      <% from_support = m.user_id == support_id %>
       <div class="hw-bubble<%= ' hw-bubble--support' if from_support %>">
         <% if m.deleted? %>
           <em class="hw-bubble__deleted">Message deleted</em>
@@ -44,22 +58,20 @@
           <% end %>
         <% end %>
         <div class="hw-bubble__meta">
-          <% unless from_support %>
-            <%# Where the person wrote from (one thread for every mode and shop). %>
+          <% if from_support %>
+            Support<%= " · #{m.admin_user.email}" if m.admin_user %>
+          <% elsif shop %>
+            <%# Which member wrote it, and their role in the shop then. %>
+            <%= link_to m.user.full_name, admin_user_path(m.user), dir: "auto", class: "hw-support-author" %>
+            <span class="hw-badge hw-badge--plain" data-context="shop"><%= (m.context || {})["role"].to_s.humanize.presence || "Former member" %></span>
+          <% else %>
+            <%# Where the person wrote from: Buyer mode or Seller as Me. %>
             <% ctx = m.context || {} %>
-            <span class="hw-badge hw-badge--plain" data-context="<%= ctx['shop_id'] ? 'shop' : ctx['mode'].presence || 'unknown' %>">
-              <% if ctx["shop_id"] && (ctx_shop = Shop.find_by(id: ctx["shop_id"])) %>
-                as <%= link_to ctx_shop.name, admin_shop_path(ctx_shop) %> (<%= ctx["role"].to_s.humanize %>)
-              <% elsif ctx["mode"] == "seller" %>
-                as seller (Me)
-              <% elsif ctx["mode"] == "buyer" %>
-                as buyer
-              <% else %>
-                unknown (older app)
-              <% end %>
+            <span class="hw-badge hw-badge--plain" data-context="<%= ctx['mode'].presence || 'unknown' %>">
+              <% if ctx["mode"] == "seller" %>as seller (Me)<% elsif ctx["mode"] == "buyer" %>as buyer<% else %>unknown (older app)<% end %>
             </span>
+            <span dir="auto"><%= user.full_name %></span>
           <% end %>
-          <%= from_support ? "Support#{" · #{m.admin_user.email}" if m.admin_user}" : user.full_name %>
           · <%= l(m.created_at, format: :short) %>
         </div>
       </div>
@@ -73,7 +85,7 @@
     <%= form_with url: reply_admin_support_conversation_path(@conversation), method: :post,
           data: { turbo: false }, id: "support-reply", class: "hw-composer" do |f| %>
       <%= f.text_area :body, rows: 4, required: true, maxlength: 1000, dir: "auto", class: "hw-textarea",
-            placeholder: "Reply as Hatiwal Support — the user gets it in the app and as a push." %>
+            placeholder: shop ? "Reply as Hatiwal Support — the whole team gets it in the app and as a push." : "Reply as Hatiwal Support — the user gets it in the app and as a push." %>
       <div class="hw-composer__bar">
         <p id="support-refresh-note" class="hw-note"></p>
         <%= f.submit "Send reply", class: "button" %>

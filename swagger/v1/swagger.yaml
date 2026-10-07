@@ -1767,7 +1767,12 @@ paths:
       - Conversations
       description: 'Idempotent. Creates the caller''s support conversation on first
         call, returns it after. Rendered like GET /conversations/:id (kind: "support",
-        listing: null, viewer_role: null).'
+        listing: null, viewer_role: null). Owner, 2026-10-12: Support is per identity.
+        Without shop_id, the caller''s own thread (Buyer mode and Seller as Me); with
+        shop_id, that SHOP''s thread (members only, 403 otherwise), shared by its
+        team and shown only while that shop is selected. GET /conversations pins each
+        identity''s thread first (role=buying, role=selling&shop_id=none, role=selling&shop_id=<id>);
+        me.unread_counts.support is the person''s thread''s unread (also inside buying).'
       security:
       - bearer: []
       parameters:
@@ -1786,7 +1791,15 @@ paths:
         required: true
         schema:
           type: string
+      - name: shop_id
+        in: query
+        required: false
+        description: 'A shop the caller is a member of: that shop''s own Support thread'
+        schema:
+          type: integer
       responses:
+        '403':
+          description: shop_id names a shop the caller is not a member of
         '401':
           description: requires authentication
         '200':
