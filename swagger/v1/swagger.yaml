@@ -607,6 +607,94 @@ paths:
               required:
               - body
         required: true
+  "/api/v1/my/analytics":
+    get:
+      summary: a seller's numbers, for Me or one shop they are on
+      tags:
+      - Listings
+      description: |
+        `shop_id`: a shop the caller is on (any role), or none for Me. Counts:
+        total (not removed), active (live, not expired), expired, sold, draft,
+        sales + units_sold (recorded sales), views (sum), chats (begun with this
+        identity). Never site-wide. 403 `not_a_member` for another shop.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: shop_id
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '401':
+          description: unauthorized
+        '403':
+          description: not on that shop's team
+        '200':
+          description: Me
+  "/api/v1/my/listings/{id}/duplicate":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: duplicate one of the caller's listings as a draft, photos copied
+      tags:
+      - Listings
+      description: |
+        A new DRAFT with the listing's text, price, category, place and COPIES of
+        its photos (new files: deleting either listing never affects the other's).
+        `shop_id`: where it goes — a shop the caller is on, or null for Me (out of
+        a shop only for the poster or the shop's owner). Clients open the draft in
+        the edit form. Error codes: move_not_member (403), duplicate_forbidden
+        (403), shop_unavailable (422).
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '403':
+          description: not on the target shop's team
+        '201':
+          description: the draft, with its photos
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop_id:
+                  type: integer
+                  nullable: true
   "/api/v1/my/listings/{id}/renew":
     parameters:
     - name: id
@@ -721,6 +809,61 @@ paths:
           description: successful
         '422':
           description: the listing fails validation
+  "/api/v1/my/listings/{id}/move":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    put:
+      summary: move one of the caller's listings to Me or to another shop they are
+        on
+      tags:
+      - Listings
+      description: |
+        `shop_id`: the target shop, or null for Me. Any member may move a shop's
+        products; into a shop needs membership of it; out to Me only the poster
+        or the shop's owner. The listing keeps its photos, expiry and feed
+        position. Its chats do NOT move: each open one gets a system message
+        (`notice: {notice: "listing_moved", shop_id, name}`) and is closed; the
+        buyer starts a new chat with the new seller. Error codes:
+        move_not_member (403), move_forbidden (403), shop_unavailable,
+        move_same_place, move_has_hold, move_not_movable (422).
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '403':
+          description: not on the target shop's team
+        '422':
+          description: cannot move (held, sold, removed, already there)
+        '200':
+          description: moved
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop_id:
+                  type: integer
+                  nullable: true
   "/api/v1/my/listings/{id}":
     parameters:
     - name: id
@@ -797,6 +940,47 @@ paths:
                       type: integer
                       description: Total units; may not be below sold_units
         required: true
+  "/api/v1/my/listings/{id}/relaunch":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    put:
+      summary: relaunch one of the caller's own listings (renew + weekly bump)
+      tags:
+      - Listings
+      description: |
+        Restarts the 90-day run (like renew), and moves the listing back to the
+        top of the newest-first feed if it was last moved at least 7 days ago.
+        `bumped` says whether this call moved it; `next_bump_at` when it next can
+        (null = now). Photos, chats and the listing itself are kept.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '403':
+          description: not the caller's listing, or not live
+        '422':
+          description: the listing fails validation
+        '200':
+          description: successful
   "/api/v1/my/reviews/pending":
     get:
       summary: sold sales the caller still owes a review on
