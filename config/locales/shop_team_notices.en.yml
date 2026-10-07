@@ -1,0 +1,15 @@
+# SHOP-3 team Support notices (SupportNoticeJob::TEAM_NOTICES), owner 2026-10-07.
+en:
+  support:
+    team_roles:
+      owner: "Owner"
+      manager: "Manager"
+      staff: "Staff"
+    notices:
+      shop_invite_received: "Hello %{name}. %{inviter} invited you to join %{shop} as %{role}. To answer, open Me → Invitations to join a shop."
+      shop_member_joined: "%{member} joined %{shop} as %{role}."
+      shop_joined: "Welcome to %{shop}! You can now sell and answer its chats. Switch with “Sell as”."
+      shop_member_removed: "You're no longer on %{shop}'s team. You sell as yourself again."
+      shop_role_changed: "Your role in %{shop} is now %{role}."
+      shop_ownership_received: "%{actor} handed %{shop} to you. You are now its owner."
+      shop_ownership_handed_over: "You handed %{shop} to %{new_owner}. You stay on the team as %{role}."

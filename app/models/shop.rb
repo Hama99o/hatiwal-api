@@ -113,6 +113,7 @@ class Shop < ApplicationRecord
     end
     if email && (invitee = User.find_by("LOWER(email) = ?", email)) && invitee.confirmed_at.present?
       ShopTeamPushJob.perform_later("shop_invite", invitee.id, id, by.id, nil, invite.id)
+      SupportNoticeJob.enqueue(invitee, :shop_invite_received, shop: self, invite: invite)
     end
     invite
   end
@@ -142,6 +143,7 @@ class Shop < ApplicationRecord
       ShopAuditEvent.record!(self, :role_changed, actor: by, target_user: user, from: from, to: role.to_s)
     end
     ShopTeamPushJob.perform_later("shop_membership_changed", user.id, id, by.id, "role_changed")
+    SupportNoticeJob.enqueue(user, :shop_role_changed, shop: self)
     member
   end
 
@@ -170,6 +172,9 @@ class Shop < ApplicationRecord
                                                  badge_dropped: was_verified)
     end
     ShopTeamPushJob.perform_later("shop_owner_changed", new_owner.id, id, by.id)
+    old_owner = User.find_by(id: old_owner_id)
+    SupportNoticeJob.enqueue(new_owner, :shop_ownership_received, shop: self, actor: old_owner)
+    SupportNoticeJob.enqueue(old_owner, :shop_ownership_handed_over, shop: self, actor: new_owner)
     reload
   end
 
@@ -511,7 +516,10 @@ class Shop < ApplicationRecord
       User.where(id: member.user_id, active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
       ShopAuditEvent.record!(self, action, actor: actor, target_user: member.user, **data)
     end
-    ShopTeamPushJob.perform_later("shop_membership_changed", member.user_id, id, actor&.id, "removed") if action == :removed
+    if action == :removed
+      ShopTeamPushJob.perform_later("shop_membership_changed", member.user_id, id, actor&.id, "removed")
+      SupportNoticeJob.enqueue(member.user, :shop_member_removed, shop: self)
+    end
     member
   end
 end

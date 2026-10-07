@@ -99,6 +99,8 @@ class ShopInvite < ApplicationRecord
       update!(status: :accepted, accepted_by: user, decided_at: Time.current)
       ShopAuditEvent.record!(shop, :joined, actor: user, target_user: user, invite_id: id)
       ShopTeamPushJob.perform_later("shop_member_joined", shop.owner_id, shop.id, user.id)
+      SupportNoticeJob.enqueue(shop.owner, :shop_member_joined, shop: shop, actor: user)
+      SupportNoticeJob.enqueue(user, :shop_joined, shop: shop)
       member
     end
   end

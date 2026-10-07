@@ -190,8 +190,21 @@ else the default locale) with the usual broadcast + push. Added 2026-10-05.
 
 | Key | Sent when | Enqueued by |
 |---|---|---|
-| `user_verified` | An admin switches a user's **verified** badge from off to on | `Admin::UsersController#update` |
-| `shop_verified`, `shop_verification_rejected`, `shop_badge_removed` | planned, see `hatiwal-mobile/docs/SHOPS.md` | Admin shops (not built) |
+| `user_verified` | An admin switches a user's **verified** badge from off to on | `Admin::UsersController#update`; VER-1 approve (`VerificationRequest#approve!`) |
+| `user_verification_rejected`, `user_badge_revoked` | VER-1: an admin rejects a request / removes the badge (with the reason) | `VerificationRequest#reject!` / `#revoke!` (admin queue) |
+| `shop_verified`, `shop_verification_rejected`, `shop_badge_removed`, `shop_reverify_needed` | The same for a shop, to its owner (SHOP-1/2) | `VerificationRequest` decisions; `ShopsController#update` (name/address edit) |
+| `app_update_available` | UPD-1: a build too old to block is told to update | `AppUpdateNotice` (once per user per version) |
+| `shop_invite_received` | SHOP-3: an existing, confirmed account is invited by email (also on resend) | `Shop#invite!`, `ShopInvitesController#resend` |
+| `shop_member_joined` → owner, `shop_joined` → the new member | Someone accepts an invite | `ShopInvite#accept!` |
+| `shop_role_changed` | The owner changes a member's role | `Shop#change_role!` |
+| `shop_member_removed` | A member is removed (leaving on your own sends nothing) | `Shop#remove_team_member!` |
+| `shop_ownership_received` → new owner, `shop_ownership_handed_over` → old owner | Ownership is transferred | `Shop#transfer_ownership!` |
+
+The SHOP-3 team notices (owner, 2026-10-07) sit beside the team pushes. Each one
+re-checks the state when it runs (`SupportNoticeJob::TEAM_NOTICES`): a cancelled
+invite, a member already gone or a role changed back sends nothing stale. Roles
+are named in the reader's language (`support.team_roles.*`), with the app's own
+words. Texts: `config/locales/shop_team_notices.*.yml`.
 
 Rules:
 - Enqueued by the action, never by a model callback (same reason as the welcome).

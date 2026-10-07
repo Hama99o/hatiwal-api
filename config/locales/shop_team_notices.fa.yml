@@ -1,0 +1,15 @@
+# SHOP-3 team Support notices (SupportNoticeJob::TEAM_NOTICES), owner 2026-10-07.
+fa:
+  support:
+    team_roles:
+      owner: "مالک"
+      manager: "مدیر"
+      staff: "کارمند"
+    notices:
+      shop_invite_received: "سلام %{name}. %{inviter} شما را دعوت کرده تا به‌عنوان %{role} به %{shop} بپیوندید. برای پاسخ، «من ← دعوت‌ها برای پیوستن به دوکان» را باز کنید."
+      shop_member_joined: "%{member} به‌عنوان %{role} به %{shop} پیوست."
+      shop_joined: "به %{shop} خوش آمدید! حالا می‌توانید بفروشید و به چت‌های این دوکان پاسخ دهید. با «فروش به نام» جابه‌جا شوید."
+      shop_member_removed: "شما دیگر در تیم %{shop} نیستید. حالا دوباره به نام خودتان می‌فروشید."
+      shop_role_changed: "نقش شما در %{shop} اکنون %{role} است."
+      shop_ownership_received: "%{actor} %{shop} را به شما سپرد. اکنون شما مالک آن هستید."
+      shop_ownership_handed_over: "شما %{shop} را به %{new_owner} سپردید. شما به‌عنوان %{role} در تیم می‌مانید."

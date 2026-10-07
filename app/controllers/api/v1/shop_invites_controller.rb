@@ -35,7 +35,10 @@ class Api::V1::ShopInvitesController < Api::V1::BaseController
     return render_unprocessable_entity(I18n.t("shops.team.errors.forbidden"), code: :link_invite) if invite.link?
 
     invitee = User.find_by("LOWER(email) = ?", invite.email)
-    ShopTeamPushJob.perform_later("shop_invite", invitee.id, @shop.id, current_user.id, nil, invite.id) if invitee&.confirmed_at.present?
+    if invitee&.confirmed_at.present?
+      ShopTeamPushJob.perform_later("shop_invite", invitee.id, @shop.id, current_user.id, nil, invite.id)
+      SupportNoticeJob.enqueue(invitee, :shop_invite_received, shop: @shop, invite: invite)
+    end
     render_blue(ShopInviteSerializer, invite, view: :owner)
   end
 
