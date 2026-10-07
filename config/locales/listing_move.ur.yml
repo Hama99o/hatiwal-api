@@ -1,0 +1,4 @@
+# Move a listing — see listing_move.en.yml.
+ur:
+  listing_move:
+    notice: "یہ اشتہار %{name} کو منتقل ہو گیا۔ %{name} کو پیغام بھیجنے کے لیے اسے دوبارہ کھولیں۔"

@@ -2,6 +2,10 @@ class MessageSerializer < ApplicationSerializer
   fields :id, :kind, :read_at, :created_at, :responds_to_id
 
   field(:deleted) { |m| m.deleted? }
+  # A server notice ({notice, shop_id, name}), so each viewer reads it in their
+  # own language; `body` is the fallback older apps show. Only "listing_moved"
+  # (Listings::MoveService) today. Nil on every other message.
+  field(:notice) { |m| m.system? && m.context.is_a?(Hash) ? m.context.slice("notice", "shop_id", "name") : nil }
   field(:deleted_at) { |m| m.deleted_at }
 
   # Body: suppressed when deleted (tombstone — no content leak)

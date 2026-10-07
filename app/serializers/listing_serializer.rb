@@ -53,9 +53,12 @@ class ListingSerializer < ApplicationSerializer
       conversation_id: if txn.buyer_id.nil?
                           nil
                        elsif l.conversations.loaded?
-                          l.conversations.to_a.find { |c| c.buyer_id == txn.buyer_id }&.id
+                          # A moved listing can have one chat per identity: the current one.
+                          l.conversations.to_a.select { |c| c.buyer_id == txn.buyer_id }
+                           .max_by { |c| c.shop_id == l.shop_id ? 1 : 0 }&.id
                        else
-                          l.conversations.find_by(buyer_id: txn.buyer_id)&.id
+                          (l.conversations.find_by(buyer_id: txn.buyer_id, shop_id: l.shop_id) ||
+                           l.conversations.find_by(buyer_id: txn.buyer_id))&.id
                        end
     }
   end

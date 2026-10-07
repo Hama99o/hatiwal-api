@@ -78,7 +78,10 @@ class Conversation < ApplicationRecord
   scope :person_support, -> { kind_support.where(shop_id: nil) }
   scope :shop_support, -> { kind_support.where.not(shop_id: nil) }
 
-  validates :listing_id, uniqueness: { scope: :buyer_id, message: "already has a conversation with this buyer", allow_nil: true }
+  # One chat per listing, buyer AND selling identity (shop_id; nil = the person):
+  # a listing moved to another shop starts a new chat there, the old one stays
+  # with the identity it began with (Listings::MoveService).
+  validates :listing_id, uniqueness: { scope: %i[buyer_id shop_id], message: "already has a conversation with this buyer", allow_nil: true }
   validate :buyer_is_not_seller
   validate :support_thread_shape, if: :kind_support?
   validate :shop_chat_shape, if: :shop_chat?

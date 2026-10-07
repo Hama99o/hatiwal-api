@@ -1,0 +1,5 @@
+# Move a listing (docs/OWNER_ITEMS_2026-10-12.md, item 5): the notice left in
+# the listing's old chats. Own file so it never collides with edits to en.yml.
+en:
+  listing_move:
+    notice: "This listing moved to %{name}. Open it again to message %{name}."

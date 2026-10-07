@@ -1,0 +1,4 @@
+# Move a listing — see listing_move.en.yml.
+ps:
+  listing_move:
+    notice: "دا اعلان %{name} ته ولېږدول شو. د %{name} سره د خبرو لپاره یې بیا پرانیزئ."

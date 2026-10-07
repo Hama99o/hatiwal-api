@@ -279,6 +279,7 @@ Rails.application.routes.draw do
             put :sold
             put :renew
             put :relaunch
+            put :move
           end
           # GET /my/listings/:listing_id/analytics
           resource :analytics, only: [ :show ], controller: "listing_analytics"

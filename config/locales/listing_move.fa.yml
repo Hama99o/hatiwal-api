@@ -1,0 +1,4 @@
+# Move a listing — see listing_move.en.yml.
+fa:
+  listing_move:
+    notice: "این آگهی به %{name} منتقل شد. برای پیام دادن به %{name} دوباره بازش کنید."

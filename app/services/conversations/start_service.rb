@@ -17,7 +17,7 @@ class Conversations::StartService
   end
 
   def call
-    return existing_conversation if existing_conversation
+    return reopened(existing_conversation) if existing_conversation
 
     seller = chat_seller
     raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(seller)
@@ -64,7 +64,15 @@ class Conversations::StartService
   # A shop product's chat is with the shop: its seller is the shop's owner.
   def chat_seller = @listing.shop&.owner || @listing.user
 
+  # The chat with the listing's CURRENT seller identity: a listing that moved to
+  # another shop left its old chats with the old identity (Listings::MoveService).
   def existing_conversation
-    @existing_conversation ||= Conversation.find_by(listing: @listing, buyer: @buyer)
+    @existing_conversation ||= Conversation.find_by(listing: @listing, buyer: @buyer, shop_id: @listing.shop_id)
+  end
+
+  # Moved away and back: the chat that was closed by the move opens again.
+  def reopened(conversation)
+    conversation.update_column(:status, Conversation.statuses[:open]) if conversation.closed? && @listing.live?
+    conversation
   end
 end
