@@ -1,5 +1,5 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
-  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew ]
+  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew, :relaunch ]
 
   # Feed flooding. A real seller listing 30 items in one day is already an
   # outlier on a local marketplace; a script posting 10 000 is what buries
@@ -143,6 +143,18 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing, :renew?
     @listing.renew!
     render_blue(ListingSerializer, @listing, view: :owner_detailed)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
+  end
+
+  # Edit + relaunch (owner, 2026-10-12): renew for LISTING_LIFESPAN, AND move
+  # back to the top of the feed if the last bump was at least a week ago. The
+  # client calls it after saving the edit; the response's `bumped` says whether
+  # it moved and `next_bump_at` when it next can. Same 422 shape as #renew.
+  def relaunch
+    authorize @listing, :relaunch?
+    bumped = @listing.relaunch!
+    render_blue(ListingSerializer, @listing, view: :owner_detailed, options: { bumped: bumped })
   rescue ActiveRecord::RecordInvalid => e
     render_unprocessable_entity(e.record)
   end

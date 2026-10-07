@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_130100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -266,12 +266,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
 
   create_table "listings", force: :cascade do |t|
     t.string "address"
+    t.datetime "bumped_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
     t.bigint "category_id", null: false
     t.integer "condition"
     t.datetime "created_at", null: false
     t.string "currency", default: "AFN", null: false
     t.text "description"
     t.datetime "expires_at"
+    t.datetime "expiry_reminder_day_for"
+    t.datetime "expiry_reminder_week_for"
     t.decimal "latitude", precision: 10, scale: 6
     t.string "location"
     t.decimal "longitude", precision: 10, scale: 6
@@ -290,6 +293,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_120000) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.integer "views_count", default: 0, null: false
+    t.index ["bumped_at"], name: "index_listings_on_bumped_at"
     t.index ["category_id"], name: "index_listings_on_category_id"
     t.index ["condition"], name: "index_listings_on_condition"
     t.index ["created_at"], name: "index_listings_on_created_at"

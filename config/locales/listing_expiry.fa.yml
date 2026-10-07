@@ -1,0 +1,11 @@
+# Listing expiry reminders — see listing_expiry.en.yml.
+fa:
+  support:
+    notices:
+      listing_expires_week: "⏰ %{name}، آگهی شما «%{title}» تا ۷ روز دیگر منقضی می‌شود. از «آگهی‌های من» با یک لمس تمدیدش کنید: عکس‌ها و گفتگوهایش می‌مانند و دوباره منتشر نمی‌شود."
+      listing_expires_day: "⏰ %{name}، آگهی شما «%{title}» فردا منقضی می‌شود. از «آگهی‌های من» با یک لمس تمدیدش کنید: عکس‌ها و گفتگوهایش می‌مانند و دوباره منتشر نمی‌شود."
+  push:
+    listing_expiry:
+      week_title: "آگهی شما تا ۷ روز دیگر منقضی می‌شود"
+      day_title: "آگهی شما فردا منقضی می‌شود"
+      body: "«%{title}»: برای تمدید ۹۰ روزه لمس کنید."

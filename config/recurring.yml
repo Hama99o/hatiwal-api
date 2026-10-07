@@ -25,3 +25,7 @@ production:
   purge_verification_files:
     class: PurgeVerificationFilesJob
     schedule: every day at 2am
+  # Listing expiry reminders, 7 days and 1 day before (owner, 2026-10-12).
+  listing_expiry_reminders:
+    class: ListingExpiryReminderJob
+    schedule: every hour at minute 25

@@ -159,7 +159,17 @@ class Listing < ApplicationRecord
 
   EARTH_RADIUS_KM = 6371
   # How long a published listing stays in the buyer feed before it expires.
-  LISTING_LIFESPAN = 30.days
+  # Owner, 2026-10-12 (docs/OWNER_ITEMS_2026-10-12.md, item 1): 90 days, was 30.
+  LISTING_LIFESPAN = 90.days
+  # An edit + relaunch may move a listing back to the top of the feed, at most
+  # once per this interval. A plain Renew never does.
+  BUMP_INTERVAL = 7.days
+  # The two expiry reminders (ListingExpiryReminderJob): name => how long before
+  # `expires_at` it goes out, and the column recording the expiry it was sent for.
+  EXPIRY_REMINDERS = {
+    week: { before: 7.days, column: :expiry_reminder_week_for },
+    day: { before: 1.day, column: :expiry_reminder_day_for }
+  }.freeze
 
   # Valid sort keys accepted by the API. "nearest" additionally requires
   # latitude/longitude — the controller applies `nearest_first` for it and
@@ -177,7 +187,8 @@ class Listing < ApplicationRecord
   # `sold`, `draft` and admin-removed listings are the genuinely-unavailable set
   # and stay out.
   scope :live,        -> { where(status: [ :active, :reserved ]) }
-  scope :ordered,     -> { order(created_at: :desc) }
+  # Newest first by `bumped_at` (= `created_at` until an edit + relaunch moves it).
+  scope :ordered,     -> { order(bumped_at: :desc) }
   # Filtering by a category includes everything filed under its subcategories:
   # the create-listing picker lets a seller file an item under
   # "Electronics > Phones", and that item is still an Electronics listing.
@@ -194,7 +205,7 @@ class Listing < ApplicationRecord
   # and appear in NO seller tab at all. Name kept for its callers.
   scope :expired_active, -> { live.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
 
-  # Sort the result set by the supplied key. Falls back to newest (created_at
+  # Sort the result set by the supplied key. Falls back to newest (bumped_at
   # desc) for any absent or unrecognised value — the SORT_KEYS whitelist prevents
   # injection and keeps sort semantics clearly defined in one place.
   scope :sorted, lambda { |key|
@@ -203,7 +214,7 @@ class Listing < ApplicationRecord
     when "price_desc"  then reorder(price: :desc)
     when "oldest"      then reorder(created_at: :asc)
     when "most_viewed" then reorder(views_count: :desc)
-    else                    reorder(created_at: :desc)
+    else                    reorder(bumped_at: :desc)
     end
   }
 
@@ -319,7 +330,7 @@ class Listing < ApplicationRecord
     reorder(Arel.sql(
       "(listings.latitude IS NULL OR listings.longitude IS NULL) ASC, " \
       "#{sanitize_sql_array([ haversine_distance_sql, *haversine_binds(lat, lng) ])} ASC NULLS LAST, " \
-      "#{province_term}listings.created_at DESC, listings.id DESC"
+      "#{province_term}listings.bumped_at DESC, listings.id DESC"
     ))
   end
 
@@ -369,6 +380,9 @@ class Listing < ApplicationRecord
   private_class_method :haversine_binds
 
   before_save :set_published_at, if: -> { active? && published_at.nil? }
+  # Feed position starts at creation (an explicit `created_at`, e.g. an import,
+  # wins), so the default order is exactly the old `created_at` order.
+  before_create { self.bumped_at ||= created_at || Time.current }
   # SF-B10 — this callback is NO LONGER what dates a hold. It is the fallback for
   # the ONE hold that has no Transaction row to date it: the legacy bare
   # `PUT /my/listings/:id/reserve` with no `buyer_id`, where
@@ -433,9 +447,35 @@ class Listing < ApplicationRecord
     live? && expires_at.present? && expires_at.past?
   end
 
-  # (Re)start the expiry clock — used on publish and on seller renew.
+  # (Re)start the expiry clock — used on seller renew. Never moves the listing
+  # in the feed (`bumped_at` is untouched): photos, chats and its place stay.
   def renew!
     update!(expires_at: LISTING_LIFESPAN.from_now)
+  end
+
+  # Edit + relaunch: renew, and move back to the top of the feed if the last
+  # bump was at least BUMP_INTERVAL ago. Returns whether it bumped.
+  def relaunch!
+    bump = bumpable?
+    update!({ expires_at: LISTING_LIFESPAN.from_now }.merge(bump ? { bumped_at: Time.current } : {}))
+    bump
+  end
+
+  def bumpable? = bumped_at.nil? || bumped_at <= BUMP_INTERVAL.ago
+
+  # When the next relaunch may bump again (nil = now).
+  def next_bump_at
+    bumpable? ? nil : bumped_at + BUMP_INTERVAL
+  end
+
+  # Live listings whose `reminder` (see EXPIRY_REMINDERS) is due: expiring within
+  # its window, not yet past, and not already reminded for THIS expiry.
+  def self.expiry_reminder_due(reminder)
+    cfg = EXPIRY_REMINDERS.fetch(reminder)
+    now = Time.current
+    live.not_removed
+        .where(expires_at: now..(now + cfg[:before]))
+        .where("#{cfg[:column]} IS NULL OR #{cfg[:column]} <> expires_at")
   end
 
   # draft -> active. Flips the status and starts the expiry clock in ONE write so

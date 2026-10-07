@@ -51,6 +51,8 @@ class ListingPolicy < ApplicationPolicy
   # so a reserved listing can now expire and drop out of `browsable`; without
   # this it would expire with no way to renew it.
   def renew?     = owner? && record.live?
+  # Edit + relaunch: same gate as renew (it IS a renew, plus a weekly bump).
+  def relaunch?  = renew?
   # Sellable while live (active or reserved); sold is terminal (never from
   # draft/sold). Already allowed selling without reserving first.
   def sold?      = owner? && record.live?

@@ -163,6 +163,8 @@ class ListingSerializer < ApplicationSerializer
     # instead of issuing a separate COUNT(*) query per listing row.
     field(:conversations_count) { |l| l.conversations.size }
     field(:expired) { |l| l.expired? }
+    # Edit + relaunch: when the listing may next move to the top (nil = now).
+    field(:next_bump_at) { |l| l.next_bump_at }
     field(:category) { |l| CategorySerializer.render_as_hash(l.category) }
     # Price-drop badge data for seller listing cards. Both nil when no recent drop.
     field(:price_drop_percent) { |l| l.price_drop_percent }
@@ -178,8 +180,16 @@ class ListingSerializer < ApplicationSerializer
     # grid-snapped values; see `Listing::GRID_DEGREES` for why snapping and not
     # an offset. `:owner_detailed` overrides them back to exact.
     fields :description, :category_id, :location,
-           :views_count, :published_at, :reserved_at, :sold_at, :updated_at, :expires_at,
+           :views_count, :published_at, :reserved_at, :sold_at, :updated_at,
            :negotiable
+    # Owner, 2026-10-12 (docs/OWNER_ITEMS_2026-10-12.md, item 1): buyers never
+    # see an expiry DATE — only the seller (or their shop team) does. The
+    # `expired` flag below stays public: it says "no longer on the market",
+    # not when. Guests and buyers get nil.
+    field(:expires_at) do |l, opts|
+      viewer = opts[:current_user]
+      viewer && l.manageable_by?(viewer) ? l.expires_at : nil
+    end
     field(:latitude)  { |l| l.approximate_latitude }
     field(:longitude) { |l| l.approximate_longitude }
     # So a client can SAY it is approximate and draw an area instead of a pin,
@@ -269,5 +279,10 @@ class ListingSerializer < ApplicationSerializer
     field(:location_precision) { "exact" }
     field(:location_radius_m)  { nil }
     field(:sale, &SALE_FIELD)
+    # Always the owner's own listing here (see `:detailed`'s gate).
+    field(:expires_at) { |l| l.expires_at }
+    field(:next_bump_at) { |l| l.next_bump_at }
+    # Only on a relaunch response: whether that relaunch moved it to the top.
+    field(:bumped) { |_l, opts| opts[:bumped] }
   end
 end
