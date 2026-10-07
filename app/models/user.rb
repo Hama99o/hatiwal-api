@@ -78,6 +78,16 @@ class User < ApplicationRecord
   # confirmed_at (the address is proven by Google).
   def email_confirmed? = confirmed_at.present?
 
+  # devise_token_auth's own payloads (sign_in, validate_token, sign-up) render
+  # this, not UserSerializer — and without `email_confirmed` the apps read an
+  # unconfirmed account as confirmed (undefined = "an older API") until
+  # something fetched /users/me: right after sign-in or a reload, "Open your
+  # shop" and Verify skipped their email gate and only the API's 403 said no
+  # (device check 2026-10-07, d_email_gate). Same boolean as UserSerializer :me.
+  def token_validation_response
+    super.merge("email_confirmed" => email_confirmed?)
+  end
+
   def verification_missing
     missing = []
     missing << "email_confirmed" if confirmed_at.blank?
