@@ -12,7 +12,7 @@ class Api::V1::ReviewsController < Api::V1::BaseController
 
   def index
     user = User.find(params[:user_id])
-    reviews = policy_scope(Review).visible.for_reviewee(user).ordered
+    reviews = policy_scope(Review).visible.for_reviewee(user).about_person.ordered
     reviews = reviews.where(role: params[:role]) if Review.roles.key?(params[:role])
 
     paginate_blue(ReviewSerializer, reviews.includes(reviewer: { avatar_attachment: :blob }))

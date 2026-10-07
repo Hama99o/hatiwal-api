@@ -20,7 +20,10 @@ class Api::V1::ListingsController < Api::V1::BaseController
     # GET /users/:id/sold_listings.
     listings = policy_scope(Listing.browsable)
     listings = listings.not_hidden_for(current_user)
+    # A person's profile grid is personal: their shops' products are on the
+    # shops' pages (matches users.listings_count). With shop_id, that shop's.
     listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
+    listings = listings.personal if params[:user_id].present? && params[:shop_id].blank?
     # SHOP-1 — the Bazaar "Shops" filter, and a shop page's Products tab.
     listings = listings.from_shops if params[:seller_type] == Listing::SELLER_TYPE_SHOP
     listings = listings.by_shop(params[:shop_id]) if params[:shop_id].present?

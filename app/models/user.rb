@@ -211,7 +211,9 @@ class User < ApplicationRecord
   # (as reviewee). Called only when a review is revealed, so feeds never sum
   # reviews per row. update_columns skips validations/callbacks by design.
   def recompute_review_stats!
-    visible = Review.visible.for_reviewee(self)
+    # A buyer's review of a SHOP sale rates the shop (Shop#reviews), not the
+    # owner as a person (owner, 2026-10-07).
+    visible = Review.visible.for_reviewee(self).about_person
     update_columns(
       review_count: visible.count,
       avg_rating: visible.average(:rating)&.round(2)
@@ -251,8 +253,9 @@ class User < ApplicationRecord
   # there is no live decrement path — so this recompute is a genuine repair
   # lever, not a no-op.
   def recompute_transaction_counters!
-    sold_from_transactions = Transaction.as_seller(self).sold.distinct.count(:listing_id)
-    sold_from_legacy_listings = listings.sold.count
+    # Personal only (owner, 2026-10-07): shop sales count on the shop.
+    sold_from_transactions = Transaction.as_seller(self).personal.sold.distinct.count(:listing_id)
+    sold_from_legacy_listings = listings.personal.sold.count
     update_columns(
       sold_count: [ sold_from_transactions, sold_from_legacy_listings ].max,
       bought_count: Transaction.as_buyer(self).sold.distinct.count(:listing_id)
@@ -532,7 +535,9 @@ class User < ApplicationRecord
 
   # What GET /listings?user_id= returns (`browsable` = live + not expired).
   def live_listings_count
-    @live_listings_count ||= listings.live.not_expired.count
+    # A person's profile is personal (owner, 2026-10-07): products posted as one
+    # of their shops belong to the shop's page, never to the owner's profile.
+    @live_listings_count ||= listings.personal.live.not_expired.count
   end
 
   # ── Shareable deep-link URL ──────────────────────────────────────────────────
@@ -735,7 +740,7 @@ class User < ApplicationRecord
 
     ids = users.map(&:id)
     convos = Conversation.where(seller_id: ids, created_at: 90.days.ago..).includes(:messages).group_by(&:seller_id)
-    counts = Listing.where(user_id: ids).live.not_expired.group(:user_id).count
+    counts = Listing.where(user_id: ids).personal.live.not_expired.group(:user_id).count
     users.each do |u|
       u.instance_variable_set(:@seller_response_stats, u.send(:compute_seller_response_stats, convos.fetch(u.id, [])))
       u.instance_variable_set(:@live_listings_count, counts.fetch(u.id, 0))

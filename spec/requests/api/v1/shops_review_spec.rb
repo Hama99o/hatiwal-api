@@ -13,7 +13,9 @@ RSpec.describe "SHOP-1 review", type: :request do
     headers = auth_headers_for(user)
     sql = []
     ActiveSupport::Notifications.subscribed(->(*, p) { sql << p[:sql] }, "sql.active_record") { get "/api/v1/users/me", headers: headers }
-    expect(sql.grep(/shop/i)).to be_empty
+    # No query against the shop tables. (A `listings.shop_id IS NULL` predicate
+    # inside the personal listing counts is not a shop query: same query, no join.)
+    expect(sql.grep(/(FROM|JOIN)\s+"shop(s|_members|_invites|_audit_events)"/i)).to be_empty
     expect(JSON.parse(response.body)["user"]).to include("shops" => [], "unread_counts" => nil, "selling_as_shop" => nil)
   end
 

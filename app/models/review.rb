@@ -31,6 +31,12 @@ class Review < ApplicationRecord
   scope :hidden,        -> { where(visible: false) }
   scope :for_reviewee,  ->(user) { where(reviewee_id: user.id) }
   scope :ordered,       -> { order(created_at: :desc) }
+  # About the PERSON: everything except a buyer's review of a sale made as a
+  # shop (that one rates the shop: Shop#reviews). A shop's review OF its buyer
+  # stays personal to the buyer.
+  scope :about_person, lambda {
+    joins(:sale).where("transactions.shop_id IS NULL OR reviews.role <> ?", roles[:of_seller])
+  }
   scope :overdue_hidden, -> { hidden.where(created_at: ..REVEAL_WINDOW.ago) }
 
   # Persist this review and, if the counterparty has already reviewed this sale,

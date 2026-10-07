@@ -88,6 +88,9 @@ class Transaction < ApplicationRecord
 
   scope :as_buyer,  ->(user) { where(buyer_id: user.id) }
   scope :as_seller, ->(user) { where(seller_id: user.id) }
+  # Sold as the PERSON, not as one of their shops (owner, 2026-10-07: the
+  # Profile is personal; a shop's sales count on the shop).
+  scope :personal, -> { where(shop_id: nil) }
   scope :for_user,  ->(user) { where("buyer_id = ? OR seller_id = ?", user.id, user.id) }
   scope :ordered,   -> { order(created_at: :desc) }
   # Sales that have a real counterparty account on both sides. SF-B3 made
@@ -156,7 +159,7 @@ class Transaction < ApplicationRecord
     raise Listing::CorrectionBlocked, REVIEWED_SALE_ERROR if reviews.exists?
 
     if sold?
-      User.where(id: seller_id).update_all("sold_count = GREATEST(sold_count - 1, 0)")
+      User.where(id: seller_id).update_all("sold_count = GREATEST(sold_count - 1, 0)") if shop_id.nil?
       decrement_bought_count!(buyer_id)
     end
 
@@ -189,7 +192,8 @@ class Transaction < ApplicationRecord
   # Atomic single-column UPDATEs (no read-then-write race, no extra SELECT) —
   # same reasoning as ActiveRecord's own #increment_counter.
   def bump_trust_counters!
-    User.increment_counter(:sold_count, seller_id)
+    # A shop's sale counts on the shop, never on the owner's personal sold_count.
+    User.increment_counter(:sold_count, seller_id) if shop_id.nil?
     # SF-B3 — the buyer half is guarded: an outside-buyer sale has no account to
     # credit. The seller's sold_count still moves, because the sale still
     # happened. (`increment_counter` with a nil id would be a no-op UPDATE rather

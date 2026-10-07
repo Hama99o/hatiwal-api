@@ -89,8 +89,10 @@ class UserSerializer < ApplicationSerializer
     # `browsable`/"Active" tab. A held listing is still one of the seller's items
     # on sale; counting it as neither active nor anything else made the dashboard
     # tile disagree with the tab right next to it.
-    field(:items_active_count) { |u| u.listings.live.count }
-    field(:items_sold_count) { |u| u.listings.sold.count }
+    # Personal only, whatever "Sell as" is (owner, 2026-10-07): a shop's
+    # products are counted on the shop, never on the person's Profile.
+    field(:items_active_count) { |u| u.listings.personal.live.count }
+    field(:items_sold_count) { |u| u.listings.personal.sold.count }
     # No money total: listings span currencies (AFN/USD/EUR) with no FX rate, so
     # summing them would be meaningless. We surface counts only.
     field(:saved_items_count) { |u| u.saved_listings.count }

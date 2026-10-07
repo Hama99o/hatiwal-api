@@ -233,6 +233,8 @@ class Listing < ApplicationRecord
   # stays exactly as it was.
   scope :from_visible_shops, -> { where("listings.shop_id IS NULL OR listings.shop_id IN (?)", Shop.visible.select(:id)) }
   scope :from_shops,  -> { where.not(shop_id: nil) }
+  # Posted as the PERSON ("Me"), not as one of their shops.
+  scope :personal,    -> { where(shop_id: nil) }
   scope :by_shop,     ->(id) { where(shop_id: id) }
   scope :browsable,   -> { live.not_expired.not_removed.from_visible_shops.ordered }
 
