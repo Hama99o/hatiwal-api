@@ -56,6 +56,9 @@ class ListingPolicy < ApplicationPolicy
   # Move to Me / another shop: anyone who manages it; where it may go is
   # Listings::MoveService's call (membership of the target, poster/owner for Me).
   def move?      = owner?
+  # Duplicate (with its photos) to here, Me or another shop: anyone who manages
+  # it; where it may go is Listings::DuplicateService's call.
+  def duplicate? = owner?
   # Sellable while live (active or reserved); sold is terminal (never from
   # draft/sold). Already allowed selling without reserving first.
   def sold?      = owner? && record.live?

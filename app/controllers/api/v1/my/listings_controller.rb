@@ -1,5 +1,5 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
-  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew, :relaunch, :move ]
+  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew, :relaunch, :move, :duplicate ]
 
   # Feed flooding. A real seller listing 30 items in one day is already an
   # outlier on a local marketplace; a script posting 10 000 is what buries
@@ -162,6 +162,19 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # Move to Me (`shop_id` null/blank) or to another shop the caller is on
   # (owner, 2026-10-12; Listings::MoveService has the rules). Its chats stay
   # with the identity they started with: each open one is told and closed.
+  # Duplicate as a new DRAFT, photos copied (owner, 2026-10-12): to the same
+  # place, Me or another shop the caller is on (`shop_id`, null = Me).
+  # Listings::DuplicateService has the rules. The clients open it in the form.
+  def duplicate
+    authorize @listing, :duplicate?
+    copy = Listings::DuplicateService.new(listing: @listing, actor: current_user, shop_id: params[:shop_id]).call
+    render_blue(ListingSerializer, copy, view: :owner_detailed, status: :created)
+  rescue Listings::MoveService::Error => e
+    render_coded_error(e.message, code: e.code, status: e.status)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
+  end
+
   def move
     authorize @listing, :move?
     Listings::MoveService.new(listing: @listing, actor: current_user, shop_id: params[:shop_id]).call

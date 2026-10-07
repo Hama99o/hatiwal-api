@@ -280,6 +280,7 @@ Rails.application.routes.draw do
             put :renew
             put :relaunch
             put :move
+            post :duplicate
           end
           # GET /my/listings/:listing_id/analytics
           resource :analytics, only: [ :show ], controller: "listing_analytics"
