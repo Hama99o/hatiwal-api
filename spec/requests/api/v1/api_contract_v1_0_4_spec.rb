@@ -38,7 +38,13 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # SHOP-2. false on every chat an old client can meet unless a shop
     # messaged it; listing_deleted stays true on a shop chat for exactly them.
     "conversations[].shop_chat" => "SHOP-2 Message-shop chat flag",
-    "conversation.shop_chat" => "SHOP-2 Message-shop chat flag"
+    "conversation.shop_chat" => "SHOP-2 Message-shop chat flag",
+    # Item 5 (Move to shop). Null on every message except the server's
+    # "listing moved" :system notice. An old app ignores it: every build since
+    # 2026-06-12 (before v1.0.4) renders a :system message as its centered
+    # `body`, and that body is a full sentence in the BUYER's language — see
+    # "an old app reads the listing-moved notice from its body" below.
+    "messages[].notice" => "item 5 system notice (null on every other message)"
   }.freeze
 
   # Values are irrelevant; their JSON TYPE is the contract.
@@ -187,5 +193,25 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     end
 
     expect(problems).to be_empty, "v1.0.4 contract broken:\n  #{problems.join("\n  ")}"
+  end
+
+  # Item 5: a moved listing's old chat gets a :system message. v1.0.4 ignores
+  # `notice` and shows `body`, so the body must be the whole, localized sentence
+  # — never empty, never a token.
+  it "an old app reads the listing-moved notice from its body" do
+    seller = create(:user)
+    buyer = create(:user, preferred_language: "fa")
+    shop = create(:shop, owner: seller, name: "Safi Mobile")
+    listing = create(:listing, :active, user: seller)
+    chat = create(:conversation, listing: listing, buyer: buyer)
+    Listings::MoveService.new(listing: listing, actor: seller, shop_id: shop.id).call
+
+    get "/api/v1/conversations/#{chat.id}/messages", headers: auth_headers_for(buyer)
+    notice = JSON.parse(response.body)["messages"].find { |m| m["kind"] == "system" }
+
+    expect(notice["body"]).to eq(I18n.t("listing_move.notice", locale: :fa, name: "Safi Mobile"))
+    expect(notice["body"]).to include("Safi Mobile")
+    expect(notice["deleted"]).to be(false)
+    expect(notice["notice"]).to include("notice" => "listing_moved")
   end
 end
