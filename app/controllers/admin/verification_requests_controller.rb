@@ -55,26 +55,35 @@ module Admin
     def approve
       @verification.approve!(admin: current_admin_user, checklist: params[:checklist] || {})
       log_admin_action("verification_approve", target: @verification, details: checklist_summary)
-      redirect_to next_waiting_path, notice: "#{@verification.subject.full_name} is verified. #{message_outcome}"
+      redirect_to next_waiting_path, notice: "#{@verification.subject.full_name} is verified. #{message_outcome}#{next_note}"
     rescue ArgumentError => e
       redirect_to admin_verification_request_path(@verification), alert: e.message
     end
 
+    # Owner, 2026-10-12 (item 8): a missing reason (or "Other" without its text)
+    # comes back to the same page as a clear error at the field, with the
+    # checklist and what was typed kept — never a crash or a blank 422.
     def reject
+      problem = reason_problem(@verification.reject_reasons)
+      return render_decision_problem(:reject, problem) if problem
+
       @verification.reject!(admin: current_admin_user, reason_code: params[:reason_code],
                        reason_text: params[:reason_text], checklist: params[:checklist] || {})
       log_admin_action("verification_reject", target: @verification, details: reason_details)
-      redirect_to next_waiting_path, notice: "Request rejected. #{@verification.subject.full_name} sees the reason and can try again. #{message_outcome}"
+      redirect_to next_waiting_path, notice: "Request rejected. #{@verification.subject.full_name} sees the reason and can try again. #{message_outcome}#{next_note}"
     rescue ArgumentError => e
-      redirect_to admin_verification_request_path(@verification), alert: e.message
+      render_decision_problem(:reject, { field: :base, message: e.message })
     end
 
     def revoke
+      problem = reason_problem(VerificationRequest::REVOKE_REASONS)
+      return render_decision_problem(:revoke, problem) if problem
+
       @verification.revoke!(admin: current_admin_user, reason_code: params[:reason_code], reason_text: params[:reason_text])
       log_admin_action("verification_revoke", target: @verification, details: reason_details)
       redirect_to admin_verification_request_path(@verification), notice: "Badge removed. #{message_outcome}"
     rescue ArgumentError => e
-      redirect_to admin_verification_request_path(@verification), alert: e.message
+      render_decision_problem(:revoke, { field: :base, message: e.message })
     end
 
     # From the user's admin page: remove a badge, whether or not an approved
@@ -82,6 +91,10 @@ module Admin
     def revoke_badge
       user = User.find(params[:user_id])
       return redirect_to(admin_user_path(user), alert: "#{user.full_name} is not verified.") unless user.verified?
+
+      problem = VerificationRequest.reason_problem(params[:reason_code], params[:reason_text],
+                                                   VerificationRequest::REVOKE_REASONS, person: user.full_name)
+      return redirect_to(admin_user_path(user, anchor: "revoke-badge"), alert: "Badge not removed: #{problem[:message]}") if problem
 
       @verification = VerificationRequest.revoke_badge!(user, admin: current_admin_user,
                                                         reason_code: params[:reason_code], reason_text: params[:reason_text])
@@ -117,6 +130,25 @@ module Admin
     end
 
     private
+
+    def reason_problem(allowed)
+      VerificationRequest.reason_problem(params[:reason_code], params[:reason_text], allowed,
+                                         person: @verification.subject.verification_notice_recipient.full_name)
+    end
+
+    # The same page, with the error at its field and what was typed kept (422).
+    def render_decision_problem(action, problem)
+      @decision_error = problem.merge(action: action)
+      flash.now[:alert] = problem[:message]
+      show
+      render :show, status: :unprocessable_entity
+    end
+
+    # The queue flow: say where the admin landed after a decision.
+    def next_note
+      following = VerificationRequest.where(subject_type: @verification.subject_type).requested.where.not(id: @verification.id).exists?
+      following ? " Next request opened." : " No more waiting."
+    end
 
     def set_request
       @verification = VerificationRequest.includes(:subject).find(params[:id])

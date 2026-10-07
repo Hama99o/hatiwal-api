@@ -1,0 +1,63 @@
+<%# Owner, 2026-10-12 (item 8): a clear, required reason for Reject / Revoke.
+    - a select with plain labels (the person gets the text in THEIR language);
+    - the "Other" text field appears only when "Other" is picked, and is then
+      required (it is sent as typed);
+    - a preview: "<Name> will get: <the reason in their language>";
+    - an inline error from the server, at the field it is about.
+    locals: reasons, recipient (User), prefix (unique id prefix), and optional
+    selected, text, error ({ field: :reason_code | :reason_text | :base, message: }) %>
+<%
+  locale = recipient.preferred_language.presence_in(User::SUPPORTED_LANGUAGES.map(&:to_s)) || I18n.default_locale.to_s
+  previews = reasons.index_with { |code| code == "other" ? "" : I18n.t("verification.reasons.#{code}", locale: locale) }
+  selected = local_assigns[:selected].presence
+  text = local_assigns[:text]
+  error = local_assigns[:error]
+  other = selected == "other"
+%>
+<div class="hw-reason-picker" id="<%= prefix %>-picker" data-previews="<%= previews.to_json %>"
+     data-recipient="<%= recipient.firstname.presence || recipient.full_name %>">
+  <label class="hw-field" for="<%= prefix %>-reason">
+    <span class="hw-label">Why? <span class="hw-label__hint">(required — <%= recipient.full_name %> is told this)</span></span>
+    <%= select_tag :reason_code,
+          options_for_select(reasons.map { |c| [ I18n.t("verification.reasons.#{c}", locale: :en), c ] }, selected),
+          prompt: "Choose a reason…", class: "hw-select#{' hw-input--error' if error&.dig(:field) == :reason_code}",
+          id: "#{prefix}-reason", "aria-describedby": "#{prefix}-error #{prefix}-preview" %>
+  </label>
+  <label class="hw-field" for="<%= prefix %>-text" id="<%= prefix %>-other" <%= "hidden" unless other %>>
+    <span class="hw-label">Your reason <span class="hw-label__hint">(required for “Other” — sent as you type it)</span></span>
+    <%= text_field_tag :reason_text, text, class: "hw-input#{' hw-input--error' if error&.dig(:field) == :reason_text}",
+          id: "#{prefix}-text", dir: "auto", maxlength: 500, required: other %>
+  </label>
+  <% if error %>
+    <p class="hw-field__error" id="<%= prefix %>-error" role="alert"><%= error[:message] %></p>
+  <% else %>
+    <p class="hw-field__error" id="<%= prefix %>-error" role="alert" hidden></p>
+  <% end %>
+  <p class="hw-reason-preview" id="<%= prefix %>-preview" aria-live="polite" <%= "hidden" unless selected %>>
+    <%= recipient.firstname.presence || recipient.full_name %> will get:
+    <q dir="auto" class="hw-reason-preview__text"><%= other ? text : previews[selected] %></q>
+    <span class="hw-text-muted">(<%= locale %>)</span>
+  </p>
+</div>
+<script>
+  (function () {
+    var root = document.getElementById("<%= prefix %>-picker");
+    if (!root) return;
+    var select = document.getElementById("<%= prefix %>-reason");
+    var otherBox = document.getElementById("<%= prefix %>-other");
+    var text = document.getElementById("<%= prefix %>-text");
+    var preview = document.getElementById("<%= prefix %>-preview");
+    var quote = preview.querySelector("q");
+    var previews = JSON.parse(root.dataset.previews || "{}");
+    function update() {
+      var code = select.value;
+      var other = code === "other";
+      otherBox.hidden = !other;
+      text.required = other;
+      preview.hidden = !code;
+      quote.textContent = other ? text.value : (previews[code] || "");
+    }
+    select.addEventListener("change", update);
+    text.addEventListener("input", update);
+  })();
+</script>

@@ -988,3 +988,23 @@ label.channel:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
 .hw-verify-checks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 var(--hw-space-2); margin-top: var(--hw-space-4); }
 .hw-verify-checks legend { grid-column: 1 / -1; }
 .hw-verify-actions { display: flex; flex-wrap: wrap; gap: var(--hw-space-4); justify-content: space-between; align-items: center; }
+
+/* ── Verification decision (owner, 2026-10-12, item 8) ─────────────────────
+   Approve and Reject are two separate, clear actions; Reject reveals a
+   required reason with a preview of what the person gets; errors show at the
+   field they are about. */
+.hw-decision { display: grid; gap: var(--hw-space-4); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); margin-top: var(--hw-space-4); }
+.hw-decision__box { border: 1px solid var(--hw-border); border-radius: 12px; padding: var(--hw-space-4); background: var(--hw-surface); }
+.hw-decision__box--reject[open] { border-color: var(--hw-danger-border); background: var(--hw-danger-50); }
+.hw-decision__title { margin: 0 0 6px; font-size: 0.95rem; font-weight: 700; color: var(--hw-text); }
+.hw-decision__box summary { cursor: pointer; list-style: none; }
+.hw-decision__box summary::-webkit-details-marker { display: none; }
+.hw-decision__hint { margin: 0 0 var(--hw-space-3); font-size: 0.8rem; color: var(--hw-muted); }
+.hw-check-count { font-size: 0.8rem; font-weight: 650; color: var(--hw-text-2); }
+.hw-check-count--incomplete { color: var(--hw-warning); }
+.hw-reason-picker .hw-field { display: block; margin-bottom: var(--hw-space-3); }
+.hw-reason-picker .hw-select, .hw-reason-picker .hw-input { width: 100%; }
+.hw-input--error { border-color: var(--hw-danger) !important; box-shadow: 0 0 0 3px var(--hw-danger-50); }
+.hw-field__error { margin: 0 0 var(--hw-space-3); font-size: 0.85rem; font-weight: 600; color: var(--hw-danger); }
+.hw-reason-preview { margin: 0 0 var(--hw-space-3); padding: 8px 12px; border-radius: 8px; background: var(--hw-subtle); font-size: 0.85rem; color: var(--hw-text-2); }
+.hw-reason-preview__text { font-weight: 600; color: var(--hw-text); }

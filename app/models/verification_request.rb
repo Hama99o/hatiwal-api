@@ -41,6 +41,23 @@ class VerificationRequest < ApplicationRecord
   LEGACY_REASONS = %w[shop_sign_not_visible].freeze
   # Revoke takes the same codes minus the photo-quality ones, plus its own.
   REVOKE_REASONS = %w[name_mismatch document_not_accepted policy_violation other].freeze
+
+  # Why a Reject / Revoke reason can't be used, as the admin page shows it
+  # (owner, 2026-10-12, item 8: a clear message at the field, never a crash or
+  # a blank 422), or nil. `person`: who is told, for a friendlier message.
+  def self.reason_problem(code, text, allowed, person: nil)
+    who = person.presence || "the person"
+    return { field: :reason_code, message: "Choose a reason: #{who} is told why, in their language." } if code.blank?
+    return { field: :reason_code, message: "That reason isn't available here. Choose one from the list." } unless allowed.include?(code.to_s)
+    if code.to_s == "other" && text.to_s.strip.blank?
+      return { field: :reason_text, message: "Write the reason for “Other”: it is sent to #{who} as you type it." }
+    end
+
+    nil
+  end
+
+  # The reasons offered to reject THIS request (proof_not_accepted is for shops).
+  def reject_reasons = shop_subject? ? REJECT_REASONS : REJECT_REASONS.excluding("proof_not_accepted")
   # What the admin ticks on the card; saved with the decision.
   CHECKLIST = %w[photo_clear name_matches selfie_matches no_bad_history].freeze
 
@@ -201,7 +218,7 @@ class VerificationRequest < ApplicationRecord
   def reject!(admin:, reason_code:, reason_text: nil, checklist: {})
     raise ArgumentError, "only a waiting request can be rejected" unless requested?
 
-    decide!(:rejected, admin, reason_code, reason_text, REJECT_REASONS, checklist: checklist)
+    decide!(:rejected, admin, reason_code, reason_text, reject_reasons, checklist: checklist)
     SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:rejected), shop: (subject if shop_subject?))
   end
 
@@ -277,9 +294,8 @@ class VerificationRequest < ApplicationRecord
 
   def decide!(status, admin, reason_code, reason_text, allowed, checklist: nil)
     code = reason_code.to_s
-    raise ArgumentError, "choose a reason first" if code.blank?
-    raise ArgumentError, "unknown reason: #{code}" unless allowed.include?(code)
-    raise ArgumentError, "write the reason for \"other\"" if code == "other" && reason_text.blank?
+    problem = self.class.reason_problem(code, reason_text, allowed)
+    raise ArgumentError, problem[:message] if problem
 
     attrs = { status: status, decided_by: admin, decided_at: Time.current,
               reason_code: code, reason_text: (reason_text.to_s.strip.presence if code == "other") }

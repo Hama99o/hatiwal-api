@@ -61,7 +61,9 @@ RSpec.describe "Admin verification — decisions and Support messages", type: :r
     it "reject with no reason: nothing decided, a clear alert" do
       decide(request_record, :reject, reason_code: "")
       expect(request_record.reload).to be_requested
-      expect(flash[:alert]).to eq("choose a reason first")
+      # Owner, 2026-10-12 (item 8): the same page, the error at the field.
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(flash[:alert]).to start_with("Choose a reason:")
       expect(support_text_for(user)).to be_nil
     end
 

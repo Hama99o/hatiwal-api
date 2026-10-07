@@ -66,7 +66,7 @@
       <p class="hw-panel__text">Verified shop since <%= l(shop.verified_at, format: :short) %><% if shop.verified_by %> by <%= shop.verified_by %><% end %>.</p>
       <%= render "admin/verification_requests/reason_form", url: remove_badge_admin_shop_path(shop),
                  reasons: VerificationRequest::REVOKE_REASONS, submit: "Remove badge", method: :post, form_id: "shop-remove-badge",
-                 confirm: "Remove the Verified shop badge from #{shop.name}?" %>
+                 confirm: "Remove the Verified shop badge from #{shop.name}?", recipient: shop.owner, prefix: "shop-remove-badge" %>
     <% elsif latest_request %>
       <p class="hw-panel__text"><%= render "admin/verification_requests/status_badge", request: latest_request %>
         <%= link_to "Open the request →", admin_verification_request_path(latest_request) %></p>

@@ -47,6 +47,10 @@ module Admin
       shop = find_resource(params[:id])
       return redirect_to([ namespace, shop ], alert: "#{shop.name} is not verified.") unless shop.verified?
 
+      problem = VerificationRequest.reason_problem(params[:reason_code], params[:reason_text],
+                                                   VerificationRequest::REVOKE_REASONS, person: shop.owner.full_name)
+      return redirect_to([ namespace, shop ], alert: "Badge not removed: #{problem[:message]}") if problem
+
       request = VerificationRequest.revoke_badge!(shop, admin: current_admin_user,
                                                   reason_code: params[:reason_code], reason_text: params[:reason_text])
       log_admin_action("verification_revoke", target: request, details: "shop ##{shop.id} · #{params[:reason_code]}")
