@@ -6,6 +6,11 @@ class MessageSerializer < ApplicationSerializer
   # own language; `body` is the fallback older apps show. Only "listing_moved"
   # (Listings::MoveService) today. Nil on every other message.
   field(:notice) { |m| m.system? && m.context.is_a?(Hash) ? m.context.slice("notice", "shop_id", "name") : nil }
+  # A Support notice's button ({type, label_key, params}): what it opens, e.g.
+  # {type: "open_invite", label_key: "chat.noticeAction.openInvite", params:
+  # {token}} (SupportNoticeJob::ACTIONS). Nil on every other message; older apps
+  # ignore it and read `body`, which always says it all.
+  field(:action) { |m| !m.deleted? && m.context.is_a?(Hash) && m.context["action"].is_a?(Hash) ? m.context["action"] : nil }
   field(:deleted_at) { |m| m.deleted_at }
 
   # Body: suppressed when deleted (tombstone — no content leak)

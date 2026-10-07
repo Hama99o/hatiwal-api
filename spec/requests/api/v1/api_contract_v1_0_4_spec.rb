@@ -20,6 +20,8 @@ require "rails_helper"
 # Re-record ONLY when that app version is no longer in use:
 #   RECORD_API_CONTRACT=1 bundle exec rspec spec/requests/api/v1/api_contract_v1_0_4_spec.rb
 RSpec.describe "API contract served to app v1.0.4", type: :request do
+  include ActiveJob::TestHelper
+
   include ActiveSupport::Testing::TimeHelpers
 
   FIXTURE = Rails.root.join("spec/fixtures/api_contract/v1_0_4.json")
@@ -44,7 +46,12 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # 2026-06-12 (before v1.0.4) renders a :system message as its centered
     # `body`, and that body is a full sentence in the BUYER's language — see
     # "an old app reads the listing-moved notice from its body" below.
-    "messages[].notice" => "item 5 system notice (null on every other message)"
+    "messages[].notice" => "item 5 system notice (null on every other message)",
+    # Owner, 2026-10-12: a Support notice's button. Null on every other message;
+    # the notice itself stays a plain :text message whose body is the whole
+    # sentence, so an old app shows exactly what it showed before (see "an old
+    # app reads a tappable Support notice from its body" below).
+    "messages[].action" => "Support notice button (null on every other message)"
   }.freeze
 
   # Values are irrelevant; their JSON TYPE is the contract.
@@ -213,5 +220,28 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     expect(notice["body"]).to include("Safi Mobile")
     expect(notice["deleted"]).to be(false)
     expect(notice["notice"]).to include("notice" => "listing_moved")
+  end
+
+  # Owner, 2026-10-12: tappable Support notices. v1.0.4 ignores `action`; the
+  # notice is still a :text message from Support whose body is the whole
+  # sentence in the person's language, never a token or a bare label.
+  it "an old app reads a tappable Support notice from its body" do
+    allow(ENV).to receive(:fetch).and_call_original
+    allow(ENV).to receive(:fetch).with("SUPPORT_ADMIN_INITIATE", "false").and_return("true")
+    owner = create(:user, :confirmed, firstname: "Tamana", lastname: "Owner")
+    shop = create(:shop, owner: owner, name: "Kabul Cosmetics")
+    invitee = create(:user, :confirmed, firstname: "Gul", email: "gul@hatiwal.test", preferred_language: "ps")
+    shop.invite!(by: owner, email: "gul@hatiwal.test")
+    perform_enqueued_jobs(only: SupportNoticeJob)
+
+    thread = Conversation.person_support.find_by!(buyer_id: invitee.id)
+    get "/api/v1/conversations/#{thread.id}/messages", headers: auth_headers_for(invitee)
+    notice = JSON.parse(response.body)["messages"].sole
+
+    expect(notice["kind"]).to eq("text")
+    expect(notice["body"]).to eq(I18n.t("support.notices.shop_invite_received", locale: :ps, name: "Gul",
+                                        inviter: "Tamana Owner", shop: "Kabul Cosmetics",
+                                        role: I18n.t("support.team_roles.staff", locale: :ps)))
+    expect(notice["action"]).to include("type" => "open_invite")
   end
 end

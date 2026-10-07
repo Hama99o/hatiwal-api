@@ -92,7 +92,12 @@ class Message < ApplicationRecord
   # - a shop's thread stamps it itself: {"mode" => "seller", "shop_id", "role"},
   #   the role the member had when they wrote.
   # Anywhere else it is dropped.
+  #
+  # Hatiwal Support's own messages carry only {"action" => {...}}: what a
+  # notice's button opens (owner, 2026-10-12: Support notices are tappable;
+  # SupportNoticeJob sets it). Shown to the apps as `messages[].action`.
   CONTEXT_MODES = %w[buyer seller].freeze
+  NOTICE_ACTION_TYPES = %w[open_invite open_shop open_team open_verification open_listing].freeze
   INVALID_CONTEXT_CODE = "invalid_message_context".freeze
   before_validation :normalize_support_context, on: :create
   validate :support_context_fits_sender, on: :create, if: -> { context.present? }
@@ -160,11 +165,25 @@ class Message < ApplicationRecord
 
   def normalize_support_context
     return self.context = nil unless conversation&.kind_support? && user_id.present?
+    return self.context = support_notice_context if from_support?
     return self.context = shop_support_context if conversation.shop_support?
     return self.context = nil if user_id != conversation.buyer_id || context.blank?
 
     raw = context.respond_to?(:to_h) ? context.to_h.stringify_keys : {}
     self.context = { "mode" => raw["mode"].to_s, "shop_id" => raw["shop_id"].presence&.to_i }.compact
+  end
+
+  def from_support?
+    user_id == conversation.support_user&.id
+  end
+
+  # Support's message: its notice action when it has a known one, else nothing.
+  def support_notice_context
+    raw = context.respond_to?(:to_h) ? context.to_h.deep_stringify_keys : {}
+    action = raw["action"]
+    return nil unless action.is_a?(Hash) && NOTICE_ACTION_TYPES.include?(action["type"].to_s)
+
+    { "action" => action.slice("type", "label_key", "params") }
   end
 
   # A member writing in their shop's thread (nil for the Support account).
@@ -176,7 +195,7 @@ class Message < ApplicationRecord
   # A person's own thread: a known mode, and never a shop (a shop has its own
   # thread). A shop's thread stamps its context itself, so it is always valid.
   def support_context_fits_sender
-    return if conversation.shop_support?
+    return if conversation.shop_support? || from_support?
 
     errors.add(:context, "has an unknown mode") unless CONTEXT_MODES.include?(context["mode"])
     errors.add(:context, "names a shop: a shop writes in its own Support thread") if context["shop_id"]

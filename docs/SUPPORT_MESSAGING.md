@@ -243,3 +243,26 @@ Rules:
 - It goes through `Conversation.admin_support_thread_for`, so nothing is sent while `SUPPORT_ADMIN_INITIATE` is off.
 - A retried job does not post the same text twice within an hour.
 - Text lives under `support.notices.<key>` in en/ps/fa/ur. `%{name}` is the first name.
+
+### Tappable notices (owner, 2026-10-12)
+
+A notice with a natural target carries a button: `messages[].action`
+`{type, label_key, params}`, kept in the message's `context["action"]` (only
+Support's own messages may carry one: `Message#support_notice_context`). The
+body is unchanged, so older apps show the same sentence and no button.
+
+| Notice | `type` | `params` | Label (`label_key`, translated by the apps) |
+|---|---|---|---|
+| `user_verification_rejected`, `user_badge_revoked` | `open_verification` | `{subject: "me"}` | `chat.noticeAction.tryVerificationAgain` |
+| `shop_verification_rejected`, `shop_badge_removed` | `open_verification` | `{subject: "shop", shop_id}` | `chat.noticeAction.tryVerificationAgain` |
+| `shop_reverify_needed` | `open_verification` | `{subject: "shop", shop_id}` | `chat.noticeAction.verifyAgain` |
+| `shop_verified`, `shop_joined`, `shop_role_changed`, `shop_ownership_handed_over` | `open_shop` | `{shop_id}` | `chat.noticeAction.viewShop` |
+| `shop_member_joined`, `shop_ownership_received` | `open_team` | `{shop_id}` | `chat.noticeAction.viewTeam` |
+| `shop_invite_received` | `open_invite` | `{token}` | `chat.noticeAction.openInvite` |
+| `listing_expires_week`, `listing_expires_day` | `open_listing` | `{listing_id, shop_id}` | `chat.noticeAction.renewListing` |
+
+No button: `user_verified`, `app_update_available`, `shop_member_removed`
+(nothing left to open). The apps switch to Seller mode and the right shop for a
+shop or listing target, and say so in a toast when the target is gone (an
+expired invite, a shop you left, a listing no longer yours). Table:
+`SupportNoticeJob::ACTIONS`; spec: `spec/jobs/support_notice_actions_spec.rb`.

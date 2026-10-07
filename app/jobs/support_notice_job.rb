@@ -63,6 +63,28 @@ class SupportNoticeJob < ApplicationJob
     shop_ownership_handed_over: ->(user, shop, actor, _invite) { actor && shop.owner_id == actor.id && shop.member?(user) }
   }.freeze
 
+  # Owner, 2026-10-12: a notice with a natural target gets a button
+  # (messages[].action) that opens it; the apps pick the identity (Seller mode
+  # + the shop) and say so when the target is gone. key => [type, label]; the
+  # params come from the notice's own records (#action_for). No entry = no
+  # button (nothing left to open, e.g. removed from a shop).
+  ACTIONS = {
+    user_verification_rejected: %w[open_verification tryVerificationAgain],
+    user_badge_revoked: %w[open_verification tryVerificationAgain],
+    shop_verified: %w[open_shop viewShop],
+    shop_verification_rejected: %w[open_verification tryVerificationAgain],
+    shop_badge_removed: %w[open_verification tryVerificationAgain],
+    shop_reverify_needed: %w[open_verification verifyAgain],
+    shop_invite_received: %w[open_invite openInvite],
+    shop_member_joined: %w[open_team viewTeam],
+    shop_joined: %w[open_shop viewShop],
+    shop_role_changed: %w[open_shop viewShop],
+    shop_ownership_received: %w[open_team viewTeam],
+    shop_ownership_handed_over: %w[open_shop viewShop],
+    listing_expires_week: %w[open_listing renewListing],
+    listing_expires_day: %w[open_listing renewListing]
+  }.freeze
+
   # `shop:` names the shop a shop notice is about (SHOP-2: an owner may have several).
   # Team notices also pass `actor:` (the other person) and/or `invite:`.
   def self.enqueue(user, key, shop: nil, actor: nil, invite: nil, listing: nil)
@@ -94,7 +116,8 @@ class SupportNoticeJob < ApplicationJob
     shop = shop_for(user, key, shop_id)
     return unless SHOP_NOTICES.include?(key) ? still_true.call(user, shop) : still_true.call(user)
 
-    deliver(user, notice_text(user, key, shop), shop: (shop if SHOP_THREAD_NOTICES.include?(key)))
+    deliver(user, notice_text(user, key, shop), shop: (shop if SHOP_THREAD_NOTICES.include?(key)),
+                                                action: action_for(key, shop: shop))
   end
 
   private
@@ -110,7 +133,8 @@ class SupportNoticeJob < ApplicationJob
     invite = ShopInvite.find_by(id: team["invite_id"], shop_id: shop.id) if team["invite_id"]
     return unless TEAM_NOTICES[key].call(user, shop, actor, invite)
 
-    deliver(user, team_text(user, key, shop, actor, invite), shop: (shop if SHOP_THREAD_NOTICES.include?(key)))
+    deliver(user, team_text(user, key, shop, actor, invite), shop: (shop if SHOP_THREAD_NOTICES.include?(key)),
+                                                              action: action_for(key, shop: shop, invite: invite))
   end
 
   def perform_listing(user_id, key, data)
@@ -125,13 +149,14 @@ class SupportNoticeJob < ApplicationJob
     text = I18n.with_locale(locale_for(user)) do
       I18n.t("support.notices.#{key}", name: user.firstname.presence || user.full_name, title: listing.title)
     end
-    deliver(user, text, shop: (listing.shop if listing.shop_id), push: false)
+    deliver(user, text, shop: (listing.shop if listing.shop_id), push: false, action: action_for(key, listing: listing))
   end
 
   # Into the shop's thread when `shop` is given, else the person's own; both
   # through the gate, written by the Support account. `push: false` when the
-  # caller sends its own push (e.g. a listing-expiry reminder).
-  def deliver(user, body, shop: nil, push: true)
+  # caller sends its own push (e.g. a listing-expiry reminder). `action`: the
+  # notice's button (#action_for), kept in the message's context.
+  def deliver(user, body, shop: nil, push: true, action: nil)
     thread = shop ? Conversation.admin_shop_support_thread_for(shop) : Conversation.admin_support_thread_for(user)
     return unless thread
 
@@ -139,9 +164,26 @@ class SupportNoticeJob < ApplicationJob
     # A retried job must not post the same notice twice.
     return if thread.messages.where(user: author, body: body).where("created_at > ?", 1.hour.ago).exists?
 
-    message = thread.messages.create!(user: author, kind: :text, body: body)
+    message = thread.messages.create!(user: author, kind: :text, body: body, context: action && { "action" => action })
     BroadcastMessageJob.perform_later(message.id)
     SendMessagePushJob.perform_later(message.id) if push
+  end
+
+  # The button of notice `key`, or nil. A shop target names the shop; an
+  # invite, its token (the app opens the invite screen with it); a listing,
+  # its id; a person's verification, `subject: "me"`.
+  def action_for(key, shop: nil, invite: nil, listing: nil)
+    type, label = ACTIONS[key]
+    return nil unless type
+
+    params =
+      case type
+      when "open_invite" then invite && { "token" => invite.token }
+      when "open_listing" then listing && { "listing_id" => listing.id, "shop_id" => listing.shop_id }
+      when "open_verification" then shop ? { "subject" => "shop", "shop_id" => shop.id } : { "subject" => "me" }
+      else shop && { "shop_id" => shop.id }
+      end
+    params && { "type" => type, "label_key" => "chat.noticeAction.#{label}", "params" => params }
   end
 
   # Same fallback as WelcomeSupportMessageJob#welcome_text.
