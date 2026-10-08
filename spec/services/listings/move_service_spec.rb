@@ -31,12 +31,33 @@ RSpec.describe Listings::MoveService do
       expect(listing.user).to eq(owner)
     end
 
-    it "shop → shop, by a member of both; the mover becomes the poster" do
+    it "shop → shop by the source shop's owner; the mover becomes the poster" do
+      listing = create(:listing, :active, user: staff, shop: shop_a)
+      move(listing, owner, shop_b.id)
+      expect(listing.reload.shop).to eq(shop_b)
+      expect(listing.user).to eq(owner)
+    end
+
+    # Review 2026-10-08 (HIGH): staff on two shops carried goods from one to the other.
+    it "refuses: staff taking a product someone else posted into a second shop they are on" do
       shop_b.shop_members.create!(user: staff, role: :staff)
       listing = create(:listing, :active, user: owner, shop: shop_a)
-      move(listing, staff, shop_b.id)
-      expect(listing.reload.shop).to eq(shop_b)
-      expect(listing.user).to eq(staff)
+      expect(error_code(listing, staff, shop_b.id)).to eq(:move_forbidden)
+      expect(listing.reload.shop).to eq(shop_a)
+    end
+
+    it "allows: the poster (still a member), or a manager of the source shop, to another shop" do
+      shop_b.shop_members.create!(user: staff, role: :staff)
+      own = create(:listing, :active, user: staff, shop: shop_a)
+      move(own, staff, shop_b.id)
+      expect(own.reload.shop).to eq(shop_b)
+
+      manager = create(:user)
+      shop_a.shop_members.create!(user: manager, role: :manager)
+      shop_b.shop_members.create!(user: manager, role: :staff)
+      theirs = create(:listing, :active, user: owner, shop: shop_a)
+      move(theirs, manager, shop_b.id)
+      expect(theirs.reload.shop).to eq(shop_b)
     end
 
     it "shop → Me by the shop's owner, even for a product staff posted" do

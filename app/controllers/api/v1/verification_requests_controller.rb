@@ -48,7 +48,17 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
   private
 
   def render_status(status: :ok)
-    render_blue(VerificationStatusSerializer, VerificationStatus.new(@subject.reload), status: status)
+    render_blue(VerificationStatusSerializer, VerificationStatus.new(@subject.reload), status: status,
+                                                                                   options: { private_details: private_details? })
+  end
+
+  # The document details (name on it, last 4 digits, the rejection reason) are
+  # the applicant's: the person themself, or for a shop the one who may apply
+  # (the owner). The rest of the team sees the state (review 2026-10-08).
+  def private_details?
+    return @subject == current_user if @subject.is_a?(User)
+
+    ShopPolicy.new(current_user, @subject).apply_verification?
   end
 
   # "me" → the caller. SHOP-1: "shop:<id>" → that shop; whether the caller may

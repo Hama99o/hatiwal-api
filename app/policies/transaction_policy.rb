@@ -29,8 +29,11 @@ class TransactionPolicy < ApplicationPolicy
 
   private
 
+  # The shop the sale was MADE in (transactions.shop_id, pinned at creation),
+  # not the listing's current shop: a product moved to another shop must not
+  # hand its past sales to that shop's team (review 2026-10-08).
   def shop_member?
-    shop = record.listing&.shop
+    shop = record.shop
     shop.present? && shop.member?(user)
   end
 end

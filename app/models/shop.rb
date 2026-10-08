@@ -512,6 +512,10 @@ class Shop < ApplicationRecord
   # account, and (removed) is told.
   def drop_member!(member, action, actor:, **data)
     transaction do
+      # The shop keeps what was posted for it: the leaving member's products
+      # become the owner's, the same hand-over close! does (review 2026-10-08).
+      listings.where(user_id: member.user_id).where.not(user_id: owner_id)
+              .update_all(user_id: owner_id, updated_at: Time.current)
       member.destroy!
       User.where(id: member.user_id, active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
       ShopAuditEvent.record!(self, action, actor: actor, target_user: member.user, **data)

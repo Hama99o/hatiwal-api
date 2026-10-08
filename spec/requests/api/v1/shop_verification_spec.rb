@@ -245,3 +245,44 @@ RSpec.describe "Shop edit after verification", type: :request do
     expect(JSON.parse(response.body)["verification_status"]).to include("status" => "none", "name_changed" => true)
   end
 end
+
+# Review 2026-10-08 (MEDIUM, privacy): every member got the OWNER's document
+# details on the shop's card. Only the one who may apply (the owner) gets the
+# name on the document, its last 4 digits and the rejection reason; the rest
+# of the team sees the state.
+RSpec.describe "Shop verification card: the owner's document stays the owner's", type: :request do
+  let(:admin) { create(:admin_user) }
+  let(:shop) { create(:shop, :verification_eligible) }
+  let(:staff) { create(:user) }
+  let(:manager) { create(:user) }
+
+  before do
+    shop.shop_members.create!(user: staff, role: :staff)
+    shop.shop_members.create!(user: manager, role: :manager)
+    create(:shop_verification_request, shop: shop).reject!(admin: admin, reason_code: "photo_not_clear")
+  end
+
+  def card_for(user)
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: auth_headers_for(user)
+    JSON.parse(response.body)["verification_status"]
+  end
+
+  it "the owner sees the name on the document, its last 4 digits and the reason" do
+    card = card_for(shop.owner)
+    expect(card["status"]).to eq("rejected")
+    expect(card["request"]["name_on_document"]).to be_present
+    expect(card["request"]["document_last4"]).to be_present
+    expect(card["reason"]).to be_present
+    expect(card["request"]["reason_code"]).to eq("photo_not_clear")
+  end
+
+  it "staff and managers see the state only: no name, no digits, no reason" do
+    [ staff, manager ].each do |member|
+      card = card_for(member)
+      expect(response).to have_http_status(:ok)
+      expect(card["status"]).to eq("rejected")
+      expect(card["request"].values_at("name_on_document", "document_last4", "reason_code")).to eq([ nil, nil, nil ])
+      expect(card["reason"]).to be_nil
+    end
+  end
+end

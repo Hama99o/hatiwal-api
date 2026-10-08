@@ -6,9 +6,9 @@
 # Where it may go (the same rules as Listings::MoveService, minus "same place",
 # which is the usual choice here):
 #   - a shop: the caller is on its team and it is open;
-#   - Me: a personal listing (its poster), or out of a shop only for the
-#     listing's poster or the shop's owner — staff don't copy the shop's goods
-#     into their own listings.
+#   - out of the listing's shop (to Me or another shop): its poster while still
+#     a member, or the shop's owner or a manager — staff don't copy the shop's
+#     goods into their own listings or a second shop (review 2026-10-08).
 #
 # The photos are COPIED, not shared: each gets a new blob uploaded from the
 # original's file. Re-attaching the same blob would tie the two listings
@@ -42,16 +42,18 @@ class Listings::DuplicateService
   private
 
   def target_shop
+    shop = nil
     if @shop_id
       shop = Shop.find_by(id: @shop_id)
       raise Error.new("you are not on that shop's team", code: :move_not_member, status: :forbidden) unless shop&.member?(@actor)
       raise Error.new("that shop is not open", code: :shop_unavailable) unless shop.active?
-
-      return shop
     end
-    return nil if @listing.shop.nil? || @listing.user_id == @actor.id || @listing.shop.owner_id == @actor.id
+    # A copy inside the same shop is any member's; a copy that LEAVES the shop
+    # (to Me or to another shop) follows the move rule (Listing#may_leave_shop_by?,
+    # review 2026-10-08: staff copied the goods into a second shop).
+    return shop if shop&.id == @listing.shop_id || @listing.may_leave_shop_by?(@actor)
 
-    raise Error.new("only its poster or the shop's owner can copy it to their own listings",
+    raise Error.new("only its poster or the shop's owner or a manager can copy it out of the shop",
                     code: :duplicate_forbidden, status: :forbidden)
   end
 

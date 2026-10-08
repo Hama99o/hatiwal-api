@@ -26,6 +26,20 @@ class ListingSerializer < ApplicationSerializer
     { id: l.user_id, name: l.user.full_name }
   end
 
+  # Review 2026-10-08 (HIGH, privacy): on a SHOP product the seller buyers see
+  # is the SHOP, never the team member who posted it — the same face
+  # ConversationSerializer.person_block gives a shop chat: the owner's id, the
+  # shop's name / logo / city, as_shop: true. Same keys as a person, so apps
+  # older than shops still render it. nil = a personal listing (or a shop no
+  # longer active): the person, as before.
+  def self.shop_seller(listing)
+    shop = listing.shop
+    return nil unless shop&.active?
+
+    { id: shop.owner_id, name: shop.name, city: shop.city.presence || shop.province, verified: shop.verified?,
+      avatar_url: shop.logo_url, as_shop: true }
+  end
+
   SALE_FIELD = proc do |l|
     txn = l.current_sale
     next nil unless txn
@@ -136,6 +150,8 @@ class ListingSerializer < ApplicationSerializer
       opts[:saved_ids]&.include?(l.id) || false
     end
     field(:seller) do |l|
+      next ListingSerializer.shop_seller(l) if l.shop&.active?
+
       u = l.user
       { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
     end
@@ -228,8 +244,22 @@ class ListingSerializer < ApplicationSerializer
     end
     field(:shop) { |l| l.shop&.active? ? ShopSerializer.render_as_hash(l.shop, view: :card) : nil }
     field(:seller) do |l, opts|
-      u = l.user
       viewer = opts[:current_user]
+      if (shop_face = ListingSerializer.shop_seller(l))
+        # The shop's own contact: its phone only when public and only to a
+        # signed-in non-member; never a member's personal phone or WhatsApp.
+        shop = l.shop
+        avg, count = shop.review_stats
+        may_call = viewer.present? && shop.phone_public && !shop.member?(viewer)
+        next shop_face.merge(
+          phone: may_call ? shop.phone : nil, whatsapp_number: nil,
+          avg_rating: avg, review_count: count,
+          response_rate_percent: nil, response_time_label: nil, last_active_label: nil,
+          seller_is_away: false, seller_away_until: nil
+        )
+      end
+
+      u = l.user
       # Expose contact details only to an authenticated user who is not the
       # listing owner. Guests (viewer nil) and the owner viewing their own
       # listing both receive nil.

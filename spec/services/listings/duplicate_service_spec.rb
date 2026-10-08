@@ -78,6 +78,26 @@ RSpec.describe Listings::DuplicateService do
     expect { duplicate(original, staff, nil) }.to raise_error(described_class::Error) { |e| expect(e.code).to eq(:duplicate_forbidden) }
   end
 
+  # Review 2026-10-08 (HIGH): staff on two shops copied one shop's goods into the other.
+  it "refuses staff copying someone else's shop product into a second shop they are on" do
+    other.shop_members.create!(user: staff, role: :staff)
+    original = create(:listing, :active, user: owner, shop: shop)
+    expect { duplicate(original, staff, other.id) }
+      .to raise_error(described_class::Error) { |e| expect(e.code).to eq(:duplicate_forbidden) }
+  end
+
+  it "the poster (still a member) or a manager may copy it out of the shop" do
+    other.shop_members.create!(user: staff, role: :staff)
+    own = create(:listing, :active, user: staff, shop: shop)
+    expect(duplicate(own, staff, other.id).shop).to eq(other)
+    expect(duplicate(own, staff, nil).shop).to be_nil
+
+    manager = create(:user)
+    shop.shop_members.create!(user: manager, role: :manager)
+    theirs = create(:listing, :active, user: owner, shop: shop)
+    expect(duplicate(theirs, manager, nil).user).to eq(manager)
+  end
+
   it "refuses a shop the caller is not on, or a closed one" do
     original = create(:listing, :active, user: owner)
     expect { duplicate(original, owner, create(:shop).id) }

@@ -4,8 +4,9 @@
 # Who may move it (docs/SHOPS.md: every member adds/edits/deletes/MOVES the
 # shop's products):
 #   - out of Me: its poster;
-#   - out of a shop: any member, but out to "Me" only its poster or the shop's
-#     owner (a staff member does not take the shop's goods home);
+#   - out of a shop (to Me OR to another shop): its poster while still a
+#     member, or the shop's owner or a manager — staff do not take the shop's
+#     goods home, nor into a second shop they are on (Listing#may_leave_shop_by?);
 #   - into a shop: a member of it, and the shop must be open.
 # The actor becomes the listing's poster (`user`), so the listing always
 # belongs to someone on the team that now sells it.
@@ -68,12 +69,10 @@ class Listings::MoveService
     raise Error.new("it is already there", code: :move_same_place) if target&.id == @listing.shop_id
     raise Error.new("a sold or removed listing cannot move", code: :move_not_movable) if @listing.sold? || @listing.removed?
     raise Error.new("release the hold before moving this listing", code: :move_has_hold) if held?
-    return unless target.nil? && @listing.shop
+    return if @listing.may_leave_shop_by?(@actor)
 
-    # Out of a shop to Me: the poster, or the shop's owner.
-    return if @listing.user_id == @actor.id || @listing.shop.owner_id == @actor.id
-
-    raise Error.new("only its poster or the shop's owner can take it out of the shop", code: :move_forbidden, status: :forbidden)
+    raise Error.new("only its poster or the shop's owner or a manager can take it out of the shop",
+                    code: :move_forbidden, status: :forbidden)
   end
 
   def held? = @listing.reserved? || @listing.held_units.positive?

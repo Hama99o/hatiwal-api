@@ -702,10 +702,29 @@ class Listing < ApplicationRecord
   def sale_seller_id = shop&.owner_id || user_id
 
   # The poster, or (SHOP-3) any member of the product's shop.
-  def manageable_by?(user)
+  # Taking a shop product OUT of its shop — to Me or to ANY other shop, by
+  # moving or duplicating it — is for its poster while still on the team, or
+  # the shop's owner or a manager. Staff do not carry the shop's goods away,
+  # not even into a second shop they are also on (review 2026-10-08;
+  # docs/SHOPS.md "Move and Duplicate").
+  def may_leave_shop_by?(user)
+    return true if shop_id.nil?
     return false unless user
 
-    user_id == user.id || (shop_id.present? && shop&.member?(user))
+    member = shop&.shop_members&.find_by(user_id: user.id)
+    return false unless member
+
+    member.owner? || member.manager? || user_id == user.id
+  end
+
+  # A shop product is managed by the shop's CURRENT members — its poster only
+  # while still on the team (review 2026-10-08: a removed member kept control
+  # through user_id). A personal listing, by its poster.
+  def manageable_by?(user)
+    return false unless user
+    return shop&.member?(user) || false if shop_id.present?
+
+    user_id == user.id
   end
 
   def reserve_with_buyer!(buyer_id:, final_price: nil, quantity: nil)

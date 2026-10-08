@@ -719,8 +719,10 @@ class User < ApplicationRecord
   # products, or their personal (shop-less) listings as Me.
   # Listings this user may manage: their own, plus (SHOP-3) every product of a
   # shop they're a member of.
+  # Own personal listings + every product of a shop the user is on NOW (not
+  # shop products they posted on a team they have left; review 2026-10-08).
   def manageable_listings
-    Listing.where(user_id: id).or(Listing.where(shop_id: shop_members.select(:shop_id)))
+    Listing.where(user_id: id, shop_id: nil).or(Listing.where(shop_id: shop_members.select(:shop_id)))
   end
 
   def listings_for_selling_identity
