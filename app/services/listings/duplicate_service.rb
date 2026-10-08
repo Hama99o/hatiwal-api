@@ -29,6 +29,12 @@ class Listings::DuplicateService
   end
 
   def call
+    # A deleted listing, or one the admin took down, is not copied back into
+    # the market (edge-case pass 2026-10-08: a take-down came straight back as
+    # a draft, then a live listing, with its text and photos). A sold one is
+    # fine: "sell another like this".
+    raise Error.new("a removed listing cannot be duplicated", code: :duplicate_removed) if @listing.removed?
+
     target = target_shop
     copy = Listing.new(@listing.slice(*COPIED).merge(user: @actor, shop: target, status: :draft))
 
