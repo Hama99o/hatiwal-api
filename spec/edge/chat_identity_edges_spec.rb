@@ -159,6 +159,12 @@ RSpec.describe "Shop chat identity — edge cases", type: :request do
       expect(json["conversations"].pluck("id")).to include(chat.id)
     end
 
+    it "a buyer coming back to the product (now the owner's own) continues the same chat, never a second one" do
+      again = Conversations::StartService.new(buyer: buyer, listing: product.reload, message_body: "Still for sale?").call
+      expect(again.id).to eq(chat.id)
+      expect(Conversation.where(listing_id: product.id, buyer_id: buyer.id).count).to eq(1)
+    end
+
     it "their unread count is the owner's Me count, not a shop's the app no longer lists" do
       owner.reload
       expect(owner.unread_counts).to include(selling_me: 2)

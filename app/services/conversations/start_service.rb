@@ -73,7 +73,17 @@ class Conversations::StartService
     # came back with another poster starts a new one (edge pass 2026-10-08).
     scope = Conversation.where(listing: @listing, buyer: @buyer, shop_id: @listing.shop_id)
     scope = scope.where(seller: chat_seller) if @listing.shop_id.nil?
-    @existing_conversation = scope.first
+    @existing_conversation = scope.first || closed_shop_chat
+  end
+
+  # A CLOSED shop's products became its owner's own, and so did their chats
+  # (Conversation::OWNERS_OWN_SQL): the buyer coming back continues that chat
+  # rather than opening a second one with the same owner (review 2026-10-08, dd).
+  def closed_shop_chat
+    return nil unless @listing.shop_id.nil?
+
+    Conversation.where(listing: @listing, buyer: @buyer, seller: chat_seller)
+                .where(shop_id: Shop.where(status: :closed).select(:id)).order(:id).first
   end
 
   # Moved away and back: the chat that was closed by the move opens again.
