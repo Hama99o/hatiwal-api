@@ -9,6 +9,9 @@ class VerificationStatusSerializer < ApplicationSerializer
   # and managers — review 2026-10-08). Absent option = private (the applicant).
   field(:reason) { |s, opts| opts[:private_details] == false ? nil : s.reason }
   field(:name_changed, &:name_changed?)
+  # May THIS viewer apply (or re-apply)? A shop's manager / staff: false — the
+  # app shows "Only the owner can apply" instead of a form the API refuses.
+  field(:can_apply) { |_s, opts| opts[:private_details] != false }
   field(:request) do |status, opts|
     r = status.shown_request
     next nil unless r

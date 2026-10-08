@@ -286,3 +286,50 @@ RSpec.describe "Shop verification card: the owner's document stays the owner's",
     end
   end
 end
+
+# Owner bug, 2026-10-08: after a rename dropped a shop's badge, re-applying
+# answered a bare 403 and the app said "check your connection". The OWNER can
+# re-apply (201); a manager gets the reason, coded and in their language, and
+# the card tells the app up front (can_apply).
+RSpec.describe "Re-applying after a rename dropped the shop's badge", type: :request do
+  let(:admin) { create(:admin_user) }
+  let(:shop) { create(:shop, :verification_eligible) }
+  let(:owner) { shop.owner }
+  let(:manager) { create(:user, :confirmed, preferred_language: "ps") }
+  let(:image) { Rack::Test::UploadedFile.new(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg") }
+
+  def apply_as(user)
+    post "/api/v1/verification_requests", headers: auth_headers_for(user), params: {
+      subject: "shop:#{shop.id}",
+      verification_request: { document_type: "e_tazkira", name_on_document: owner.full_name, document_number: "1234564821",
+                              front: image, back: image, selfie: image, proof: image }
+    }
+  end
+
+  before do
+    shop.shop_members.create!(user: manager, role: :manager)
+    create(:shop_verification_request, shop: shop).approve!(admin: admin)
+    patch "/api/v1/shops/#{shop.id}", params: { shop: { name: "Renamed Shop" } }.to_json,
+                                      headers: auth_headers_for(owner).merge("Content-Type" => "application/json")
+    expect(shop.reload.verified?).to be(false)
+  end
+
+  it "the owner re-applies: 201, under review" do
+    apply_as(owner)
+    expect(response).to have_http_status(:created)
+    expect(JSON.parse(response.body).dig("verification_status", "status")).to eq("requested")
+  end
+
+  it "a manager is told why, in their language, with a code; the card says can_apply false" do
+    apply_as(manager)
+    expect(response).to have_http_status(:forbidden)
+    body = JSON.parse(response.body)
+    expect(body["code"]).to eq("verification_owner_only")
+    expect(body["error"]).to eq(I18n.t("verification.errors.owner_only", locale: :ps))
+
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: auth_headers_for(manager)
+    expect(JSON.parse(response.body)["verification_status"]).to include("can_apply" => false, "name_changed" => true)
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: auth_headers_for(owner)
+    expect(JSON.parse(response.body)["verification_status"]).to include("can_apply" => true)
+  end
+end

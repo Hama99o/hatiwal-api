@@ -24,6 +24,14 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
   def create
     return render_daily_limit_reached if VerificationRequest.daily_limit_reached?(current_user)
 
+    # A shop's Verified badge is applied for by its OWNER (their own e-Tazkira).
+    # A manager or staff member gets that reason, coded and in their language,
+    # not a bare 403 the app could only call a "connection" problem (owner bug,
+    # 2026-10-08: a manager renamed a verified shop, then could not re-apply).
+    if @subject.is_a?(Shop) && @subject.member?(current_user) && !ShopPolicy.new(current_user, @subject).apply_verification?
+      return render_coded_error(error_text(:owner_only), code: :verification_owner_only, status: :forbidden)
+    end
+
     request = VerificationRequest.new(request_params.merge(subject: @subject, requested_by: current_user))
     authorize request
 
