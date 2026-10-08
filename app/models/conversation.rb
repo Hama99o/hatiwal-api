@@ -263,12 +263,14 @@ class Conversation < ApplicationRecord
 
   # The shop the SELLER side speaks as, or nil. Owner, 2026-10-05: whatever is
   # done as the shop shows the shop, never the person — so the buyer gets the
-  # shop's name and logo in place of the owner's. A product chat only while the
-  # shop is open (a closed shop's products went back to the owner); a "Message
-  # shop" chat always.
+  # shop's name and logo in place of the owner's. A product chat until the shop
+  # is CLOSED (a closed shop's products went back to the owner); a "Message
+  # shop" chat always. A suspended (or pending) shop keeps its face: suspension
+  # is temporary and must not show the buyer the owner's or a member's personal
+  # name (edge pass 2026-10-08).
   def shop_face
     s = chat_shop
-    s if s && (shop_chat? || s.active?)
+    s if s && (shop_chat? || !s.closed?)
   end
 
   def participant?(user)

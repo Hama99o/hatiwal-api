@@ -78,4 +78,14 @@ RSpec.describe "Shop chat identity — edge cases", type: :request do
     recipients = SendMessagePushJob.new.send(:recipients, chat.reload, buyer)
     expect(recipients.map(&:id)).to eq([ owner.id ])
   end
+
+  it "a suspended shop's chats still name the shop to the buyer, never the owner or a member" do
+    say(staff, "Yes, we have it in blue")
+    say(owner, "Come by after 4")
+    shop.update_columns(status: Shop.statuses[:suspended])
+    %W[/api/v1/conversations /api/v1/conversations/#{chat.id} /api/v1/conversations/#{chat.id}/messages].each do |path|
+      get path, headers: auth_headers_for(buyer)
+      %w[Zarmina Qadirzai Staffkhan].each { |n| expect(response.body).not_to include(n), "#{path} leaks #{n}" }
+    end
+  end
 end
