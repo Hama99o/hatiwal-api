@@ -109,6 +109,9 @@ class ConversationSerializer < ApplicationSerializer
     # SHOP-1 — see :detailed. The inbox row shows the shop for the buyer, and
     # lets the seller's Chat tab tell shop chats from personal ones.
     field(:shop) { |c| shop_block(c) }
+    # closed-shop-face: this product chat's shop has closed; the apps say so at
+    # the composer (new messages are the owner's own). nil otherwise.
+    field(:closed_shop) { |c| (s = c.closed_shop_face) && { name: s.name, closed_at: s.closed_at.iso8601 } }
     field(:last_message_body) { |c| lm = c.last_message; lm && !lm.deleted? ? lm.body : nil }
     # A server notice as the last message ({notice, shop_id, name}, as on the
     # message): each app renders the preview in the reader's language. The
@@ -223,6 +226,9 @@ class ConversationSerializer < ApplicationSerializer
     # SHOP-1 — the chat is with a shop when its listing is: the buyer sees the
     # shop's name and logo, and replies go out as the shop.
     field(:shop) { |c| shop_block(c) }
+    # closed-shop-face: this product chat's shop has closed; the apps say so at
+    # the composer (new messages are the owner's own). nil otherwise.
+    field(:closed_shop) { |c| (s = c.closed_shop_face) && { name: s.name, closed_at: s.closed_at.iso8601 } }
     # The thread screen shows the *other* person (name, avatar, tap-to-profile,
     # block toggle). Mirror the :list view so the detailed payload exposes it too
     # — without this the mobile Conversation screen silently hides those controls.

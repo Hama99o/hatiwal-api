@@ -35,6 +35,8 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # an old client can meet until someone opens a shop; it ignores the key.
     "conversations[].shop" => "SHOP-1 shop block (null = personal)",
     "conversation.shop" => "SHOP-1 shop block (null = personal)",
+    "conversations[].closed_shop" => "closed-shop-face: {name, closed_at} once a product chat's shop has closed (null otherwise)",
+    "conversation.closed_shop" => "closed-shop-face: {name, closed_at} once a product chat's shop has closed (null otherwise)",
     "listings[].shop" => "SHOP-1 shop block (null = personal)",
     "listing.shop" => "SHOP-1 shop block (null = personal)",
     # SHOP-2. false on every chat an old client can meet unless a shop

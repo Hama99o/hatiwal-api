@@ -364,7 +364,7 @@ class Shop < ApplicationRecord
       shop_members.destroy_all # destroy, not delete: keeps the members' counters right
       update_columns(status: self.class.statuses[:closed], phone: nil, phone_public: false, address_line: nil,
                      description: nil, latitude: nil, longitude: nil, verified_at: nil, verified_by_id: nil,
-                     updated_at: Time.current)
+                     closed_at: Time.current, updated_at: Time.current)
     end
   end
 
