@@ -60,8 +60,10 @@ RSpec.describe "Listing expiry — edge cases", type: :request do
         before = listing.reload.expires_at
         put "/api/v1/my/listings/#{listing.id}/renew", headers: headers
         expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body).to include("code" => "listing_removed")
         put "/api/v1/my/listings/#{listing.id}/relaunch", headers: headers
         expect(response).to have_http_status(:forbidden)
+        expect(response.parsed_body).to include("code" => "listing_removed")
         expect(listing.reload.expires_at).to eq(before)
         expect(Listing.browsable).not_to include(listing)
       end

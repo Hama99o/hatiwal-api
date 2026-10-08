@@ -140,6 +140,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # Deliberately the SAME shape as #reserve/#sold rather than a new one: an
   # ordinary 422 carrying `errors`, which every client already renders.
   def renew
+    return render_listing_removed if @listing.removed?
+
     authorize @listing, :renew?
     @listing.renew!
     render_blue(ListingSerializer, @listing, view: :owner_detailed)
@@ -152,6 +154,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # client calls it after saving the edit; the response's `bumped` says whether
   # it moved and `next_bump_at` when it next can. Same 422 shape as #renew.
   def relaunch
+    return render_listing_removed if @listing.removed?
+
     authorize @listing, :relaunch?
     bumped = @listing.relaunch!
     render_blue(ListingSerializer, @listing, view: :owner_detailed, options: { bumped: bumped })
@@ -330,6 +334,12 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   end
 
   private
+
+  # A deleted (or taken-down) listing is not renewed: 403 with a code, so the
+  # apps say it in the reader's language (a bare "Forbidden" read as English).
+  def render_listing_removed
+    render_coded_error("this listing was deleted", code: :listing_removed, status: :forbidden)
+  end
 
   def set_listing
     # SHOP-3: a shop's products are every member's to manage.
