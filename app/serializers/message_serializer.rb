@@ -24,11 +24,18 @@ class MessageSerializer < ApplicationSerializer
   # see "Message deleted" but the sender row stays so threading is intact)
   # SHOP-1/2: the seller side of a chat with a shop writes AS the shop — its
   # name and logo, never the owner's (ConversationSerializer.person_block).
-  field(:sender) do |m|
+  field(:sender) do |m, opts|
     u = m.user
     # SHOP-3: any member of the chat's shop writes as the shop, not only the seller.
     shop = m.conversation&.shop_face if m.conversation&.written_as_shop?(m.user_id)
-    next { id: m.user_id, name: shop.name, avatar_url: shop.logo_url, as_shop: true } if shop
+    if shop
+      # The member's user id only for the shop's team (their alignment, "replied
+      # by"); null for the buyer: an id opens the guest-readable public profile,
+      # i.e. the member's name and photo (privacy text: "never the member who
+      # posted"; docs audit 2026-10-08, P0). Same audience rule as sent_by.
+      id = MessageSerializer.team_viewer?(m, opts) ? m.user_id : nil
+      next { id: id, name: shop.name, avatar_url: shop.logo_url, as_shop: true }
+    end
 
     { id: m.user_id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
   end
@@ -46,7 +53,12 @@ class MessageSerializer < ApplicationSerializer
     conversation = message.conversation
     return false unless conversation&.written_as_shop?(message.user_id)
 
-    opts[:team] == true || (opts[:current_user].present? && conversation.seller_side?(opts[:current_user]))
+    team_viewer?(message, opts)
+  end
+
+  # On the chat's seller side: REST `current_user`, or the members-only stream.
+  def self.team_viewer?(message, opts)
+    opts[:team] == true || (opts[:current_user].present? && message.conversation&.seller_side?(opts[:current_user]))
   end
 
   # Attachment URL: suppressed when deleted

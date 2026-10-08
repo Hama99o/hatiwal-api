@@ -221,4 +221,29 @@ RSpec.describe "Shop chat identity — edge cases", type: :request do
       expect(sent.map { |p| p[:data] }).to all(include(role: "selling", shopId: shop.id))
     end
   end
+
+  # P0 privacy (docs audit 1.1.6, d0): the privacy text promises a buyer never
+  # learns which member wrote. A member's user id let any buyer read their name
+  # and photo from the guest-readable public profile.
+  describe "a message written as the shop carries no member id for the buyer" do
+    before { say(staff, "Yes, in blue") }
+
+    it "REST: the buyer gets sender.id null; the team keeps it (alignment, replied by)" do
+      reply = messages_as(buyer).find { |m| m["body"] == "Yes, in blue" }
+      expect(reply["sender"]).to include("id" => nil, "as_shop" => true, "name" => "Herat Silk House")
+      mine = messages_as(staff).find { |m| m["body"] == "Yes, in blue" }
+      expect(mine["sender"]["id"]).to eq(staff.id)
+      expect(messages_as(owner).find { |m| m["body"] == "Yes, in blue" }["sender"]["id"]).to eq(staff.id)
+    end
+
+    it "the live streams: the public (buyer's) one without the id, the team's with it" do
+      reply = chat.messages.find_by(body: "Yes, in blue")
+      expect(MessageSerializer.render_as_hash(reply, view: :default)[:sender][:id]).to be_nil
+      expect(MessageSerializer.render_as_hash(reply, view: :default, team: true)[:sender][:id]).to eq(staff.id)
+    end
+
+    it "the buyer's own messages keep their id (their own alignment)" do
+      expect(messages_as(buyer).find { |m| m["body"] == "Salaam" }["sender"]["id"]).to eq(buyer.id)
+    end
+  end
 end
