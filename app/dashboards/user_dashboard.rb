@@ -4,9 +4,10 @@ require "administrate/base_dashboard"
 # reset_password_token, unlock_token, confirmation_token, provider/uid) and the
 # ActiveStorage avatar association are deliberately omitted: they must never be
 # viewed or edited through the admin UI. Admins manage identity + moderation
-# fields (status, verified, seller_mode) only. `confirmed_at` is shown but not
-# editable — whether an email address is real is proven by the user, not typed
-# in by an admin.
+# fields (status, verified, seller_mode) only. `confirmed_at` (the email
+# confirmation date) is editable since owner 2026-10-08 so an admin can confirm
+# a user by hand (or use "Confirm email now" on the show page); both are
+# audit-logged. Blank = not confirmed.
 class UserDashboard < Administrate::BaseDashboard
   ATTRIBUTE_TYPES = {
     id: Field::Number,
@@ -91,6 +92,7 @@ class UserDashboard < Administrate::BaseDashboard
     preferred_language
     seller_mode
     verified
+    confirmed_at
     status
     block_reason
   ].freeze

@@ -41,14 +41,31 @@ module Admin
       redirect_to [ namespace, user ], notice: notice
     end
 
+    # "Confirm email now" (owner, 2026-10-08): confirm a user by hand, e.g. one
+    # whose confirmation mail never arrived. See User#admin_confirm_email!.
+    def confirm_email
+      user = find_resource(params[:id])
+      dropped = user.unconfirmed_email
+      user.admin_confirm_email!
+      log_admin_action("confirm_email", target: user,
+                                        details: [ user.email, ("dropped pending change to #{dropped}" if dropped) ].compact.join(" · "))
+      redirect_to [ namespace, user ], notice: "#{user.email} is confirmed."
+    end
+
     # Administrate's update, plus the "you are verified" Support message when an
-    # admin switches the badge ON (off → on only; SupportNoticeJob re-checks it).
+    # admin switches the badge ON (off → on only; SupportNoticeJob re-checks it),
+    # and an audit line when the admin edits the email "Confirmed at" date.
     def update
       user = requested_resource
       was_verified = user.verified?
+      was_confirmed_at = user.confirmed_at
       super
       user.reload
       SupportNoticeJob.enqueue(user, :user_verified) if !was_verified && user.verified?
+      return if user.confirmed_at == was_confirmed_at
+
+      log_admin_action("edit_email_confirmed_at", target: user,
+                                                  details: "#{was_confirmed_at&.iso8601 || 'not confirmed'} → #{user.confirmed_at&.iso8601 || 'not confirmed'}")
     end
 
     # Override this method to specify custom lookup behavior.

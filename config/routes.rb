@@ -52,6 +52,7 @@ Rails.application.routes.draw do
         patch :block
         patch :unblock
         post :warn
+        patch :confirm_email
       end
     end
     resources :user_warnings, only: [ :index, :show ]

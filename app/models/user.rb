@@ -78,6 +78,18 @@ class User < ApplicationRecord
   # confirmed_at (the address is proven by Google).
   def email_confirmed? = confirmed_at.present?
 
+  # Admin "Confirm email now" (owner, 2026-10-08): the CURRENT address counts as
+  # proven from now on. A pending change of address (Devise reconfirmable keeps
+  # it in unconfirmed_email until its link is clicked) is dropped with its
+  # token: the admin vouched for the address they can see, not for one the user
+  # typed and never proved. update_columns: no Devise callback may re-send a
+  # confirmation mail or postpone anything. The email gate
+  # (ApplicationController#require_confirmed_email!) reads confirmed_at on every
+  # request, so shops and verification unlock at once.
+  def admin_confirm_email!
+    update_columns(confirmed_at: Time.current, unconfirmed_email: nil, confirmation_token: nil, updated_at: Time.current)
+  end
+
   # devise_token_auth's own payloads (sign_in, validate_token, sign-up) render
   # this, not UserSerializer — and without `email_confirmed` the apps read an
   # unconfirmed account as confirmed (undefined = "an older API") until

@@ -20,6 +20,11 @@
   <span class="hw-badges">
     <span class="hw-badge <%= user.account_blocked? ? 'hw-badge--danger' : 'hw-badge--success' %>"><%= user.status.to_s.humanize %></span>
     <% if user.verified? %><span class="hw-badge hw-badge--brand">Verified</span><% end %>
+    <% if user.email_confirmed? %>
+      <span class="hw-badge hw-badge--success" id="email-confirmed-badge" title="Email confirmed <%= l(user.confirmed_at, format: :short) %>">Email confirmed</span>
+    <% else %>
+      <span class="hw-badge hw-badge--warning" id="email-confirmed-badge">Email not confirmed</span>
+    <% end %>
     <% if user.verification_requests.requested.exists? %><span class="hw-badge hw-badge--warning">Verification waiting</span><% end %>
     <% if user.seller_mode? %><span class="hw-badge hw-badge--gold">Seller</span><% end %>
     <% if active_count.positive? %><span class="hw-badge hw-badge--warning"><%= active_count %>/<%= threshold %> warnings</span><% end %>
@@ -38,6 +43,18 @@
         <%= link_to "Open support conversation", admin_support_conversation_path(support_thread), class: "button button--alt" %>
       <% end %>
     </div>
+    <%# Owner, 2026-10-08: confirm the email by hand (unlocks shops + verification at once). %>
+    <p class="hw-kv" id="email-confirmation">
+      <span>Email confirmed: <%= user.email_confirmed? ? l(user.confirmed_at, format: :short) : "no" %></span>
+      <% if user.unconfirmed_email.present? %><span dir="auto">Pending change to <%= user.unconfirmed_email %> (dropped if you confirm now)</span><% end %>
+    </p>
+    <% unless user.email_confirmed? && user.unconfirmed_email.blank? %>
+      <div class="hw-actions">
+        <%= button_to "Confirm email now", confirm_email_admin_user_path(user),
+              method: :patch, id: "confirm-email-now", class: "button",
+              data: { turbo: false }, form: { data: { confirm: "Mark #{user.email} as confirmed?" } } %>
+      </div>
+    <% end %>
     <p class="hw-kv">
       <span>Email: <%= user.emailable? ? "available" : "not available (#{user.email_refusal_reason})" %></span>
       <span>In-app: <%= Conversation.admin_can_message?(user) ? "available" : "not available (#{Conversation.admin_message_refusal(user)})" %></span>
