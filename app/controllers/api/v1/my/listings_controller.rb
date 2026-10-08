@@ -4,7 +4,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # Feed flooding. A real seller listing 30 items in one day is already an
   # outlier on a local marketplace; a script posting 10 000 is what buries
   # everyone else's listings.
-  throttle to: 30, within: 1.day, by: :user, only: :create
+  # Duplicate makes a listing too, so it shares the same daily budget (one
+  # counter: the limit's name is the same); it was unthrottled until the 1.1.6
+  # authorization sweep (2026-10-08).
+  throttle to: 30, within: 1.day, by: :user, only: %i[create duplicate]
 
   def index
     # SHOP-1: "My listings" as Me, "My shop" as a shop (User#selling_shop).
