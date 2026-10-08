@@ -15,6 +15,17 @@ class ListingSerializer < ApplicationSerializer
   #
   # PRIVACY: do NOT add this field to :list or :detailed — those views ship to
   # guests and to any buyer, and the buyer's identity must stay owner-scoped.
+  # Owner, 2026-10-08: on a SHOP's product, which team member posted it — for the
+  # TEAM only. Same privacy rule as SALE_FIELD: member-scoped views
+  # (:seller_list, :owner_detailed — my/listings only), never :list / :detailed,
+  # which buyers see. nil on a personal listing. "You" is the client's call
+  # (it compares id with the signed-in user).
+  POSTED_BY_FIELD = proc do |l|
+    next nil if l.shop_id.nil? || l.user.nil?
+
+    { id: l.user_id, name: l.user.full_name }
+  end
+
   SALE_FIELD = proc do |l|
     txn = l.current_sale
     next nil unless txn
@@ -174,6 +185,7 @@ class ListingSerializer < ApplicationSerializer
     field(:price_dropped_at)   { |l| l.price_dropped_at }
     # TASK-R418 — owner-only buyer/final-price block for reserved/sold rows.
     field(:sale, &SALE_FIELD)
+    field(:posted_by, &POSTED_BY_FIELD)
   end
 
   view :detailed do
@@ -282,6 +294,7 @@ class ListingSerializer < ApplicationSerializer
     field(:location_precision) { "exact" }
     field(:location_radius_m)  { nil }
     field(:sale, &SALE_FIELD)
+    field(:posted_by, &POSTED_BY_FIELD)
     # Always the owner's own listing here (see `:detailed`'s gate).
     field(:expires_at) { |l| l.expires_at }
     field(:next_bump_at) { |l| l.next_bump_at }

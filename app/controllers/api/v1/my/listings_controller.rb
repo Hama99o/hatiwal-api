@@ -12,7 +12,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
       current_user.listings_for_selling_identity
                   .not_removed
                   .includes(
-                    :category, :conversations, :price_histories,
+                    :category, :conversations, :price_histories, :user, # :user — posted_by
                     # TASK-R418: the :seller_list view's `sale` field reads
                     # listing.current_sale (=> sale_transactions) and its
                     # buyer's avatar — eager-load both so a feed full of

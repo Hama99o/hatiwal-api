@@ -28,6 +28,11 @@ RSpec.describe "Api::V1::My::Analytics", type: :request do
         total (not removed), active (live, not expired), expired, sold, draft,
         sales + units_sold (recorded sales), views (sum), chats (begun with this
         identity). Never site-wide. 403 `not_a_member` for another shop.
+        A shop also gets `team` (owner 2026-10-08): one row per member
+        {user {id, name, avatar_url}, role, posted, active, expired, sold}, sold
+        = sales the member recorded; and `team_unattributed` {posted, active,
+        expired, sold}: products of former members and sales recorded before
+        recorded_by existed. Every member sees the whole team. Me: both null.
       DESC
       produces "application/json"
 
@@ -89,6 +94,58 @@ RSpec.describe "Api::V1::My::Analytics", type: :request do
 
     get "/api/v1/my/analytics", params: { shop_id: shop.id }, headers: headers
     expect(JSON.parse(response.body)["analytics"].slice("sales", "chats")).to eq("sales" => 0, "chats" => 0)
+  end
+
+  # Owner, 2026-10-08: the shop's numbers per team member. Posted = the
+  # member's products (not removed), active / expired of those, sold = sales
+  # the member RECORDED (transactions.recorded_by). Older sales with no
+  # recorder, and products of people who left, go to team_unattributed.
+  describe "the Team breakdown" do
+    let(:manager) { create(:user, firstname: "Mina", lastname: "Manager") }
+    let(:staff)   { create(:user, firstname: "Ali", lastname: "Staff") }
+    let(:former)  { create(:user) }
+
+    before do
+      shop.shop_members.create!(user: manager, role: :manager)
+      shop.shop_members.create!(user: staff, role: :staff)
+      # The owner already has 1 active shop product (the outer before block).
+      create(:listing, :active, user: staff, shop: shop)
+      create(:listing, :active, user: staff, shop: shop, expires_at: 1.day.ago)
+      staff_sold = create(:listing, :active, user: staff, shop: shop, quantity: 3)
+      create(:transaction, :outside_buyer, seller: seller, listing: staff_sold, recorded_by: manager)
+      create(:transaction, :outside_buyer, seller: seller, listing: staff_sold, recorded_by: nil) # before recorded_by
+      # Posted by someone who has since left the team.
+      left = shop.shop_members.create!(user: former, role: :staff)
+      create(:listing, :active, user: former, shop: shop)
+      left.destroy!
+    end
+
+    def team_for(user)
+      get "/api/v1/my/analytics", params: { shop_id: shop.id }, headers: auth_headers_for(user)
+      JSON.parse(response.body)["analytics"]
+    end
+
+    it "one row per member (owner, manager, staff), and the rest unattributed" do
+      a = team_for(seller)
+      rows = a["team"].map { |r| [ r["user"]["id"], r["role"], r.slice("posted", "active", "expired", "sold") ] }
+      expect(rows).to eq([
+        [ seller.id,  "owner",   { "posted" => 1, "active" => 1, "expired" => 0, "sold" => 0 } ],
+        [ manager.id, "manager", { "posted" => 0, "active" => 0, "expired" => 0, "sold" => 1 } ],
+        [ staff.id,   "staff",   { "posted" => 3, "active" => 2, "expired" => 1, "sold" => 0 } ]
+      ])
+      expect(a["team"].second["user"]["name"]).to eq("Mina Manager")
+      expect(a["team_unattributed"]).to eq("posted" => 1, "active" => 1, "expired" => 0, "sold" => 1)
+    end
+
+    it "staff see the whole team, like the shop's other numbers" do
+      expect(team_for(staff)["team"].map { |r| r["user"]["id"] }).to eq([ seller.id, manager.id, staff.id ])
+    end
+
+    it "Me has no team" do
+      get "/api/v1/my/analytics", headers: headers
+      a = JSON.parse(response.body)["analytics"]
+      expect([ a["team"], a["team_unattributed"] ]).to eq([ nil, nil ])
+    end
   end
 
   describe "POST /my/listings/relaunch_expired" do

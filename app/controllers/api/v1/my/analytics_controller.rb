@@ -31,7 +31,10 @@ class Api::V1::My::AnalyticsController < Api::V1::BaseController
       views: listings.sum(:views_count),
       # Chats begun with THIS identity (pinned at start; a moved listing's old
       # chats stay where they began).
-      chats: chats.count
+      chats: chats.count,
+      # Owner, 2026-10-08: who did what on a shop's team (nil for Me).
+      team: @shop && team_rows(listings),
+      team_unattributed: @shop && unattributed_row(listings)
     } })
   end
 
@@ -65,6 +68,42 @@ class Api::V1::My::AnalyticsController < Api::V1::BaseController
 
       @listings = @shop.listings
     end
+  end
+
+  # One row per current member (owner first, then managers, staff; by join
+  # date): products POSTED (listings.user_id, not removed), how many of those
+  # are active / expired, and SALES RECORDED (transactions.recorded_by: who
+  # marked it sold). The whole team sees the whole team, staff included — the
+  # same people already see the shop's totals and each other's names.
+  def team_rows(listings)
+    members = @shop.shop_members.includes(user: { avatar_attachment: :blob }).order(:role, :created_at)
+    ids = members.map(&:user_id)
+    posted, active, expired, sold = per_user(listings, ids)
+    members.map do |m|
+      u = m.user
+      { user: { id: u.id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil }, role: m.role,
+        posted: posted[u.id] || 0, active: active[u.id] || 0, expired: expired[u.id] || 0, sold: sold[u.id] || 0 }
+    end
+  end
+
+  # Everything no current member accounts for: products of people who left the
+  # team, and sales with no recorded_by (recorded before it existed). The
+  # clients show it as "Unknown / former member", only when non-zero.
+  def unattributed_row(listings)
+    ids = @shop.shop_members.pluck(:user_id)
+    others = listings.where.not(user_id: ids)
+    live = others.live.count
+    expired = others.expired_active.count
+    { posted: others.count, active: live - expired, expired: expired,
+      sold: sales.where(recorded_by_id: nil).or(sales.where.not(recorded_by_id: ids)).count }
+  end
+
+  def per_user(listings, ids)
+    mine = listings.where(user_id: ids)
+    live = mine.live.group(:user_id).count
+    expired = mine.expired_active.group(:user_id).count
+    active = live.to_h { |id, n| [ id, n - (expired[id] || 0) ] }
+    [ mine.group(:user_id).count, active, expired, sales.where(recorded_by_id: ids).group(:recorded_by_id).count ]
   end
 
   def sales

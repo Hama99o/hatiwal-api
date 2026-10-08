@@ -617,6 +617,11 @@ paths:
         total (not removed), active (live, not expired), expired, sold, draft,
         sales + units_sold (recorded sales), views (sum), chats (begun with this
         identity). Never site-wide. 403 `not_a_member` for another shop.
+        A shop also gets `team` (owner 2026-10-08): one row per member
+        {user {id, name, avatar_url}, role, posted, active, expired, sold}, sold
+        = sales the member recorded; and `team_unattributed` {posted, active,
+        expired, sold}: products of former members and sales recorded before
+        recorded_by existed. Every member sees the whole team. Me: both null.
       parameters:
       - name: access-token
         in: header
