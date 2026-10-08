@@ -6,6 +6,8 @@ require "swagger_helper"
 # the new app is served — so everything here is ADDITIVE: listing threads must
 # come back byte-for-byte as before, plus one `kind` key.
 RSpec.describe "Api::V1::SupportConversations", type: :request do
+  include ActiveJob::TestHelper
+
   let(:user)    { create(:user) }
   let(:headers) { auth_headers_for(user) }
 
@@ -16,8 +18,9 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
                   "Rendered like GET /conversations/:id (kind: \"support\", listing: null, viewer_role: null). " \
                   "Owner, 2026-10-12: Support is per identity. Without shop_id, the caller's own thread (Buyer " \
                   "mode and Seller as Me); with shop_id, that SHOP's thread (members only, 403 otherwise), shared " \
-                  "by its team and shown only while that shop is selected. GET /conversations pins each identity's " \
-                  "thread first (role=buying, role=selling&shop_id=none, role=selling&shop_id=<id>); " \
+                  "by its team and shown only while that shop is selected. GET /conversations lists each identity's " \
+                  "thread by its last message like any chat, not pinned (owner, 2026-10-08; role=buying, " \
+                  "role=selling&shop_id=none, role=selling&shop_id=<id>). It can be archived, never deleted. " \
                   "me.unread_counts.support is the person's thread's unread (also inside buying)."
       produces "application/json"
       security [ { bearer: [] } ]
@@ -98,7 +101,8 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
-    it "pins the support thread first in the inbox" do
+    # Owner, 2026-10-08: no longer pinned on top.
+    it "sorts the support thread by its last message, like any other chat" do
       seller  = create(:user)
       listing = create(:listing, :active, user: seller)
       busy = create(:conversation, buyer: user, listing: listing, last_message_at: 1.minute.ago)
@@ -106,10 +110,11 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
       Conversation.find(support_id).update!(last_message_at: 3.days.ago)
 
       get "/api/v1/conversations", headers: headers
-      ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
+      expect(JSON.parse(response.body)["conversations"].map { |c| c["id"] }).to eq([ busy.id, support_id ])
 
-      expect(ids.first).to eq(support_id)
-      expect(ids).to include(busy.id)
+      Conversation.find(support_id).update!(last_message_at: Time.current)
+      get "/api/v1/conversations", headers: headers
+      expect(JSON.parse(response.body)["conversations"].map { |c| c["id"] }).to eq([ support_id, busy.id ])
     end
 
     # Search is SELECT DISTINCT; the support pin must not break it (it did, once).
@@ -123,15 +128,13 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
     end
 
     # Owner, 2026-10-12: the person's own Support thread belongs to Buyer mode
-    # AND Seller as Me, so both role views carry it, pinned first (once: the
-    # 1.1.5 app shows a role view exactly as served, with no extra pin).
-    it "pins the person's support thread first in the Buying and Selling views" do
+    # AND Seller as Me, so both role views carry it, once each.
+    it "lists the person's support thread once in the Buying and Selling views" do
       support_id = open_support["id"]
 
       %w[buying selling].each do |role|
         get "/api/v1/conversations", params: { role: role }, headers: headers
         ids = JSON.parse(response.body)["conversations"].map { |c| c["id"] }
-        expect(ids.first).to eq(support_id)
         expect(ids.count(support_id)).to eq(1)
       end
     end
@@ -187,9 +190,32 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
       expect(thread.reload.archived_for?(user)).to be(false)
     end
 
-    it "brings a DELETED thread back on a new message, and on Contact support" do
+    # Owner, 2026-10-08: archive yes, delete never.
+    it "archives it (gone from the inbox, in Archived), but refuses deleting it with a code" do
       thread = Conversation.find(open_support_id)
+
+      put "/api/v1/conversations/#{thread.id}/archive", headers: headers
+      expect(response).to have_http_status(:no_content)
+      expect(inbox_ids).not_to include(thread.id)
+      expect(inbox_ids(archived: true)).to include(thread.id)
+
       delete "/api/v1/conversations/#{thread.id}", headers: headers
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["code"]).to eq("support_not_deletable")
+      expect(thread.reload.deleted_for?(user)).to be(false)
+      expect(Conversation.exists?(thread.id)).to be(true)
+    end
+
+    it "still deletes a LISTING thread" do
+      convo = create(:conversation, buyer: user, listing: create(:listing, :active))
+      delete "/api/v1/conversations/#{convo.id}", headers: headers
+      expect(response).to have_http_status(:no_content)
+    end
+
+    # Threads deleted before deleting was refused still come back.
+    it "brings an older DELETED thread back on a new message, and on Contact support" do
+      thread = Conversation.find(open_support_id)
+      thread.delete_for!(user)
       expect(inbox_ids).not_to include(thread.id)
 
       support_reply(thread)
@@ -198,6 +224,54 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
       thread.delete_for!(user)
       expect(open_support_id).to eq(thread.id)
       expect(inbox_ids).to include(thread.id)
+    end
+
+    # Owner, 2026-10-08: any new Support message brings an archived thread
+    # back, with its badge; while archived, its unread does not count.
+    it "a Support NOTICE (SupportNoticeJob) brings it back, unread, and the badge with it" do
+      thread = Conversation.find(open_support_id)
+      support_reply(thread)
+      put "/api/v1/conversations/#{thread.id}/archive", headers: headers
+      expect(user.reload.unread_counts[:support]).to eq(0)
+
+      user.update_column(:verified, true)
+      SupportNoticeJob.perform_now(user.id, "user_verified")
+
+      expect(inbox_ids).to include(thread.id)
+      expect(user.reload.unread_counts[:support]).to eq(2)
+    end
+
+    it "an ADMIN reply (Admin::SendMessage.reply) brings it back, unread" do
+      thread = Conversation.find(open_support_id)
+      put "/api/v1/conversations/#{thread.id}/archive", headers: headers
+
+      Admin::SendMessage.reply(admin: create(:admin_user), user: user, body: "Fixed it for you").call
+
+      expect(inbox_ids).to include(thread.id)
+      expect(user.reload.unread_counts[:support]).to eq(1)
+    end
+
+    # Per identity: a SHOP's Support thread is archived on the team's side and
+    # comes back for the team on the shop's next notice; the person's own
+    # thread is untouched by it.
+    it "per identity: a shop notice brings the SHOP's archived thread back, not the person's" do
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("SUPPORT_ADMIN_INITIATE", "false").and_return("true")
+      shop = create(:shop, owner: user, name: "Kabul Cosmetics")
+      own = Conversation.find(open_support_id)
+      post "/api/v1/support_conversation", params: { shop_id: shop.id }, headers: headers
+      shop_thread = Conversation.find(JSON.parse(response.body).dig("conversation", "id"))
+      [ own, shop_thread ].each { |t| put "/api/v1/conversations/#{t.id}/archive", headers: headers }
+      expect(shop_thread.reload.archived_for?(user)).to be(true)
+
+      joiner = create(:user, :confirmed, firstname: "Ali", lastname: "Khan")
+      create(:shop_invite, shop: shop).accept!(joiner)
+      perform_enqueued_jobs(only: SupportNoticeJob)
+
+      expect(shop_thread.reload.archived_for?(user)).to be(false)
+      expect(inbox_ids(role: "selling", shop_id: shop.id)).to include(shop_thread.id)
+      expect(own.reload.archived_for?(user)).to be(true)
+      expect(user.reload.unread_counts[:shops][shop.id.to_s]).to eq(1)
     end
 
     it "never hides the thread from the admin, archived or deleted" do

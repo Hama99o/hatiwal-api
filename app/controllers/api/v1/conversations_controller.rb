@@ -35,12 +35,10 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     # matches — not "the matches that happened to be on page 1 anyway".
     base_scope = base_scope.matching(params[:search]) if params[:search].present?
 
-    # support_first BEFORE ordered: the user's support thread is pinned to the
-    # top, then everything else by recent activity. Only users on an app with
-    # support messaging can have a support thread (docs/SUPPORT_MESSAGING.md),
-    # so for everyone else this ORDER BY changes nothing.
+    # By recent activity, Support included: owner, 2026-10-08, Support is no
+    # longer pinned on top; it sorts by its last message like any other chat.
     conversations = policy_scope(
-      base_scope.support_first.ordered
+      base_scope.ordered
                 .includes(
                     # :latest_message loads only the newest message per conversation
                     # (has_one with ORDER BY DESC) instead of the entire messages
@@ -97,6 +95,14 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def destroy
     authorize @conversation
+    # Owner, 2026-10-08: Support can be ARCHIVED (it comes back on Support's
+    # next message) but never deleted. The apps hide Delete on it; this is
+    # the guard for any client that still offers it.
+    if @conversation.kind_support?
+      return render_unprocessable_entity("The Hatiwal Support conversation can be archived, not deleted",
+                                         code: :support_not_deletable)
+    end
+
     @conversation.delete_for!(current_user)
     head :no_content
   end
@@ -165,8 +171,8 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   # the inbox to just the caller's buyer threads or just their seller threads.
   # Any absent or unrecognised value is a no-op — the full mixed inbox is the
   # existing (and default) behaviour, never a 500 or an accidentally-empty list.
-  # Owner, 2026-10-12: every identity shows ITS Support thread, pinned first
-  # (support_first), and never another's:
+  # Owner, 2026-10-12: every identity shows ITS Support thread (sorted by its
+  # last message since 2026-10-08, no longer pinned first), and never another's:
   # - buying: the buying chats + the person's own Support thread (buyer side);
   # - selling: the selling chats + the person's own Support thread (Seller as
   #   Me) and the shops' threads, which the shop_id filter then narrows:
