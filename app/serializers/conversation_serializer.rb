@@ -37,8 +37,10 @@ class ConversationSerializer < ApplicationSerializer
     if shop
       # city: the shop's city, else its province (always filled from the pin), so
       # it is a string like a person's: apps older than shops render it as such.
-      return { id: person.id, name: shop.name, city: shop.city.presence || shop.province, verified: shop.verified?,
-               avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
+      # privacy-b: the owner's id only for the shop's team and pre-1.1.6
+      # clients (ShopFace); everyone else gets null and the shop's own id.
+      return { id: ShopFace.owner_id_for(shop), shop_id: shop.id, name: shop.name, city: shop.city.presence || shop.province,
+               verified: shop.verified?, avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
     end
 
     { id: person.id, name: person.full_name, city: person.city, verified: person.verified,

@@ -8,6 +8,7 @@
   target = report.reportable
   is_listing = target.is_a?(Listing)
   is_user = target.is_a?(User)
+  is_shop = target.is_a?(Shop) # privacy-b: a buyer reports a shop by its id
   status_tone = { "pending" => "hw-badge--warning", "resolved" => "hw-badge--success" }.fetch(report.status.to_s, "")
 %>
 
@@ -31,6 +32,9 @@
         (seller: <span dir="auto"><%= target.user.full_name %></span>)<%= " — already taken down" if target.removed? %>
       <% elsif is_user %>
         User — <%= link_to(target.full_name.presence || "User ##{target.id}", [ namespace, target ], dir: "auto") %>
+      <% elsif is_shop %>
+        Shop — <%= link_to(target.name.presence || "Shop ##{target.id}", [ namespace, target ], dir: "auto") %>
+        (owner: <span dir="auto"><%= target.owner.full_name %></span>)<%= " — #{target.status}" unless target.active? %>
       <% else %>
         <%= target&.class&.name %> ##<%= target&.id %>
       <% end %>
@@ -43,8 +47,8 @@
               class: "button button--danger" %>
       <% end %>
 
-      <% if (is_listing || is_user) && !report.resolved? %>
-        <%= button_to(is_listing ? "Warn seller & resolve" : "Warn user & resolve",
+      <% if (is_listing || is_user || is_shop) && !report.resolved? %>
+        <%= button_to(is_listing ? "Warn seller & resolve" : (is_shop ? "Warn shop owner & resolve" : "Warn user & resolve"),
               warn_target_admin_report_path(report),
               method: :patch, data: { turbo: false, confirm: "Give one warning (strike) and resolve this report? #{User::WARNING_BLOCK_THRESHOLD} active warnings suspend the account." }, class: "button") %>
       <% end %>

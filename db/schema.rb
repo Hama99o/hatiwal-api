@@ -179,10 +179,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_220000) do
     t.bigint "blocked_id", null: false
     t.bigint "blocker_id", null: false
     t.datetime "created_at", null: false
+    t.bigint "shop_id"
     t.datetime "updated_at", null: false
     t.index ["blocked_id"], name: "index_blocks_on_blocked_id"
     t.index ["blocker_id", "blocked_id"], name: "index_blocks_on_blocker_id_and_blocked_id", unique: true
     t.index ["blocker_id"], name: "index_blocks_on_blocker_id"
+    t.index ["shop_id"], name: "index_blocks_on_shop_id"
   end
 
   create_table "categories", force: :cascade do |t|

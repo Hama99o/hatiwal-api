@@ -13,9 +13,10 @@ class Report < ApplicationRecord
 
   enum :status, { pending: 0, reviewed: 1, resolved: 2, dismissed: 3 }
 
-  # Only these can be reported. The controller checks the client's
-  # reportable_type against this list BEFORE anything constantizes it.
-  REPORTABLE_TYPES = [ Listing.name, User.name ].freeze
+  # privacy-b: a shop is reported by ITS id (a buyer's app never has the
+  # owner's). Only these can be reported; anything else is refused rather than
+  # constantized.
+  REPORTABLE_TYPES = [ Listing.name, User.name, Shop.name ].freeze
 
   validates :reportable_type, inclusion: { in: REPORTABLE_TYPES }
   validates :reason, presence: true
@@ -34,6 +35,9 @@ class Report < ApplicationRecord
     end
     if reportable.is_a?(User) && reportable.id == reporter_id
       errors.add(:base, "cannot report yourself")
+    end
+    if reportable.is_a?(Shop) && reportable.member?(reporter)
+      errors.add(:base, "cannot report your own shop")
     end
   end
 end
