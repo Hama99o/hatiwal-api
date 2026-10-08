@@ -376,19 +376,30 @@ class Shop < ApplicationRecord
   # pass 2026-10-08: the admin got a bare 422 page instead of a reason.
   class ClosedShop < StandardError; end
 
-  def suspend!
+  def suspend!(reason: nil)
     raise ClosedShop, "#{self.class.name} ##{id} is closed" if closed?
 
     transaction do
       suspended!
       User.where(active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
     end
+    notify_moderation!(:suspended, reason)
   end
 
   def reactivate!
     raise ClosedShop, "#{self.class.name} ##{id} is closed" if closed?
 
     active!
+    notify_moderation!(:reactivated)
+  end
+
+  # The team is told (owner gap, 2026-10-08): a notice in the shop's Support
+  # thread (the whole team reads it) and a push to the owner and managers.
+  def notify_moderation!(event, reason = nil)
+    SupportNoticeJob.enqueue(owner, :"shop_#{event}", shop: self, reason: reason)
+    shop_members.where(role: %i[owner manager]).pluck(:user_id).each do |user_id|
+      ShopTeamPushJob.perform_later("shop_membership_changed", user_id, id, nil, event.to_s)
+    end
   end
 
   # The owner can never be removed (phase 3 will transfer ownership first).

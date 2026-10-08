@@ -8,6 +8,8 @@ ps:
       shop_membership_changed_closed: '%{shop} بند شو. اوس بیا د ځان په توګه پلورئ.'
       shop_membership_changed_role_changed: په %{shop} کې ستاسو رول بدل شو. د لیدو لپاره هټیوال پرانیزئ.
       shop_owner_changed: '%{name} تاسو د %{shop} مالک کړئ.'
+      shop_membership_changed_suspended: '%{shop} ځنډول شوی. د لامل لیدو لپاره هټیوال پرانیزئ.'
+      shop_membership_changed_reactivated: '%{shop} بیا فعال دی.'
   shops:
     team:
       errors:

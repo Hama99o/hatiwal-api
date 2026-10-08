@@ -12,5 +12,9 @@ ps:
       shop_member_removed: "تاسو نور د %{shop} په ټیم کې نه یاست. اوس بیا په خپل نوم پلورئ."
       shop_role_changed: "په %{shop} کې ستاسو رول اوس %{role} دی."
       shop_badge_applicant_left: "د %{shop} د تایید ✓ نښه لرې شوه: %{member}، چې غوښتنه یې کړې وه، نور هلته مالک یا مدیر نه دی. مالک یا مدیر بیا غوښتنه کولی شي."
+      # An admin suspends / reactivates the shop (owner gap, 2026-10-08); the shop's thread.
+      shop_suspended: "%{shop} د هټیوال لخوا ځنډول شوی: له لټون څخه پټ دی او ټیم یې اوس مهال په خپل نوم پلوري. پوښتنه لرئ؟ همدلته ځواب ورکړئ."
+      shop_suspended_reason: "%{shop} د هټیوال لخوا ځنډول شوی: %{reason}. له لټون څخه پټ دی او ټیم یې اوس مهال په خپل نوم پلوري. پوښتنه لرئ؟ همدلته ځواب ورکړئ."
+      shop_reactivated: "%{shop} بیا فعال دی: بیا په لټون کې ښکاري او ټیم یې کولای شي د دوکان په نوم وپلوري."
       shop_ownership_received: "%{actor} %{shop} تاسو ته وسپاره. اوس تاسو یې مالک یاست."
       shop_ownership_handed_over: "تاسو %{shop} %{new_owner} ته وسپاره. تاسو د %{role} په توګه په ټیم کې پاتې کېږئ."
