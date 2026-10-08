@@ -22,13 +22,48 @@ RSpec.describe SupportNoticeJob, "notice actions", type: :job do
 
   def action(type, label, params) = { "type" => type, "label_key" => "chat.noticeAction.#{label}", "params" => params }
 
+  # Owner bug, 2026-10-08: an old "rejected → Try again" notice kept offering
+  # a new application while one was under review. The button carries the
+  # subject's CURRENT state each time the thread is read.
+  describe "the verification button knows the state NOW" do
+    it "a person: rejected → requested (under review) → verified" do
+      user = create(:user, :verification_eligible)
+      request = create(:verification_request, user: user)
+      request.reject!(admin: admin, reason_code: "name_mismatch")
+      described_class.perform_now(user.id, "user_verification_rejected")
+      notice = person_notice(user)
+      expect(action_of(notice)["params"]).to include("subject" => "me", "state" => "rejected")
+
+      again = create(:verification_request, user: user)
+      expect(action_of(notice.reload)["params"]["state"]).to eq("requested")
+      again.approve!(admin: admin)
+      expect(action_of(notice.reload)["params"]["state"]).to eq("verified")
+    end
+
+    it "a shop: the same, for the shop's thread" do
+      request = create(:shop_verification_request, shop: create(:shop, :verification_eligible, owner: owner))
+      request.reject!(admin: admin, reason_code: "photo_not_clear")
+      described_class.perform_now(owner.id, "shop_verification_rejected", request.subject_id)
+      notice = shop_notices(request.subject).last
+      expect(action_of(notice)["params"]).to include("subject" => "shop", "state" => "rejected")
+      create(:shop_verification_request, shop: request.subject)
+      expect(action_of(notice.reload)["params"]["state"]).to eq("requested")
+    end
+
+    it "other buttons are untouched" do
+      described_class.perform_now(owner.id, "shop_verified", create(:shop, owner: owner, verified_at: Time.current).id) rescue nil
+      expect(MessageSerializer.with_live_state(nil, { "type" => "open_shop", "params" => { "shop_id" => 1 } }))
+        .to eq({ "type" => "open_shop", "params" => { "shop_id" => 1 } })
+    end
+  end
+
   describe "a person's verification" do
     it "rejected: Try verification again, for me" do
       request = create(:verification_request, user: create(:user, :verification_eligible))
       request.reject!(admin: admin, reason_code: "name_mismatch")
       described_class.perform_now(request.subject_id, "user_verification_rejected")
 
-      expect(action_of(person_notice(request.subject))).to eq(action("open_verification", "tryVerificationAgain", { "subject" => "me" }))
+      expect(action_of(person_notice(request.subject))).to eq(action("open_verification", "tryVerificationAgain", { "subject" => "me", "state" => "rejected" }))
     end
 
     it "badge removed: the same" do
@@ -37,7 +72,7 @@ RSpec.describe SupportNoticeJob, "notice actions", type: :job do
       request.revoke!(admin: admin, reason_code: "policy_violation")
       described_class.perform_now(request.subject_id, "user_badge_revoked")
 
-      expect(action_of(person_notice(request.subject))).to eq(action("open_verification", "tryVerificationAgain", { "subject" => "me" }))
+      expect(action_of(person_notice(request.subject))).to eq(action("open_verification", "tryVerificationAgain", { "subject" => "me", "state" => "revoked" }))
     end
 
     it "verified: no button (nothing to do)" do
@@ -66,7 +101,7 @@ RSpec.describe SupportNoticeJob, "notice actions", type: :job do
       described_class.perform_now(vshop.owner_id, "shop_verification_rejected", vshop.id)
 
       expect(action_of(shop_notices(vshop).sole))
-        .to eq(action("open_verification", "tryVerificationAgain", { "subject" => "shop", "shop_id" => vshop.id }))
+        .to eq(action("open_verification", "tryVerificationAgain", { "subject" => "shop", "shop_id" => vshop.id, "state" => "rejected" }))
     end
 
     it "badge removed: the same" do
@@ -75,7 +110,7 @@ RSpec.describe SupportNoticeJob, "notice actions", type: :job do
       described_class.perform_now(vshop.owner_id, "shop_badge_removed", vshop.id)
 
       expect(action_of(shop_notices(vshop).sole))
-        .to eq(action("open_verification", "tryVerificationAgain", { "subject" => "shop", "shop_id" => vshop.id }))
+        .to eq(action("open_verification", "tryVerificationAgain", { "subject" => "shop", "shop_id" => vshop.id, "state" => "revoked" }))
     end
   end
 

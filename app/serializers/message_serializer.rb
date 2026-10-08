@@ -10,7 +10,11 @@ class MessageSerializer < ApplicationSerializer
   # {type: "open_invite", label_key: "chat.noticeAction.openInvite", params:
   # {token}} (SupportNoticeJob::ACTIONS). Nil on every other message; older apps
   # ignore it and read `body`, which always says it all.
-  field(:action) { |m| !m.deleted? && m.context.is_a?(Hash) && m.context["action"].is_a?(Hash) ? m.context["action"] : nil }
+  field(:action) do |m|
+    next nil unless !m.deleted? && m.context.is_a?(Hash) && m.context["action"].is_a?(Hash)
+
+    MessageSerializer.with_live_state(m, m.context["action"])
+  end
   field(:deleted_at) { |m| m.deleted_at }
 
   # Body: suppressed when deleted (tombstone — no content leak)
@@ -98,5 +102,21 @@ class MessageSerializer < ApplicationSerializer
     next nil unless m.offer_kind?
 
     m.offer_quantity
+  end
+
+  # A verification button is only right for the state the subject is in NOW,
+  # not when the notice was sent (owner bug, 2026-10-08: an old "rejected →
+  # Try again" kept offering a new application while one was under review).
+  # So `params.state` = the subject's current state (none / requested /
+  # verified / rejected / revoked); the apps relabel or retarget the button.
+  # Older apps ignore the extra key.
+  def self.with_live_state(message, action)
+    return action unless action["type"] == "open_verification"
+
+    params = action["params"].is_a?(Hash) ? action["params"] : {}
+    subject = params["subject"] == "shop" ? Shop.find_by(id: params["shop_id"]) : message.conversation&.buyer
+    return action unless subject
+
+    action.merge("params" => params.merge("state" => VerificationStatus.new(subject).state))
   end
 end
