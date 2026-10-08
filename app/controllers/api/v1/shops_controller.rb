@@ -54,8 +54,9 @@ class Api::V1::ShopsController < Api::V1::BaseController
       @shop.update(shop_params)
     end
     if saved
-      # A verified shop's new name/address is not what the badge vouched for.
-      SupportNoticeJob.enqueue(@shop.owner, :shop_reverify_needed, shop: @shop) if @shop.drop_badge_after_identity_change!
+      # Owner decision, 2026-10-08: once verified, a shop stays verified — the
+      # owner or a manager edits its name and address directly; editing never
+      # drops the badge (it used to: drop_badge_after_identity_change!).
       render_blue(ShopSerializer, @shop, view: :owner, options: { current_user: current_user })
     else
       render_shop_errors(@shop)

@@ -341,15 +341,17 @@ RSpec.describe "Api::V1::VerificationRequests", type: :request do
   end
 
   describe "changing the name on a verified account" do
-    it "takes the badge off, keeps the decision as it was, and asks to verify again" do
+    # Owner decision, 2026-10-08: once verified, a person stays verified.
+    it "keeps the badge and the decision; nothing to verify again" do
       request = create(:verification_request, user: user)
       request.approve!(admin: create(:admin_user))
-      put "/api/v1/users/me", params: { user: { lastname: "Different" } }, headers: headers
-      expect(user.reload).not_to be_verified
+      put "/api/v1/users/me", params: { user: { firstname: "Other", lastname: "Different" } }, headers: headers
+      expect(user.reload).to be_verified
+      expect(user.full_name).to eq("Other Different")
       expect(request.reload).to be_approved
 
       get "/api/v1/verification_requests/current", headers: headers
-      expect(response.parsed_body["verification_status"]).to include("status" => "none", "name_changed" => true)
+      expect(response.parsed_body["verification_status"]).to include("status" => "verified", "name_changed" => false)
     end
 
     it "changes nothing for someone who never applied" do

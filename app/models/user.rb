@@ -108,17 +108,6 @@ class User < ApplicationRecord
     missing
   end
 
-  # A verified person who changes their name loses the badge: it vouched for
-  # the OLD name. They re-apply (the status card says "Your name changed —
-  # verify again", VerificationStatus#name_changed?). Decided rows are history
-  # and stay exactly as they were. Called from the user's own profile edit,
-  # not on admin edits.
-  def drop_badge_after_name_change!
-    return unless verified? && (saved_change_to_firstname? || saved_change_to_lastname?)
-
-    update!(verified: false)
-  end
-
   # Account deletion: nothing of an ID document may outlive the account. Open
   # requests are cancelled (so none sits in the admin queue forever), every
   # photo is deleted, and the name on the document + the number are blanked.

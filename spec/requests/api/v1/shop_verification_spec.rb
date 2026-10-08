@@ -126,21 +126,16 @@ RSpec.describe VerificationRequest, "for a shop", type: :model do
     expect(shop.reload.verified?).to be(false)
   end
 
-  it "a name/address change drops the badge but never rewrites the decided request" do
+  # Owner decision, 2026-10-08: once verified, a shop stays verified; editing
+  # never drops the badge and never rewrites the decision.
+  it "a name, address or any other change keeps the badge and the decided request" do
     request.approve!(admin: admin)
     decided_at = request.reload.decided_at
-    shop.reload.update!(name: "Another name")
-    expect(shop.drop_badge_after_identity_change!).to be(true)
-    expect(shop.reload.verified?).to be(false)
-    expect(request.reload).to have_attributes(status: "approved", decided_at: decided_at, decided_by_id: admin.id)
-    expect(VerificationStatus.new(shop.reload)).to have_attributes(state: "none", name_changed?: true)
-  end
-
-  it "keeps the badge for changes that are not the name or address" do
-    request.approve!(admin: admin)
-    shop.reload.update!(description: "New description", hours: { "sat" => [ %w[09:00 17:00] ] })
-    expect(shop.drop_badge_after_identity_change!).to be(false)
+    shop.reload.update!(name: "Another name", address_line: "Shahr-e Naw, Street 5", latitude: 34.53, longitude: 69.17,
+                        description: "New description")
     expect(shop.reload.verified?).to be(true)
+    expect(request.reload).to have_attributes(status: "approved", decided_at: decided_at, decided_by_id: admin.id)
+    expect(VerificationStatus.new(shop.reload)).to have_attributes(state: "verified", name_changed?: false)
   end
 
   it "sends the shop notices in the owner's language, all four locales" do
@@ -236,13 +231,18 @@ RSpec.describe "Shop edit after verification", type: :request do
     expect(JSON.parse(response.body).dig("verification_status", "request")).to include("files_purged" => true, "files_count" => 0)
   end
 
-  it "the owner renaming the shop drops the badge and tells them, in their language" do
+  # Owner decision, 2026-10-08: renaming a verified shop applies at once and
+  # keeps the badge; nothing is queued (no notice, no request).
+  it "the owner renaming a verified shop keeps the badge; nothing is queued" do
     expect do
-      patch "/api/v1/shops/#{shop.id}", params: { shop: { name: "Renamed" } }.to_json, headers: headers
-    end.to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_reverify_needed", shop.id)
-    expect(shop.reload.verified?).to be(false)
+      patch "/api/v1/shops/#{shop.id}", params: { shop: { name: "Renamed", address_line: "Karte Seh, Street 3" } }.to_json,
+                                        headers: headers
+    end.not_to have_enqueued_job(SupportNoticeJob)
+    expect(response).to have_http_status(:ok)
+    expect(shop.reload).to have_attributes(name: "Renamed", address_line: "Karte Seh, Street 3")
+    expect(shop.verified?).to be(true)
     get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: headers
-    expect(JSON.parse(response.body)["verification_status"]).to include("status" => "none", "name_changed" => true)
+    expect(JSON.parse(response.body)["verification_status"]).to include("status" => "verified", "name_changed" => false)
   end
 end
 

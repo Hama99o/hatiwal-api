@@ -34,18 +34,10 @@ class VerificationStatus
 
   def missing = state == "verified" ? [] : subject.verification_missing
 
-  # The badge came off because the person changed their name after approval
-  # (User#drop_badge_after_name_change!): the card says "verify again".
-  # Derived, not stored: approved, no badge, and the name no longer matches.
-  def name_changed?
-    # SHOP-1: a shop's badge only comes off without a decision when the owner
-    # changed its name or address (Shop#drop_badge_after_identity_change!) — an
-    # admin removal writes a `revoked` row instead.
-    return state == "none" && request&.approved? if subject.is_a?(Shop)
-    return false unless state == "none" && request&.approved? && request.name_on_document.present?
-
-    !request.name_on_document.squish.casecmp?(subject.full_name.squish)
-  end
+  # Always false since the owner decision of 2026-10-08: once verified, editing
+  # a name or address never drops the badge, so there is no "your name changed
+  # — verify again" state. Kept in the payload for the apps that read it.
+  def name_changed? = false
 
   # The reason in the subject's language (the clients also translate
   # reason_code themselves; this is the fallback and the "other" free text).

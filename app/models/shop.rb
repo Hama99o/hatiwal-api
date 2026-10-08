@@ -274,20 +274,6 @@ class Shop < ApplicationRecord
     true
   end
 
-  # ── Losing the badge (docs/SHOPS.md, "Losing it") ──────────────────────────
-  # The badge vouched for THIS name and address. After the owner changes either,
-  # it comes off; the owner re-applies (the status card says "Your shop
-  # name/address changed — verify again", VerificationStatus#name_changed?).
-  # Decided requests are history and are never rewritten — the same rule as
-  # User#drop_badge_after_name_change! (VER-1, 1988052). Called from the owner's
-  # own edit (ShopsController#update), never as a callback. True when dropped.
-  def drop_badge_after_identity_change!
-    return false unless verified? && saved_change_to_identity?
-
-    update_columns(verified_at: nil, verified_by_id: nil, updated_at: Time.current)
-    true
-  end
-
   # The open intervals around `now` as [start, end] times, merged so a range
   # that runs past midnight into the next day's first range reads as one.
   def hour_intervals(now)
@@ -313,10 +299,6 @@ class Shop < ApplicationRecord
   def open_interval(at)
     now = at.in_time_zone(time_zone)
     hour_intervals(now).find { |start, stop| start <= now && now < stop }
-  end
-
-  def saved_change_to_identity?
-    saved_change_to_name? || saved_change_to_address_line? || saved_change_to_latitude? || saved_change_to_longitude?
   end
 
   # ── Closing (the owner's "Close my shop", or their account deletion) ───────

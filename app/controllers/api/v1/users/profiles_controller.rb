@@ -6,8 +6,9 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
   end
 
   def update_me
+    # Owner decision, 2026-10-08: once verified, a person stays verified — a
+    # name change no longer drops the badge (drop_badge_after_name_change!).
     if current_user.update(profile_params)
-      current_user.drop_badge_after_name_change!
       render_blue(UserSerializer, current_user, view: :me)
     else
       render_unprocessable_entity(current_user)
