@@ -57,6 +57,11 @@ class Listings::DuplicateService
 
   # In the original's order. `create_and_upload!` uploads while the original's
   # file is open, then the new blob is attached to the copy.
+  #
+  # A photo whose FILE is gone (a blob row left without its file in storage)
+  # is skipped and logged: the other photos and the draft still come through.
+  # It used to raise ActiveStorage::FileNotFoundError and fail the whole
+  # duplicate (owner bug, 2026-10-08, dev DB).
   def copy_photos_to(copy)
     @listing.images.each do |image|
       blob = image.blob
@@ -66,6 +71,8 @@ class Listings::DuplicateService
         )
         copy.images.attach(new_blob)
       end
+    rescue ActiveStorage::FileNotFoundError
+      Rails.logger.warn("[Listings::DuplicateService] listing #{@listing.id}: photo blob #{blob.id} has no file, not copied")
     end
   end
 end

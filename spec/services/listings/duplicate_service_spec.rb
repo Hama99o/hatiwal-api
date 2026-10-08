@@ -34,6 +34,23 @@ RSpec.describe Listings::DuplicateService do
     expect(copy.images.map { |i| i.blob.checksum }).to eq(original.images.map { |i| i.blob.checksum })
   end
 
+  # Owner bug, 2026-10-08: a blob whose file is missing failed the whole copy.
+  it "skips a photo whose file is missing, logs it, and still copies the rest" do
+    original = create(:listing, :active, user: owner)
+    add_photo(original, "front.jpg")
+    add_photo(original, "lost.jpg")
+    add_photo(original, "back.jpg")
+    lost = original.images.find { |i| i.filename.to_s == "lost.jpg" }.blob
+    lost.service.delete(lost.key)
+    allow(Rails.logger).to receive(:warn)
+
+    copy = duplicate(original, owner, nil)
+
+    expect(copy).to be_persisted.and be_draft
+    expect(copy.images.map { |i| i.filename.to_s }).to eq(%w[front.jpg back.jpg])
+    expect(Rails.logger).to have_received(:warn).with(/blob #{lost.id} has no file/)
+  end
+
   it "deleting the original never removes the duplicate's photos" do
     original = create(:listing, :active, user: owner)
     add_photo(original, "front.jpg")
