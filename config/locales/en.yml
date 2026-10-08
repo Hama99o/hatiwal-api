@@ -96,7 +96,7 @@ en:
       already_requested: "A request is already under review."
       unknown_subject: "Unknown verification subject."
       daily_limit: "You've sent 3 requests today. Please try again tomorrow."
-      owner_only: "Only the shop's owner can apply for its Verified badge."
+      owner_only: "Only the shop's owner or a manager can apply for its Verified badge."
     reasons:
       photo_not_clear: "The photo is not clear"
       name_mismatch: "The name does not match your document"

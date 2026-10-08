@@ -287,49 +287,94 @@ RSpec.describe "Shop verification card: the owner's document stays the owner's",
   end
 end
 
-# Owner bug, 2026-10-08: after a rename dropped a shop's badge, re-applying
-# answered a bare 403 and the app said "check your connection". The OWNER can
-# re-apply (201); a manager gets the reason, coded and in their language, and
-# the card tells the app up front (can_apply).
-RSpec.describe "Re-applying after a rename dropped the shop's badge", type: :request do
+# Owner, 2026-10-08: the owner OR a manager applies, with their own e-Tazkira;
+# staff get a coded reason in their language (a backstop: the apps don't show
+# them the card). The document details go to the APPLICANT only. The badge
+# vouches for the applicant: if they stop being the owner or a manager, it
+# comes off and the shop's Support thread says so.
+RSpec.describe "Who applies for a shop's badge, and who it vouches for", type: :request do
+  include ActiveJob::TestHelper
+
   let(:admin) { create(:admin_user) }
   let(:shop) { create(:shop, :verification_eligible) }
   let(:owner) { shop.owner }
-  let(:manager) { create(:user, :confirmed, preferred_language: "ps") }
+  let(:manager) { create(:user, :confirmed, firstname: "Mina", lastname: "Manager") }
+  let(:staff) { create(:user, :confirmed, preferred_language: "ps") }
   let(:image) { Rack::Test::UploadedFile.new(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg") }
+
+  before do
+    shop.shop_members.create!(user: manager, role: :manager)
+    shop.shop_members.create!(user: staff, role: :staff)
+  end
 
   def apply_as(user)
     post "/api/v1/verification_requests", headers: auth_headers_for(user), params: {
       subject: "shop:#{shop.id}",
-      verification_request: { document_type: "e_tazkira", name_on_document: owner.full_name, document_number: "1234564821",
+      verification_request: { document_type: "e_tazkira", name_on_document: user.full_name, document_number: "1234564821",
                               front: image, back: image, selfie: image, proof: image }
     }
   end
 
-  before do
-    shop.shop_members.create!(user: manager, role: :manager)
-    create(:shop_verification_request, shop: shop).approve!(admin: admin)
-    patch "/api/v1/shops/#{shop.id}", params: { shop: { name: "Renamed Shop" } }.to_json,
-                                      headers: auth_headers_for(owner).merge("Content-Type" => "application/json")
-    expect(shop.reload.verified?).to be(false)
+  def card_for(user)
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: auth_headers_for(user)
+    JSON.parse(response.body)["verification_status"]
   end
 
-  it "the owner re-applies: 201, under review" do
-    apply_as(owner)
-    expect(response).to have_http_status(:created)
-    expect(JSON.parse(response.body).dig("verification_status", "status")).to eq("requested")
-  end
-
-  it "a manager is told why, in their language, with a code; the card says can_apply false" do
+  it "a manager applies (201), recorded as the applicant; the owner too" do
     apply_as(manager)
+    expect(response).to have_http_status(:created)
+    expect(shop.verification_requests.last.requested_by).to eq(manager)
+  end
+
+  it "staff: a coded 403 in their language; can_apply false for staff, true for owner and manager" do
+    apply_as(staff)
     expect(response).to have_http_status(:forbidden)
     body = JSON.parse(response.body)
     expect(body["code"]).to eq("verification_owner_only")
     expect(body["error"]).to eq(I18n.t("verification.errors.owner_only", locale: :ps))
+    expect(card_for(staff)["can_apply"]).to be(false)
+    expect(card_for(manager)["can_apply"]).to be(true)
+    expect(card_for(owner)["can_apply"]).to be(true)
+  end
 
-    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: auth_headers_for(manager)
-    expect(JSON.parse(response.body)["verification_status"]).to include("can_apply" => false, "name_changed" => true)
-    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: auth_headers_for(owner)
-    expect(JSON.parse(response.body)["verification_status"]).to include("can_apply" => true)
+  it "the document details go to the applicant only — not the owner, not staff" do
+    apply_as(manager)
+    shop.verification_requests.last.reject!(admin: admin, reason_code: "photo_not_clear")
+    expect(card_for(manager)["request"]["name_on_document"]).to eq("Mina Manager")
+    expect(card_for(manager)["reason"]).to be_present
+    [ owner, staff ].each do |other|
+      card = card_for(other)
+      expect(card["request"].values_at("name_on_document", "document_last4", "reason_code")).to eq([ nil, nil, nil ])
+      expect(card["reason"]).to be_nil
+    end
+  end
+
+  describe "the badge vouches for its applicant" do
+    before do
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("SUPPORT_ADMIN_INITIATE", "false").and_return("true")
+      apply_as(manager)
+      shop.verification_requests.last.approve!(admin: admin)
+      expect(shop.reload.verified?).to be(true)
+    end
+
+    it "the applicant made Staff: the badge comes off; the owner is told in the shop thread" do
+      perform_enqueued_jobs(only: SupportNoticeJob) { shop.change_role!(manager, role: :staff, by: owner) }
+      expect(shop.reload.verified?).to be(false)
+      thread = Conversation.shop_support.find_by(shop_id: shop.id)
+      notice = thread.messages.order(:id).to_a.find { |m| m.body.include?("Mina Manager") }
+      expect(notice).to be_present, thread.messages.pluck(:body).inspect
+      expect(notice.context).to include("action" => include("type" => "open_verification"))
+    end
+
+    it "the applicant leaves, or is removed: the badge comes off" do
+      shop.leave!(manager)
+      expect(shop.reload.verified?).to be(false)
+    end
+
+    it "someone else leaving keeps it" do
+      shop.leave!(staff)
+      expect(shop.reload.verified?).to be(true)
+    end
   end
 end

@@ -144,6 +144,7 @@ class Shop < ApplicationRecord
     end
     ShopTeamPushJob.perform_later("shop_membership_changed", user.id, id, by.id, "role_changed")
     SupportNoticeJob.enqueue(user, :shop_role_changed, shop: self)
+    drop_badge_if_applicant_gone!(user)
     member
   end
 
@@ -250,6 +251,28 @@ class Shop < ApplicationRecord
   end
 
   def hours_stated? = hours.is_a?(Hash) && hours.any?
+
+  # ── The badge vouches for its APPLICANT (owner decision, 2026-10-08) ───────
+  # The owner or a manager applies with their own e-Tazkira. If that person
+  # later stops being the owner or a manager here (leaves, is removed, is made
+  # Staff), the badge comes off — the same as an ownership transfer — and the
+  # shop's Support thread says so; the owner or a manager re-applies.
+  def badge_applicant
+    return nil unless verified?
+
+    verification_requests.approved.order(decided_at: :desc).first&.requested_by
+  end
+
+  def drop_badge_if_applicant_gone!(user)
+    applicant = badge_applicant
+    return false unless applicant && applicant.id == user.id
+    return false if ShopPolicy.new(user, self).apply_verification?
+
+    update_columns(verified_at: nil, verified_by_id: nil, updated_at: Time.current)
+    ShopAuditEvent.record!(self, :badge_dropped, actor: nil, target_user: user, reason: "applicant_left")
+    SupportNoticeJob.enqueue(owner, :shop_badge_applicant_left, shop: self, actor: user)
+    true
+  end
 
   # ── Losing the badge (docs/SHOPS.md, "Losing it") ──────────────────────────
   # The badge vouched for THIS name and address. After the owner changes either,
@@ -520,6 +543,7 @@ class Shop < ApplicationRecord
       User.where(id: member.user_id, active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
       ShopAuditEvent.record!(self, action, actor: actor, target_user: member.user, **data)
     end
+    drop_badge_if_applicant_gone!(member.user)
     if action == :removed
       ShopTeamPushJob.perform_later("shop_membership_changed", member.user_id, id, actor&.id, "removed")
       SupportNoticeJob.enqueue(member.user, :shop_member_removed, shop: self)

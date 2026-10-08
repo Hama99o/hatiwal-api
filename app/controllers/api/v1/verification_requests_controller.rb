@@ -24,10 +24,10 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
   def create
     return render_daily_limit_reached if VerificationRequest.daily_limit_reached?(current_user)
 
-    # A shop's Verified badge is applied for by its OWNER (their own e-Tazkira).
-    # A manager or staff member gets that reason, coded and in their language,
-    # not a bare 403 the app could only call a "connection" problem (owner bug,
-    # 2026-10-08: a manager renamed a verified shop, then could not re-apply).
+    # A shop's Verified badge is applied for by its owner or a manager (their
+    # own e-Tazkira). Staff get that reason, coded and in their language — a
+    # backstop: the apps don't show staff the card or the flow at all (owner,
+    # 2026-10-08). Not a bare 403 the app could only call a "connection" problem.
     if @subject.is_a?(Shop) && @subject.member?(current_user) && !ShopPolicy.new(current_user, @subject).apply_verification?
       return render_coded_error(error_text(:owner_only), code: :verification_owner_only, status: :forbidden)
     end
@@ -56,15 +56,24 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
   private
 
   def render_status(status: :ok)
-    render_blue(VerificationStatusSerializer, VerificationStatus.new(@subject.reload), status: status,
-                                                                                   options: { private_details: private_details? })
+    card = VerificationStatus.new(@subject.reload)
+    render_blue(VerificationStatusSerializer, card, status: status,
+                                                    options: { private_details: private_details?(card), can_apply: can_apply? })
   end
 
   # The document details (name on it, last 4 digits, the rejection reason) are
-  # the applicant's: the person themself, or for a shop the one who may apply
-  # (the owner). The rest of the team sees the state (review 2026-10-08).
-  def private_details?
+  # the APPLICANT's alone: the person themself, or for a shop the member who
+  # sent the request shown — not the owner, not the rest of the team (owner,
+  # 2026-10-08; review 2026-10-08).
+  def private_details?(card)
     return @subject == current_user if @subject.is_a?(User)
+
+    card.shown_request.nil? || card.shown_request.requested_by_id == current_user.id
+  end
+
+  # May this viewer apply? Me: yes. A shop: its owner or a manager.
+  def can_apply?
+    return true if @subject.is_a?(User)
 
     ShopPolicy.new(current_user, @subject).apply_verification?
   end

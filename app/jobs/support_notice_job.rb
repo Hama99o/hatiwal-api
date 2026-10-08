@@ -44,7 +44,7 @@ class SupportNoticeJob < ApplicationJob
   # Owner, 2026-10-12: Support is per identity. These are about THE SHOP, so they
   # go to the shop's own Support thread (its whole team reads it); every other
   # notice is about the person and goes to their own thread.
-  SHOP_THREAD_NOTICES = (SHOP_NOTICES + %i[shop_member_joined]).freeze
+  SHOP_THREAD_NOTICES = (SHOP_NOTICES + %i[shop_member_joined shop_badge_applicant_left]).freeze
 
   # SHOP-3 team events (owner, 2026-10-07: "the same system as for users"),
   # alongside ShopTeamPushJob. key => what must STILL hold when the job runs:
@@ -60,7 +60,10 @@ class SupportNoticeJob < ApplicationJob
     shop_role_changed: ->(user, shop, _actor, _invite) { shop.shop_members.where(user: user).where.not(role: :owner).exists? },
     # Transfer: the new owner, and the old owner (now a manager).
     shop_ownership_received: ->(user, shop, _actor, _invite) { shop.owner_id == user.id },
-    shop_ownership_handed_over: ->(user, shop, actor, _invite) { actor && shop.owner_id == actor.id && shop.member?(user) }
+    shop_ownership_handed_over: ->(user, shop, actor, _invite) { actor && shop.owner_id == actor.id && shop.member?(user) },
+    # To the OWNER, in the shop's thread: the badge came off because the member
+    # who applied for it is no longer the owner or a manager (owner, 2026-10-08).
+    shop_badge_applicant_left: ->(user, shop, _actor, _invite) { shop.owner_id == user.id && !shop.verified? }
   }.freeze
 
   # Owner, 2026-10-12: a notice with a natural target gets a button
@@ -81,6 +84,7 @@ class SupportNoticeJob < ApplicationJob
     shop_role_changed: %w[open_shop viewShop],
     shop_ownership_received: %w[open_team viewTeam],
     shop_ownership_handed_over: %w[open_shop viewShop],
+    shop_badge_applicant_left: %w[open_verification verifyAgain],
     listing_expires_week: %w[open_listing renewListing],
     listing_expires_day: %w[open_listing renewListing]
   }.freeze

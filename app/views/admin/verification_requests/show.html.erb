@@ -2,10 +2,12 @@
     each one served is written to the audit log (shown at the bottom). %>
 <%
   r = @verification
-  # SHOP-1: for a shop request, `user` is the shop's OWNER (the person behind
-  # it) and the shop's own facts come from the _shop_facts partial.
+  # SHOP-1: for a shop request, `user` is the APPLICANT — the owner or a
+  # manager, with their own e-Tazkira (owner decision, 2026-10-08) — and the
+  # shop's own facts come from the _shop_facts partial.
   shop = r.shop_subject? ? r.subject : nil
-  user = shop ? shop.owner : @user
+  user = shop ? r.requested_by : @user
+  applicant_role = shop && (shop.shop_members.find_by(user_id: user.id)&.role || "no longer on the team")
   names_match = r.name_on_document.to_s.squish.casecmp?(user.full_name.squish)
   reports_count = user.reports_against.size
   warnings_count = user.active_warnings_count
@@ -17,7 +19,7 @@
 <header class="hw-page-header">
   <div>
     <h1 class="hw-page-header__title main-content__page-title">
-      Verification — <% if shop %><span dir="auto">🏪 <%= shop.name %></span> · owner <% end %><%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto" %>
+      Verification — <% if shop %><span dir="auto">🏪 <%= shop.name %></span> · applied by <% end %><%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto", id: "verify-applicant" %><% if shop %> <span class="hw-badge hw-badge--plain" id="verify-applicant-role">(<%= applicant_role.to_s.humanize %>)</span><% end %>
       <%= render "status_badge", request: r %>
     </h1>
     <p class="hw-page-header__subtitle">

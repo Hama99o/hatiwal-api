@@ -20,11 +20,14 @@ class ShopPolicy < ApplicationPolicy
   # (Shop#remove_team_member! keeps a manager off managers and the owner).
   def team? = member?
   def manage_team? = EDITORS.include?(role)
-  # Owner only: roles, ownership, and the Verified application (it is the
-  # owner's own e-Tazkira).
+  # Owner only: roles and ownership.
   def change_role? = role == "owner"
   def transfer? = role == "owner"
-  def apply_verification? = role == "owner"
+  # Owner decision, 2026-10-08: "if a manager can change the shop's info, they
+  # should be able to apply too." The owner OR a manager applies, with their
+  # OWN e-Tazkira; the badge then vouches for that applicant (Shop#
+  # drop_badge_if_applicant_gone!). Never staff.
+  def apply_verification? = EDITORS.include?(role)
 
   class Scope < ApplicationPolicy::Scope
     def resolve
