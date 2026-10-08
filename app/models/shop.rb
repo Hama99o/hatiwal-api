@@ -102,6 +102,7 @@ class Shop < ApplicationRecord
     raise ShopInvite::Refused.new(:team_full) if team_full?
 
     invite = self.class.transaction do
+      team_actor!(by, :owner, :manager)
       self.class.lock_owner!(owner_id) # one owner's invites are counted one at a time
       if invites.where("shop_invites.created_at > ?", 1.day.ago).count >= ShopInvite::DAILY_LIMIT
         raise ShopInvite::Refused.new(:too_many_invites, status: :too_many_requests)
@@ -120,12 +121,15 @@ class Shop < ApplicationRecord
 
   # The owner removes anyone but themselves; a manager removes STAFF only.
   def remove_team_member!(user, by:)
-    member = shop_members.find_by(user_id: user.id)
-    raise ShopInvite::Refused.new(:not_a_member, status: :not_found) unless member
-    raise ShopInvite::Refused.new(:owner_cannot_leave) if member.owner?
-    raise ShopInvite::Refused.new(:forbidden, status: :forbidden) if !owner?(by) && !member.staff?
+    transaction do
+      actor = team_actor!(by, :owner, :manager)
+      member = shop_members.find_by(user_id: user.id)
+      raise ShopInvite::Refused.new(:not_a_member, status: :not_found) unless member
+      raise ShopInvite::Refused.new(:owner_cannot_leave) if member.owner?
+      raise ShopInvite::Refused.new(:forbidden, status: :forbidden) if !actor.owner? && !member.staff?
 
-    drop_member!(member, :removed, actor: by)
+      drop_member!(member, :removed, actor: by)
+    end
   end
 
   # The owner changes a member's role (manager ⇄ staff). The owner's own role
@@ -139,6 +143,7 @@ class Shop < ApplicationRecord
 
     from = member.role
     transaction do
+      team_actor!(by, :owner)
       member.update!(role: role.to_s)
       ShopAuditEvent.record!(self, :role_changed, actor: by, target_user: user, from: from, to: role.to_s)
     end
@@ -164,6 +169,7 @@ class Shop < ApplicationRecord
     was_verified = verified?
     transaction do
       lock!
+      team_actor!(by, :owner)
       shop_members.find_by!(user_id: old_owner_id).update!(role: :manager)
       target.update!(role: :owner)
       chats = Conversation.where(shop_id: id)
@@ -521,6 +527,18 @@ class Shop < ApplicationRecord
 
   def apply_approval_switch
     self.status = :pending if self.class.approval_required? && active?
+  end
+
+  # Edge-case pass 2026-10-08: the controller authorizes, then calls the model;
+  # a role change landing in between must not let the OLD role act (a manager
+  # just made Staff removing someone, an old owner changing roles). Re-checked
+  # here on the actor's membership row, locked until the action commits, so a
+  # concurrent change_role!/transfer (which writes that row) waits or is seen.
+  def team_actor!(by, *roles)
+    actor = by && shop_members.lock.find_by(user_id: by.id)
+    raise ShopInvite::Refused.new(:forbidden, status: :forbidden) unless actor && roles.map(&:to_s).include?(actor.role)
+
+    actor
   end
 
   def add_owner_as_member
