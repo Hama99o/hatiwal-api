@@ -167,7 +167,7 @@ class ApplicationController < ActionController::API
       error:   "account_#{current_user.status}",
       status:  current_user.status,
       message: current_user.account_block_message,
-      reason:  current_user.block_reason
+      reason:  current_user.display_block_reason
     }, status: :forbidden
   end
 

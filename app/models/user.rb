@@ -345,13 +345,31 @@ class User < ApplicationRecord
   # Human-readable "you are blocked" message. Always states they are blocked;
   # when the admin gave a reason, it is appended ("… Reason: <reason>"). The bare
   # reason is also returned separately for clients that want it structured.
+  # In the user's OWN language: the API does not switch locale per request
+  # (edge pass 1.1.6, 2026-10-08 — it was always English).
   def account_block_message
     return unless account_blocked?
 
-    base = I18n.t("accounts.blocked.#{status}", default: I18n.t("accounts.blocked.default"))
-    return base if block_reason.blank?
+    locale = reader_locale
+    base = I18n.t("accounts.blocked.#{status}", locale: locale, default: I18n.t("accounts.blocked.default", locale: locale))
+    reason = display_block_reason
+    return base if reason.blank?
 
-    "#{base} #{I18n.t('accounts.blocked.reason', reason: block_reason)}"
+    "#{base} #{I18n.t('accounts.blocked.reason', reason: reason, locale: locale)}"
+  end
+
+  # The reason as the user should read it: an admin's words as written; the
+  # automatic one (3 warnings) — stored in whatever locale was current when it
+  # happened — in the user's own language.
+  def display_block_reason
+    return block_reason unless auto_blocked? && suspended?
+
+    I18n.t("accounts.auto_suspended_reason", count: WARNING_BLOCK_THRESHOLD, locale: reader_locale)
+  end
+
+  def reader_locale
+    locale = preferred_language.presence&.to_sym
+    locale && I18n.locale_available?(locale) ? locale : I18n.default_locale
   end
 
   # ── Self-deletion (anonymize, keep history) ──────────────────────────────────

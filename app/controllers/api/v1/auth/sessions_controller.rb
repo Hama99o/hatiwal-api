@@ -41,7 +41,7 @@ module Api
               403,
               @resource.account_block_message,
               status: @resource.status,
-              reason: @resource.block_reason
+              reason: @resource.display_block_reason
             )
           else
             super

@@ -4,7 +4,7 @@ require "rails_helper"
 RSpec.describe "Account blocking", type: :request do
   describe "logging in while blocked" do
     it "rejects a banned user, with the reason folded into the message" do
-      user = create(:user, status: :banned, block_reason: "Repeatedly posting spam")
+      user = create(:user, status: :banned, block_reason: "Repeatedly posting spam", preferred_language: "en")
 
       post "/api/v1/auth/sign_in", params: { email: user.email, password: user.password }, as: :json
 
@@ -18,7 +18,7 @@ RSpec.describe "Account blocking", type: :request do
     end
 
     it "falls back to the default message when no reason was given" do
-      user = create(:user, status: :banned, block_reason: nil)
+      user = create(:user, status: :banned, block_reason: nil, preferred_language: "en")
 
       post "/api/v1/auth/sign_in", params: { email: user.email, password: user.password }, as: :json
 
