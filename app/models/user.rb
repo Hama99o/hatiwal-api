@@ -395,6 +395,11 @@ class User < ApplicationRecord
   # user" so the other participant keeps their conversation history.
   def anonymize_account!
     transaction do
+      # SHOP-3: deleting the account is leaving every shop they are a member of,
+      # with the same rules as Shop#leave! — first, so the products they posted
+      # for a shop pass to its owner instead of being hidden below, and a badge
+      # they applied for comes off (edge pass 2026-10-08).
+      shop_members.where.not(role: :owner).includes(:shop).find_each { |m| m.shop.leave!(self) }
       # Hide active listings from the public feed but keep them for chat history.
       listings.where(removed_at: nil)
               .update_all(removed_at: Time.current, removed_reason: "account_deleted", updated_at: Time.current)

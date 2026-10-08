@@ -115,11 +115,11 @@ class Conversation < ApplicationRecord
   SQL
 
   # Messages `:u` hasn't read that count as inbound: not their own, and, on
-  # the seller side of a shop chat, not a teammate's (the team shares one inbox).
+  # the seller side of a shop chat, only the buyer's (the team shares one
+  # inbox). Decided by the AUTHOR, not by today's team: a former member's
+  # messages stay the shop's, never "unread" for the rest (edge pass 2026-10-08).
   INBOUND_MESSAGE_SQL = <<~SQL.squish.freeze
-    messages.user_id <> :u AND (conversations.buyer_id = :u OR messages.user_id NOT IN (
-      SELECT sm.user_id FROM shop_members sm
-       WHERE sm.shop_id = conversations.shop_id))
+    messages.user_id <> :u AND (conversations.buyer_id = :u OR messages.user_id = conversations.buyer_id)
   SQL
 
   # A user with no shop (almost everyone) gets the plain, shop-free SQL: the
@@ -299,8 +299,11 @@ class Conversation < ApplicationRecord
     end
   end
 
-  # A teammate wrote it as the shop (MessageSerializer, push titles).
-  def written_as_shop?(user_id) = shop_face.present? && seller_side_user_ids.include?(user_id)
+  # A teammate wrote it as the shop (MessageSerializer, push titles): anyone on
+  # the seller side, i.e. not the buyer — by the author, not by today's team, so
+  # what a member wrote stays the shop's after they leave and their personal
+  # name never surfaces to the buyer (edge pass 2026-10-08).
+  def written_as_shop?(user_id) = shop_face.present? && user_id.present? && user_id != buyer_id
 
   # SHOP-3 — why a team member (seller side, not the seller) can't send here,
   # or nil: a block between the buyer and the OWNER ends the chat for the whole
@@ -317,7 +320,7 @@ class Conversation < ApplicationRecord
   # What `user` hasn't read: see INBOUND_MESSAGE_SQL.
   def inbound_messages_for(user)
     scope = messages.where.not(user_id: user.id)
-    side_for(user) == :seller ? scope.where.not(user_id: seller_side_user_ids) : scope
+    side_for(user) == :seller ? scope.where(user_id: buyer_id) : scope
   end
 
   # Returns true when this conversation is archived for the given user.
@@ -379,8 +382,8 @@ class Conversation < ApplicationRecord
   # hash via opts[:unread_counts] to avoid one COUNT query per row.
   def unread_count_for(user)
     if messages.loaded?
-      own_side = side_for(user) == :seller ? seller_side_user_ids : [ user.id ]
-      messages.count { |m| m.read_at.nil? && own_side.exclude?(m.user_id) }
+      seller = side_for(user) == :seller
+      messages.count { |m| m.read_at.nil? && m.user_id != user.id && (!seller || m.user_id == buyer_id) }
     else
       inbound_messages_for(user).where(read_at: nil).count
     end
