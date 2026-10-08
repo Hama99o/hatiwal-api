@@ -47,4 +47,26 @@ RSpec.describe "A shop member deletes their account — edge cases" do
     staff.anonymize_account!
     expect(staff.reload).to have_attributes(active_shop_id: nil, shop_memberships_count: 0)
   end
+
+  describe "the usual path: deletion is requested (30-day grace), then finalized" do
+    it "a member's shop products stay live through the grace period and end with the owner, still live" do
+      product = create(:listing, :active, user: staff, shop: shop)
+      personal = create(:listing, :active, user: staff)
+
+      staff.schedule_deletion!
+      expect(product.reload.removed_at).to be_nil # the shop keeps selling it
+      expect(personal.reload.removed_at).to be_present
+
+      staff.anonymize_account!
+      expect(product.reload).to have_attributes(user_id: owner.id, shop_id: shop.id, removed_at: nil)
+    end
+
+    it "the OWNER's own shop products are hidden with their account (their shop closes with it)" do
+      product = create(:listing, :active, user: owner, shop: shop)
+      owner.schedule_deletion!
+      expect(product.reload.removed_at).to be_present
+      owner.cancel_deletion!
+      expect(product.reload.removed_at).to be_nil
+    end
+  end
 end

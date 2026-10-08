@@ -388,7 +388,12 @@ class User < ApplicationRecord
   # data is left intact so logging back in within the grace period can restore it.
   def schedule_deletion!
     transaction do
+      # Their personal listings and their OWN shops' products. Not what they
+      # posted for someone else's shop: that is the shop's, which keeps selling
+      # it, and it passes to the owner when the deletion is final (Shop#leave!
+      # from anonymize_account!; edge pass 2026-10-08).
       listings.where(removed_at: nil)
+              .where("listings.shop_id IS NULL OR listings.shop_id IN (SELECT shops.id FROM shops WHERE shops.owner_id = ?)", id)
               .update_all(removed_at: Time.current, removed_reason: "pending_deletion", updated_at: Time.current)
       update!(deletion_scheduled_at: Time.current, tokens: {})
     end
