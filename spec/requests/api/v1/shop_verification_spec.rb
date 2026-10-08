@@ -138,11 +138,18 @@ RSpec.describe VerificationRequest, "for a shop", type: :model do
     expect(VerificationStatus.new(shop.reload)).to have_attributes(state: "verified", name_changed?: false)
   end
 
+  # Owner, 2026-10-08: once verified, editing never drops the badge, so the old
+  # "you changed the name or address, verify again" notice no longer exists.
+  it "there is no 'verify again after an edit' notice any more" do
+    expect { SupportNoticeJob.enqueue(shop.owner, :shop_reverify_needed, shop: shop) }.to raise_error(ArgumentError, /unknown support notice/)
+    expect(I18n.exists?("support.notices.shop_reverify_needed", :en)).to be(false)
+  end
+
   it "sends the shop notices in the owner's language, all four locales" do
     request.approve!(admin: admin)
     User::SUPPORTED_LANGUAGES.each do |locale|
-      %w[shop_verified shop_verification_rejected shop_badge_removed shop_reverify_needed].each do |key|
-        text = I18n.t("support.notices.#{key}", locale: locale, shop: "Safi", reason: "x", name: "A", raise: true)
+      %w[shop_verified shop_verification_rejected shop_badge_removed shop_badge_applicant_left].each do |key|
+        text = I18n.t("support.notices.#{key}", locale: locale, shop: "Safi", reason: "x", name: "A", member: "M", raise: true)
         expect(text).to include("Safi")
       end
     end

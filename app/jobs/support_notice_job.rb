@@ -24,8 +24,6 @@ class SupportNoticeJob < ApplicationJob
     shop_verified: ->(_user, shop) { shop&.verified? },
     shop_verification_rejected: ->(_user, shop) { shop&.latest_verification_request&.rejected? },
     shop_badge_removed: ->(_user, shop) { shop && !shop.verified? && shop.latest_verification_request&.revoked? },
-    # The owner changed the verified shop's name/address: the badge came off.
-    shop_reverify_needed: ->(_user, shop) { shop && !shop.verified? && shop.latest_verification_request&.approved? },
     # UPD-1: "please update" for app builds too old to be blocked (1.1.5 and
     # older). Once per user per target version: AppUpdateNotice.
     app_update_available: ->(_user) { true }
@@ -39,7 +37,7 @@ class SupportNoticeJob < ApplicationJob
   # listing reminds in the shop's own thread.
   LISTING_NOTICES = %i[listing_expires_week listing_expires_day].freeze
 
-  SHOP_NOTICES = %i[shop_verified shop_verification_rejected shop_badge_removed shop_reverify_needed].freeze
+  SHOP_NOTICES = %i[shop_verified shop_verification_rejected shop_badge_removed].freeze
 
   # Owner, 2026-10-12: Support is per identity. These are about THE SHOP, so they
   # go to the shop's own Support thread (its whole team reads it); every other
@@ -77,7 +75,6 @@ class SupportNoticeJob < ApplicationJob
     shop_verified: %w[open_shop viewShop],
     shop_verification_rejected: %w[open_verification tryVerificationAgain],
     shop_badge_removed: %w[open_verification tryVerificationAgain],
-    shop_reverify_needed: %w[open_verification verifyAgain],
     shop_invite_received: %w[open_invite openInvite],
     shop_member_joined: %w[open_team viewTeam],
     shop_joined: %w[open_shop viewShop],
@@ -237,7 +234,7 @@ class SupportNoticeJob < ApplicationJob
     case key
     when :user_verification_rejected, :user_badge_revoked
       { reason: user.latest_verification_request.reason_for(locale) }
-    when :shop_verified, :shop_reverify_needed
+    when :shop_verified
       { shop: shop.name }
     when :shop_verification_rejected, :shop_badge_removed
       { shop: shop.name, reason: shop.latest_verification_request.reason_for(locale) }
