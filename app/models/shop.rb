@@ -371,14 +371,25 @@ class Shop < ApplicationRecord
   # ── Admin moderation ───────────────────────────────────────────────────────
   # Suspended shops leave search (Listing.from_visible_shops); every member is
   # moved back to selling as themselves at once, not on their next request.
+  # Moderation never touches a CLOSED shop (its name, address and files are
+  # gone; reactivating it put a nameless shop back on the market). Edge-case
+  # pass 2026-10-08: the admin got a bare 422 page instead of a reason.
+  class ClosedShop < StandardError; end
+
   def suspend!
+    raise ClosedShop, "#{self.class.name} ##{id} is closed" if closed?
+
     transaction do
       suspended!
       User.where(active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
     end
   end
 
-  def reactivate! = active!
+  def reactivate!
+    raise ClosedShop, "#{self.class.name} ##{id} is closed" if closed?
+
+    active!
+  end
 
   # The owner can never be removed (phase 3 will transfer ownership first).
   # Returns false for the owner row.

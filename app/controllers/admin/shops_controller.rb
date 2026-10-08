@@ -18,6 +18,8 @@ module Admin
 
     def suspend
       shop = find_resource(params[:id])
+      return refuse_closed(shop) if shop.closed?
+
       shop.suspend!
       log_admin_action("suspend_shop", target: shop, details: params[:reason].presence)
       redirect_to [ namespace, shop ], notice: "#{shop.name} is suspended: hidden from search, members sell as themselves."
@@ -25,6 +27,8 @@ module Admin
 
     def reactivate
       shop = find_resource(params[:id])
+      return refuse_closed(shop) if shop.closed?
+
       shop.reactivate!
       log_admin_action("reactivate_shop", target: shop)
       redirect_to [ namespace, shop ], notice: "#{shop.name} is active again."
@@ -60,6 +64,11 @@ module Admin
     end
 
     private
+
+    # A closed shop is the owner's decision and final: nothing to moderate.
+    def refuse_closed(shop)
+      redirect_to [ namespace, shop ], alert: "Shop ##{shop.id} is closed by its owner: it can't be suspended or reactivated."
+    end
 
     # The list renders owner + category for every row: preload them.
     def scoped_resource
