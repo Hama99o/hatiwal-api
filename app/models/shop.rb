@@ -135,18 +135,26 @@ class Shop < ApplicationRecord
   # The owner changes a member's role (manager ⇄ staff). The owner's own role
   # only changes by a transfer.
   def change_role!(user, role:, by:)
-    member = shop_members.find_by(user_id: user.id)
-    raise ShopInvite::Refused.new(:not_a_member, status: :not_found) unless member
-    raise ShopInvite::Refused.new(:cannot_change_owner) if member.owner?
     raise ShopInvite::Refused.new(:invalid_role) unless %w[manager staff].include?(role.to_s)
-    return member if member.role == role.to_s
 
-    from = member.role
-    transaction do
+    # The target's row is read under its lock, after the actor's (review
+    # 2026-10-08): read before, a concurrent change made the audit's `from`
+    # stale or skipped this as "already that role".
+    member = nil
+    changed = transaction do
       team_actor!(by, :owner)
+      member = shop_members.lock.find_by(user_id: user.id)
+      raise ShopInvite::Refused.new(:not_a_member, status: :not_found) unless member
+      raise ShopInvite::Refused.new(:cannot_change_owner) if member.owner?
+      next false if member.role == role.to_s
+
+      from = member.role
       member.update!(role: role.to_s)
       ShopAuditEvent.record!(self, :role_changed, actor: by, target_user: user, from: from, to: role.to_s)
+      true
     end
+    return member unless changed
+
     ShopTeamPushJob.perform_later("shop_membership_changed", user.id, id, by.id, "role_changed")
     SupportNoticeJob.enqueue(user, :shop_role_changed, shop: self)
     cancel_request_if_applicant_gone!(user)
