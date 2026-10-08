@@ -144,6 +144,7 @@ class Shop < ApplicationRecord
     end
     ShopTeamPushJob.perform_later("shop_membership_changed", user.id, id, by.id, "role_changed")
     SupportNoticeJob.enqueue(user, :shop_role_changed, shop: self)
+    cancel_request_if_applicant_gone!(user)
     drop_badge_if_applicant_gone!(user)
     member
   end
@@ -271,6 +272,19 @@ class Shop < ApplicationRecord
     update_columns(verified_at: nil, verified_by_id: nil, updated_at: Time.current)
     ShopAuditEvent.record!(self, :badge_dropped, actor: nil, target_user: user, reason: "applicant_left")
     SupportNoticeJob.enqueue(owner, :shop_badge_applicant_left, shop: self, actor: user)
+    true
+  end
+
+  # The same for a request still under review (edge-case pass 2026-10-08): an
+  # admin must never approve a badge for someone who can no longer apply. It is
+  # cancelled and its ID photos deleted at once, as if they had cancelled it.
+  def cancel_request_if_applicant_gone!(user)
+    return false if ShopPolicy.new(user, self).apply_verification?
+
+    request = verification_requests.requested.find_by(requested_by_id: user.id)
+    return false unless request
+
+    request.cancel!
     true
   end
 
@@ -525,6 +539,7 @@ class Shop < ApplicationRecord
       User.where(id: member.user_id, active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
       ShopAuditEvent.record!(self, action, actor: actor, target_user: member.user, **data)
     end
+    cancel_request_if_applicant_gone!(member.user)
     drop_badge_if_applicant_gone!(member.user)
     if action == :removed
       ShopTeamPushJob.perform_later("shop_membership_changed", member.user_id, id, actor&.id, "removed")

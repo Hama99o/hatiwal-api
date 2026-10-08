@@ -112,8 +112,10 @@ class User < ApplicationRecord
   # requests are cancelled (so none sits in the admin queue forever), every
   # photo is deleted, and the name on the document + the number are blanked.
   # Decisions and the number's digest stay (ban evasion), nothing readable.
+  # Shop requests they sent as owner or manager hold THEIR e-Tazkira too.
   def forget_verification_documents!
-    verification_requests.find_each do |request|
+    VerificationRequest.where(id: verification_requests.select(:id))
+                       .or(VerificationRequest.where(requested_by_id: id)).find_each do |request|
       request.purge_files!
       # The number goes; its digest stays (with the decision), so a banned
       # person cannot verify a new account with the same ID.
