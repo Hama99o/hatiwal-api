@@ -360,6 +360,11 @@ if defined?(Shop) && Shop.table_exists?
   [ [ "Umair personal QA — Old phone", 3_000, "electronics" ], [ "Umair personal QA — Chair", 1_200, "home" ] ]
     .each { |t, pr, sl| qa_shop_listing.call(owner, nil, t, pr, sl, :kabul) }
   owner.update_column(:active_shop_id, cosmetics.id)
+  # The seed makes no drafts for shop.owner. Drafts left by earlier sessions
+  # (four "Umair personal QA — Chair" copies saved while selling as Cosmetics)
+  # sat on top of My shop and pushed the 3 products off screen
+  # (selling_as_switch_and_sticks, regression 2026-10-08).
+  owner.listings.where(status: Listing.statuses[:draft]).destroy_all
 
   # SHOP-2: shop.owner runs THREE shops (owned, oldest first in /me shops[]):
   # Cosmetics (above, unverified), a verified one and a pending one. Different
