@@ -31,7 +31,12 @@ class UserSerializer < ApplicationSerializer
     field(:bought_count) { |u| u.bought_count }
     field(:avg_rating) { |u| u.avg_rating&.to_f }
     field(:review_count) { |u| u.review_count }
+    # English month names for every reader (the API does not switch locale);
+    # kept for older apps. `member_since_at` is the month as a date, for the
+    # apps to format in the reader's language — month precision only, never the
+    # exact sign-up time (edge pass 1.1.6, 2026-10-08).
     field(:member_since) { |u| u.created_at.strftime("%B %Y") }
+    field(:member_since_at) { |u| u.created_at.to_date.beginning_of_month.iso8601 }
     field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
     # Whether the current viewer has blocked this user. Keeps the block/unblock
     # toggle in sync on first open without a separate API call. Defaults to false

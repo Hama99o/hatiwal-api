@@ -37,4 +37,15 @@ RSpec.describe "Server-composed text in the reader's language — edge cases", t
     user = create(:user, preferred_language: "ps", status: :banned, auto_blocked: false, block_reason: "Spam listings")
     expect(user.display_block_reason).to eq("Spam listings")
   end
+
+  it "a public profile's 'member since' comes as a date the app formats in the reader's language (month precision)" do
+    viewer = create(:user, preferred_language: "fa")
+    member = create(:user)
+    member.update_columns(created_at: Time.zone.parse("2025-10-17 13:45"))
+    get "/api/v1/users/#{member.id}", headers: auth_headers_for(viewer)
+    expect(response).to have_http_status(:ok)
+    profile = json["user"]
+    expect(profile["member_since_at"]).to eq("2025-10-01")
+    expect(profile["member_since"]).to eq("October 2025") # older apps read this, unchanged
+  end
 end
