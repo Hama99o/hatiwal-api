@@ -13,6 +13,11 @@ class Report < ApplicationRecord
 
   enum :status, { pending: 0, reviewed: 1, resolved: 2, dismissed: 3 }
 
+  # Only these can be reported. The controller checks the client's
+  # reportable_type against this list BEFORE anything constantizes it.
+  REPORTABLE_TYPES = [ Listing.name, User.name ].freeze
+
+  validates :reportable_type, inclusion: { in: REPORTABLE_TYPES }
   validates :reason, presence: true
   validates :description, length: { maximum: 1000 }, allow_blank: true
   validates :reportable_id, uniqueness: {
