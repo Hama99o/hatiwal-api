@@ -40,7 +40,6 @@ class ShopSerializer < ApplicationSerializer
     field(:open_now) { |s| s.open_now }
     field(:next_change_at) { |s| s.next_change_at&.iso8601 }
     field(:time_zone) { |s| s.time_zone }
-    field(:owner) { |s| { id: s.owner_id, name: s.owner.full_name } }
     field(:share_url) { |s| Shop.share_url_for(s) }
     # The SHOP's own reviews (Shop#reviews), never the owner's personal ones.
     field(:avg_rating) { |s| s.review_stats.first }
@@ -49,6 +48,10 @@ class ShopSerializer < ApplicationSerializer
 
   view :owner do
     include_view :public
+    # Members only (moved out of :public, d0 2026-10-08, P0 privacy): the public
+    # shop page is guest-readable and named the owner; the privacy text promises
+    # buyers never see the owner's personal name.
+    field(:owner) { |s| { id: s.owner_id, name: s.owner.full_name } }
     fields :status, :phone_public
     field(:phone) { |s| s.phone }
     # Read from the (preloaded) members, never a query per row.

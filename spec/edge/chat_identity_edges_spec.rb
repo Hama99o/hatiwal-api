@@ -246,4 +246,25 @@ RSpec.describe "Shop chat identity — edge cases", type: :request do
       expect(messages_as(buyer).find { |m| m["body"] == "Salaam" }["sender"]["id"]).to eq(buyer.id)
     end
   end
+
+  # P0 privacy (d0, 2026-10-08): the public shop page (guest-readable) named the
+  # OWNER — `owner: {id, name: full_name}` in the :public view. The privacy text
+  # promises buyers never see the owner's personal name.
+  describe "the public shop page never names the owner" do
+    it "a guest and a buyer: no owner block, no owner name anywhere" do
+      get "/api/v1/shops/#{shop.id}"
+      expect(response).to have_http_status(:ok)
+      expect(json["shop"]).not_to have_key("owner")
+      expect(response.body).not_to include("Qadirzai")
+
+      get "/api/v1/shops/#{shop.id}", headers: auth_headers_for(buyer)
+      expect(json["shop"]).not_to have_key("owner")
+      expect(response.body).not_to include("Qadirzai")
+    end
+
+    it "the team still gets it" do
+      get "/api/v1/shops/#{shop.id}", headers: auth_headers_for(staff)
+      expect(json["shop"]["owner"]).to include("id" => owner.id)
+    end
+  end
 end
