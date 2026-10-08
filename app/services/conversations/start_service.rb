@@ -67,12 +67,26 @@ class Conversations::StartService
   # The chat with the listing's CURRENT seller identity: a listing that moved to
   # another shop left its old chats with the old identity (Listings::MoveService).
   def existing_conversation
-    @existing_conversation ||= Conversation.find_by(listing: @listing, buyer: @buyer, shop_id: @listing.shop_id)
+    return @existing_conversation if defined?(@existing_conversation)
+
+    # A personal chat is the buyer's with THIS seller: a listing that left Me and
+    # came back with another poster starts a new one (edge pass 2026-10-08).
+    scope = Conversation.where(listing: @listing, buyer: @buyer, shop_id: @listing.shop_id)
+    scope = scope.where(seller: chat_seller) if @listing.shop_id.nil?
+    @existing_conversation = scope.first
   end
 
   # Moved away and back: the chat that was closed by the move opens again.
+  # A chat closed by a move reopens when the listing is back — but never past a
+  # block (edge pass 2026-10-08: it skipped the checks a new chat makes).
   def reopened(conversation)
-    conversation.update_column(:status, Conversation.statuses[:open]) if conversation.closed? && @listing.live?
+    if conversation.closed? && @listing.live?
+      seller = conversation.seller
+      raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(seller)
+      raise Error.new("you have been blocked by this user", code: :blocked_by) if seller.blocked?(@buyer)
+
+      conversation.update_column(:status, Conversation.statuses[:open])
+    end
     conversation
   end
 end

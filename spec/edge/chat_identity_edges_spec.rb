@@ -88,4 +88,37 @@ RSpec.describe "Shop chat identity — edge cases", type: :request do
       %w[Zarmina Qadirzai Staffkhan].each { |n| expect(response.body).not_to include(n), "#{path} leaks #{n}" }
     end
   end
+
+  describe "a listing that moves away and comes back" do
+    it "Me (Staff) -> shop -> Me (a manager): the buyer's new chat reaches the manager, not the old poster" do
+      manager = create(:user, firstname: "Mina", lastname: "Managerzai").tap { |u| shop.shop_members.create!(user: u, role: :manager) }
+      personal = create(:listing, :active, user: staff)
+      old = Conversations::StartService.new(buyer: buyer, listing: personal, message_body: "Hi Ali").call
+      Listings::MoveService.new(listing: personal, actor: staff, shop_id: shop.id).call
+      Listings::MoveService.new(listing: personal.reload, actor: manager, shop_id: nil).call
+      expect(old.reload).to be_closed
+
+      fresh = Conversations::StartService.new(buyer: buyer, listing: personal.reload, message_body: "Still for sale?").call
+      expect(fresh.seller_id).to eq(manager.id)
+      expect(fresh.id).not_to eq(old.id)
+      expect(old.reload).to be_closed # the old thread with Ali stays Ali's, read-only
+    end
+
+    it "shop -> Me -> the same shop: the shop's old chat with the buyer reopens with the shop" do
+      Listings::MoveService.new(listing: product, actor: owner, shop_id: nil).call
+      Listings::MoveService.new(listing: product.reload, actor: owner, shop_id: shop.id).call
+      again = Conversations::StartService.new(buyer: buyer, listing: product.reload, message_body: "Back?").call
+      expect(again.id).to eq(chat.id)
+      expect(again.reload).to be_open
+    end
+
+    it "the reopen path still refuses a buyer the seller has blocked" do
+      Listings::MoveService.new(listing: product, actor: owner, shop_id: nil).call
+      Listings::MoveService.new(listing: product.reload, actor: owner, shop_id: shop.id).call
+      Block.create!(blocker: owner, blocked: buyer)
+      expect { Conversations::StartService.new(buyer: buyer, listing: product.reload, message_body: "Back?").call }
+        .to raise_error(Conversations::StartService::Error)
+      expect(chat.reload).to be_closed
+    end
+  end
 end

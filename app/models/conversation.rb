@@ -81,7 +81,13 @@ class Conversation < ApplicationRecord
   # One chat per listing, buyer AND selling identity (shop_id; nil = the person):
   # a listing moved to another shop starts a new chat there, the old one stays
   # with the identity it began with (Listings::MoveService).
-  validates :listing_id, uniqueness: { scope: %i[buyer_id shop_id], message: "already has a conversation with this buyer", allow_nil: true }
+  # A personal chat is also pinned to its seller: a listing that left Me and came
+  # back with another poster starts a new chat (edge pass 2026-10-08).
+  validates :listing_id, uniqueness: { scope: %i[buyer_id shop_id], message: "already has a conversation with this buyer", allow_nil: true },
+                         if: -> { shop_id.present? }
+  validates :listing_id, uniqueness: { scope: %i[buyer_id seller_id], conditions: -> { where(shop_id: nil) },
+                                       message: "already has a conversation with this buyer", allow_nil: true },
+                         if: -> { shop_id.nil? }
   validate :buyer_is_not_seller
   validate :support_thread_shape, if: :kind_support?
   validate :shop_chat_shape, if: :shop_chat?

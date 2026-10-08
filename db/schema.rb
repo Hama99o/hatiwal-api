@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_08_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -217,7 +217,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_140000) do
     t.bigint "shop_id"
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
-    t.index "listing_id, buyer_id, COALESCE(shop_id, (0)::bigint)", name: "index_conversations_one_listing_chat_per_identity", unique: true, where: "(listing_id IS NOT NULL)"
+    t.index "listing_id, buyer_id, COALESCE(shop_id, (0)::bigint), (\nCASE\n    WHEN (shop_id IS NULL) THEN seller_id\n    ELSE (0)::bigint\nEND)", name: "index_conversations_one_listing_chat_per_identity_and_seller", unique: true, where: "(listing_id IS NOT NULL)"
     t.index ["buyer_deleted_at"], name: "index_conversations_on_buyer_deleted_at"
     t.index ["buyer_id", "shop_id"], name: "index_conversations_one_shop_chat_per_buyer", unique: true, where: "((listing_id IS NULL) AND (shop_id IS NOT NULL))"
     t.index ["buyer_id"], name: "index_conversations_on_buyer_id"
