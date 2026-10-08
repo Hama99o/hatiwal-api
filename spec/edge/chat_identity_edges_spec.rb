@@ -165,4 +165,60 @@ RSpec.describe "Shop chat identity — edge cases", type: :request do
       expect(owner.unread_counts[:shops]).not_to have_key(shop.id.to_s)
     end
   end
+
+  describe "the matrix: transitions while a chat is open" do
+    it "an ownership transfer: the new owner is the seller, the old owner (a manager now) still reads it, nothing becomes unread" do
+      say(staff, "We have it")
+      put "/api/v1/conversations/#{chat.id}/mark_read", headers: auth_headers_for(owner)
+      shop.transfer_ownership!(staff, by: owner)
+      expect(chat.reload.seller_id).to eq(staff.id)
+      [ owner, staff ].each { |member| expect(unread_for(member)).to eq(0) }
+      reply = messages_as(buyer).find { |m| m["body"] == "We have it" }
+      expect(reply["sender"]).to include("name" => "Herat Silk House", "as_shop" => true)
+      say(owner, "Still here as a manager")
+    end
+
+    it "the shop is renamed: every message, old and new, shows the new name" do
+      say(owner, "Hello")
+      shop.update!(name: "Herat Silk & Co")
+      expect(messages_as(buyer).select { |m| m["sender"]["as_shop"] }.map { |m| m["sender"]["name"] }.uniq).to eq([ "Herat Silk & Co" ])
+    end
+
+    it "the listing is removed (deleted / taken down): the chat stays readable, still the shop's" do
+      say(owner, "Hello")
+      product.update_columns(removed_at: Time.current, removed_reason: "seller_deleted")
+      get "/api/v1/conversations/#{chat.id}", headers: auth_headers_for(buyer)
+      expect(response).to have_http_status(:ok)
+      expect(json["conversation"]["listing_deleted"]).to be(true)
+      expect(response.body).not_to include("Qadirzai")
+      expect(messages_as(buyer).find { |m| m["body"] == "Hello" }["sender"]).to include("as_shop" => true)
+    end
+
+    it "the buyer deletes their account: the team keeps the thread, the buyer shows as a deleted user, no push goes out" do
+      say(buyer, "One more question")
+      buyer.anonymize_account!
+      get "/api/v1/conversations/#{chat.id}", headers: auth_headers_for(owner)
+      expect(response).to have_http_status(:ok)
+      expect(response.body).not_to include("Buyerzai")
+      expect(SendMessagePushJob.new.send(:recipients, chat.reload, owner).map(&:id)).to eq([ buyer.id ])
+      expect(buyer.reload.push_token).to be_nil # deliver() returns on a blank token
+    end
+
+    it "a push from the shop to the buyer: titled with the shop, routed to Buying; the buyer's to the team: routed to that shop" do
+      [ owner, staff, buyer ].each { |u| u.update_columns(push_token: "ExponentPushToken[#{u.id}]") }
+      sent = []
+      allow(Notifications::ExpoPushService).to receive(:deliver) { |**kw| sent << kw; Struct.new(:error).new(nil) }
+      say(staff, "Yes")
+      perform_enqueued_jobs(only: SendMessagePushJob)
+      to_buyer = sent.find { |p| p[:token] == "ExponentPushToken[#{buyer.id}]" }
+      expect(to_buyer).to include(title: "Herat Silk House")
+      expect(to_buyer[:data]).to include(role: "buying", shopId: shop.id)
+
+      sent.clear
+      say(buyer, "Great")
+      perform_enqueued_jobs(only: SendMessagePushJob)
+      expect(sent.map { |p| p[:token] }).to contain_exactly("ExponentPushToken[#{owner.id}]", "ExponentPushToken[#{staff.id}]")
+      expect(sent.map { |p| p[:data] }).to all(include(role: "selling", shopId: shop.id))
+    end
+  end
 end
