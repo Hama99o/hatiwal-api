@@ -34,7 +34,7 @@ en:
         shop:
           attributes:
             base:
-              outside_service_area: "must be in Afghanistan, Pakistan or Iran"
+              outside_service_area: "must be in an area Hatiwal serves"
               duplicate_shop: "You already have this shop: the same name nearby or the same address"
             hours:
               malformed: "are not valid opening hours"

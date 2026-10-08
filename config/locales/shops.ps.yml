@@ -34,7 +34,7 @@ ps:
         shop:
           attributes:
             base:
-              outside_service_area: "باید په افغانستان، پاکستان یا ایران کې وي"
+              outside_service_area: "باید په هغو سیمو کې وي چې هټیوال پکې خدمت کوي"
               duplicate_shop: "دا دوکان مو مخکې لرئ: همدا نوم نږدې یا همدا پته"
             hours:
               malformed: "د خلاصېدو سم وختونه نه دي"

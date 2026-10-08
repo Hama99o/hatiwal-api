@@ -34,7 +34,7 @@ ur:
         shop:
           attributes:
             base:
-              outside_service_area: "افغانستان، پاکستان یا ایران میں ہونی چاہیے"
+              outside_service_area: "ان علاقوں میں ہونی چاہیے جہاں ہتیوال خدمت کرتا ہے"
               duplicate_shop: "یہ دکان آپ کی پہلے سے ہے: قریب میں یہی نام یا یہی پتہ"
             hours:
               malformed: "درست اوقاتِ کار نہیں ہیں"
