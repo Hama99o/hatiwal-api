@@ -51,7 +51,14 @@ class Conversation < ApplicationRecord
   # began on a personal product stays personal even if the product later moves
   # into a shop (the buyer wrote to a person; staff never see personal chats).
   scope :for_shop, ->(shop_id) { where(shop_id: shop_id) }
-  scope :without_shop, -> { where(shop_id: nil) }
+  # "Me": personal chats, plus a CLOSED shop's product chats — the shop's
+  # products went back to its owner, and so did their chats (shop_face); they
+  # must not vanish from every inbox (edge pass 2026-10-08).
+  OWNERS_OWN_SQL = <<~SQL.squish.freeze
+    conversations.shop_id IS NULL OR (conversations.listing_id IS NOT NULL AND conversations.shop_id IN (
+      SELECT shops.id FROM shops WHERE shops.status = #{Shop.statuses.fetch("closed")}))
+  SQL
+  scope :without_shop, -> { where(OWNERS_OWN_SQL) }
   scope :support_first, -> { order(kind: :desc) }
 
   # Support threads whose latest word is the user's: they have a message from

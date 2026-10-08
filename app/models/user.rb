@@ -700,7 +700,7 @@ class User < ApplicationRecord
     identity = Arel.sql(
       "CASE WHEN conversations.kind = #{Conversation.kinds[:support]} AND conversations.shop_id IS NULL THEN 'support' " \
       "WHEN conversations.buyer_id = #{id.to_i} THEN 'buying' " \
-      "WHEN conversations.shop_id IS NOT NULL THEN conversations.shop_id::text ELSE 'selling_me' END"
+      "WHEN #{Conversation::OWNERS_OWN_SQL} THEN 'selling_me' ELSE conversations.shop_id::text END"
     )
     raw = Message.joins(:conversation)
                  .where(conversation_id: Conversation.for_user(self).not_archived_for(self).select(:id), read_at: nil)

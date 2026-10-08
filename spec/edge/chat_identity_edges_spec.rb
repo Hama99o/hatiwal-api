@@ -147,4 +147,22 @@ RSpec.describe "Shop chat identity — edge cases", type: :request do
       say(owner, "Yes, personally")
     end
   end
+
+  describe "a CLOSED shop's product chats are the owner's own now" do
+    before do
+      shop.close!
+      say(buyer, "Do you still sell it?")
+    end
+
+    it "they are in the owner's Seller-as-Me inbox" do
+      get "/api/v1/conversations", params: { role: "selling", shop_id: "none" }, headers: auth_headers_for(owner)
+      expect(json["conversations"].pluck("id")).to include(chat.id)
+    end
+
+    it "their unread count is the owner's Me count, not a shop's the app no longer lists" do
+      owner.reload
+      expect(owner.unread_counts).to include(selling_me: 2)
+      expect(owner.unread_counts[:shops]).not_to have_key(shop.id.to_s)
+    end
+  end
 end
