@@ -10,11 +10,11 @@
 # The thread comes from Conversation.admin_support_thread_for, the gate. With
 # SUPPORT_ADMIN_INITIATE off it returns nil and nothing is sent.
 #
-# OFF until mobile 1.1.4 is live on iOS AND Android (owner, 2026-10-02): older
-# apps draw the Support thread poorly, so a welcome would land in a bad screen.
-# Switch: WELCOME_SUPPORT_MESSAGE=true. It is deliberately NOT in
-# config/deploy.yml env, so production cannot have it on until someone adds it
-# there for the 1.1.4 release.
+# It was OFF until mobile 1.1.4 was live on iOS AND Android (owner, 2026-10-02):
+# older apps draw the Support thread poorly. Switch: WELCOME_SUPPORT_MESSAGE=true,
+# passed to production through config/deploy.yml's secret env since 516c1ec
+# (2026-10-03, "welcome message ON in production — mobile 1.1.4 is live on both
+# stores"); its value lives in the deploy secrets, never in the repo.
 class WelcomeSupportMessageJob < ApplicationJob
   queue_as :default
 
