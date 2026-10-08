@@ -30,8 +30,9 @@ class Api::V1::MessagesController < Api::V1::BaseController
       return render_unprocessable_entity(message, code: code)
     end
 
-    # SHOP-2: a chat with a suspended/closed shop stays readable, but is shut.
-    if @conversation.shop_chat? && !@conversation.shop&.active?
+    # SHOP-2: a chat with a suspended/closed shop stays readable, but is shut
+    # (Conversation#shut_by_shop?).
+    if @conversation.shut_by_shop?
       return render_unprocessable_entity(I18n.t("shops.errors.not_open"), code: :shop_unavailable)
     end
 

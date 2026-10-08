@@ -121,4 +121,30 @@ RSpec.describe "Shop chat identity — edge cases", type: :request do
       expect(chat.reload).to be_closed
     end
   end
+
+  describe "a suspended shop's product chats are readable but shut, like its Message-shop chats" do
+    before { shop.suspend! }
+
+    it "neither the buyer nor the team can send; reading still works" do
+      [ buyer, owner ].each do |user|
+        post "/api/v1/conversations/#{chat.id}/messages", params: { kind: "text", body: "Hello?" }, headers: auth_headers_for(user)
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(json["code"]).to eq("shop_unavailable")
+        get "/api/v1/conversations/#{chat.id}/messages", headers: auth_headers_for(user)
+        expect(response).to have_http_status(:ok)
+      end
+    end
+
+    it "reactivated: the chat works again" do
+      shop.update!(status: :active)
+      say(buyer, "Hello again")
+    end
+
+    it "a CLOSED shop's product chat is the owner's now: the buyer and the owner still talk" do
+      shop.update!(status: :active)
+      shop.close!
+      say(buyer, "Still there?")
+      say(owner, "Yes, personally")
+    end
+  end
 end

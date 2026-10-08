@@ -15,16 +15,17 @@ class ConversationSerializer < ApplicationSerializer
   # That is a type change from "always a string", and it is only safe because
   # no client older than support messaging is ever served a support thread —
   # docs/SUPPORT_MESSAGING.md, "Why this cannot break v1.0.4".
-  # SHOP-1/2 — who the chat is with. A product's shop only while it is open (a
-  # closed shop's products went back to the owner). A "Message shop" chat is
-  # always with its shop, open or not, with `status`, so the buyer never falls
-  # back to the owner's personal name; the composer is shut by the API then.
+  # SHOP-1/2 — who the chat is with, with `status`. A product's shop until it is
+  # CLOSED (a closed shop's products went back to the owner) — the same rule as
+  # Conversation#shop_face, so a suspended shop never falls back to the owner's
+  # personal name. A "Message shop" chat is always with its shop. When the shop
+  # is not open the composer is shut by the API (Conversation#shut_by_shop?).
   def self.shop_block(conversation)
     shop = conversation.chat_shop
     return nil unless shop
-    return ShopSerializer.render_as_hash(shop, view: :card).merge(status: shop.status) if conversation.shop_chat?
+    return nil if !conversation.shop_chat? && shop.closed?
 
-    shop.active? ? ShopSerializer.render_as_hash(shop, view: :card) : nil
+    ShopSerializer.render_as_hash(shop, view: :card).merge(status: shop.status)
   end
 
   # A participant as the viewer may see them. The seller side of a chat with a

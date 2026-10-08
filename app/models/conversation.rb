@@ -279,6 +279,18 @@ class Conversation < ApplicationRecord
     s if s && (shop_chat? || !s.closed?)
   end
 
+  # SHOP-2: a chat with a shop that is not open stays readable but is shut —
+  # a "Message shop" chat whenever its shop is not active; a product chat while
+  # its shop is suspended or pending (its product is unavailable and the team
+  # cannot select the shop). A CLOSED shop's product chats are the owner's now
+  # and stay open (edge pass 2026-10-08).
+  def shut_by_shop?
+    s = chat_shop
+    return false unless s && kind_listing?
+
+    shop_chat? ? !s.active? : (s.suspended? || s.pending?)
+  end
+
   def participant?(user)
     side_for(user).present?
   end
