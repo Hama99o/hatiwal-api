@@ -443,8 +443,11 @@ class Listing < ApplicationRecord
   # never expire, so it sat live forever. Now that reserved listings are
   # browsable that would be a listing in the feed with an expiry the feed itself
   # ignores.
+  # `<=` like `expired_active` / `not_expired` (edge-case pass 2026-10-08): at
+  # the exact expiry instant the feed had already dropped it but `past?` still
+  # said live, so the listing was in no tab at all for that moment.
   def expired?
-    live? && expires_at.present? && expires_at.past?
+    live? && expires_at.present? && expires_at <= Time.current
   end
 
   # (Re)start the expiry clock — used on seller renew. Never moves the listing

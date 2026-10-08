@@ -53,7 +53,9 @@ class ListingPolicy < ApplicationPolicy
   # SF-B1 — from `live?`. `Listing#expired?` widened to `live?` at the same time,
   # so a reserved listing can now expire and drop out of `browsable`; without
   # this it would expire with no way to renew it.
-  def renew?     = owner? && record.live?
+  # Never a deleted (soft-removed) one: it answered 200 "renewed" for a listing
+  # that stays gone (edge-case pass 2026-10-08).
+  def renew?     = owner? && record.live? && record.removed_at.nil?
   # Edit + relaunch: same gate as renew (it IS a renew, plus a weekly bump).
   def relaunch?  = renew?
   # Move to Me / another shop: anyone who manages it; where it may go is
