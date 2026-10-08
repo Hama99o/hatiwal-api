@@ -5,7 +5,9 @@ require "rails_helper"
 # %{placeholders} as English (a dropped %{shop} loses the identity), no English
 # left in the RTL locales, and the notice's button opens the right thing for
 # the right identity (the shop's id for a shop notice, "me" for a person's).
-RSpec.describe "1.1.6 notice and push texts", type: :model do
+# Namespaced: a constant defined in a describe block is global (LOCALES clashed
+# with spec/i18n/locale_coverage_spec.rb's).
+module NoticeTexts116
   LOCALES = %i[en ps fa ur].freeze
   NOTICE_KEYS = (SupportNoticeJob::NOTICES.keys + SupportNoticeJob::TEAM_NOTICES.keys +
                  SupportNoticeJob::LISTING_NOTICES).uniq.freeze
@@ -15,15 +17,17 @@ RSpec.describe "1.1.6 notice and push texts", type: :model do
   ROLE_KEYS = %w[owner manager staff].map { |r| "support.team_roles.#{r}" }.freeze
   # Latin words allowed in ps/fa/ur text: the brand and the store names, as written in the apps.
   LATIN_OK = %w[Hatiwal App Store Google Play].freeze
+end
 
+RSpec.describe "1.1.6 notice and push texts", type: :model do
   def text(key, locale) = I18n.t(key, locale: locale, raise: true)
   def placeholders(str) = str.to_s.scan(/%\{(\w+)\}/).flatten.sort
 
-  (NOTICE_KEYS.map { |k| "support.notices.#{k}" } + PUSH_KEYS + ROLE_KEYS).each do |key|
+  (NoticeTexts116::NOTICE_KEYS.map { |k| "support.notices.#{k}" } + NoticeTexts116::PUSH_KEYS + NoticeTexts116::ROLE_KEYS).each do |key|
     describe key do
       it "exists in every locale with English's placeholders" do
         en = placeholders(text(key, :en))
-        LOCALES.each do |locale|
+        NoticeTexts116::LOCALES.each do |locale|
           expect { text(key, locale) }.not_to raise_error, "#{key} missing in #{locale}"
           expect(placeholders(text(key, locale))).to eq(en), "#{key} in #{locale}: placeholders differ from en"
         end
@@ -32,7 +36,7 @@ RSpec.describe "1.1.6 notice and push texts", type: :model do
       it "has no English left in ps / fa / ur" do
         %i[ps fa ur].each do |locale|
           str = text(key, locale).gsub(/%\{\w+\}/, "")
-          latin = str.scan(/[A-Za-z]{3,}/) - LATIN_OK
+          latin = str.scan(/[A-Za-z]{3,}/) - NoticeTexts116::LATIN_OK
           expect(latin).to be_empty, "#{key} in #{locale} has Latin words: #{latin.inspect} — #{str}"
           expect(str).not_to eq(text(key, :en).gsub(/%\{\w+\}/, "")), "#{key} in #{locale} is the English text"
         end

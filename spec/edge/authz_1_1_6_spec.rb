@@ -6,6 +6,13 @@ require "rails_helper"
 # of ANOTHER shop, a member A removed, and a guest. Every attempt must be
 # refused (401 for the guest; 403/404 otherwise) and change nothing.
 # The table of endpoint × actor → status is written to tmp/authz_1_1_6.md.
+# Namespaced: a constant defined in a describe block is global, and RESULTS
+# collided with spec/perf's in a full run.
+module Authz116
+  ACTORS = %i[stranger buyer other_staff removed guest].freeze
+  RESULTS = []
+end
+
 RSpec.describe "1.1.6 authorization sweep", type: :request do
   before do
     allow(ENV).to receive(:fetch).and_call_original
@@ -41,14 +48,12 @@ RSpec.describe "1.1.6 authorization sweep", type: :request do
   let!(:support) { Conversation.shop_support_thread_for!(shop) }
   let(:others_listing) { create(:listing, :active, user: stranger) }
 
-  ACTORS = %i[stranger buyer other_staff removed guest].freeze
-  RESULTS = [] # rubocop:disable Lint/ConstantDefinitionInBlock
   after(:all) do
-    rows = RESULTS.group_by(&:first).map do |label, hits|
-      "| #{label} | " + ACTORS.map { |a| hits.find { |h| h[1] == a }&.last || "—" }.join(" | ") + " |"
+    rows = Authz116::RESULTS.group_by(&:first).map do |label, hits|
+      "| #{label} | " + Authz116::ACTORS.map { |a| hits.find { |h| h[1] == a }&.last || "—" }.join(" | ") + " |"
     end
     File.write(Rails.root.join("tmp/authz_1_1_6.md"),
-               ([ "| endpoint | #{ACTORS.join(' | ')} |", "|---|#{'---|' * ACTORS.size}" ] + rows).join("\n") + "\n")
+               ([ "| endpoint | #{Authz116::ACTORS.join(' | ')} |", "|---|#{'---|' * Authz116::ACTORS.size}" ] + rows).join("\n") + "\n")
   end
 
   def headers_for(actor)
@@ -57,7 +62,7 @@ RSpec.describe "1.1.6 authorization sweep", type: :request do
 
   def attempt(label, verb, path, actor, params: {})
     public_send(verb, path, params: params, headers: headers_for(actor), as: :json)
-    RESULTS << [ label, actor, response.status ]
+    Authz116::RESULTS << [ label, actor, response.status ]
     allowed = actor == :guest ? [ 401 ] : [ 403, 404 ]
     # Selling as a shop you're not on: the documented 422 cannot_sell_as_shop.
     allowed += [ 422 ] if label == "PATCH selling_as shop" && response.parsed_body["code"] == "cannot_sell_as_shop"
@@ -97,7 +102,7 @@ RSpec.describe "1.1.6 authorization sweep", type: :request do
     ]
   end
 
-  ACTORS.each do |actor|
+  Authz116::ACTORS.each do |actor|
     it "#{actor}: every member-only 1.1.6 endpoint of shop A is refused, and nothing changes" do
       aggregate_failures do
         endpoints.each { |label, verb, path, params| attempt(label, verb, path, actor, params: params || {}) }
@@ -115,7 +120,7 @@ RSpec.describe "1.1.6 authorization sweep", type: :request do
   end
 
   # The shop chat: its buyer and the team, no one else.
-  (ACTORS - [ :buyer ]).each do |actor|
+  (Authz116::ACTORS - [ :buyer ]).each do |actor|
     it "#{actor}: the buyer↔shop chat is closed to them (read, messages, write)" do
       aggregate_failures do
         attempt("GET shop chat", :get, "/api/v1/conversations/#{shop_chat.id}", actor)
