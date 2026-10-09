@@ -30,6 +30,13 @@
 en:
   hello: "Hello world"
   accounts:
+    report_warning:
+      spam: "Reported as spam"
+      inappropriate: "Reported as inappropriate"
+      fraud: "Reported as fraud or a scam"
+      wrong_category: "Reported as posted in the wrong category"
+      prohibited_item: "Reported as a prohibited item"
+      other: "Reported by another user"
     auto_suspended_reason: "Automatically suspended after reaching %{count} warnings."
     blocked:
       default: "Your account has been blocked. Please contact support."

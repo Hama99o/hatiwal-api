@@ -1,6 +1,13 @@
 # Account and upload messages that were en-only (found by spec/i18n/locale_coverage_spec.rb, 2026-10-05).
 ur:
   accounts:
+    report_warning:
+      spam: "اسپام کے طور پر رپورٹ کیا گیا"
+      inappropriate: "نامناسب مواد کے طور پر رپورٹ کیا گیا"
+      fraud: "دھوکہ دہی یا فراڈ کے طور پر رپورٹ کیا گیا"
+      wrong_category: "غلط زمرے میں لگانے پر رپورٹ کیا گیا"
+      prohibited_item: "ممنوعہ چیز کے طور پر رپورٹ کیا گیا"
+      other: "کسی دوسرے صارف نے رپورٹ کیا"
     auto_suspended_reason: "%{count} انتباہات تک پہنچنے کے بعد خودکار طور پر معطل کر دیا گیا۔"
     blocked:
       default: "آپ کا اکاؤنٹ بلاک کر دیا گیا ہے۔ براہ کرم سپورٹ سے رابطہ کریں۔"

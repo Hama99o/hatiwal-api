@@ -13,6 +13,22 @@ class UserWarning < ApplicationRecord
   belongs_to :user
   belongs_to :admin_user, optional: true
 
+  # A warning issued from a report stores a CODE ("report:fraud"), shown in the
+  # reader's language (d0 hunt 2026-10-09: it stored English, "Reported as
+  # fraud", which the apps showed verbatim to ps/fa/ur users). Old English rows
+  # are recognised too. A reason an admin typed is shown as typed.
+  REPORT_REASON = /\Areport:(\w+)\z/
+  LEGACY_REPORT_REASON = /\AReported as (.+)\z/
+
+  def self.report_reason(report_reason) = "report:#{report_reason}"
+
+  def display_reason(locale = user&.reader_locale)
+    code = reason[REPORT_REASON, 1] || reason[LEGACY_REPORT_REASON, 1]&.tr(" ", "_")
+    return reason unless code && Report.reasons.key?(code)
+
+    I18n.t("accounts.report_warning.#{code}", locale: locale || I18n.default_locale)
+  end
+
   enum :category, {
     spam: 0,
     fraud: 1,

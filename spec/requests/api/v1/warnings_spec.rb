@@ -48,3 +48,36 @@ RSpec.describe "Warnings API", type: :request do
     end
   end
 end
+
+# d0 hunt 2026-10-09: a warning from a report was stored as English text
+# ("Reported as spam") and the apps show the reason verbatim, so a Pashto,
+# Dari or Urdu user read it in English. It is stored as a code now and
+# rendered in the reader's language; old English rows are recognised too.
+RSpec.describe "Warnings from a report are in the reader's language", type: :request do
+  include Devise::Test::IntegrationHelpers
+
+  let(:admin) { create(:admin_user, password: "changeme123!") }
+  let(:user) { create(:user, preferred_language: "ps") }
+  def reasons
+    get "/api/v1/users/warnings", headers: auth_headers_for(user)
+    JSON.parse(response.body)["warnings"].pluck("reason")
+  end
+
+  it "a warning issued from a report reads in Pashto for a Pashto user" do
+    sign_in admin, scope: :admin_user
+    report = create(:report, :against_user, reportable: user, reason: :fraud)
+    patch warn_target_admin_report_path(report)
+    expect(reasons).to eq([ I18n.t("accounts.report_warning.fraud", locale: :ps) ])
+    expect(reasons.first).not_to include("Reported as")
+  end
+
+  it "an old English row ('Reported as wrong category') is translated too" do
+    user.warnings.create!(reason: "Reported as wrong category", category: :other)
+    expect(reasons).to eq([ I18n.t("accounts.report_warning.wrong_category", locale: :ps) ])
+  end
+
+  it "a reason an admin typed is shown as typed" do
+    user.warnings.create!(reason: "Selling counterfeit phones", category: :fraud)
+    expect(reasons).to eq([ "Selling counterfeit phones" ])
+  end
+end

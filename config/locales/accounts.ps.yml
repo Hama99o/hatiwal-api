@@ -1,6 +1,13 @@
 # Account and upload messages that were en-only (found by spec/i18n/locale_coverage_spec.rb, 2026-10-05).
 ps:
   accounts:
+    report_warning:
+      spam: "د سپام په توګه راپور شوی"
+      inappropriate: "د ناوړه منځپانګې په توګه راپور شوی"
+      fraud: "د درغلۍ یا چل په توګه راپور شوی"
+      wrong_category: "په ناسمه ډله کې د اچولو له امله راپور شوی"
+      prohibited_item: "د منع شوي توکي په توګه راپور شوی"
+      other: "د بل کارن له خوا راپور شوی"
     auto_suspended_reason: "د %{count} خبرتیاوو تر رسېدو وروسته په خپله وځنډول شو."
     blocked:
       default: "ستاسو حساب بند شوی. مهرباني وکړئ له ملاتړ سره اړیکه ونیسئ."

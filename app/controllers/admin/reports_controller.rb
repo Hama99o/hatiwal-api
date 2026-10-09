@@ -53,7 +53,7 @@ module Admin
 
         target.issue_warning!(
           admin_user: current_admin_user,
-          reason: "Reported as #{report.reason.humanize.downcase}",
+          reason: UserWarning.report_reason(report.reason), # shown in the user's language
           category: warning_category_for(report.reason)
         )
         report.update!(status: :resolved)
