@@ -566,7 +566,8 @@ puts "=== QA Seed: edge-case device fixtures (1.1.6, maestro/edge_116/) ==="
 #                    API's in-memory throttle (RateLimitable), which a seed cannot
 #                    pre-fill: the FLOW sends the first 20 through the API.
 #   * edge.closer  — #7 (close the shop offline): "QA Edge Offline Shop", put
-#                    back to ACTIVE (recreated if a run did close it).
+#                    back to ACTIVE (recreated if a run did close it), with
+#                    edge.closer.staff (Nadia Staffer) as its STAFF member.
 edge_seller   = qa_user(email: "edge.seller@hatiwal.test", firstname: "Sadiq", lastname: "Edgeseller", place: :kabul, avatar: true)
 edge_tapper   = qa_user(email: "edge.tapper@hatiwal.test", firstname: "Tariq", lastname: "Doubletap", place: :kabul, avatar: true)
 edge_reporter = qa_user(email: "edge.reporter@hatiwal.test", firstname: "Rahim", lastname: "Ratelimit", place: :kabul, avatar: true)
@@ -604,7 +605,15 @@ if defined?(Shop) && Shop.table_exists?
                                 address_line: "#{edge_place[:city]} QA bazaar, edge shop #{Shop.where(owner: edge_closer).count + 1}",
                                 description: "QA edge-case fixture: closed offline, must stay open.")
   offline_shop.update_columns(status: Shop.statuses[:active], updated_at: Time.current)
-  puts "  #7 edge.closer owns \"QA Edge Offline Shop\" ##{offline_shop.id} (active)"
+  # closed-shop-face (d8f011f2, _diag/h00/closed_shop_face_{en,ps}): a STAFF
+  # member writes the pre-close reply as the shop; after the close the buyer must
+  # not see her personal name. The membership follows the newest open shop, so a
+  # run that closed (and this seed recreated) it still finds her on the team.
+  edge_staff = qa_user(email: "edge.closer.staff@hatiwal.test", firstname: "Nadia", lastname: "Staffer", place: :kabul, avatar: true)
+  staff_member = offline_shop.shop_members.find_or_initialize_by(user: edge_staff)
+  staff_member.invited_by ||= edge_closer
+  staff_member.update!(role: :staff)
+  puts "  #7 edge.closer owns \"QA Edge Offline Shop\" ##{offline_shop.id} (active); edge.closer.staff (Nadia Staffer) is its staff"
 else
   puts "  SKIP #7: shops table not migrated yet"
 end
