@@ -149,7 +149,7 @@ RSpec.describe "Shop team roles and ownership", type: :request do
   end
 
   describe "transfer ownership" do
-    it "moves the shop, its chats and the sale seller; drops a Verified badge; logs and tells the new owner" do
+    it "moves the shop, its chats and the sale seller; keeps a Verified badge (G4); logs and tells the new owner" do
       buyer = create(:user)
       product = create(:listing, :active, user: owner, shop: shop)
       chat = Conversations::StartService.new(buyer: buyer, listing: product, message_body: "Salaam").call
@@ -161,12 +161,13 @@ RSpec.describe "Shop team roles and ownership", type: :request do
       expect(response).to have_http_status(:ok)
 
       shop.reload
-      expect(shop).to have_attributes(owner_id: staff.id, verified_at: nil)
+      expect(shop).to have_attributes(owner_id: staff.id)
+      expect(shop).to be_verified # G4: the badge stays; the old owner is still a manager
       expect(shop.shop_members.find_by(user: staff).role).to eq("owner")
       expect(shop.shop_members.find_by(user: owner).role).to eq("manager")
       expect([ chat.reload.seller_id, shop_chat.reload.seller_id ]).to eq([ staff.id, staff.id ])
       expect(product.reload.sale_seller_id).to eq(staff.id)
-      expect(ShopAuditEvent.find_by(shop: shop, action: "transferred").data).to include("badge_dropped" => true)
+      expect(ShopAuditEvent.find_by(shop: shop, action: "transferred").data).to include("badge_dropped" => false)
 
       # The old owner, now a manager, may leave; the new owner may not.
       delete "/api/v1/shops/#{shop.id}/membership", headers: h(owner)

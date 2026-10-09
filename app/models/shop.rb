@@ -164,7 +164,10 @@ class Shop < ApplicationRecord
 
   # The owner hands the shop to an existing member, who becomes the owner; the
   # old owner stays as a MANAGER. Shop chats follow (their seller is the owner).
-  # A Verified badge is dropped: it vouched for the old owner's e-Tazkira.
+  # A Verified badge STAYS (owner decision G4, 2026-10-09): it vouches for its
+  # applicant, who is still the owner or a manager after a plain transfer. It
+  # comes off later if the applicant is made Staff or leaves
+  # (drop_badge_if_applicant_gone!, as for any member).
   def transfer_ownership!(new_owner, by:)
     raise ShopInvite::Refused.new(:cannot_transfer_to_self) if new_owner.id == owner_id
     raise ShopInvite::Refused.new(:shop_unavailable) unless active?
@@ -174,7 +177,6 @@ class Shop < ApplicationRecord
     raise ShopInvite::Refused.new(:verification_pending) if verification_requests.requested.exists?
 
     old_owner_id = owner_id
-    was_verified = verified?
     transaction do
       lock!
       team_actor!(by, :owner)
@@ -183,9 +185,9 @@ class Shop < ApplicationRecord
       chats = Conversation.where(shop_id: id)
       chats.where(seller_id: old_owner_id).where.not(buyer_id: new_owner.id)
            .update_all(seller_id: new_owner.id, updated_at: Time.current)
-      update_columns(owner_id: new_owner.id, verified_at: nil, verified_by_id: nil, updated_at: Time.current)
+      update_columns(owner_id: new_owner.id, updated_at: Time.current)
       ShopAuditEvent.record!(self, :transferred, actor: by, target_user: new_owner, from: old_owner_id, to: new_owner.id,
-                                                 badge_dropped: was_verified)
+                                                 badge_dropped: false)
     end
     ShopTeamPushJob.perform_later("shop_owner_changed", new_owner.id, id, by.id)
     old_owner = User.find_by(id: old_owner_id)
@@ -270,7 +272,8 @@ class Shop < ApplicationRecord
   # ── The badge vouches for its APPLICANT (owner decision, 2026-10-08) ───────
   # The owner or a manager applies with their own e-Tazkira. If that person
   # later stops being the owner or a manager here (leaves, is removed, is made
-  # Staff), the badge comes off — the same as an ownership transfer — and the
+  # Staff), the badge comes off — an ownership transfer alone no longer does
+  # (G4, 2026-10-09: the old owner stays a manager) — and the
   # shop's Support thread says so; the owner or a manager re-applies.
   def badge_applicant
     return nil unless verified?
