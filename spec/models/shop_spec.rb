@@ -16,10 +16,22 @@ RSpec.describe Shop, type: :model do
       expect(build(:shop, name: "A" * 51)).not_to be_valid
     end
 
-    it "refuses a location outside Afghanistan, Pakistan and Iran" do
+    it "refuses a location outside Afghanistan and Pakistan" do
       shop = build(:shop, latitude: 25.2, longitude: 55.27) # Dubai
       expect(shop).not_to be_valid
       expect(shop.errors.details[:base]).to include(error: :outside_service_area)
+    end
+
+    # 1.1.7: the service area shrank to Afghanistan + Pakistan. A shop pinned
+    # earlier in the region that left it keeps working — other edits save — but
+    # its pin can only MOVE into the area, never to another point outside it.
+    it "lets a shop pinned outside the (new) area save other edits, but not move outside again" do
+      shop = create(:shop)
+      shop.update_columns(latitude: 36.3, longitude: 59.6) # pinned before 1.1.7, now outside
+      expect(shop.reload.update(name: "Renamed Shop")).to be(true)
+      expect(shop.update(latitude: 29.5, longitude: 60.86)).to be(false) # another outside point
+      expect(shop.errors.details[:base]).to include(error: :outside_service_area)
+      expect(shop.reload.update(latitude: 34.5553, longitude: 69.2075)).to be(true) # into Kabul
     end
 
     it "accepts well-formed opening hours and rejects the rest" do

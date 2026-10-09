@@ -11,8 +11,8 @@ RSpec.describe "Api::V1::Users::LocationGuesses", type: :request do
       tags "Users"
       description "The area the user searched in (`search_area`) or a GPS fix the app already had " \
                   "permission for (`gps`, at most once a day). The newest clue replaces the last. Ignored " \
-                  "(still 204) when the user has an own address or the point is outside Afghanistan, " \
-                  "Pakistan and Iran. Read the result from `location` on GET /users/me. Never public."
+                  "(still 204) when the user has an own address or the point is outside Afghanistan and " \
+                  "Pakistan. Read the result from `location` on GET /users/me. Never public."
       consumes "application/json"
       security [ { bearer: [] } ]
 

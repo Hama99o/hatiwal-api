@@ -687,7 +687,7 @@ class User < ApplicationRecord
 
   # Records a clue about where the user is. Returns true when it was saved,
   # false when it was ignored: the user has an own address, the source is not
-  # one we know, or the point is outside Afghanistan/Pakistan/Iran.
+  # one we know, or the point is outside Afghanistan/Pakistan.
   def record_location_guess!(latitude:, longitude:, source:, province: nil)
     return false unless GuessSource::ALL.include?(source.to_s)
     return false unless ServiceArea.include?(latitude, longitude)
