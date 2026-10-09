@@ -47,6 +47,9 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # `body`, and that body is a full sentence in the BUYER's language — see
     # "an old app reads the listing-moved notice from its body" below.
     "messages[].notice" => "item 5 system notice (null on every other message)",
+    # The same notice on the inbox row (1.1.6): null on every row whose last
+    # message is not a server notice. An old app shows `last_message_body`.
+    "conversations[].last_message_notice" => "item 5 notice on the inbox row (null otherwise)",
     # Owner, 2026-10-12: a Support notice's button. Null on every other message;
     # the notice itself stays a plain :text message whose body is the whole
     # sentence, so an old app shows exactly what it showed before (see "an old

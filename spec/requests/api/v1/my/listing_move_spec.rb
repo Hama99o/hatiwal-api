@@ -85,6 +85,29 @@ RSpec.describe "Api::V1::My::Listings move", type: :request do
       expect(response).to have_http_status(:not_found)
     end
 
+    # e5, 1.1.6 run-080: the inbox preview of the notice was its stored body,
+    # frozen in the buyer's language at move time ("This listing moved to …"
+    # in a Pashto inbox; the seller sees the buyer's language). The row now
+    # carries the notice, so each app renders it in the reader's language.
+    it "the inbox row carries the notice for both sides; other chats carry null" do
+      listing = create(:listing, :active, user: owner)
+      buyer = create(:user)
+      chat = create(:conversation, listing: listing, buyer: buyer)
+      other = create(:conversation, buyer: buyer)
+      other.messages.create!(user: buyer, kind: :text, body: "hi")
+      put "/api/v1/my/listings/#{listing.id}/move", params: { shop_id: shop.id }, headers: headers, as: :json
+
+      expected = { "notice" => "listing_moved", "shop_id" => shop.id, "name" => "Safi Mobile" }
+      get "/api/v1/conversations", headers: auth_headers_for(buyer)
+      rows = JSON.parse(response.body)["conversations"].index_by { |r| r["id"] }
+      expect(rows[chat.id]["last_message_notice"]).to eq(expected)
+      expect(rows[other.id]["last_message_notice"]).to be_nil
+
+      get "/api/v1/conversations", params: { role: "selling" }, headers: headers
+      row = JSON.parse(response.body)["conversations"].find { |r| r["id"] == chat.id }
+      expect(row["last_message_notice"]).to eq(expected)
+    end
+
     it "the old chat shows the localized-ready notice to both sides, and is closed" do
       listing = create(:listing, :active, user: owner)
       buyer = create(:user)

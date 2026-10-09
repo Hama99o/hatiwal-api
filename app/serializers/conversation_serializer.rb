@@ -110,6 +110,13 @@ class ConversationSerializer < ApplicationSerializer
     # lets the seller's Chat tab tell shop chats from personal ones.
     field(:shop) { |c| shop_block(c) }
     field(:last_message_body) { |c| lm = c.last_message; lm && !lm.deleted? ? lm.body : nil }
+    # A server notice as the last message ({notice, shop_id, name}, as on the
+    # message): each app renders the preview in the reader's language. The
+    # body is that sentence frozen in the buyer's language at the time.
+    field(:last_message_notice) do |c|
+      lm = c.last_message
+      lm.context.slice("notice", "shop_id", "name") if lm&.system? && !lm.deleted? && lm.context.is_a?(Hash) && lm.context["notice"].present?
+    end
     field(:last_message_kind) { |c| c.last_message&.kind }
     field(:last_message_deleted) { |c| c.last_message&.deleted? || false }
     field(:unread_count) { |c, opts| unread_count_for(c, opts) }
