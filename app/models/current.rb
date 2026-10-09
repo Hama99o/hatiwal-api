@@ -3,7 +3,7 @@
 # outside a request (jobs, cable broadcasts) everything is nil / empty, which
 # means the strictest output: no owner id.
 class Current < ActiveSupport::CurrentAttributes
-  # A client older than 1.1.6 (or one that sends no version): it predates
+  # A client older than 1.1.7 (ShopFace::NEW_CLIENT_VERSION) (or one that sends no version): it predates
   # shops and expects a person's id where a shop's face is shown.
   attribute :legacy_shop_ids
   # A proc returning the viewer, called only when a shop's face is serialized:

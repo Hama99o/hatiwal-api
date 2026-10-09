@@ -1,9 +1,9 @@
 require "rails_helper"
 
 # privacy-b (d0, 2026-10-08; owner decides at 09:00 on 2026-10-09): a buyer on
-# a 1.1.6+ client never receives the user id of the person behind a shop. Any
+# a 1.1.7+ client never receives the user id of the person behind a shop. Any
 # id opens the guest-readable public profile (name, photo). The shop's team and
-# clients older than 1.1.6 (no / older X-App-Version, not web) keep the owner
+# clients older than 1.1.7 (no / older X-App-Version, not web) keep the owner
 # id, so store apps that predate shops do not break. Blocking and reporting a
 # shop go by the SHOP's id.
 RSpec.describe "privacy-b: no owner id in what a buyer sees of a shop", type: :request do
@@ -16,15 +16,16 @@ RSpec.describe "privacy-b: no owner id in what a buyer sees of a shop", type: :r
   let(:product) { create(:listing, :active, user: owner, shop: shop) }
   let!(:chat) { Conversations::StartService.new(buyer: buyer, listing: product, message_body: "Salaam").call }
 
-  NEW_APP = { "X-App-Version" => "1.1.6", "X-App-Platform" => "android" }.freeze
+  NEW_APP = { "X-App-Version" => "1.1.7", "X-App-Platform" => "android" }.freeze
   WEB = { "X-App-Platform" => "web" }.freeze
-  OLD_APP = { "X-App-Version" => "1.1.5", "X-App-Platform" => "android" }.freeze
+  # The SHIPPED 1.1.6 build has no privacy-b client code: it must keep the owner id.
+  OLD_APP = { "X-App-Version" => "1.1.6", "X-App-Platform" => "android" }.freeze
 
   def json = JSON.parse(response.body)
   def as(user, client = NEW_APP) = auth_headers_for(user).merge(client)
 
   describe "the listing's seller block" do
-    it "a buyer on 1.1.6 / web: the shop with shop_id, no owner id (detail and list)" do
+    it "a buyer on 1.1.7 / web: the shop with shop_id, no owner id (detail and list)" do
       [ NEW_APP, WEB ].each do |client|
         get "/api/v1/listings/#{product.id}", headers: as(buyer, client)
         expect(json["listing"]["seller"]).to include("id" => nil, "shop_id" => shop.id, "as_shop" => true, "name" => "Herat Silk House")
@@ -45,7 +46,7 @@ RSpec.describe "privacy-b: no owner id in what a buyer sees of a shop", type: :r
       expect(json["listing"]["seller"]["id"]).to eq(owner.id)
     end
 
-    it "an app older than 1.1.6, or one without the header, keeps the owner id (it predates shops)" do
+    it "an app older than 1.1.7, or one without the header, keeps the owner id (it predates shops)" do
       [ OLD_APP, {} ].each do |client|
         get "/api/v1/listings/#{product.id}", headers: auth_headers_for(buyer).merge(client)
         expect(json["listing"]["seller"]["id"]).to eq(owner.id)
@@ -54,7 +55,7 @@ RSpec.describe "privacy-b: no owner id in what a buyer sees of a shop", type: :r
   end
 
   describe "the conversation's seller / other participant" do
-    it "the buyer on 1.1.6: the shop face, no owner id; the team: the owner id" do
+    it "the buyer on 1.1.7: the shop face, no owner id; the team: the owner id" do
       get "/api/v1/conversations/#{chat.id}", headers: as(buyer)
       c = json["conversation"]
       expect(c["other_participant"]).to include("id" => nil, "shop_id" => shop.id, "as_shop" => true)
