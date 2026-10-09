@@ -66,7 +66,8 @@ class SendMessagePushJob < ApplicationJob
       # the chat belongs to when the push is tapped. Additive — old apps ignore them.
       data: { type: "message", conversationId: conversation.id, messageId: message.id,
               role: recipient.id == conversation.buyer_id ? "buying" : "selling",
-              shopId: conversation.shop_id }
+              shopId: conversation.shop_id },
+      channel_id: recipient.chat_push_channel
     )
 
     # Expo reports the device is gone — drop the stale token so we stop retrying.
