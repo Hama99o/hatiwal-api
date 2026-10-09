@@ -34,10 +34,10 @@ class MessageSerializer < ApplicationSerializer
       # i.e. the member's name and photo (privacy text: "never the member who
       # posted"; docs audit 2026-10-08, P0). Same audience rule as sent_by.
       id = MessageSerializer.team_viewer?(m, opts) ? m.user_id : nil
-      next { id: id, name: shop.name, avatar_url: shop.logo_url, as_shop: true }
+      next { id: id, name: shop.name, avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
     end
 
-    { id: m.user_id, name: u.full_name, avatar_url: u.avatar_url }
+    { id: m.user_id, name: u.full_name, avatar_url: u.avatar_url, avatar_thumb_url: u.avatar_thumb_url }
   end
 
   # SHOP-3 "replied by": WHICH teammate wrote a shop message, for the shop's

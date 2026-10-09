@@ -1156,6 +1156,10 @@ class Listing < ApplicationRecord
     images.map { |a| PublicImageUrl.for(a) }.compact
   end
 
+  # Light variants, one per photo in image_urls' order (PublicImageUrl::SIZES).
+  def image_thumb_urls = images.attached? ? images.map { |a| PublicImageUrl.variant(a, :thumb) }.compact : []
+  def image_medium_urls = images.attached? ? images.map { |a| PublicImageUrl.variant(a, :medium) }.compact : []
+
   # Images as {id, url} pairs. `id` is the blob's stable signed_id, which the
   # edit form echoes back in `removed_image_ids` to delete specific photos —
   # so editing keeps the rest of the gallery instead of replacing it.

@@ -425,8 +425,10 @@ class Shop < ApplicationRecord
   def full_name = name
 
   def logo_url = PublicImageUrl.for(logo)
+  def logo_thumb_url = PublicImageUrl.variant(logo, :avatar)
 
   def cover_url = PublicImageUrl.for(cover)
+  def cover_medium_url = PublicImageUrl.variant(cover, :medium)
 
   def live_listings_count = listings.live.not_expired.not_removed.count
 

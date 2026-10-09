@@ -38,11 +38,11 @@ class ConversationSerializer < ApplicationSerializer
       # city: the shop's city, else its province (always filled from the pin), so
       # it is a string like a person's: apps older than shops render it as such.
       return { id: person.id, name: shop.name, city: shop.city.presence || shop.province, verified: shop.verified?,
-               avatar_url: shop.logo_url, as_shop: true }
+               avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
     end
 
     { id: person.id, name: person.full_name, city: person.city, verified: person.verified,
-      avatar_url: person.avatar_url }
+      avatar_url: person.avatar_url, avatar_thumb_url: person.avatar_thumb_url }
   end
 
   def self.viewer_role_for(conversation, opts)
@@ -218,7 +218,7 @@ class ConversationSerializer < ApplicationSerializer
         # re-offering a review the server would 422 on as a duplicate.
         viewer_has_reviewed_sale: viewer_is_sale_buyer ? Review.exists?(transaction_id: txn.id, reviewer_id: current_user.id) : nil }
     end
-    field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar_url } }
+    field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar_url, avatar_thumb_url: b.avatar_thumb_url } }
     field(:seller) { |c| person_block(c, c.seller) }
     # SHOP-1 — the chat is with a shop when its listing is: the buyer sees the
     # shop's name and logo, and replies go out as the shop.

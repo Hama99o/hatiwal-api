@@ -9,6 +9,6 @@ class ReviewSerializer < ApplicationSerializer
   # author (on create), who already knows who they are.
   field(:reviewer) do |r|
     u = r.reviewer
-    { id: u.id, name: u.full_name, avatar_url: u.avatar_url }
+    { id: u.id, name: u.full_name, avatar_url: u.avatar_url, avatar_thumb_url: u.avatar_thumb_url }
   end
 end

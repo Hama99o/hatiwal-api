@@ -37,7 +37,7 @@ class ListingSerializer < ApplicationSerializer
     return nil unless shop&.active?
 
     { id: shop.owner_id, name: shop.name, city: shop.city.presence || shop.province, verified: shop.verified?,
-      avatar_url: shop.logo_url, as_shop: true }
+      avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
   end
 
   SALE_FIELD = proc do |l|
@@ -65,7 +65,7 @@ class ListingSerializer < ApplicationSerializer
                {
                  id: buyer.id,
                  name: buyer.full_name,
-                 avatar_url: buyer.avatar_url,
+                 avatar_url: buyer.avatar_url, avatar_thumb_url: buyer.avatar_thumb_url,
                  verified: buyer.verified
                }
              end,
@@ -124,6 +124,8 @@ class ListingSerializer < ApplicationSerializer
     fields :category_id, :views_count, :negotiable
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
+    field(:image_thumb_urls) { |l| l.image_thumb_urls }
+    field(:image_medium_urls) { |l| l.image_medium_urls }
     field(:is_viewed) { |l, opts| opts[:viewed_ids]&.include?(l.id) || false }
     # TASK-BE-SAVEDLIST (FlowApp #255) — the feed heart. Before this, :list
     # never rendered is_saved at all (it only existed on :detailed), so no
@@ -153,7 +155,7 @@ class ListingSerializer < ApplicationSerializer
       next ListingSerializer.shop_seller(l) if l.shop&.active?
 
       u = l.user
-      { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar_url }
+      { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar_url, avatar_thumb_url: u.avatar_thumb_url }
     end
     # SHOP-1 — present when the listing was posted as a shop: the card shows the
     # shop name + "Shop" chip and the button reads "Message shop". nil = personal.
@@ -188,6 +190,8 @@ class ListingSerializer < ApplicationSerializer
     fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at, :negotiable, :shop_id
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
+    field(:image_thumb_urls) { |l| l.image_thumb_urls }
+    field(:image_medium_urls) { |l| l.image_medium_urls }
     # Use .size (not .count) so that when conversations are eager-loaded via
     # includes(:conversations) in the controller the in-memory target is used
     # instead of issuing a separate COUNT(*) query per listing row.
@@ -228,6 +232,8 @@ class ListingSerializer < ApplicationSerializer
     field(:location_precision) { "approximate" }
     field(:location_radius_m)  { Listing::APPROXIMATE_LOCATION_RADIUS_M }
     field(:images) { |l| l.image_urls }
+    field(:image_thumb_urls) { |l| l.image_thumb_urls }
+    field(:image_medium_urls) { |l| l.image_medium_urls }
     field(:image_attachments) { |l| l.image_attachments }
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:expired) { |l| l.expired? }
@@ -284,7 +290,7 @@ class ListingSerializer < ApplicationSerializer
         phone: phone,
         whatsapp_number: whatsapp,
         verified: u.verified,
-        avatar_url: u.avatar_url,
+        avatar_url: u.avatar_url, avatar_thumb_url: u.avatar_thumb_url,
         # Rating summary so the buyer sees the seller's trust score on the
         # highest-intent screen (listing detail), matching the seller profile.
         # avg_rating is nil until the seller has at least one revealed review.

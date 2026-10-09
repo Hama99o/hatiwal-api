@@ -38,6 +38,7 @@ class UserSerializer < ApplicationSerializer
     field(:member_since) { |u| u.created_at.strftime("%B %Y") }
     field(:member_since_at) { |u| u.created_at.to_date.beginning_of_month.iso8601 }
     field(:avatar_url) { |u| u.avatar_url }
+    field(:avatar_thumb_url) { |u| u.avatar_thumb_url }
     # Whether the current viewer has blocked this user. Keeps the block/unblock
     # toggle in sync on first open without a separate API call. Defaults to false
     # when no viewer context is available (e.g. unauthenticated — should not
@@ -77,6 +78,7 @@ class UserSerializer < ApplicationSerializer
            :whatsapp_number, :show_phone_publicly, :show_address_publicly
     field(:full_name) { |u| u.full_name }
     field(:avatar_url) { |u| u.avatar_url }
+    field(:avatar_thumb_url) { |u| u.avatar_thumb_url }
     # Whether this account's email address has been confirmed.
     #
     # A BOOLEAN, not `confirmed_at`: the clients only need to decide whether to show

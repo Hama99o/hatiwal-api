@@ -58,7 +58,7 @@ RSpec.describe "Api::V1::SupportConversations", type: :request do
           expect(c["listing_deleted"]).to be(true)
           expect(c["viewer_role"]).to be_nil
           expect(c["other_participant"]).to include("name" => "Hatiwal Support", "verified" => true)
-          expect(c["other_participant"].keys).to match_array(%w[id name city verified avatar_url])
+          expect(c["other_participant"].keys).to match_array(%w[id name city verified avatar_url avatar_thumb_url])
           expect(c["blocked_with_participant"]).to be(false)
         end
       end

@@ -9,7 +9,37 @@
 # (config/initializers/private_verification_files.rb).
 # spec/edge/stable_image_urls_spec.rb guards both.
 module PublicImageUrl
+  # Light variants (owner, 2026-10-09: "Cloudinary without paying for it").
+  # Lists show THUMB, the gallery MEDIUM, zoom the original. Sized for the real
+  # display at 3x density (owner: "the images must show well").
+  #   thumb / avatar: cards and avatars COVER-crop, so what must be sharp is the
+  #     SHORT side: a 2-column card is ~180 dp → 540 px, hence 640 (avatars
+  #     ≤ 80 dp → 256), the long side capped at 2.5x.
+  #   medium: the gallery CONTAINS the photo in ~400 dp width → the long side
+  #     ≤ 1440.
+  # resize_to_limit never upscales and never crops (a 300 px original stays
+  # 300 px). WebP: the production image's libvips (Debian 13, 8.16) has it.
+  SIZES = { thumb: [ 640, 1600 ], avatar: [ 256, 512 ], medium: [ 1440, 1440 ] }.freeze
+  SAVER = { quality: 80, strip: true }.freeze
+
   module_function
+
+  # A LAZY representation URL (generated on the first request, then stored),
+  # stable like the blob route; building it runs no query. Falls back to the
+  # original when a variant could fail: not variable (a PDF…), or no analysed
+  # width (a corrupt file vips cannot read, or not analysed yet) — the client
+  # then shows exactly what it shows today, never a 500.
+  def variant(attachment, size)
+    return nil unless attachment.respond_to?(:attached?) ? attachment.attached? : attachment.present?
+    return self.for(attachment) unless processable?(attachment.blob)
+
+    Rails.application.routes.url_helpers.rails_representation_url(
+      attachment.variant(resize_to_limit: box(attachment.blob, size), format: :webp, saver: SAVER),
+      **(ActiveStorage::Current.url_options || {})
+    )
+  rescue StandardError
+    nil
+  end
 
   # nil when nothing is attached (or the URL cannot be built).
   def for(attachment)
@@ -18,5 +48,19 @@ module PublicImageUrl
     Rails.application.routes.url_helpers.rails_blob_url(attachment, **(ActiveStorage::Current.url_options || {}))
   rescue StandardError
     nil
+  end
+
+  # [width, height] limits. thumb/avatar: the short side gets the first number,
+  # by the analysed orientation (ActiveStorage swaps width/height for EXIF
+  # rotations, and vips autorotates).
+  def box(blob, size)
+    short, long = SIZES.fetch(size)
+    return [ short, long ] if size == :medium
+
+    blob.metadata["width"].to_i >= blob.metadata["height"].to_i ? [ long, short ] : [ short, long ]
+  end
+
+  def processable?(blob)
+    blob.variable? && blob.metadata["width"].to_i.positive?
   end
 end

@@ -35,11 +35,11 @@ class TransactionSerializer < ApplicationSerializer
     b = t.buyer
     next nil if b.nil?
 
-    { id: b.id, name: b.full_name, avatar_url: b.avatar_url }
+    { id: b.id, name: b.full_name, avatar_url: b.avatar_url, avatar_thumb_url: b.avatar_thumb_url }
   end
 
   field(:seller) do |t|
     s = t.seller
-    { id: s.id, name: s.full_name, avatar_url: s.avatar_url }
+    { id: s.id, name: s.full_name, avatar_url: s.avatar_url, avatar_thumb_url: s.avatar_thumb_url }
   end
 end

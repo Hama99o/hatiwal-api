@@ -17,6 +17,7 @@ class ShopSerializer < ApplicationSerializer
 
   view :card do
     field(:logo_url) { |s| s.logo_url }
+    field(:logo_thumb_url) { |s| s.logo_thumb_url }
     field(:verified) { |s| s.verified? }
     fields :province, :city
   end
@@ -25,6 +26,7 @@ class ShopSerializer < ApplicationSerializer
     include_view :card
     fields :description, :category_id, :latitude, :longitude, :address_line, :hours, :created_at
     field(:cover_url) { |s| s.cover_url }
+    field(:cover_medium_url) { |s| s.cover_medium_url }
     field(:phone) { |s| s.phone_public ? s.phone : nil }
     # SHOP-2: the apps gate "Message shop" on it. A non-member only ever gets an
     # active shop (#show 404s the rest), so it reveals nothing.

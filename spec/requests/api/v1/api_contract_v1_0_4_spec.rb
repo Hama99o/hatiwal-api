@@ -50,6 +50,19 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # The same notice on the inbox row (1.1.6): null on every row whose last
     # message is not a server notice. An old app shows `last_message_body`.
     "conversations[].last_message_notice" => "item 5 notice on the inbox row (null otherwise)",
+    # Light image variants (owner, 2026-10-09). Beside the unchanged originals
+    # (image_urls / avatar_url), which an old app keeps using.
+    "listings[].image_thumb_urls" => "photo variants: 480 px WebP, one per image_urls entry",
+    "listings[].image_medium_urls" => "photo variants: 1200 px WebP, one per image_urls entry",
+    "listings[].seller.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    "conversations[].other_participant.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    "messages[].sender.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    "listing.image_thumb_urls" => "photo variants: 480 px WebP, one per image_urls entry",
+    "listing.image_medium_urls" => "photo variants: 1200 px WebP, one per image_urls entry",
+    "listing.seller.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    "conversation.buyer.avatar_thumb_url" => "photo variants: 256 px avatar",
+    "conversation.seller.avatar_thumb_url" => "photo variants: 256 px avatar",
+    "conversation.other_participant.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
     # Owner, 2026-10-12: a Support notice's button. Null on every other message;
     # the notice itself stays a plain :text message whose body is the whole
     # sentence, so an old app shows exactly what it showed before (see "an old
