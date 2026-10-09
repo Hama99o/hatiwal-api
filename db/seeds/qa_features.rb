@@ -552,6 +552,66 @@ gate_shops = defined?(Shop) && Shop.table_exists? ? Shop.where(owner_id: gate.id
 puts "  shop.gate@hatiwal.test UNCONFIRMED (no shop expected; owns #{gate_shops})"
 
 # =============================================================================
+puts "=== QA Seed: edge-case device fixtures (1.1.6, maestro/edge_116/) ==="
+# =============================================================================
+# Four device checks the release run could not cover (d0's list, 2026-10-09).
+# Dedicated edge.* accounts, so a throttled reporter or a double-tap run never
+# disturbs another flow. Reset every run:
+#   * edge.seller  — owns "QA Edge Chat Lamp" (the Send thread) and "QA Edge
+#                    Report Rug" (the thing to report).
+#   * edge.tapper  — #3 (a push for a conversation that is gone) and #4 (double
+#                    taps): one open thread with edge.seller; their own
+#                    "QA Edge Double …" listings, messages and reports wiped.
+#   * edge.reporter — #8 (the 21st report in a day). The 20-a-day limit is the
+#                    API's in-memory throttle (RateLimitable), which a seed cannot
+#                    pre-fill: the FLOW sends the first 20 through the API.
+#   * edge.closer  — #7 (close the shop offline): "QA Edge Offline Shop", put
+#                    back to ACTIVE (recreated if a run did close it).
+edge_seller   = qa_user(email: "edge.seller@hatiwal.test", firstname: "Sadiq", lastname: "Edgeseller", place: :kabul, avatar: true)
+edge_tapper   = qa_user(email: "edge.tapper@hatiwal.test", firstname: "Tariq", lastname: "Doubletap", place: :kabul, avatar: true)
+edge_reporter = qa_user(email: "edge.reporter@hatiwal.test", firstname: "Rahim", lastname: "Ratelimit", place: :kabul, avatar: true)
+edge_closer   = qa_user(email: "edge.closer@hatiwal.test", firstname: "Karim", lastname: "Closer", place: :kabul, avatar: true)
+[ edge_seller, edge_tapper, edge_reporter, edge_closer ].each { |u| u.update_columns(seller_mode: true) if qa_column?(User, :seller_mode) }
+
+edge_place = QA_PLACES.fetch(:kabul)
+edge_listing = lambda do |owner, title, price|
+  l = Listing.find_or_initialize_by(user: owner, title: title)
+  l.assign_attributes(category: fallback_category, description: "QA edge-case fixture.", price: price, currency: "AFN",
+                      location: "#{edge_place[:city]}, #{edge_place[:province]}",
+                      latitude: edge_place[:latitude], longitude: edge_place[:longitude], quantity: 1)
+  l.save! if l.new_record? || l.changed?
+  l.update_columns(status: Listing.statuses[:active], published_at: l.published_at || 1.day.ago,
+                   reserved_at: nil, sold_at: nil, sold_units: 0, expires_at: nil, removed_at: nil)
+  l.images.attach(qa_blob(QA_PHOTO, "qa-edge-#{l.id}.jpg", "image/jpeg")) if !l.images.attached? && File.exist?(QA_PHOTO)
+  l
+end
+lamp = edge_listing.call(edge_seller, "QA Edge Chat Lamp", 1500)
+rug  = edge_listing.call(edge_seller, "QA Edge Report Rug", 4000)
+
+# What earlier double-tap / report runs left behind.
+edge_tapper.listings.where("title LIKE 'QA Edge Double%'").destroy_all
+Report.where(reporter: [ edge_tapper, edge_reporter ]).delete_all
+edge_chat = Conversation.find_or_create_by!(listing: lamp, buyer: edge_tapper, seller: edge_seller)
+edge_chat.messages.where(user: edge_tapper).where("body LIKE 'QA double send%'").delete_all
+edge_chat.update_columns(status: Conversation.statuses[:open]) if qa_column?(Conversation, :status)
+edge_chat.messages.create!(user: edge_seller, body: "Salaam, the lamp is still here.", kind: :text) if edge_chat.messages.none?
+
+if defined?(Shop) && Shop.table_exists?
+  offline_shop = Shop.where(owner: edge_closer, name: "QA Edge Offline Shop").where.not(status: Shop.statuses[:closed]).first
+  offline_shop ||= Shop.create!(owner: edge_closer, name: "QA Edge Offline Shop", category: fallback_category,
+                                latitude: edge_place[:latitude], longitude: edge_place[:longitude],
+                                province: edge_place[:province], city: edge_place[:city],
+                                address_line: "#{edge_place[:city]} QA bazaar, edge shop #{Shop.where(owner: edge_closer).count + 1}",
+                                description: "QA edge-case fixture: closed offline, must stay open.")
+  offline_shop.update_columns(status: Shop.statuses[:active], updated_at: Time.current)
+  puts "  #7 edge.closer owns \"QA Edge Offline Shop\" ##{offline_shop.id} (active)"
+else
+  puts "  SKIP #7: shops table not migrated yet"
+end
+puts "  #3/#4 edge.tapper: thread ##{edge_chat.id} with edge.seller on \"#{lamp.title}\"; to report: \"#{rug.title}\" ##{rug.id}"
+puts "  #8 edge.reporter: no reports (the flow sends 20 through the API, then the 21st from the app)"
+
+# =============================================================================
 puts "=== QA Seed: check — no Support threads ==="
 # =============================================================================
 
