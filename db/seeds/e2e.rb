@@ -542,8 +542,14 @@ if File.exist?(E2E_PHOTO)
   # photo. One draft gets photos so the happy path is reachable; the other stays
   # photoless deliberately, because "Publish is refused, and says which field is
   # missing" is real behaviour that deserves a fixture too.
+  # ORDERED and without qa_features' own photo fixtures (e5, 2026-10-09): with no
+  # ORDER the six slots were Postgres's arbitrary pick, so once qa_features added
+  # the "QA Photo Edge — …" listings (seller@, active, their own photos) they
+  # took slots and "Men Winter Jacket XL Black" lost its photos between seeds.
   photo_targets = Listing.where(user: seller)
                          .where(status: [ :active, :reserved, :sold ])
+                         .where.not("title LIKE ?", "QA Photo Edge%")
+                         .order(:id)
                          .limit(6)
                          .to_a
   # Prefer the NAMED fixture over "lowest id". Flows have to be able to target this
