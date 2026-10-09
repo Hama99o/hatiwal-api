@@ -113,3 +113,45 @@ RSpec.describe "Admin shops", type: :request do
     expect(response.body).to include("user-shops", "Safi Cosmetics")
   end
 end
+
+# d0 hunt 2026-10-09 (supervisor: 1.1.7): suspend / reactivate notified the team
+# again on every repeat (a Support notice + pushes), and Reactivate on a PENDING
+# shop approved it with a misleading "reactivated" notice.
+RSpec.describe "Admin shops: suspend / reactivate are idempotent; reactivate is for suspended shops", type: :request do
+  include Devise::Test::IntegrationHelpers
+  include ActiveJob::TestHelper
+
+  let(:admin) { create(:admin_user, password: "changeme123!") }
+  let(:shop) { create(:shop) }
+  before { sign_in admin, scope: :admin_user }
+
+  def notices = enqueued_jobs.count { |j| j[:job] == SupportNoticeJob || j["job_class"] == "SupportNoticeJob" }
+
+  it "a second Suspend changes nothing and tells nobody again" do
+    patch suspend_admin_shop_path(shop), params: { reason: "spam" }
+    expect(shop.reload).to be_suspended
+    clear_enqueued_jobs
+    patch suspend_admin_shop_path(shop), params: { reason: "spam" }
+    expect(shop.reload).to be_suspended
+    expect(notices).to eq(0)
+    expect(AdminAuditLog.where(action: "suspend_shop", target: shop).count).to eq(1)
+  end
+
+  it "a second Reactivate changes nothing and tells nobody again" do
+    shop.update_columns(status: Shop.statuses[:suspended])
+    patch reactivate_admin_shop_path(shop)
+    expect(shop.reload).to be_active
+    clear_enqueued_jobs
+    patch reactivate_admin_shop_path(shop)
+    expect(notices).to eq(0)
+    expect(AdminAuditLog.where(action: "reactivate_shop", target: shop).count).to eq(1)
+  end
+
+  it "Reactivate does NOT approve a pending shop (and sends no 'reactivated' notice)" do
+    shop.update_columns(status: Shop.statuses[:pending])
+    clear_enqueued_jobs
+    patch reactivate_admin_shop_path(shop)
+    expect(shop.reload).to be_pending
+    expect(notices).to eq(0)
+  end
+end

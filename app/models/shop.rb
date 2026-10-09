@@ -379,21 +379,29 @@ class Shop < ApplicationRecord
   # pass 2026-10-08: the admin got a bare 422 page instead of a reason.
   class ClosedShop < StandardError; end
 
+  # Both return true when the status changed, false for a no-op. A repeat used
+  # to notify the team again every time (d0 hunt 2026-10-09).
   def suspend!(reason: nil)
     raise ClosedShop, "#{self.class.name} ##{id} is closed" if closed?
+    return false if suspended?
 
     transaction do
       suspended!
       User.where(active_shop_id: id).update_all(active_shop_id: nil, updated_at: Time.current)
     end
     notify_moderation!(:suspended, reason)
+    true
   end
 
+  # Only a SUSPENDED shop is reactivated. A pending shop (SHOP_APPROVAL_REQUIRED)
+  # is not "re"-activated: this used to approve it with a "reactivated" notice.
   def reactivate!
     raise ClosedShop, "#{self.class.name} ##{id} is closed" if closed?
+    return false unless suspended?
 
     active!
     notify_moderation!(:reactivated)
+    true
   end
 
   # The team is told (owner gap, 2026-10-08): a notice in the shop's Support

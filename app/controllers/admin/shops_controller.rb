@@ -20,7 +20,8 @@ module Admin
       shop = find_resource(params[:id])
       return refuse_closed(shop) if shop.closed?
 
-      shop.suspend!(reason: params[:reason].presence)
+      return redirect_to([ namespace, shop ], alert: "#{shop.name} is already suspended: nothing changed, nobody was notified.") unless shop.suspend!(reason: params[:reason].presence)
+
       log_admin_action("suspend_shop", target: shop, details: params[:reason].presence)
       redirect_to [ namespace, shop ], notice: "#{shop.name} is suspended: hidden from search, members sell as themselves."
     end
@@ -29,7 +30,11 @@ module Admin
       shop = find_resource(params[:id])
       return refuse_closed(shop) if shop.closed?
 
-      shop.reactivate!
+      unless shop.reactivate!
+        why = shop.pending? ? "is waiting for approval, not suspended" : "is not suspended"
+        return redirect_to([ namespace, shop ], alert: "#{shop.name} #{why}: nothing changed, nobody was notified.")
+      end
+
       log_admin_action("reactivate_shop", target: shop)
       redirect_to [ namespace, shop ], notice: "#{shop.name} is active again."
     end
