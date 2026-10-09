@@ -157,4 +157,30 @@ RSpec.describe SendMessagePushJob, type: :job do
         .with(hash_including(data: hash_including(role: "buying", shopId: nil)))
     end
   end
+
+  # d0 hunt 2026-10-09: only offer / meetup / photo / document had labels. A
+  # counter-offer, an accept/decline and a meetup reply fell through to the raw
+  # body: "9000|AFN|10000" or "Cafe | 3pm | 34.51,69.17" on the lock screen.
+  describe "replies to an offer or a meetup push a label, never the raw body" do
+    let(:offer) { create(:message, conversation: conversation, user: buyer, kind: :offer, body: "12000|AFN|14000") }
+    let(:proposal) { create(:message, conversation: conversation, user: buyer, kind: :meetup_proposal, body: "Cafe | 3pm | 34.51,69.17") }
+
+    {
+      offer_counter: [ :offer, "9000|AFN|14000", "push.message.offer_counter" ],
+      offer_accepted: [ :offer, "12000|AFN|14000", "push.message.offer_accepted" ],
+      offer_declined: [ :offer, "12000|AFN|14000", "push.message.offer_declined" ],
+      meetup_accepted: [ :proposal, "Cafe | 3pm | 34.51,69.17", "push.message.meetup_accepted" ],
+      meetup_declined: [ :proposal, "Cafe | 3pm | 34.51,69.17", "push.message.meetup_declined" ]
+    }.each do |kind, (target, body, key)|
+      it "#{kind}: the buyer gets the #{key} label in their language (ps)" do
+        buyer.update!(preferred_language: "ps")
+        responds_to = public_send(target)
+        msg = create(:message, conversation: conversation, user: seller, kind: kind, body: body, responds_to: responds_to)
+        label = I18n.t(key, locale: :ps)
+        expect(label).not_to start_with("Translation missing")
+        expect(Notifications::ExpoPushService).to receive(:deliver).with(hash_including(body: label)).and_return(result)
+        described_class.perform_now(msg.id)
+      end
+    end
+  end
 end

@@ -11,7 +11,14 @@ class SendMessagePushJob < ApplicationJob
     "offer" => "push.message.offer",
     "meetup_proposal" => "push.message.meetup",
     "image_message" => "push.message.image",
-    "document" => "push.message.document"
+    "document" => "push.message.document",
+    # Replies: their body is the answered offer / proposal (or a sender-language
+    # label from web) — never shown raw (d0 hunt 2026-10-09).
+    "offer_counter" => "push.message.offer_counter",
+    "offer_accepted" => "push.message.offer_accepted",
+    "offer_declined" => "push.message.offer_declined",
+    "meetup_accepted" => "push.message.meetup_accepted",
+    "meetup_declined" => "push.message.meetup_declined"
   }.freeze
 
   BODY_MAX = 120
