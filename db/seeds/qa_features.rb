@@ -612,6 +612,51 @@ puts "  #3/#4 edge.tapper: thread ##{edge_chat.id} with edge.seller on \"#{lamp.
 puts "  #8 edge.reporter: no reports (the flow sends 20 through the API, then the 21st from the app)"
 
 # =============================================================================
+puts "=== QA Seed: photo-edge fixtures (1.1.6 photo variants) ==="
+# =============================================================================
+# The light photos must look right and never break (owner, 2026-10-09): one
+# active listing per edge-case photo (tiny 200x150, portrait 1080x1920,
+# panorama 4000x1000, a PNG with transparency) plus one with all four, owned
+# by seller@ (no shop: no Sell-as sheet). Generated test images (a grid, a
+# circle, "TOP ↑", L/R corners — blur, stretch, rotation and crop all show),
+# attached AS-IS so the API's variant / downscale path processes them.
+# Idempotent by title; seller@ comes from e2e.rb (reset_e2e), so this section
+# must run after it, like every qa_features run does.
+photo_edge_seller = User.find_by(email: "seller@hatiwal.test")
+if photo_edge_seller
+  edge_photos = {
+    tiny: [ "qa_edge_tiny_200x150.jpg", "image/jpeg" ],
+    portrait: [ "qa_edge_portrait_1080x1920.jpg", "image/jpeg" ],
+    panorama: [ "qa_edge_panorama_4000x1000.jpg", "image/jpeg" ],
+    png: [ "qa_edge_png_alpha_800.png", "image/png" ]
+  }
+  photo_edge_place = QA_PLACES.fetch(:kabul)
+  [ [ "QA Photo Edge — Tiny", %i[tiny], 1100 ], [ "QA Photo Edge — Portrait", %i[portrait], 1200 ],
+    [ "QA Photo Edge — Panorama", %i[panorama], 1300 ], [ "QA Photo Edge — PNG", %i[png], 1400 ],
+    [ "QA Photo Edge — All four", %i[tiny portrait panorama png], 1500 ] ].each do |title, keys, price|
+    l = Listing.find_or_initialize_by(user: photo_edge_seller, title: title)
+    l.assign_attributes(category: fallback_category, description: "QA photo-edge fixture (1.1.6 photo variants).",
+                        price: price, currency: "AFN", location: "#{photo_edge_place[:city]}, #{photo_edge_place[:province]}",
+                        latitude: photo_edge_place[:latitude], longitude: photo_edge_place[:longitude], quantity: 1)
+    l.save! if l.new_record? || l.changed?
+    l.update_columns(shop_id: nil, status: Listing.statuses[:active], published_at: l.published_at || 1.hour.ago,
+                     reserved_at: nil, sold_at: nil, sold_units: 0, expires_at: nil, removed_at: nil)
+    # Exactly these photos, in this order: reattach when the set differs.
+    want = keys.map { |k| edge_photos.fetch(k).first }
+    unless l.images.attached? && l.images.map { |i| i.filename.to_s } == want
+      l.images.purge if l.images.attached?
+      keys.each do |k|
+        file, type = edge_photos.fetch(k)
+        l.images.attach(qa_blob(QA_SAMPLES.join(file), file, type))
+      end
+    end
+  end
+  puts "  5 photo-edge listings for seller@ (QA Photo Edge — Tiny / Portrait / Panorama / PNG / All four)"
+else
+  puts "  SKIP photo-edge: seller@hatiwal.test missing (run reset_e2e first)"
+end
+
+# =============================================================================
 puts "=== QA Seed: check — no Support threads ==="
 # =============================================================================
 
