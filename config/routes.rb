@@ -150,6 +150,8 @@ Rails.application.routes.draw do
   # Google OAuth for mobile — POST /api/v1/auth/google
   # Mobile sends a Google ID token; we verify it and return devise_token_auth tokens.
   post "api/v1/auth/google", to: "api/v1/auth/google_auth#create"
+  # Sign in with Apple (1.1.7, iOS first) — POST /api/v1/auth/apple; docs/APPLE_SIGN_IN.md.
+  post "api/v1/auth/apple", to: "api/v1/auth/apple_auth#create"
 
   namespace :api do
     namespace :v1 do

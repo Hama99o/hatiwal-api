@@ -33,6 +33,9 @@ gem "rack-cors"
 
 # HTTP client (used for Google ID token verification)
 gem "faraday"
+# Sign in with Apple: verifies Apple identity tokens (JWKS) and signs the ES256
+# client secret (app/services/apple). Already in the bundle (via signet / googleauth).
+gem "jwt"
 
 # Google OAuth2 server-side code flow (admin login)
 gem "signet"

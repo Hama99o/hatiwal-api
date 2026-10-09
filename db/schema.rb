@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_08_220000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_220000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -507,6 +507,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_220000) do
   create_table "users", force: :cascade do |t|
     t.bigint "active_shop_id"
     t.boolean "allow_password_change", default: false
+    t.text "apple_refresh_token"
+    t.string "apple_uid"
     t.boolean "auto_blocked", default: false, null: false
     t.decimal "avg_rating", precision: 3, scale: 2
     t.datetime "away_until"
@@ -573,6 +575,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_220000) do
     t.boolean "verified", default: false, null: false
     t.string "whatsapp_number"
     t.index ["active_shop_id"], name: "index_users_on_active_shop_id"
+    t.index ["apple_uid"], name: "index_users_on_apple_uid", unique: true
     t.index ["avg_rating"], name: "index_users_on_avg_rating"
     t.index ["city"], name: "index_users_on_city"
     t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true

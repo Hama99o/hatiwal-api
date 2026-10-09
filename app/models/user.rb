@@ -14,6 +14,10 @@ class User < ApplicationRecord
   include DeviseTokenAuth::Concerns::User
   include ClientVersionReporting
 
+  # Sign in with Apple (1.1.7): the refresh token kept only to revoke the
+  # account's Apple authorization on deletion — encrypted like VER-1's numbers.
+  encrypts :apple_refresh_token
+
   has_one_attached :avatar
   # Public: a permanent URL so apps cache it (PublicImageUrl).
   def avatar_url = PublicImageUrl.for(avatar)
@@ -420,6 +424,7 @@ class User < ApplicationRecord
   # all PII and block login permanently, while RETAINING messages as "Deleted
   # user" so the other participant keeps their conversation history.
   def anonymize_account!
+    apple_token = apple_refresh_token
     transaction do
       # SHOP-3: deleting the account is leaving every shop they are a member of,
       # with the same rules as Shop#leave! — first, so the products they posted
@@ -449,7 +454,9 @@ class User < ApplicationRecord
         push_token: nil,
         password: SecureRandom.hex(32), # unusable; old credentials no longer work
         deleted_at: Time.current,
-        tokens: {}                       # invalidate all existing sessions
+        tokens: {},                      # invalidate all existing sessions
+        apple_uid: nil,                  # Sign in with Apple: forget the Apple id…
+        apple_refresh_token: nil         # …and revoke its authorization (after commit)
       )
       avatar.purge_later if avatar.attached?
       forget_verification_documents! # VER-1
@@ -460,6 +467,10 @@ class User < ApplicationRecord
       assign_attributes(verified: false)
       save!(validate: false)
     end
+    # App Store guideline 5.1.1(v): a deleted account's Sign in with Apple
+    # authorization is revoked too. After the transaction, so a rollback never
+    # revokes; the token travels encrypted (AppleRevokeJob).
+    AppleRevokeJob.enqueue_for(apple_token)
   end
 
   # ── Warning / strike system ──────────────────────────────────────────────────
