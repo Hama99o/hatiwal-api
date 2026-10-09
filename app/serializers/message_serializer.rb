@@ -37,7 +37,7 @@ class MessageSerializer < ApplicationSerializer
       next { id: id, name: shop.name, avatar_url: shop.logo_url, as_shop: true }
     end
 
-    { id: m.user_id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
+    { id: m.user_id, name: u.full_name, avatar_url: u.avatar_url }
   end
 
   # SHOP-3 "replied by": WHICH teammate wrote a shop message, for the shop's

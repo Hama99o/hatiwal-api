@@ -424,9 +424,9 @@ class Shop < ApplicationRecord
   def preferred_language = owner.preferred_language
   def full_name = name
 
-  def logo_url = logo.attached? ? logo.url : nil
+  def logo_url = PublicImageUrl.for(logo)
 
-  def cover_url = cover.attached? ? cover.url : nil
+  def cover_url = PublicImageUrl.for(cover)
 
   def live_listings_count = listings.live.not_expired.not_removed.count
 

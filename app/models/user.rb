@@ -15,6 +15,8 @@ class User < ApplicationRecord
   include ClientVersionReporting
 
   has_one_attached :avatar
+  # Public: a permanent URL so apps cache it (PublicImageUrl).
+  def avatar_url = PublicImageUrl.for(avatar)
 
   # The avatar was unvalidated: `user[avatar]` accepted any file of any size.
   # Smaller cap than a listing photo — this is one small square, and the mobile

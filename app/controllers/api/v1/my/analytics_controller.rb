@@ -81,7 +81,7 @@ class Api::V1::My::AnalyticsController < Api::V1::BaseController
     posted, active, expired, sold = per_user(listings, ids)
     members.map do |m|
       u = m.user
-      { user: { id: u.id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil }, role: m.role,
+      { user: { id: u.id, name: u.full_name, avatar_url: u.avatar_url }, role: m.role,
         posted: posted[u.id] || 0, active: active[u.id] || 0, expired: expired[u.id] || 0, sold: sold[u.id] || 0 }
     end
   end

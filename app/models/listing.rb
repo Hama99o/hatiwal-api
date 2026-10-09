@@ -1133,7 +1133,7 @@ class Listing < ApplicationRecord
 
     image = images.first
     # Non-image blobs (e.g. a stray PDF) aren't variable — fall back to the original.
-    return image.url unless image.blob.variable?
+    return PublicImageUrl.for(image) unless image.blob.variable?
 
     # Return a LAZY representation URL rather than calling `.processed.url`: the
     # variant is generated on the client's first request to this URL (then
@@ -1149,19 +1149,11 @@ class Listing < ApplicationRecord
   end
 
   # A STABLE URL per image (owner, 2026-10-09: My listings re-downloaded every
-  # photo on each visit). `attachment.url` is the storage service's URL, signed
-  # with an expiry — a new string on every response, so the apps' URL-keyed
-  # image cache never hit, and a cached list held links that died after
-  # service_urls_expire_in. The blob route is permanent (signed_id) and
-  # redirects to the file, like thumbnail_url's representation route.
+  # photo on each visit) — see PublicImageUrl.
   def image_urls
     return [] unless images.attached?
 
-    helpers = Rails.application.routes.url_helpers
-    options = ActiveStorage::Current.url_options || {}
-    images.map { |a| helpers.rails_blob_url(a, **options) }
-  rescue StandardError
-    []
+    images.map { |a| PublicImageUrl.for(a) }.compact
   end
 
   # Images as {id, url} pairs. `id` is the blob's stable signed_id, which the
@@ -1170,7 +1162,7 @@ class Listing < ApplicationRecord
   def image_attachments
     return [] unless images.attached?
 
-    images.map { |a| { id: a.blob.signed_id, url: a.url } }
+    images.map { |a| { id: a.blob.signed_id, url: PublicImageUrl.for(a) } }
   rescue StandardError
     []
   end

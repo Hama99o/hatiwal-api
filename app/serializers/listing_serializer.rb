@@ -65,7 +65,7 @@ class ListingSerializer < ApplicationSerializer
                {
                  id: buyer.id,
                  name: buyer.full_name,
-                 avatar_url: buyer.avatar.attached? ? buyer.avatar.url : nil,
+                 avatar_url: buyer.avatar_url,
                  verified: buyer.verified
                }
              end,
@@ -153,7 +153,7 @@ class ListingSerializer < ApplicationSerializer
       next ListingSerializer.shop_seller(l) if l.shop&.active?
 
       u = l.user
-      { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
+      { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar_url }
     end
     # SHOP-1 — present when the listing was posted as a shop: the card shows the
     # shop name + "Shop" chip and the button reads "Message shop". nil = personal.
@@ -284,7 +284,7 @@ class ListingSerializer < ApplicationSerializer
         phone: phone,
         whatsapp_number: whatsapp,
         verified: u.verified,
-        avatar_url: u.avatar.attached? ? u.avatar.url : nil,
+        avatar_url: u.avatar_url,
         # Rating summary so the buyer sees the seller's trust score on the
         # highest-intent screen (listing detail), matching the seller profile.
         # avg_rating is nil until the seller has at least one revealed review.

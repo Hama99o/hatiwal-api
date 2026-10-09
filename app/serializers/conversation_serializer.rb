@@ -42,7 +42,7 @@ class ConversationSerializer < ApplicationSerializer
     end
 
     { id: person.id, name: person.full_name, city: person.city, verified: person.verified,
-      avatar_url: person.avatar.attached? ? person.avatar.url : nil }
+      avatar_url: person.avatar_url }
   end
 
   def self.viewer_role_for(conversation, opts)
@@ -218,7 +218,7 @@ class ConversationSerializer < ApplicationSerializer
         # re-offering a review the server would 422 on as a duplicate.
         viewer_has_reviewed_sale: viewer_is_sale_buyer ? Review.exists?(transaction_id: txn.id, reviewer_id: current_user.id) : nil }
     end
-    field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
+    field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar_url } }
     field(:seller) { |c| person_block(c, c.seller) }
     # SHOP-1 — the chat is with a shop when its listing is: the buyer sees the
     # shop's name and logo, and replies go out as the shop.
