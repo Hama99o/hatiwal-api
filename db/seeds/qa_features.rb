@@ -613,7 +613,24 @@ if defined?(Shop) && Shop.table_exists?
   staff_member = offline_shop.shop_members.find_or_initialize_by(user: edge_staff)
   staff_member.invited_by ||= edge_closer
   staff_member.update!(role: :staff)
-  puts "  #7 edge.closer owns \"QA Edge Offline Shop\" ##{offline_shop.id} (active); edge.closer.staff (Nadia Staffer) is its staff"
+  # closed-shop face, option A is about the shop's PRODUCT chats: one live
+  # product posted AS this shop (e5's setup: buyer@ starts a chat on it, Nadia
+  # replies, the owner closes the shop). It follows the newest open shop like
+  # Nadia's membership: a closed shop's products pass to the owner personally,
+  # so the same listing is put back under the recreated shop and live again.
+  lamp_photo = QA_SAMPLES.join("shop_front.png")
+  shop_lamp = Listing.find_or_initialize_by(user: edge_closer, title: "QA Edge Offline Shop — Desk Lamp")
+  shop_lamp.assign_attributes(category: Category.find_by(slug: "home") || fallback_category,
+                              description: "QA edge-case fixture: a product of the shop that gets closed.",
+                              price: 2200, currency: "AFN", location: "#{edge_place[:city]}, #{edge_place[:province]}",
+                              latitude: edge_place[:latitude], longitude: edge_place[:longitude], quantity: 1)
+  shop_lamp.save! if shop_lamp.new_record? || shop_lamp.changed?
+  shop_lamp.update_columns(shop_id: offline_shop.id, status: Listing.statuses[:active],
+                           published_at: shop_lamp.published_at || 1.day.ago, reserved_at: nil, sold_at: nil,
+                           sold_units: 0, expires_at: nil, removed_at: nil)
+  shop_lamp.images.attach(qa_blob(lamp_photo, "qa-edge-lamp-#{shop_lamp.id}.png", "image/png")) unless shop_lamp.images.attached?
+  puts "  #7 edge.closer owns \"QA Edge Offline Shop\" ##{offline_shop.id} (active); edge.closer.staff (Nadia Staffer) is its staff; " \
+       "its product \"#{shop_lamp.title}\" ##{shop_lamp.id}"
 else
   puts "  SKIP #7: shops table not migrated yet"
 end
