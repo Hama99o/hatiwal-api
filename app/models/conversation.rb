@@ -298,6 +298,22 @@ class Conversation < ApplicationRecord
     shop_chat? ? !s.active? : (s.suspended? || s.pending?)
   end
 
+  # closed-shop-face: a CLOSED shop's product chat. Its product chats go back to
+  # the owner (shop_face is nil), but what the team wrote AS the shop before the
+  # closure stays the shop's: its name, marked closed — never the writer's
+  # personal name. Only what the owner writes after the closure is personal.
+  def closed_shop_face
+    s = chat_shop
+    s if s && kind_listing? && !shop_chat? && s.closed? && s.closed_at
+  end
+
+  def written_as_closed_shop?(message)
+    s = closed_shop_face
+    return false unless s && message.user_id.present? && message.user_id != buyer_id
+
+    message.created_at <= s.closed_at
+  end
+
   def participant?(user)
     side_for(user).present?
   end

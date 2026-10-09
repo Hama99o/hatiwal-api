@@ -36,6 +36,12 @@ class MessageSerializer < ApplicationSerializer
       id = MessageSerializer.team_viewer?(m, opts) ? m.user_id : nil
       next { id: id, name: shop.name, avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
     end
+    # closed-shop-face: written as the shop before it closed — still the shop's
+    # (its logo is gone with the closure), marked closed.
+    if (closed = m.conversation&.written_as_closed_shop?(m) && m.conversation.closed_shop_face)
+      id = MessageSerializer.team_viewer?(m, opts) ? m.user_id : nil
+      next { id: id, name: closed.name, avatar_url: nil, as_shop: true, shop_closed: true }
+    end
 
     { id: m.user_id, name: u.full_name, avatar_url: u.avatar_url, avatar_thumb_url: u.avatar_thumb_url }
   end
@@ -51,7 +57,7 @@ class MessageSerializer < ApplicationSerializer
 
   def self.sent_by_visible?(message, opts)
     conversation = message.conversation
-    return false unless conversation&.written_as_shop?(message.user_id)
+    return false unless conversation&.written_as_shop?(message.user_id) || conversation&.written_as_closed_shop?(message)
 
     team_viewer?(message, opts)
   end
