@@ -19,14 +19,20 @@ module Notifications
     EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send".freeze
     VALID_TOKEN_PREFIXES = [ "ExponentPushToken[", "ExpoPushToken[" ].freeze
     TIMEOUT_SECONDS = 5
+    # Android notification channels the app creates (src/utils/push-token.ts).
+    # "messages" is IMPORTANCE_HIGH (heads-up); only apps that have it get it
+    # (User#chat_push_channel).
+    DEFAULT_CHANNEL = "default".freeze
+    MESSAGES_CHANNEL = "messages".freeze
 
     Result = Data.define(:ok, :error, :details)
 
-    def self.deliver(token:, title:, body:, data: {})
-      new(token: token, title: title, body: body, data: data).deliver
+    def self.deliver(token:, title:, body:, data: {}, channel_id: DEFAULT_CHANNEL)
+      new(token: token, title: title, body: body, data: data, channel_id: channel_id).deliver
     end
 
-    def initialize(token:, title:, body:, data: {})
+    def initialize(token:, title:, body:, data: {}, channel_id: DEFAULT_CHANNEL)
+      @channel_id = channel_id
       @token = token
       @title = title
       @body  = body
@@ -65,7 +71,7 @@ module Notifications
         body: @body,
         data: @data,
         sound: "default",
-        channelId: "default",
+        channelId: @channel_id,
         priority: "high"
       }.to_json
 

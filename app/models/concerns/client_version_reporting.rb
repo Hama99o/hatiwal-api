@@ -85,6 +85,18 @@ module ClientVersionReporting
     end
   end
 
+  # The Android channel a CHAT push goes to (android-headsup). "messages"
+  # (IMPORTANCE_HIGH, a heads-up banner) exists only in apps from
+  # PUSH_MESSAGES_CHANNEL_MIN_VERSION on; every other app — older, unknown,
+  # iOS (which ignores channels) — keeps "default", which it is sure to have.
+  # The ENV lets a QA API lower the minimum for builds still labelled 1.1.5.
+  def chat_push_channel
+    min = ENV.fetch("PUSH_MESSAGES_CHANNEL_MIN_VERSION", "1.1.6")
+    compared = AppVersion.compare(last_app_version, min)
+    has_it = last_app_platform == "android" && !compared.nil? && compared >= 0
+    has_it ? Notifications::ExpoPushService::MESSAGES_CHANNEL : Notifications::ExpoPushService::DEFAULT_CHANNEL
+  end
+
   private
 
   def clear_push_registration_error
