@@ -41,6 +41,7 @@ class Message < ApplicationRecord
   # SHOP-2: a shop chat has no product, so no offers or deal kinds either.
   validate :kind_allowed_in_support_thread, if: -> { conversation&.kind_support? || conversation&.shop_chat? }
   validate :responds_to_must_be_in_same_conversation, if: -> { responds_to_id.present? }
+  validate :reply_answers_the_other_side, on: :create, if: -> { responds_to_id.present? && REPLY_TARGETS.key?(kind) }
 
   # ── SF-B11: an offer carries how many units it is for ───────────────────────
   #
@@ -206,6 +207,30 @@ class Message < ApplicationRecord
   # actor or by writing directly to the DB — not via the public API.
   def kind_must_not_be_system_when_user_authored
     errors.add(:kind, :invalid) if system?
+  end
+
+  # Which message kinds each reply may answer.
+  REPLY_TARGETS = {
+    "offer_accepted" => %w[offer offer_counter],
+    "offer_declined" => %w[offer offer_counter],
+    "offer_counter" => %w[offer offer_counter],
+    "meetup_accepted" => %w[meetup_proposal],
+    "meetup_declined" => %w[meetup_proposal]
+  }.freeze
+
+  # An offer / meetup reply answers the OTHER side's message of the right kind
+  # (d0 hunt 2026-10-09). The server only checked "same conversation": the buyer
+  # could accept their own low offer (the seller then saw "accepted your offer"
+  # at the buyer's price) or a proposer accept their own meetup. Sides, not
+  # users: a shop's team is one side (Conversation#side_for).
+  def reply_answers_the_other_side
+    target = Message.find_by(id: responds_to_id)
+    return if target.nil? || conversation.nil? # responds_to_must_be_in_same_conversation reports it
+
+    errors.add(:responds_to_id, "must be an offer or a meetup proposal of the right kind") unless REPLY_TARGETS[kind].include?(target.kind)
+    mine = conversation.side_for(user)
+    theirs = conversation.side_for(target.user)
+    errors.add(:responds_to_id, "must be the other side's message") if mine.nil? || mine == theirs
   end
 
   # Ensures that the message being responded to belongs to the same conversation.

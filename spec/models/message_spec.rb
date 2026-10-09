@@ -15,8 +15,8 @@ RSpec.describe Message, type: :model do
       let(:other_conversation) { create(:conversation) }
 
       it "is valid when responds_to belongs to the same conversation" do
-        proposal = create(:message, conversation: conversation, kind: :meetup_proposal)
-        reply    = build(:message, conversation: conversation, kind: :meetup_accepted,
+        proposal = create(:message, conversation: conversation, user: conversation.seller, kind: :meetup_proposal)
+        reply    = build(:message, conversation: conversation, user: conversation.buyer, kind: :meetup_accepted,
                                    responds_to: proposal)
         expect(reply).to be_valid
       end
@@ -83,8 +83,8 @@ RSpec.describe Message, type: :model do
     end
 
     it "can link back to the original offer via responds_to" do
-      original_offer = create(:message, conversation: conversation, kind: :offer, body: "8000|AFN|10000")
-      counter = build(:message, conversation: conversation, kind: :offer_counter,
+      original_offer = create(:message, conversation: conversation, user: conversation.buyer, kind: :offer, body: "8000|AFN|10000")
+      counter = build(:message, conversation: conversation, user: conversation.seller, kind: :offer_counter,
                                 body: "9000|AFN|10000", responds_to: original_offer)
       expect(counter).to be_valid
     end
