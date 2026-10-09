@@ -8,27 +8,19 @@
 # raises (ActiveRecord::Encryption::Errors::Configuration), by design.
 #
 # Development and test: no secrets to manage. Keys are derived from this
-# environment's secret_key_base, so they exist only where that secret does and
-# are useless against production data.
+# environment's secret_key_base (ENV still wins), so they exist only where that
+# secret does and are useless against production data. Credentials are ignored
+# here on purpose — see lib/encryption_keys.rb.
 Rails.application.config.to_prepare do
-  credentials = Rails.application.credentials.active_record_encryption
-  env_key = ENV["ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY"]
+  keys = EncryptionKeys.resolve(
+    production: Rails.env.production?,
+    credentials: Rails.application.credentials.active_record_encryption,
+    env: ENV,
+    key_generator: Rails.application.key_generator
+  )
 
-  if credentials.present?
-    next # Rails reads credentials.active_record_encryption by itself.
-  elsif env_key.present?
-    ActiveRecord::Encryption.configure(
-      primary_key: env_key,
-      deterministic_key: ENV.fetch("ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY"),
-      key_derivation_salt: ENV.fetch("ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT")
-    )
-  elsif !Rails.env.production?
-    derive = ->(purpose) { Rails.application.key_generator.generate_key("active_record_encryption/#{purpose}", 32).unpack1("H*") }
-    ActiveRecord::Encryption.configure(
-      primary_key: derive.call("primary"),
-      deterministic_key: derive.call("deterministic"),
-      key_derivation_salt: derive.call("salt")
-    )
+  if keys
+    ActiveRecord::Encryption.configure(**keys)
   else
     Rails.logger.error("[encryption] No Active Record Encryption keys: verification requests cannot be saved. See config/initializers/active_record_encryption.rb")
   end
