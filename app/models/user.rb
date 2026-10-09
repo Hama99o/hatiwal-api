@@ -161,7 +161,9 @@ class User < ApplicationRecord
   scope :not_deleted, -> { where(deleted_at: nil) }
   # Hidden from public surfaces (profile, search) both while pending deletion
   # and after final anonymization.
-  scope :publicly_active, -> { where(deleted_at: nil, deletion_scheduled_at: nil) }
+  # …and while banned or suspended (d0 hunt 2026-10-09): a ban hides the public
+  # profile and the account from people search, like a deletion does.
+  scope :publicly_active, -> { where(deleted_at: nil, deletion_scheduled_at: nil, status: :active) }
 
   def full_name
     "#{firstname} #{lastname}".strip

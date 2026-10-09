@@ -26,6 +26,8 @@ class Conversations::StartShopService
     raise OwnShop.new("you cannot message your own shop", code: :own_shop) if @shop.owner_id == @buyer.id || @shop.member?(@buyer)
 
     owner = @shop.owner
+    # A banned / suspended owner can never answer (d0 hunt 2026-10-09).
+    raise Error, "shop is not active" if owner.account_blocked?
     raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(owner)
     raise Error.new("you have been blocked by this user", code: :blocked_by) if owner.blocked?(@buyer)
 

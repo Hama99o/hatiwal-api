@@ -106,6 +106,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
     return render_not_found if blocked_pair_show?
     return render_not_found if removed_for_viewer?
     return render_not_found if closed_shop_for_viewer?
+    return render_not_found if blocked_seller_for_viewer?
 
     @listing.register_view!(current_user)
     viewed = current_user ? ListingView.exists?(user_id: current_user.id, listing_id: @listing.id) : false
@@ -243,6 +244,11 @@ class Api::V1::ListingsController < Api::V1::BaseController
 
   # SHOP-1: a suspended / pending / closed shop's products are unavailable to
   # everyone but their seller — the same rule as `browsable`.
+  # A banned / suspended seller's listing is gone for everyone but the seller.
+  def blocked_seller_for_viewer?
+    @listing.user&.account_blocked? && @listing.user_id != current_user&.id
+  end
+
   def closed_shop_for_viewer?
     @listing.shop_id.present? && !@listing.shop&.active? && @listing.user_id != current_user&.id
   end

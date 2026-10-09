@@ -247,7 +247,11 @@ class Listing < ApplicationRecord
   # Posted as the PERSON ("Me"), not as one of their shops.
   scope :personal,    -> { where(shop_id: nil) }
   scope :by_shop,     ->(id) { where(shop_id: id) }
-  scope :browsable,   -> { live.not_expired.not_removed.from_visible_shops.ordered }
+  # A banned or suspended seller's listings are out of every public surface
+  # (d0 hunt 2026-10-09): a ban only set users.status, and buyers kept
+  # finding and messaging an account that can never answer.
+  scope :from_active_sellers, -> { where.not(user_id: User.where.not(status: :active).select(:id)) }
+  scope :browsable,   -> { live.not_expired.not_removed.from_visible_shops.from_active_sellers.ordered }
 
   # Explicit per-user "Not interested" dismissal — excludes listings the given
   # user has hidden from their own feed. Guests (nil user) see everything.

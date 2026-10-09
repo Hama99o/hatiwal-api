@@ -27,6 +27,9 @@ class Conversations::StartService
     # (it is back in the feed and in search), so refusing the first message on it
     # would make the feed advertise a listing the buyer cannot reach.
     raise Error, "listing is not available" unless @listing.live?
+    # A banned / suspended seller can never answer. Uncoded on purpose: the
+    # shipped apps map "not active" to "This listing is no longer active".
+    raise Error, "listing is not active" if seller.account_blocked?
     raise Error, "cannot start a conversation on your own listing" if @listing.user_id == @buyer.id
     # SHOP-3: the shop's team doesn't buy from its own shop.
     raise Error.new("you cannot message your own shop", code: :own_shop) if @listing.shop&.member?(@buyer)
