@@ -1148,10 +1148,18 @@ class Listing < ApplicationRecord
     nil
   end
 
+  # A STABLE URL per image (owner, 2026-10-09: My listings re-downloaded every
+  # photo on each visit). `attachment.url` is the storage service's URL, signed
+  # with an expiry — a new string on every response, so the apps' URL-keyed
+  # image cache never hit, and a cached list held links that died after
+  # service_urls_expire_in. The blob route is permanent (signed_id) and
+  # redirects to the file, like thumbnail_url's representation route.
   def image_urls
     return [] unless images.attached?
 
-    images.map(&:url)
+    helpers = Rails.application.routes.url_helpers
+    options = ActiveStorage::Current.url_options || {}
+    images.map { |a| helpers.rails_blob_url(a, **options) }
   rescue StandardError
     []
   end
