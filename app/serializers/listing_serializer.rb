@@ -36,8 +36,10 @@ class ListingSerializer < ApplicationSerializer
     shop = listing.shop
     return nil unless shop&.active?
 
-    { id: shop.owner_id, name: shop.name, city: shop.city.presence || shop.province, verified: shop.verified?,
-      avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
+    # privacy-b: the owner's id only for the shop's team and pre-1.1.6 clients
+    # (ShopFace); everyone else gets null and the shop's own id.
+    { id: ShopFace.owner_id_for(shop), shop_id: shop.id, name: shop.name, city: shop.city.presence || shop.province,
+      verified: shop.verified?, avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
   end
 
   SALE_FIELD = proc do |l|

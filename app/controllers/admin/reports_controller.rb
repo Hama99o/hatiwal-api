@@ -72,6 +72,7 @@ module Admin
       case report.reportable
       when User then report.reportable
       when Listing then report.reportable.user
+      when Shop then report.reportable.owner
       end
     end
 

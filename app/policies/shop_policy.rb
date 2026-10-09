@@ -13,6 +13,10 @@ class ShopPolicy < ApplicationPolicy
   def member? = record.member?(user)
   # SHOP-2: "Message shop" without a product (own shop refused by the service, with its code).
   def message? = user.present? && record.active?
+  # privacy-b: block / report a shop by its id — anyone signed in who is not on
+  # its team (a member blocking their own shop would block their owner).
+  def block? = user.present? && !member?
+  def report? = block?
   # Moving listings in or out is managing products: every member may (phase 3).
   def move_listings? = member?
   # SHOP-3 — the team (docs/SHOPS.md, "Permission matrix"): every member sees

@@ -202,6 +202,8 @@ Rails.application.routes.draw do
         resources :reviews, only: %i[index], controller: "shop_reviews"
         # SHOP-2 — "Message shop" from the shop page (no product): find-or-create.
         resources :conversations, only: %i[create], controller: "shop_conversations"
+        # privacy-b — block / unblock a shop by its id (blocks its owner underneath).
+        resource :block, only: %i[create destroy], controller: "shop_blocks"
         # SHOP-3 — the team.
         resources :members, only: %i[index update destroy], controller: "shop_members", param: :user_id
         delete :membership, to: "shop_members#leave"
