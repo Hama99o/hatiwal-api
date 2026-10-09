@@ -311,7 +311,7 @@ class Listing < ApplicationRecord
   def self.within_radius(lat, lng, km)
     return all if lat.blank? || lng.blank? || km.blank?
 
-    where.not(latitude: nil, longitude: nil)
+    where.not(listings: { latitude: nil, longitude: nil })
          .where("#{haversine_distance_sql} <= ?", *haversine_binds(lat, lng), km.to_f)
   end
 
@@ -358,7 +358,7 @@ class Listing < ApplicationRecord
     lng = lng.to_f
     dlat = km / KM_PER_DEGREE
     dlng = km / (KM_PER_DEGREE * [ Math.cos(lat * Math::PI / 180), 0.01 ].max)
-    where(latitude: (lat - dlat)..(lat + dlat), longitude: (lng - dlng)..(lng + dlng))
+    where(listings: { latitude: (lat - dlat)..(lat + dlat), longitude: (lng - dlng)..(lng + dlng) })
   end
 
   # The radius to box a nearest-first page with, or nil for "no box".
@@ -373,8 +373,8 @@ class Listing < ApplicationRecord
   # and `nearest_first` (ORDER BY ... ASC) so the math lives in one place.
   def self.haversine_distance_sql
     "#{EARTH_RADIUS_KM} * acos(LEAST(1, GREATEST(-1, " \
-    "cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + " \
-    "sin(radians(?)) * sin(radians(latitude)))))"
+    "cos(radians(?)) * cos(radians(listings.latitude)) * cos(radians(listings.longitude) - radians(?)) + " \
+    "sin(radians(?)) * sin(radians(listings.latitude)))))"
   end
   private_class_method :haversine_distance_sql
 
