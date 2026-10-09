@@ -683,6 +683,36 @@ else
 end
 
 # =============================================================================
+# ── RTL long-text fixture (e5's exploratory RTL check, 2026-10-09) ─────────
+# Maestro's inputText cannot type Pashto reliably on Android, so a seed: ONE
+# active personal listing of seller@ whose title is the MAX length (150 chars)
+# of real Pashto with a Latin brand and numbers in the MIDDLE (bidi), a ~800-char
+# 3-paragraph Pashto description with a URL-like and a phone-like token, and a
+# long Pashto meeting address. Found by searching "QA RTL Long".
+rtl_seller = User.find_by(email: "seller@hatiwal.test")
+if rtl_seller
+  rtl_title = 'QA RTL Long د کور لپاره ډېر ښه او پاک موبایل Samsung Galaxy A54 د 128GB حافظې سره، نوې بیټرۍ، اصلي چارجر او ساتونکی پوښ، په کابل کې د لاسي سپارلو چمتو'
+  rtl = Listing.find_or_initialize_by(user: rtl_seller, title: rtl_title)
+  rtl.assign_attributes(
+    category: Category.find_by(slug: "electronics") || fallback_category,
+    description: "دا موبایل مې شاوخوا یو کال مخکې د کابل له یوه باوري هټۍ څخه نوی اخیستی و او تر اوسه یې ډېر په احتیاط ساتلی دی. پرده یې هیڅ ماتیدنه نه لري، شاته پوښ یې پاک دی او ټول تڼۍ یې سم کار کوي. بیټرۍ یې ټوله ورځ کار ورکوي او چټک چارجر ورسره دی.\n\nد اصلي بکس، چارجر، کیبل او یو اضافي ساتونکي پوښ سره به یې درکړم. که غواړئ چې لومړی یې وګورئ، زه کولی شم چې د ورځې په اوږدو کې د کابل په ښار کې په یوه خوندي او عامه ځای کې سره ووینو. د نورو انځورونو لپاره دا پاڼه وګورئ: hatiwal.com/l/12345 یا ماته پیغام راولېږئ.\n\nبیه یې د خبرو وړ ده خو لږ. یوازې جدي پېرودونکي دې اړیکه ونیسي. د تلیفون شمېره مې 0700 123 456 ده خو مهرباني وکړئ لومړی په هټیوال کې پیغام راکړئ چې ستاسو په اړه پوه شم. د پیسو مخکې لېږلو ته اړتیا نشته، یوازې د لیدو پر مهال تادیه کېږي. له تاسو مننه او د خدای په امان.",
+    address: 'د کابل ښار، شهر نو، د حاجي یعقوب څلورلارې ته نږدې، د مرکزي جومات ترڅنګ، د ښوونځي مخې ته، د درملتون څنګ ته، دویم پوړ، د زرغون دروازې سره',
+    price: 18_500, currency: "AFN", condition: :good, quantity: 1,
+    location: "#{QA_PLACES.fetch(:kabul)[:city]}, #{QA_PLACES.fetch(:kabul)[:province]}",
+    latitude: QA_PLACES.fetch(:kabul)[:latitude], longitude: QA_PLACES.fetch(:kabul)[:longitude]
+  )
+  rtl.save! if rtl.new_record? || rtl.changed?
+  rtl.update_columns(shop_id: nil, status: Listing.statuses[:active], published_at: rtl.published_at || 1.day.ago,
+                     reserved_at: nil, sold_at: nil, sold_units: 0, expires_at: nil, removed_at: nil)
+  unless rtl.images.attached?
+    phone = Rails.root.join("db/seeds/images/electronics/phone-1.jpg")
+    rtl.images.attach(qa_blob(phone, "qa-rtl-long-#{rtl.id}.jpg", "image/jpeg"))
+  end
+  puts "  RTL long-text listing ##{rtl.id} (title #{rtl.title.length} chars, description #{rtl.description.length})"
+else
+  puts "  SKIP RTL long-text listing: seller@hatiwal.test missing"
+end
+
 puts "=== QA Seed: check — no Support threads ==="
 # =============================================================================
 
