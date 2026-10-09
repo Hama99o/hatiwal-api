@@ -42,7 +42,7 @@ class SupportNoticeJob < ApplicationJob
   # Owner, 2026-10-12: Support is per identity. These are about THE SHOP, so they
   # go to the shop's own Support thread (its whole team reads it); every other
   # notice is about the person and goes to their own thread.
-  SHOP_THREAD_NOTICES = (SHOP_NOTICES + %i[shop_member_joined shop_badge_applicant_left]).freeze
+  SHOP_THREAD_NOTICES = (SHOP_NOTICES + %i[shop_member_joined shop_badge_applicant_left shop_suspended shop_reactivated]).freeze
 
   # SHOP-3 team events (owner, 2026-10-07: "the same system as for users"),
   # alongside ShopTeamPushJob. key => what must STILL hold when the job runs:
@@ -61,8 +61,17 @@ class SupportNoticeJob < ApplicationJob
     shop_ownership_handed_over: ->(user, shop, actor, _invite) { actor && shop.owner_id == actor.id && shop.member?(user) },
     # To the OWNER, in the shop's thread: the badge came off because the member
     # who applied for it is no longer the owner or a manager (owner, 2026-10-08).
-    shop_badge_applicant_left: ->(user, shop, _actor, _invite) { shop.owner_id == user.id && !shop.verified? }
+    shop_badge_applicant_left: ->(user, shop, _actor, _invite) { shop.owner_id == user.id && !shop.verified? },
+    # To the OWNER, in the shop's thread: an admin suspended / reactivated the
+    # shop (owner gap, 2026-10-08), with the admin's reason when given. Still
+    # true when the job runs, or nothing is said (a suspension undone at once).
+    shop_suspended: ->(user, shop, _actor, _invite) { shop.owner_id == user.id && shop.suspended? },
+    shop_reactivated: ->(user, shop, _actor, _invite) { shop.owner_id == user.id && shop.active? }
   }.freeze
+
+  # Their pushes go to the owner AND the managers (Shop#notify_moderation!),
+  # not to the whole thread, so the notice itself does not push.
+  STATUS_NOTICES = %i[shop_suspended shop_reactivated].freeze
 
   # Owner, 2026-10-12: a notice with a natural target gets a button
   # (messages[].action) that opens it; the apps pick the identity (Seller mode
@@ -82,13 +91,14 @@ class SupportNoticeJob < ApplicationJob
     shop_ownership_received: %w[open_team viewTeam],
     shop_ownership_handed_over: %w[open_shop viewShop],
     shop_badge_applicant_left: %w[open_verification verifyAgain],
+    shop_reactivated: %w[open_shop viewShop],
     listing_expires_week: %w[open_listing renewListing],
     listing_expires_day: %w[open_listing renewListing]
   }.freeze
 
   # `shop:` names the shop a shop notice is about (SHOP-2: an owner may have several).
   # Team notices also pass `actor:` (the other person) and/or `invite:`.
-  def self.enqueue(user, key, shop: nil, actor: nil, invite: nil, listing: nil)
+  def self.enqueue(user, key, shop: nil, actor: nil, invite: nil, listing: nil, reason: nil)
     unless NOTICES.key?(key.to_sym) || TEAM_NOTICES.key?(key.to_sym) || LISTING_NOTICES.include?(key.to_sym)
       raise ArgumentError, "unknown support notice: #{key}"
     end
@@ -97,7 +107,7 @@ class SupportNoticeJob < ApplicationJob
     if LISTING_NOTICES.include?(key.to_sym)
       perform_later(user.id, key.to_s, listing.shop_id, { "listing_id" => listing.id, "expires_at" => listing.expires_at&.iso8601(6) })
     elsif TEAM_NOTICES.key?(key.to_sym)
-      perform_later(user.id, key.to_s, shop.id, { "actor_id" => actor&.id, "invite_id" => invite&.id }.compact)
+      perform_later(user.id, key.to_s, shop.id, { "actor_id" => actor&.id, "invite_id" => invite&.id, "reason" => reason.presence }.compact)
     else
       shop ? perform_later(user.id, key.to_s, shop.id) : perform_later(user.id, key.to_s)
     end
@@ -134,8 +144,9 @@ class SupportNoticeJob < ApplicationJob
     invite = ShopInvite.find_by(id: team["invite_id"], shop_id: shop.id) if team["invite_id"]
     return unless TEAM_NOTICES[key].call(user, shop, actor, invite)
 
-    deliver(user, team_text(user, key, shop, actor, invite), shop: (shop if SHOP_THREAD_NOTICES.include?(key)),
-                                                              action: action_for(key, shop: shop, invite: invite))
+    deliver(user, team_text(user, key, shop, actor, invite, team["reason"]), shop: (shop if SHOP_THREAD_NOTICES.include?(key)),
+                                                                              push: !STATUS_NOTICES.include?(key),
+                                                                              action: action_for(key, shop: shop, invite: invite))
   end
 
   def perform_listing(user_id, key, data)
@@ -203,10 +214,12 @@ class SupportNoticeJob < ApplicationJob
 
   # Names as the people see them; the role in the reader's language, read when
   # the job runs (the role may have changed since).
-  def team_text(user, key, shop, actor, invite)
+  def team_text(user, key, shop, actor, invite, reason = nil)
     I18n.with_locale(locale_for(user)) do
       role = team_role(key, user, shop, actor, invite)
-      I18n.t("support.notices.#{key}", name: user.firstname.presence || user.full_name, shop: shop.name,
+      # A suspension with the admin's reason has its own wording.
+      text_key = key == :shop_suspended && reason.present? ? :shop_suspended_reason : key
+      I18n.t("support.notices.#{text_key}", name: user.firstname.presence || user.full_name, shop: shop.name, reason: reason.to_s,
                                         role: role ? I18n.t("support.team_roles.#{role}") : "",
                                         inviter: invite&.invited_by&.full_name.to_s, member: actor&.full_name.to_s,
                                         actor: actor&.full_name.to_s, new_owner: actor&.full_name.to_s)

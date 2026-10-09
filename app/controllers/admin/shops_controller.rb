@@ -20,7 +20,7 @@ module Admin
       shop = find_resource(params[:id])
       return refuse_closed(shop) if shop.closed?
 
-      shop.suspend!
+      shop.suspend!(reason: params[:reason].presence)
       log_admin_action("suspend_shop", target: shop, details: params[:reason].presence)
       redirect_to [ namespace, shop ], notice: "#{shop.name} is suspended: hidden from search, members sell as themselves."
     end

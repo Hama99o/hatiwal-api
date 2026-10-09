@@ -15,7 +15,10 @@ class ShopTeamPushJob < ApplicationJob
   queue_as :default
 
   KINDS = %w[shop_invite shop_member_joined shop_membership_changed shop_owner_changed].freeze
-  MEMBERSHIP_REASONS = %w[removed closed role_changed].freeze
+  # suspended / reactivated: an admin moderated the shop (owner gap, 2026-10-08);
+  # the apps refetch who they are, as for the others (a suspended shop drops
+  # the person back to Me).
+  MEMBERSHIP_REASONS = %w[removed closed role_changed suspended reactivated].freeze
 
   def perform(kind, recipient_id, shop_id, actor_id = nil, reason = nil, invite_id = nil)
     return unless KINDS.include?(kind)

@@ -8,6 +8,8 @@ fa:
       shop_membership_changed_closed: '%{shop} بسته شد. اکنون دوباره به عنوان خودتان می‌فروشید.'
       shop_membership_changed_role_changed: نقش شما در %{shop} تغییر کرد. برای دیدن آن هتیوال را باز کنید.
       shop_owner_changed: '%{name} شما را مالک %{shop} کرد.'
+      shop_membership_changed_suspended: '%{shop} تعلیق شد. برای دیدن دلیل، هتیوال را باز کنید.'
+      shop_membership_changed_reactivated: '%{shop} دوباره فعال است.'
   shops:
     team:
       errors:

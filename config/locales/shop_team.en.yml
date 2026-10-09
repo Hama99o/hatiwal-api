@@ -8,6 +8,8 @@ en:
       shop_membership_changed_closed: '%{shop} is closed. You are selling as yourself again.'
       shop_membership_changed_role_changed: Your role in %{shop} changed. Open Hatiwal to see it.
       shop_owner_changed: '%{name} made you the owner of %{shop}.'
+      shop_membership_changed_suspended: '%{shop} is suspended. Open Hatiwal to see why.'
+      shop_membership_changed_reactivated: '%{shop} is active again.'
   shops:
     team:
       errors:
