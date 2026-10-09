@@ -54,3 +54,7 @@ Thumbs.db
 
 # Local DB dumps (bin/db_backup) — never commit a database dump
 backups/
+
+# Load test (docs/LOAD_TEST.md): generated auth tokens and run output — never committed.
+/loadtest/tokens/
+/loadtest/results/
