@@ -1,13 +1,13 @@
 # privacy-b — no owner id in what a buyer sees of a shop
 
-**For the owner's decision, 2026-10-09 09:00.** Built overnight on SIDE branches; nothing is in
-`release-1.1.6`. Choose: merge into 1.1.6, or keep it for 1.1.7.
+**DECIDED by the owner (2026-10-09): ships in 1.1.7.** Rebased onto the `release-1.1.7` heads
+(2026-10-09 evening, hatiwal-d0); still on SIDE branches until it is merged into 1.1.7.
 
 | Repo | Branch | Head | Based on |
 |---|---|---|---|
-| api | `privacy-b` (worktree `.worktrees/api-privacy-b`) | `61759e0` + this doc | api `release-1.1.6` `d920412` |
-| web | `privacy-b-web` (`.worktrees/web-privacy-b`) | `f1c12da` | web `release-1.1.6` `b01ea19` |
-| mobile | `privacy-b-mobile` (`.worktrees/mobile-privacy-b`) | `2bf61082` | mobile `release-1.1.6` `b9810e72` |
+| api | `privacy-b` (worktree `.worktrees/api-privacy-b`) | `1e237e5` + this doc | api `release-1.1.7` `de8da01` |
+| web | `privacy-b-web` (`.worktrees/web-privacy-b`) | `c9dc5ea` | web `release-1.1.7` `4710af7` |
+| mobile | `privacy-b-mobile` (`.worktrees/mobile-privacy-b`) | `32c574bc` | mobile `release-1.1.7` `4f9a463d` |
 
 Each is rebased on its release head and merges as a fast-forward of one commit.
 
@@ -28,9 +28,10 @@ name and photo.
 
 - **API** — a shop's face carries `id: null` + `shop_id` for anyone not on the shop's team. The
   team keeps the owner id (its "is this mine" checks).
-- **Legacy gate** — clients older than 1.1.6 keep the owner id, so store apps that predate shops do
-  not break: a client is "new" only with `X-App-Version` ≥ 1.1.6 or `X-App-Platform: web`. Every
-  store build before 2026-10-01 sends no version at all → legacy.
+- **Legacy gate** — clients older than **1.1.7** keep the owner id (`ShopFace::NEW_CLIENT_VERSION`,
+  moved from 1.1.6 to 1.1.7 on 2026-10-09: the shipped 1.1.6 store build has none of privacy-b's
+  client code and must keep working). A client is "new" only with `X-App-Version` ≥ 1.1.7 or
+  `X-App-Platform: web`. Store builds before 2026-10-01 send no version at all → legacy.
 - **Block / report a shop by its id** — `POST/DELETE /shops/:id/block` blocks the owner underneath
   (every existing block check unchanged); `GET /blocks` lists the SHOP to new clients. A shop can be
   reported (`reportable_type: "Shop"`), never by its own team. Admin: the report page names the
@@ -53,9 +54,10 @@ name and photo.
 ## Risk
 
 - **Migration** `20261008210000`: `blocks.shop_id` (nullable, concurrent index). Additive.
-- **The gate depends on the release bump**: the app sends `X-App-Version` from `app.json`, which
-  says `1.1.5` until the release bump to 1.1.6. Without the bump the API treats 1.1.6 as legacy —
-  no privacy gain, but nothing breaks.
+- **The gate depends on the 1.1.7 bump**: the app sends `X-App-Version` from `app.json`. Until it
+  says 1.1.7 the API treats the app as legacy: no privacy gain, but nothing breaks.
+- **Deploy order:** the API and web go together (web always counts as new). Mobile users get it
+  when they update to 1.1.7; until then the 1.1.6 app keeps today's payload.
 - Cable payloads (no headers) get the strict output (no owner id) — only message payloads go
   there, and those were already fixed in `c714771`.
 
@@ -69,3 +71,24 @@ name and photo.
   components/common), incl. `identity.test.ts` (17, numeric AND null id), shop block/unblock/report
   API tests, BlockedUsers (shop row beside a person with the same id), holdInChat; no new tsc
   errors. No device run yet.
+
+## Privacy text: DRAFT for 1.1.7 (needs the owner's approval)
+
+With privacy-b a buyer never receives the user id behind a shop, so the profile can't be reached
+from a shop chat. The sentence softened for 1.1.6 can be exact again. Proposed change to web
+`messages/*.json` → `privacy.shopsBody`, one sentence in each locale, **not applied** until the
+owner approves:
+
+| | 1.1.6 (live) | 1.1.7 DRAFT |
+|---|---|---|
+| en | In chats with your shop, buyers see the shop's name and logo, not your personal details. | In chats with your shop, buyers see the shop's name and logo, never your personal name, photo or city. |
+| ps | د دوکان په چټونو کې پیرودونکي د دوکان نوم او لوګو ویني، نه ستاسو شخصي معلومات. | د دوکان په چټونو کې پیرودونکي د دوکان نوم او لوګو ویني، هېڅکله ستاسو شخصي نوم، انځور یا ښار نه. |
+| fa | در گفتگوهای دوکان، خریداران نام و لوگوی دوکان را می‌بینند، نه مشخصات شخصی شما را. | در گفتگوهای دوکان، خریداران نام و لوگوی دوکان را می‌بینند، هرگز نام شخصی، عکس یا شهر شما را نه. |
+| ur | دکان کی چیٹس میں خریدار دکان کا نام اور لوگو دیکھتے ہیں، آپ کی ذاتی تفصیلات نہیں۔ | دکان کی چیٹس میں خریدار دکان کا نام اور لوگو دیکھتے ہیں، کبھی آپ کا ذاتی نام، تصویر یا شہر نہیں۔ |
+
+The DRAFT wording is the pre-1.1.6 sentence, which the owner had already approved in all four
+languages, and it is true again once privacy-b is live (API + web together, mobile from 1.1.7). It
+should go live with the 1.1.7 API/web deploy, not before. Until 1.1.7 reaches the stores, a buyer
+on the 1.1.6 app still gets the owner id, so "never" holds only for web and 1.1.7 apps. Better: keep
+today's sentence until most users are on 1.1.7, then switch.
+
