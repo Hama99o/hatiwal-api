@@ -144,8 +144,11 @@ class VerificationRequest < ApplicationRecord
 
   # credentials.verification.number_hmac_key or ENV in production; derived from
   # secret_key_base elsewhere (never committed).
+  # Like EncryptionKeys: the production key is never used outside production,
+  # even when a dev machine can read the shared credentials file.
   def self.number_digest_key
-    key = Rails.application.credentials.dig(:verification, :number_hmac_key) || ENV["VERIFICATION_NUMBER_HMAC_KEY"]
+    key = ENV["VERIFICATION_NUMBER_HMAC_KEY"].presence
+    key ||= Rails.application.credentials.dig(:verification, :number_hmac_key) if Rails.env.production?
     return key if key.present?
     raise "VERIFICATION_NUMBER_HMAC_KEY is not set" if Rails.env.production?
 
