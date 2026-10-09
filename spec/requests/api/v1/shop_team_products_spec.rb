@@ -39,6 +39,26 @@ RSpec.describe "Shop team products and sales", type: :request do
     expect(json["transactions"].pluck("id")).to include(sale.id)
   end
 
+  # d0 hunt 2026-10-09: /my/reviews/pending built on the transactions SCOPE,
+  # which includes sales a member RECORDED — but only the buyer and the seller
+  # (the owner) may review, so staff got a "rate your recent deals" prompt that
+  # 403'd on every submit and never went away (not even after leaving the shop).
+  it "a sale staff recorded is in their transactions, but NOT in their pending reviews" do
+    Conversations::StartService.new(buyer: buyer, listing: product, message_body: "I'll take it").call
+    put "/api/v1/my/listings/#{product.id}/sold", params: { buyer_id: buyer.id }.to_json, headers: h(staff)
+    sale = product.reload.sale_transactions.sole
+
+    get "/api/v1/my/reviews/pending", headers: auth_headers_for(staff)
+    expect(response).to have_http_status(:ok)
+    expect(json["transactions"].pluck("id")).not_to include(sale.id)
+
+    # The two parties still get it.
+    get "/api/v1/my/reviews/pending", headers: auth_headers_for(owner)
+    expect(json["transactions"].pluck("id")).to include(sale.id)
+    get "/api/v1/my/reviews/pending", headers: auth_headers_for(buyer)
+    expect(json["transactions"].pluck("id")).to include(sale.id)
+  end
+
   it "a non-member can't touch a shop product" do
     put "/api/v1/my/listings/#{product.id}", params: { listing: { title: "Nope" } }.to_json, headers: h(create(:user))
     expect(response).to have_http_status(:not_found)
