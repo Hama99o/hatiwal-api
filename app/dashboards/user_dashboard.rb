@@ -79,12 +79,13 @@ class UserDashboard < Administrate::BaseDashboard
     updated_at
   ].freeze
 
-  # Editable fields only — no credentials. `status` drives moderation
-  # (active / suspended / banned) and `verified` toggles the trust badge.
+  # Editable fields only — no credentials. NOT editable here (d0 hunt
+  # 2026-10-09): `status` / `block_reason` (use Block / Unblock, which log and
+  # clear warnings) and `email` (the login; Confirm email is logged). `verified`
+  # can be switched ON here (logged); OFF goes through "Remove badge".
   FORM_ATTRIBUTES = %i[
     firstname
     lastname
-    email
     phone
     city
     province
@@ -93,8 +94,6 @@ class UserDashboard < Administrate::BaseDashboard
     seller_mode
     verified
     confirmed_at
-    status
-    block_reason
   ].freeze
 
   COLLECTION_FILTERS = {

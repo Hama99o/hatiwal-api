@@ -109,10 +109,13 @@ RSpec.describe "Admin dashboard", type: :request do
       expect(response).to have_http_status(:redirect)
     end
 
-    it "moderates a user by changing their status" do
+    # Moderation goes through Block / Unblock (logged, clears warnings), never
+    # through Edit (d0 hunt 2026-10-09; admin_safety_spec).
+    it "moderates a user through Block, not by editing their status" do
       user = create(:user, status: :active)
       patch admin_user_path(user), params: { user: { status: "banned" } }
-      expect(response).to have_http_status(:redirect)
+      expect(user.reload.status).to eq("active")
+      patch block_admin_user_path(user)
       expect(user.reload.status).to eq("banned")
     end
 

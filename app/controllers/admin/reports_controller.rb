@@ -45,12 +45,22 @@ module Admin
         return redirect_to([ namespace, report ], alert: "Could not determine a user to warn.")
       end
 
-      target.issue_warning!(
-        admin_user: current_admin_user,
-        reason: "Reported as #{report.reason.humanize.downcase}",
-        category: warning_category_for(report.reason)
-      )
-      report.update!(status: :resolved)
+      # ONE strike per report (d0 hunt 2026-10-09): repeated clicks, or a
+      # double-click on this non-Turbo form, gave a strike each and the third
+      # auto-suspended the user. Decided under the report's row lock.
+      warned = report.with_lock do
+        next false if report.resolved?
+
+        target.issue_warning!(
+          admin_user: current_admin_user,
+          reason: "Reported as #{report.reason.humanize.downcase}",
+          category: warning_category_for(report.reason)
+        )
+        report.update!(status: :resolved)
+        true
+      end
+      return redirect_to([ namespace, report ], alert: "This report is already resolved: no second warning was issued.") unless warned
+
       log_admin_action("warn_user", target: target, details: "via report ##{report.id}")
       redirect_to [ namespace, report ], notice: "Warning issued to #{target.full_name} and report resolved."
     end

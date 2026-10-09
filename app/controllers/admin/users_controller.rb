@@ -41,6 +41,17 @@ module Admin
       redirect_to [ namespace, user ], notice: notice
     end
 
+    # Destroy = anonymize (d0 hunt 2026-10-09). Administrate's default hard
+    # delete cascaded (dependent: :destroy) through the user's conversations and
+    # messages, wiping the OTHER party's chat history, with no audit line. The
+    # account is anonymized exactly like a user's own final deletion.
+    def destroy
+      user = requested_resource
+      user.anonymize_account!
+      log_admin_action("anonymize_user", target: user, details: "admin Destroy → anonymized (chats kept for the other party)")
+      redirect_to [ namespace, user ], notice: "The account was anonymized: name, email and photo removed, the login closed. Other people's chats are kept."
+    end
+
     # "Confirm email now" (owner, 2026-10-08): confirm a user by hand, e.g. one
     # whose confirmation mail never arrived. See User#admin_confirm_email!.
     def confirm_email
@@ -59,9 +70,18 @@ module Admin
       user = requested_resource
       was_verified = user.verified?
       was_confirmed_at = user.confirmed_at
+      # The badge comes OFF only through "Remove badge" (it writes the decision
+      # and tells the person); here it would silently drop it (d0 hunt).
+      if was_verified && params.dig(:user, :verified).to_s.in?(%w[0 false])
+        return redirect_to([ namespace, user ], alert: "Use “Remove badge” to take the Verified badge off: it records the reason and tells the user.")
+      end
+
       super
       user.reload
-      SupportNoticeJob.enqueue(user, :user_verified) if !was_verified && user.verified?
+      if !was_verified && user.verified?
+        SupportNoticeJob.enqueue(user, :user_verified)
+        log_admin_action("verified_on", target: user, details: "switched on in Edit")
+      end
       return if user.confirmed_at == was_confirmed_at
 
       log_admin_action("edit_email_confirmed_at", target: user,

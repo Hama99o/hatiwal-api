@@ -43,10 +43,10 @@
               class: "button button--danger" %>
       <% end %>
 
-      <% if is_listing || is_user %>
+      <% if (is_listing || is_user) && !report.resolved? %>
         <%= button_to(is_listing ? "Warn seller & resolve" : "Warn user & resolve",
               warn_target_admin_report_path(report),
-              method: :patch, data: { turbo: false }, class: "button") %>
+              method: :patch, data: { turbo: false, confirm: "Give one warning (strike) and resolve this report? #{User::WARNING_BLOCK_THRESHOLD} active warnings suspend the account." }, class: "button") %>
       <% end %>
 
       <% unless report.resolved? %>
