@@ -248,7 +248,10 @@ class Api::V1::ListingsController < Api::V1::BaseController
   end
 
   def set_listing
-    scope = policy_scope(Listing)
+    # Unsave only deletes the caller's OWN saved row, so it must work whatever
+    # the listing became: a blocked pair's listing is outside the scope, and the
+    # card could never be removed from Saved (d0 hunt 2026-10-09).
+    scope = action_name == "unsave" ? Listing.all : policy_scope(Listing)
     # Eager-load saved_listings only for #show so the serializer's saves_count
     # (l.saved_listings.size) uses the in-memory association instead of firing
     # a separate COUNT(*) query — avoids an N+1 on the detail endpoint.

@@ -283,3 +283,48 @@ RSpec.describe "Api::V1::My::SavedListings", type: :request do
     end
   end
 end
+
+# d0 hunt 2026-10-09: Saved listed every saved row, but opening one is refused
+# for a removed listing, a blocked pair, and a non-active shop's product
+# (ListingsController#show) — the card opened a 404. And unsave went through the
+# blocked-pair scope, so a blocked pair's card could not be removed at all (404;
+# the app rolled the heart back). Sold listings stay: they still open.
+RSpec.describe "Saved: only what can be opened; unsave always works", type: :request do
+  let(:user) { create(:user) }
+  let(:h) { auth_headers_for(user) }
+  def saved_ids
+    get "/api/v1/my/saved_listings", headers: h
+    JSON.parse(response.body)["listings"].pluck("id")
+  end
+  def save!(listing) = create(:saved_listing, user: user, listing: listing)
+
+  it "hides removed listings, blocked pairs (both ways) and a closed shop's products; keeps sold ones" do
+    ok = create(:listing, :active).tap { |l| save!(l) }
+    sold = create(:listing, :active).tap { |l| save!(l); l.update_columns(status: Listing.statuses[:sold]) }
+    removed = create(:listing, :active).tap { |l| save!(l); l.update_columns(removed_at: Time.current) }
+    i_blocked = create(:listing, :active).tap { |l| save!(l); create(:block, blocker: user, blocked: l.user) }
+    blocked_me = create(:listing, :active).tap { |l| save!(l); create(:block, blocker: l.user, blocked: user) }
+    shop = create(:shop)
+    closed = create(:listing, :active, user: shop.owner, shop: shop).tap { |l| save!(l) }
+    shop.update_columns(status: Shop.statuses[:closed])
+
+    expect(saved_ids).to contain_exactly(ok.id, sold.id)
+    expect([ removed, i_blocked, blocked_me, closed ].map(&:id) & saved_ids).to be_empty
+  end
+
+  it "unsave works on a listing of a blocked pair (it used to 404)" do
+    l = create(:listing, :active).tap { |x| save!(x) }
+    create(:block, blocker: user, blocked: l.user)
+    delete "/api/v1/listings/#{l.id}/unsave", headers: h
+    expect(response).to have_http_status(:ok)
+    expect(user.saved_listings.where(listing: l)).to be_empty
+  end
+
+  it "unsave works on a removed listing too" do
+    l = create(:listing, :active).tap { |x| save!(x) }
+    l.update_columns(removed_at: Time.current)
+    delete "/api/v1/listings/#{l.id}/unsave", headers: h
+    expect(response).to have_http_status(:ok)
+    expect(user.saved_listings.where(listing: l)).to be_empty
+  end
+end
