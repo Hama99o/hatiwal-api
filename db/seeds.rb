@@ -264,37 +264,12 @@ puts "  users: #{User.count}"
 puts "=== Seeding Listings (50+) ==="
 # =============================================================================
 
-require "open-uri"
-
-# Attaches real, item-appropriate photos to a listing via Active Storage.
-#
-# Photos come from loremflickr.com — a free, keyword-matched photo service that
-# needs no API key (so it works locally and on the demo server). The `lock`
-# query param makes each fetch deterministic: the same (listing, index) always
-# returns the same photo, so re-running the seed never churns images.
-#
-# Idempotent: skips listings that already have photos. Network failures are
-# non-fatal — a listing simply keeps whatever it had (or stays photo-less) and
-# the seed continues, so a flaky connection never aborts the whole run.
-def attach_seed_photos!(listing, query, count: 3)
-  return if listing.images.attached?
-
-  keyword = query.to_s.strip.downcase.gsub(/[^a-z0-9]+/, ",").gsub(/,+/, ",").gsub(/^,|,$/, "")
-  keyword = "marketplace" if keyword.blank?
-
-  attached = 0
-  count.times do |i|
-    lock = (listing.id * 10) + i # deterministic + unique per photo
-    url  = "https://loremflickr.com/800/600/#{keyword}?lock=#{lock}"
-    begin
-      io = URI.parse(url).open(open_timeout: 10, read_timeout: 20)
-      listing.images.attach(io: io, filename: "listing-#{listing.id}-#{i}.jpg", content_type: "image/jpeg")
-      attached += 1
-    rescue StandardError => e
-      warn "  ! photo fetch failed for ##{listing.id} '#{keyword}': #{e.class} #{e.message}"
-    end
-  end
-  print attached.positive? ? "📷" : "·"
+# Photos come from committed CC0 files (db/seeds/images, SeedPhotos), never the
+# network. Idempotent: a listing whose photos are all present keeps them; a
+# missing or empty one is re-attached. A bad fixture raises (no 0-byte images).
+def attach_seed_photos!(listing, hint)
+  result = SeedPhotos.attach!(listing, hint: hint)
+  print({ kept: "·", attached: "📷", no_fixtures: "∅" }.fetch(result))
 end
 
 cat = Category.all.index_by(&:slug)

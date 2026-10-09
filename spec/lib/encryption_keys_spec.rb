@@ -41,8 +41,11 @@ RSpec.describe EncryptionKeys do
     end
   end
 
-  it "configures the test env with the derived key even when credentials hold one" do
-    expect(Rails.application.credentials.active_record_encryption).to be_present
+  it "configures the test env with the derived key, never a key from credentials" do
     expect(ActiveRecord::Encryption.config.primary_key).to eq(derived_primary)
+    # Where this checkout can decrypt credentials (a master key is present), they
+    # hold the production keys since e693ca2 — and those must not be in use here.
+    credentials = Rails.application.credentials.active_record_encryption
+    expect(ActiveRecord::Encryption.config.primary_key).not_to eq(credentials[:primary_key]) if credentials.present?
   end
 end
