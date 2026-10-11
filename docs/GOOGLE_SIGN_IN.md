@@ -56,9 +56,11 @@ All three OAuth clients live in **the same Google Cloud project** as the existin
    Android**).
    - Package name: `com.hatiwal.app`.
    - SHA-1: the **Play app-signing key**. In Play Console → Hatiwal → *Test and release → App
-     integrity → App signing*, copy the "App signing key certificate" **SHA-1** (it starts with
-     `03:F6…`). Every build installed from Play is signed with this key, so without it sign-in fails
-     on every store install with `DEVELOPER_ERROR`.
+     integrity → App signing*, copy the "App signing key certificate" **SHA-1** fingerprint
+     (20 pairs). The same box also shows a **SHA-256**, the one starting `03:F6…` and used for
+     Android App Links; that is the **wrong** one here, and Google's form rejects it. Every build
+     installed from Play is signed with this key, so without its SHA-1 sign-in fails on every store
+     install with `DEVELOPER_ERROR`.
    - Add a **second Android client** with the same package and the **upload key's** SHA-1. Builds
      installed straight from EAS (the QA APK, internal distribution) are signed with it. Run
      `eas credentials -p android` → production → it prints the keystore's SHA-1. No build is needed.
