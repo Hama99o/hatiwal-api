@@ -10,6 +10,11 @@ module Apple
     JWKS_URL = "https://appleid.apple.com/auth/keys".freeze
     ISSUER = "https://appleid.apple.com".freeze
     JWKS_CACHE_KEY = "apple/jwks".freeze
+    # When a token names an unknown key id, Apple's keys are fetched again at
+    # most once per this period: forged tokens (anyone can mint one with any
+    # `kid`) must not turn each attempt into a request to Apple (d0 review).
+    JWKS_REFETCH_COOLDOWN = 5.minutes
+    JWKS_REFETCHED_KEY = "apple/jwks/refetched".freeze
 
     module_function
 
@@ -23,7 +28,7 @@ module Apple
                                                                     Digest::SHA256.hexdigest(raw_nonce.to_s))
 
       claims
-    rescue JWT::DecodeError, JSON::ParserError => e
+    rescue JWT::DecodeError, JSON::ParserError, Faraday::Error => e
       Rails.logger.info("[apple] identity token rejected: #{e.class}: #{e.message}")
       nil
     end
@@ -31,7 +36,12 @@ module Apple
     # JWT's `jwks:` loader. `kid_not_found` means Apple rotated its keys: fetch
     # again once (the cache is otherwise kept for 12 hours).
     def jwks(options = {})
-      Rails.cache.delete(JWKS_CACHE_KEY) if options[:kid_not_found]
+      if options[:kid_not_found]
+        # unless_exist: true when THIS call set the marker, i.e. no refetch in
+        # the cooldown window; otherwise keep the cached keys (the kid is unknown).
+        refetch = Rails.cache.write(JWKS_REFETCHED_KEY, true, expires_in: JWKS_REFETCH_COOLDOWN, unless_exist: true)
+        Rails.cache.delete(JWKS_CACHE_KEY) if refetch
+      end
       keys = Rails.cache.fetch(JWKS_CACHE_KEY, expires_in: 12.hours) do
         response = Faraday.get(JWKS_URL) { |r| r.options.timeout = 10 }
         raise JWT::DecodeError, "Apple JWKS answered #{response.status}" unless response.status == 200
