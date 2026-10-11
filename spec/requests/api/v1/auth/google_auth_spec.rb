@@ -38,6 +38,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
       it "returns 422" do
         post "/api/v1/auth/google", params: {}, as: :json
         expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body["code"]).to eq("google_token_missing")
       end
     end
 
@@ -46,6 +47,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
         stub_google(id_token: "bad_token", status: 400, body: '{"error":"invalid_token"}')
         post "/api/v1/auth/google", params: { id_token: "bad_token" }, as: :json
         expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body["code"]).to eq("google_token_invalid")
       end
     end
 
@@ -64,6 +66,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
         stub_google(id_token: "unverified_token", body: unverified)
         post "/api/v1/auth/google", params: { id_token: "unverified_token" }, as: :json
         expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body["code"]).to eq("google_email_unverified")
       end
     end
 
@@ -73,6 +76,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
         stub_google(id_token: "no_email_token", body: no_email)
         post "/api/v1/auth/google", params: { id_token: "no_email_token" }, as: :json
         expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body["code"]).to eq("google_email_missing")
       end
     end
 
@@ -317,6 +321,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
       it "returns 401" do
         post "/api/v1/auth/google", params: { id_token: "wrong_aud_token" }, as: :json
         expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body["code"]).to eq("google_token_invalid")
       end
     end
 

@@ -24,19 +24,26 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
   throttle to: 20, within: 1.hour, by: :ip, only: :create
 
   def create
+    # Every refusal carries a `code` the apps translate (1.1.7, like /auth/apple):
+    # google_token_missing 422, google_token_invalid 401,
+    # google_email_unverified 401, google_email_missing 422.
     id_token = params[:id_token].presence
-    return render json: { error: "id_token is required" }, status: :unprocessable_entity if id_token.nil?
+    return render_coded_error("id_token is required", code: :google_token_missing, status: :unprocessable_entity) if id_token.nil?
 
     google_payload = verify_google_id_token(id_token)
-    return render json: { error: "Invalid or expired Google token" }, status: :unauthorized unless google_payload
+    return render_coded_error("Invalid or expired Google token", code: :google_token_invalid, status: :unauthorized) unless google_payload
 
     # Google should provide a verified email address
     unless google_payload[:email_verified].to_s == "true"
-      return render json: { error: "Google account email is not verified" }, status: :unauthorized
+      return render_coded_error("Google account email is not verified", code: :google_email_unverified, status: :unauthorized)
+    end
+
+    if google_payload[:email].blank?
+      return render_coded_error("Google did not share an email address", code: :google_email_missing, status: :unprocessable_entity)
     end
 
     user = find_or_create_user(google_payload)
-    return render json: { errors: user.errors.full_messages }, status: :unprocessable_entity unless user.persisted?
+    return render_unprocessable_entity(user) unless user.persisted?
 
     # Block suspended/banned/deleted accounts — same guard as email login
     unless user.active_for_authentication?
@@ -93,9 +100,7 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
   end
 
   def find_or_create_user(payload)
-    email = payload[:email]&.strip&.downcase
-    return User.new.tap { |u| u.errors.add(:email, "not provided by Google") } if email.blank?
-
+    email = payload[:email].strip.downcase
     # If the user already has an account (any provider), sign them in directly
     # without changing their provider — they keep their email+password login too.
     user = User.find_by(email: email)
