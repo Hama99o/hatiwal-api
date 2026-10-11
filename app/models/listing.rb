@@ -1144,7 +1144,8 @@ class Listing < ApplicationRecord
     # cached), NOT synchronously during the list query. This keeps the index a
     # constant number of queries (no N+1 from per-listing variant processing)
     # while still delivering the small resized image to the app.
-    variant = image.variant(resize_to_limit: THUMBNAIL_RESIZE_LIMIT)
+    # strip: no EXIF/GPS in what buyers download (d0 hunt round 2, 2026-10-11).
+    variant = image.variant(resize_to_limit: THUMBNAIL_RESIZE_LIMIT, saver: { strip: true })
     Rails.application.routes.url_helpers.rails_representation_url(
       variant, **(ActiveStorage::Current.url_options || {})
     )

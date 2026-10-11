@@ -46,7 +46,8 @@ RSpec.describe "Light image variants (thumb / medium)", type: :request do
       expect(l["image_thumb_urls"].size).to eq(l["image_urls"].size)
       expect(l["image_medium_urls"].size).to eq(l["image_urls"].size)
       expect(l["image_thumb_urls"].first).to include("/representations/redirect/")
-      expect(l["image_urls"].first).to include("/blobs/redirect/") # originals untouched
+      # The full-size photo is a STRIPPED variant now (no EXIF/GPS), not the original.
+      expect(l["image_urls"].first).to include("/representations/redirect/")
     end
 
     it "variant URLs are stable across responses (the apps cache them by URL)" do
@@ -62,7 +63,7 @@ RSpec.describe "Light image variants (thumb / medium)", type: :request do
       analyzed!(seller.avatar.attachment)
       me = row("/api/v1/users/me", auth_headers_for(seller))["user"]
       expect(me["avatar_thumb_url"]).to include("/representations/redirect/")
-      expect(me["avatar_url"]).to include("/blobs/redirect/")
+      expect(me["avatar_url"]).to include("/representations/redirect/") # stripped, full size
 
       shop = create(:shop, owner: seller)
       shop.logo.attach(**small_jpeg)
@@ -71,7 +72,7 @@ RSpec.describe "Light image variants (thumb / medium)", type: :request do
       s = row("/api/v1/shops/#{shop.id}", auth_headers_for(create(:user)))["shop"]
       expect(s["logo_thumb_url"]).to include("/representations/redirect/")
       expect(s["cover_medium_url"]).to include("/representations/redirect/")
-      expect(s.values_at("logo_url", "cover_url")).to all(include("/blobs/redirect/"))
+      expect(s.values_at("logo_url", "cover_url")).to all(include("/representations/redirect/")) # stripped
     end
 
     it "nothing attached → [] / null, never an error" do

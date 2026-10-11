@@ -21,6 +21,12 @@ module PublicImageUrl
   # 300 px). WebP: the production image's libvips (Debian 13, 8.16) has it.
   SIZES = { thumb: [ 640, 1600 ], avatar: [ 256, 512 ], medium: [ 1440, 1440 ] }.freeze
   SAVER = { quality: 80, strip: true }.freeze
+  # What `for` serves: the photo at full size (zoom), its own format (PNG keeps
+  # its alpha), WITHOUT its metadata. A phone JPEG carries EXIF with GPS, and the
+  # web uploads the raw file: serving the original published the seller's home
+  # coordinates (d0 hunt round 2, 2026-10-11).
+  FULL_LIMIT = [ 4096, 4096 ].freeze
+  FULL_SAVER = { quality: 90, strip: true }.freeze
 
   module_function
 
@@ -31,7 +37,7 @@ module PublicImageUrl
   # then shows exactly what it shows today, never a 500.
   def variant(attachment, size)
     return nil unless attachment.respond_to?(:attached?) ? attachment.attached? : attachment.present?
-    return self.for(attachment) unless processable?(attachment.blob)
+    return original(attachment) unless processable?(attachment.blob)
 
     Rails.application.routes.url_helpers.rails_representation_url(
       attachment.variant(resize_to_limit: box(attachment.blob, size), format: :webp, saver: SAVER),
@@ -41,10 +47,25 @@ module PublicImageUrl
     nil
   end
 
-  # nil when nothing is attached (or the URL cannot be built).
+  # The public URL of an image: a stripped full-size variant (FULL_SAVER) —
+  # stable like the blob route and lazily generated. A blob that can't be
+  # processed (not variable, or no analysed width) falls back to the original,
+  # as before. nil when nothing is attached (or the URL cannot be built).
   def for(attachment)
     return nil unless attachment.respond_to?(:attached?) ? attachment.attached? : attachment.present?
+    return original(attachment) unless processable?(attachment.blob)
 
+    Rails.application.routes.url_helpers.rails_representation_url(
+      attachment.variant(resize_to_limit: FULL_LIMIT, saver: FULL_SAVER),
+      **(ActiveStorage::Current.url_options || {})
+    )
+  rescue StandardError
+    nil
+  end
+
+  # The stored file itself, permanent (blob redirect route). Only for a blob
+  # that can't be processed: an original may carry EXIF/GPS.
+  def original(attachment)
     Rails.application.routes.url_helpers.rails_blob_url(attachment, **(ActiveStorage::Current.url_options || {}))
   rescue StandardError
     nil
