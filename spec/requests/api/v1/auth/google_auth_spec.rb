@@ -173,6 +173,51 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
       end
     end
 
+    # PRE-HIJACKING (2026-10-11, same rule as Apple 4b883af): anyone can register
+    # someone else's address by email + password and simply never confirm it.
+    # When the real owner then signed in with Google (Google verified that
+    # address), they were signed into the squatter's account, and the squatter's
+    # password and sessions kept working on it. Signing in with Google to an
+    # UNCONFIRMED account now confirms it, replaces the password and ends every
+    # other session; a confirmed account is signed in as before.
+    context "with a valid token matching an UNCONFIRMED account (possibly a squatter's)" do
+      let!(:squatter) do
+        create(:user, email: google_email, password: "squatter-pass-1",
+                      password_confirmation: "squatter-pass-1", confirmed_at: nil)
+      end
+
+      before { stub_google(id_token: "squatted_token") }
+
+      it "signs in, but the squatter's password and sessions stop working" do
+        old_headers = auth_headers_for(squatter)
+        post "/api/v1/auth/google", params: { id_token: "squatted_token" }, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(squatter.reload.confirmed_at).to be_present
+
+        get "/api/v1/users/me", headers: old_headers
+        expect(response).to have_http_status(:unauthorized)
+
+        post "/api/v1/auth/sign_in", params: { email: google_email, password: "squatter-pass-1" }, as: :json
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
+    context "with a valid token matching a CONFIRMED email account" do
+      let!(:owner) { create(:user, :confirmed, email: google_email) }
+
+      before { stub_google(id_token: "confirmed_token") }
+
+      it "signs in and leaves the password and other sessions alone" do
+        old_headers = auth_headers_for(owner)
+        post "/api/v1/auth/google", params: { id_token: "confirmed_token" }, as: :json
+        expect(response).to have_http_status(:ok)
+
+        get "/api/v1/users/me", headers: old_headers
+        expect(response).to have_http_status(:ok)
+        expect(owner.reload.valid_password?("password123")).to be(true)
+      end
+    end
+
     context "with a valid token for an existing Google user signing in again" do
       let!(:google_user) { create(:user, email: google_email, uid: google_email, provider: "google") }
 

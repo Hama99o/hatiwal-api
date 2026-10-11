@@ -98,7 +98,22 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
 
     # If the user already has an account (any provider), sign them in directly
     # without changing their provider — they keep their email+password login too.
-    User.find_by(email: email) || create_user_from_google(payload, email)
+    user = User.find_by(email: email)
+    return create_user_from_google(payload, email) if user.nil?
+
+    claim_unconfirmed_account!(user) unless user.confirmed?
+    user
+  end
+
+  # PRE-HIJACKING (2026-10-11, same rule as Sign in with Apple): an UNCONFIRMED
+  # account with this address may be a squatter's — anyone can register an
+  # address they don't own and never confirm it. Google has just proven the
+  # address belongs to THIS person, so the account becomes theirs: confirmed, a
+  # new random password (the squatter's stops working), every other session ended.
+  def claim_unconfirmed_account!(user)
+    new_password = SecureRandom.hex(24)
+    user.update!(confirmed_at: Time.current, password: new_password,
+                 password_confirmation: new_password, tokens: {})
   end
 
   def create_user_from_google(payload, email)
