@@ -65,7 +65,19 @@ class Api::V1::Auth::AppleAuthController < ApplicationController
       render_coded_error("This email already has an account; sign in with it", code: :apple_email_unverified, status: :conflict)
       return
     end
-    user.update_columns(apple_uid: claims["sub"], updated_at: Time.current)
+    if user.confirmed?
+      user.update_columns(apple_uid: claims["sub"], updated_at: Time.current)
+      return user
+    end
+
+    # PRE-HIJACKING (d0 security review 2026-10-09): an UNCONFIRMED account with
+    # this address may be a squatter's — anyone can register an address they
+    # don't own and never confirm it. Apple has just proven the address belongs
+    # to THIS person, so the account becomes theirs: confirmed, a new random
+    # password (the squatter's stops working), and every other session ended.
+    new_password = SecureRandom.hex(24)
+    user.update!(apple_uid: claims["sub"], confirmed_at: Time.current,
+                 password: new_password, password_confirmation: new_password, tokens: {})
     user
   end
 

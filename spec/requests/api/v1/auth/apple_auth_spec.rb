@@ -128,6 +128,30 @@ RSpec.describe "Api::V1::Auth::AppleAuthController", type: :request do
     end
   end
 
+  # d0 security review 2026-10-09 — PRE-HIJACKING: anyone can register someone
+  # else's address by email + password and simply never confirm it. When the
+  # real owner then signs in with Apple (Apple verified that address), the Apple
+  # id was linked onto the squatter's account, and the squatter's password and
+  # sessions kept working on the owner's account. Linking to an UNCONFIRMED
+  # account now confirms it, replaces the password and ends every other session.
+  describe "an UNCONFIRMED account with the same email (possibly a squatter's)" do
+    let!(:squatter) { create(:user, email: email, password: "squatter-pass-1", password_confirmation: "squatter-pass-1", confirmed_at: nil) }
+
+    it "is linked, but the squatter's password and sessions stop working" do
+      old_headers = auth_headers_for(squatter)
+      sign_in_apple
+      expect(response).to have_http_status(:ok)
+      expect(squatter.reload.apple_uid).to eq(sub)
+      expect(squatter.confirmed_at).to be_present
+
+      get "/api/v1/users/me", headers: old_headers
+      expect(response).to have_http_status(:unauthorized)
+
+      post "/api/v1/auth/sign_in", params: { email: email, password: "squatter-pass-1" }, as: :json
+      expect(response).to have_http_status(:unauthorized)
+    end
+  end
+
   describe "the authorization code (kept only to revoke on deletion)" do
     let(:configured) do
       { team_id: "TEAM123456", key_id: "KEY1234567", client_id: "com.hatiwal.app",
