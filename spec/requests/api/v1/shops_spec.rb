@@ -14,7 +14,7 @@ RSpec.describe "Api::V1::Shops", type: :request do
     post "open your shop" do
       tags "Shops"
       description "Only name, category and location (pin + address line) are required. One shop per user " \
-                  "(phase 1). The location must be in Afghanistan or Pakistan. Live at once unless " \
+                  "(phase 1). The location must be in Afghanistan, Pakistan or Iran. Live at once unless " \
                   "SHOP_APPROVAL_REQUIRED is on, when it starts `pending`. Multipart for logo/cover; `hours` may be JSON."
       consumes "application/json", "multipart/form-data"
       produces "application/json"

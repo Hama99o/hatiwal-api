@@ -5,7 +5,7 @@
 # the listing create/update itself). The newest clue replaces the last.
 #
 # Always 204 on a well-formed clue, saved or not: when the user has an own
-# address, or the point is outside Afghanistan/Pakistan, the clue is
+# address, or the point is outside Afghanistan/Pakistan/Iran, the clue is
 # simply ignored (User#record_location_guess!). The client reads the result
 # from `location` on GET /users/me and never needs to know which happened.
 class Api::V1::Users::LocationGuessesController < Api::V1::BaseController

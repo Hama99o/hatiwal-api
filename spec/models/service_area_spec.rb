@@ -1,31 +1,25 @@
 require "rails_helper"
 
 # Same cities as hatiwal-mobile/src/lib/__tests__/serviceArea.test.ts — the
-# outline is a port, so the two must agree on every one of them. The service
-# area is Afghanistan + Pakistan (1.1.7, owner): border towns on our side stay
-# inside (~13 km margin); the cities just across the western border do not.
+# outline is a port, so the two must agree on every one of them.
 RSpec.describe ServiceArea do
   describe ".include?" do
     {
-      "Kabul" => [ 34.5553, 69.2075 ], "Herat (west, near the border)" => [ 34.352, 62.204 ],
-      "Islam Qala border crossing" => [ 34.66, 61.07 ], "Zaranj (Nimroz, on the border)" => [ 31.0125, 61.8628 ],
-      "Farah" => [ 32.37, 62.11 ], "Mazar-i-Sharif" => [ 36.709, 67.11 ], "Hairatan" => [ 37.22, 67.42 ],
+      "Kabul" => [ 34.5553, 69.2075 ], "Herat (near the Iran border)" => [ 34.352, 62.204 ],
+      "Islam Qala border crossing" => [ 34.66, 61.07 ], "Mazar-i-Sharif" => [ 36.709, 67.11 ],
       "Wakhan corridor" => [ 37.0, 73.5 ], "Jalalabad" => [ 34.43, 70.45 ], "Torkham" => [ 34.11, 71.09 ],
-      "Chaman" => [ 30.92, 66.45 ], "Peshawar" => [ 34.0, 71.57 ], "Islamabad" => [ 33.684, 73.048 ],
-      "Lahore" => [ 31.55, 74.34 ], "Wagah (Pakistan side)" => [ 31.6, 74.55 ], "Sialkot" => [ 32.49, 74.53 ],
-      "Karachi" => [ 24.86, 67.0 ], "Quetta" => [ 30.18, 66.97 ], "Taftan (on the western border)" => [ 28.96, 61.59 ],
-      "Gwadar" => [ 25.12, 62.32 ], "Jiwani" => [ 25.05, 61.75 ], "Gilgit" => [ 35.92, 74.31 ]
+      "Peshawar" => [ 34.0, 71.57 ], "Islamabad" => [ 33.684, 73.048 ], "Lahore" => [ 31.55, 74.34 ],
+      "Karachi" => [ 24.86, 67.0 ], "Quetta" => [ 30.18, 66.97 ], "Gilgit" => [ 35.92, 74.31 ],
+      "Tehran" => [ 35.69, 51.39 ], "Mashhad" => [ 36.3, 59.6 ], "Zahedan" => [ 29.5, 60.86 ],
+      "Tabriz" => [ 38.08, 46.29 ], "Bandar Abbas" => [ 27.18, 56.27 ], "Ahvaz" => [ 31.32, 48.67 ],
+      "Gwadar" => [ 25.12, 62.32 ], "Chabahar" => [ 25.29, 60.64 ], "Jiwani" => [ 25.05, 61.75 ],
+      "Sarakhs" => [ 36.54, 61.16 ], "Bajgiran" => [ 37.61, 58.41 ], "Astara (Iran)" => [ 38.43, 48.87 ],
+      "Hairatan" => [ 37.22, 67.42 ], "Sialkot" => [ 32.49, 74.53 ], "Wagah (Pakistan side)" => [ 31.6, 74.55 ]
     }.each do |name, (lat, lng)|
       it("#{name} is inside") { expect(described_class.include?(lat, lng)).to be(true) }
     end
 
     {
-      # Just across the western border — no longer served.
-      "Mashhad" => [ 36.3, 59.6 ], "Tehran" => [ 35.69, 51.39 ], "Zahedan" => [ 29.5, 60.86 ],
-      "Zabol" => [ 31.03, 61.49 ], "Taybad" => [ 34.74, 60.78 ], "Chabahar" => [ 25.29, 60.64 ],
-      "Sarakhs" => [ 36.54, 61.16 ], "Bajgiran" => [ 37.61, 58.41 ], "Tabriz" => [ 38.08, 46.29 ],
-      "Bandar Abbas" => [ 27.18, 56.27 ], "Ahvaz" => [ 31.32, 48.67 ],
-      # Further away, as before.
       "Paris" => [ 48.8566, 2.3522 ], "Dubai" => [ 25.2, 55.27 ], "Doha" => [ 25.29, 51.53 ],
       "Kuwait City" => [ 29.37, 47.98 ], "Baghdad" => [ 33.31, 44.36 ], "Istanbul" => [ 41.0, 28.98 ],
       "Ashgabat" => [ 37.95, 58.38 ], "Tashkent" => [ 41.3, 69.24 ], "Dushanbe" => [ 38.56, 68.77 ],

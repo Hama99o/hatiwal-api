@@ -1,29 +1,27 @@
-# The countries Hatiwal serves: Afghanistan and Pakistan (1.1.7, owner). A
-# location outside them is never used as a default or saved as a guess; Kabul
-# is used instead (owner's rule, 2026-10-05; docs/USER_LOCATION.md in
-# hatiwal-mobile).
+# The countries Hatiwal serves: Afghanistan, Pakistan and Iran. A location
+# outside them is never used as a default or saved as a guess; Kabul is used
+# instead (owner's rule, 2026-10-05; docs/USER_LOCATION.md in hatiwal-mobile).
 #
 # A PORT of hatiwal-mobile/src/lib/serviceArea.ts — the same hand-traced
-# outline, point for point, and the same ~13 km margin so border towns on our
-# side (Islam Qala, Zaranj, Taftan, Torkham, Chaman…) never fall out, while the
-# cities just across the western border stay out. Change both together, never
-# one: the API and the apps must agree on what "inside" means.
+# outline, point for point, and the same ~13 km margin so border towns
+# (Herat, Torkham, Zahedan…) never fall out. Change both together, never one:
+# the API and the apps must agree on what "inside" means.
 module ServiceArea
-  # [longitude, latitude], clockwise from Afghanistan's north-west corner.
+  # [longitude, latitude], clockwise from Iran's north-west corner.
   OUTLINE = [
-    [ 61.3, 35.6 ], [ 62.3, 35.3 ], [ 63.1, 35.9 ], [ 64.5, 36.3 ], [ 65.6, 37.4 ],
-    [ 66.5, 37.4 ], [ 67.8, 37.2 ], [ 68.9, 37.3 ], [ 70.2, 37.6 ], [ 71.5, 37.9 ],
-    [ 72.6, 37.0 ], [ 74.9, 37.4 ], [ 75.7, 36.7 ], [ 77.0, 35.6 ], [ 77.8, 35.5 ],
-    [ 76.0, 34.6 ], [ 74.0, 34.4 ], [ 74.6, 33.0 ], [ 75.4, 32.3 ], [ 74.95, 31.95 ],
-    [ 74.57, 31.6 ], [ 74.55, 31.1 ], [ 73.9, 30.0 ], [ 72.9, 29.0 ], [ 71.9, 27.9 ],
-    [ 70.6, 27.7 ], [ 70.3, 26.5 ], [ 70.0, 25.7 ], [ 70.9, 24.3 ], [ 68.8, 23.8 ],
-    [ 67.0, 24.8 ], [ 66.6, 25.4 ], [ 64.0, 25.2 ], [ 62.3, 25.0 ], [ 61.6, 25.0 ],
-    # Pakistan's western border, north from Gwadar Bay to the three-country point…
-    [ 61.65, 25.6 ], [ 61.8, 26.2 ], [ 62.3, 26.5 ], [ 63.2, 26.6 ], [ 63.3, 27.1 ],
-    [ 62.8, 27.3 ], [ 62.8, 28.2 ], [ 61.9, 28.6 ], [ 61.5, 29.0 ], [ 60.87, 29.86 ],
-    # …then Afghanistan's western border, north past Zaranj and Islam Qala.
-    [ 61.6, 30.55 ], [ 61.75, 31.0 ], [ 61.65, 31.4 ], [ 60.85, 31.5 ], [ 60.85, 32.2 ],
-    [ 60.6, 33.1 ], [ 60.95, 33.6 ], [ 60.9, 34.1 ], [ 61.0, 34.6 ], [ 61.1, 35.1 ]
+    [ 44.0, 39.4 ], [ 45.0, 39.7 ], [ 46.5, 38.9 ], [ 48.0, 38.4 ], [ 48.9, 38.4 ],
+    [ 49.0, 37.6 ], [ 50.5, 37.0 ], [ 53.9, 36.9 ], [ 54.0, 37.4 ], [ 55.4, 38.1 ],
+    [ 57.3, 38.2 ], [ 59.6, 37.1 ], [ 61.1, 36.6 ], [ 61.3, 35.6 ], [ 62.3, 35.3 ],
+    [ 63.1, 35.9 ], [ 64.5, 36.3 ], [ 65.6, 37.4 ], [ 66.5, 37.4 ], [ 67.8, 37.2 ],
+    [ 68.9, 37.3 ], [ 70.2, 37.6 ], [ 71.5, 37.9 ], [ 72.6, 37.0 ], [ 74.9, 37.4 ],
+    [ 75.7, 36.7 ], [ 77.0, 35.6 ], [ 77.8, 35.5 ], [ 76.0, 34.6 ], [ 74.0, 34.4 ],
+    [ 74.6, 33.0 ], [ 75.4, 32.3 ], [ 74.95, 31.95 ], [ 74.57, 31.6 ], [ 74.55, 31.1 ], [ 73.9, 30.0 ], [ 72.9, 29.0 ],
+    [ 71.9, 27.9 ], [ 70.6, 27.7 ], [ 70.3, 26.5 ], [ 70.0, 25.7 ], [ 70.9, 24.3 ],
+    [ 68.8, 23.8 ], [ 67.0, 24.8 ], [ 66.6, 25.4 ], [ 64.0, 25.2 ], [ 62.3, 25.0 ], [ 61.6, 25.0 ],
+    [ 60.5, 25.3 ], [ 59.0, 25.4 ], [ 57.3, 25.8 ], [ 56.3, 27.0 ], [ 54.0, 26.5 ],
+    [ 52.5, 27.4 ], [ 51.4, 27.9 ], [ 50.3, 29.2 ], [ 49.0, 30.0 ], [ 48.4, 30.0 ],
+    [ 48.0, 30.5 ], [ 47.7, 31.0 ], [ 47.4, 32.4 ], [ 46.1, 33.0 ], [ 45.4, 33.9 ],
+    [ 45.5, 34.8 ], [ 46.1, 35.2 ], [ 45.4, 35.9 ], [ 44.8, 37.2 ], [ 44.3, 38.4 ]
   ].freeze
 
   MARGIN_DEG = 0.12
@@ -57,13 +55,13 @@ module ServiceArea
     "Azad Kashmir" => [ 34.3700, 73.4711 ]
   }.freeze
 
-  # A point further than this from every capital gets no province name: a
-  # city abroad must not be labelled with the nearest Afghan province.
+  # A point further than this from every capital gets no province name: an
+  # Iranian city must not be labelled with the nearest Afghan province.
   PROVINCE_RADIUS_DEG = 1.5
 
   module_function
 
-  # True when the point is in Afghanistan or Pakistan (or within ~13 km of their border).
+  # True when the point is in Afghanistan, Pakistan or Iran (or within ~13 km of their border).
   def include?(latitude, longitude)
     lat = Float(latitude, exception: false)
     lng = Float(longitude, exception: false)

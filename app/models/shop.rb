@@ -56,9 +56,7 @@ class Shop < ApplicationRecord
   validates :latitude, :longitude, presence: true
   validates :logo, attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: LOGO_MAX_SIZE }
   validates :cover, attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: LOGO_MAX_SIZE }
-  # Only when the pin is set or moves (1.1.7): a shop pinned before the service
-  # area shrank must still save its other edits; it just cannot move outside.
-  validate :location_in_service_area, if: -> { new_record? || will_save_change_to_latitude? || will_save_change_to_longitude? }
+  validate :location_in_service_area
   validate :hours_well_formed
   validate :not_a_duplicate_of_own_shop
 

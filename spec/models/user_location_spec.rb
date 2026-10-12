@@ -53,7 +53,7 @@ RSpec.describe User, "location" do
       expect(user.reload).to have_attributes(guessed_latitude: nil, province: "Kabul", latitude: 34.5553)
     end
 
-    it "ignores a point outside Afghanistan and Pakistan" do
+    it "ignores a point outside Afghanistan, Pakistan and Iran" do
       expect(user.record_location_guess!(latitude: 48.8566, longitude: 2.3522, source: User::GuessSource::GPS)).to be(false)
       expect(user.reload.guessed_latitude).to be_nil
     end
