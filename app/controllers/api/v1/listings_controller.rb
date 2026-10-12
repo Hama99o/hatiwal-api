@@ -22,26 +22,37 @@ class Api::V1::ListingsController < Api::V1::BaseController
     listings = listings.not_hidden_for(current_user)
     # A person's profile grid is personal: their shops' products are on the
     # shops' pages (matches users.listings_count). With shop_id, that shop's.
-    listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
-    listings = listings.personal if params[:user_id].present? && params[:shop_id].blank?
+    #
+    # Numeric filters go through number_param (hunt-2, 1.1.7): one the client
+    # sent in a shape we cannot read is IGNORED, like an unknown `sort`. It
+    # used to reach SQL as-is, and price_min=abc answered 500.
+    user_id = number_param(:user_id, integer: true)
+    shop_id = number_param(:shop_id, integer: true)
+    category_id = number_param(:category_id, integer: true)
+    price_min = number_param(:price_min)
+    price_max = number_param(:price_max)
+    seller_active_days = number_param(:seller_active_days, integer: true)
+
+    listings = listings.by_seller(user_id) if user_id
+    listings = listings.personal if user_id && shop_id.nil?
     # SHOP-1 — the Bazaar "Shops" filter, and a shop page's Products tab.
     listings = listings.from_shops if params[:seller_type] == Listing::SELLER_TYPE_SHOP
-    listings = listings.by_shop(params[:shop_id]) if params[:shop_id].present?
+    listings = listings.by_shop(shop_id) if shop_id
     listings = listings.search(params[:search]) if params[:search].present?
-    listings = listings.by_category(params[:category_id]) if params[:category_id].present?
+    listings = listings.by_category(category_id) if category_id
     listings = listings.by_condition(params[:condition]) if params[:condition].present?
-    listings = listings.price_at_least(params[:price_min]) if params[:price_min].present?
-    listings = listings.price_at_most(params[:price_max]) if params[:price_max].present?
+    listings = listings.price_at_least(price_min) if price_min
+    listings = listings.price_at_most(price_max) if price_max
 
     if geo_filter?
-      listings = listings.within_radius(params[:latitude], params[:longitude], params[:radius])
+      listings = listings.within_radius(*buyer_point, number_param(:radius))
     elsif params[:location].present?
       # Free-text location only when no coordinates are supplied (the mobile app
       # sends a "lat, lng" string as `location` alongside coordinates).
       listings = listings.in_location(params[:location])
     end
 
-    listings = listings.seller_active_within(params[:seller_active_days]) if params[:seller_active_days].present?
+    listings = listings.seller_active_within(seller_active_days) if seller_active_days
     listings = listings.with_recent_price_drop if params[:price_dropped].present?
 
     # Apply sort last so it overrides the :browsable default order.
@@ -52,7 +63,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
     total = nil
     listings = if nearest_sort?
                  total, boxed = nearest_page_scope(listings)
-                 boxed.nearest_first(params[:latitude], params[:longitude])
+                 boxed.nearest_first(*buyer_point)
     else
                  listings.sorted(params[:sort])
     end
@@ -199,7 +210,27 @@ class Api::V1::ListingsController < Api::V1::BaseController
   end
 
   def geo_filter?
-    params[:latitude].present? && params[:longitude].present? && params[:radius].present?
+    buyer_point.present? && number_param(:radius)&.positive?
+  end
+
+  # [lat, lng] when both are readable and on the globe, else nil (no radius
+  # filter, no nearest sort).
+  def buyer_point
+    return @buyer_point if defined?(@buyer_point)
+
+    lat = number_param(:latitude)
+    lng = number_param(:longitude)
+    @buyer_point = (lat && lng && lat.abs <= 90 && lng.abs <= 180) ? [ lat, lng ] : nil
+  end
+
+  # A finite number from a query param, or nil when it is missing or unreadable
+  # ("abc", "12abc", NaN, Infinity, "1e999", an array or a hash).
+  def number_param(key, integer: false)
+    raw = params[key]
+    return nil unless raw.is_a?(String) || raw.is_a?(Numeric)
+
+    value = integer ? Integer(raw.to_s.strip, 10, exception: false) : Float(raw.to_s.strip, exception: false)
+    value if value&.finite?
   end
 
   # sort=nearest only makes sense with coordinates — radius is optional (the
@@ -213,8 +244,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
   # sort. Otherwise (a deep page reaching the listings without a point) the
   # whole scope, as before.
   def nearest_page_scope(listings)
-    lat = params[:latitude]
-    lng = params[:longitude]
+    lat, lng = buyer_point
     options = pagy_page_options
     needed = options[:page] * (options[:items] || Pagy::DEFAULT[:items] || 20)
     with_point = listings.where.not(latitude: nil, longitude: nil)
@@ -223,7 +253,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
   end
 
   def nearest_sort?
-    params[:sort].to_s == "nearest" && params[:latitude].present? && params[:longitude].present?
+    params[:sort].to_s == "nearest" && buyer_point.present?
   end
 
   # Returns true when a logged-in, non-owner viewer is in a mutual block
