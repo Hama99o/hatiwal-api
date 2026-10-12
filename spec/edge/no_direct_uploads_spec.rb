@@ -15,6 +15,20 @@ RSpec.describe "Active Storage: no anonymous writes, reads unchanged", type: :re
     expect(ActiveStorage::Blob.count).to eq(0)
   end
 
+  # Production has forgery protection on (tests turn it off): the guard must run
+  # BEFORE the CSRF check, or a request carrying a token scraped from any
+  # public HTML form (e.g. the admin login page) would get through. The smoke
+  # of the production image answered 422 here, not 404 (2026-10-12).
+  it "is not found with forgery protection ON too (the guard runs before CSRF)" do
+    ActionController::Base.allow_forgery_protection = true
+    post "/rails/active_storage/direct_uploads",
+         params: { blob: { filename: "a.bin", byte_size: 10, checksum: Base64.strict_encode64("x" * 16), content_type: "application/octet-stream" } },
+         as: :json
+    expect(response).to have_http_status(:not_found)
+  ensure
+    ActionController::Base.allow_forgery_protection = false
+  end
+
   it "the Disk service's PUT is not found" do
     put "/rails/active_storage/disk/anything", params: "bytes", headers: { "Content-Type" => "application/octet-stream" }
     expect(response).to have_http_status(:not_found)
