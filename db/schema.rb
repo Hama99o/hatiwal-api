@@ -10,9 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_220000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_12_100100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+  enable_extension "pg_trgm"
 
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
@@ -295,6 +296,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_220000) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.integer "views_count", default: 0, null: false
+    t.index "lower((title)::text) gin_trgm_ops", name: "index_listings_on_lower_title_trgm", using: :gin
+    t.index "lower(description) gin_trgm_ops", name: "index_listings_on_lower_description_trgm", using: :gin
+    t.index ["bumped_at"], name: "index_listings_browsable_feed", order: :desc, where: "((status = ANY (ARRAY[1, 2])) AND (removed_at IS NULL))", include: ["user_id", "shop_id", "expires_at", "category_id", "price"]
     t.index ["bumped_at"], name: "index_listings_on_bumped_at"
     t.index ["category_id"], name: "index_listings_on_category_id"
     t.index ["condition"], name: "index_listings_on_condition"
@@ -584,6 +588,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_220000) do
     t.index ["deleted_at"], name: "index_users_on_deleted_at"
     t.index ["deletion_scheduled_at"], name: "index_users_on_deletion_scheduled_at"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["id"], name: "index_users_on_id_not_active", where: "(status <> 0)"
     t.index ["last_app_version_at"], name: "index_users_on_last_app_version_at"
     t.index ["last_sign_in_at"], name: "index_users_on_last_sign_in_at"
     t.index ["legacy_client_seen_at"], name: "index_users_on_legacy_client_seen_at"

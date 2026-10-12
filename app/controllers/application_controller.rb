@@ -72,8 +72,14 @@ class ApplicationController < ActionController::API
 
   # `count:` — the total to report when `collection` is a narrowed slice of the
   # real result set (the boxed nearest-first feed); Pagy then skips its COUNT.
+  #
+  # An `extra` value may be a Proc: it is called with the page's records once
+  # they are loaded, so per-viewer lookups (seen / saved ids, unread counts)
+  # cost one query on the PAGE's ids instead of a subquery over the whole result
+  # set (PERFORMANCE_100K.md: ~170-200 ms each on the 216k-row feed).
   def paginate_blue(serializer, collection, extra: {}, count: nil)
     pagy, records = pagy(collection, **pagy_page_options, **(count ? { count: count } : {}))
+    extra = extra.transform_values { |value| value.is_a?(Proc) ? value.call(records) : value }
     render json: {
       serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default, **extra.except(:view)),
       meta: {

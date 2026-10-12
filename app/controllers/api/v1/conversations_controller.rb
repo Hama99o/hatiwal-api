@@ -71,16 +71,20 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     blocked_ids = current_user.blocked_users.ids.to_set
     blocker_ids = current_user.blocking_users.ids.to_set
 
-    # Compute unread counts for all visible conversations in a single GROUP BY
-    # query and pass the resulting hash to the serializer so every row reads
-    # from memory — no per-row COUNT queries (N+1).
-    conversation_ids = conversations.map(&:id)
+    # Unread counts for the PAGE's conversations in a single GROUP BY query,
+    # passed to the serializer so every row reads from memory — no per-row
+    # COUNT queries (N+1). A proc, run by paginate_blue on the loaded page: this
+    # used to `conversations.map(&:id)` first, which loaded the WHOLE inbox with
+    # every include above (each chat's messages, listing photos, avatars) before
+    # paginating — 6.5 s for a seller with 3 500 chats (docs/PERFORMANCE_100K.md).
     # SHOP-3: a teammate's message is not inbound (Conversation::INBOUND_MESSAGE_SQL).
-    unread_counts = Message.joins(:conversation)
-      .where(conversation_id: conversation_ids, read_at: nil)
-      .where(Conversation.inbound_message_sql_for(current_user), u: current_user.id)
-      .group(:conversation_id)
-      .count
+    unread_counts = lambda do |page|
+      Message.joins(:conversation)
+             .where(conversation_id: page.map(&:id), read_at: nil)
+             .where(Conversation.inbound_message_sql_for(current_user), u: current_user.id)
+             .group(:conversation_id)
+             .count
+    end
 
     paginate_blue(
       ConversationSerializer, conversations,
