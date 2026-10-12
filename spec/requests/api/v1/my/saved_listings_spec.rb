@@ -312,6 +312,19 @@ RSpec.describe "Saved: only what can be opened; unsave always works", type: :req
     expect([ removed, i_blocked, blocked_me, closed ].map(&:id) & saved_ids).to be_empty
   end
 
+  # e5 run-312: an expired listing stays saved (it still opens) but is off the
+  # market. The :list view never said so, so the app showed it as live. Only
+  # the public flag: buyers still never get the expiry DATE.
+  it "says which saved listings have expired, without the expiry date" do
+    live = create(:listing, :active).tap { |l| save!(l) }
+    old = create(:listing, :active).tap { |l| save!(l); l.update_columns(expires_at: 1.day.ago) }
+    get "/api/v1/my/saved_listings", headers: h
+    rows = JSON.parse(response.body)["listings"].index_by { |l| l["id"] }
+    expect(rows[old.id]["expired"]).to be(true)
+    expect(rows[live.id]["expired"]).to be(false)
+    expect(rows.values).to all(satisfy { |r| r["expires_at"].nil? })
+  end
+
   it "unsave works on a listing of a blocked pair (it used to 404)" do
     l = create(:listing, :active).tap { |x| save!(x) }
     create(:block, blocker: user, blocked: l.user)

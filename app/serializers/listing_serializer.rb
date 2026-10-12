@@ -129,6 +129,10 @@ class ListingSerializer < ApplicationSerializer
     field(:image_thumb_urls) { |l| l.image_thumb_urls }
     field(:image_medium_urls) { |l| l.image_medium_urls }
     field(:is_viewed) { |l, opts| opts[:viewed_ids]&.include?(l.id) || false }
+    # e5 run-312: a saved listing past its 90-day clock stays on Saved (it
+    # still opens) but is off the market; the app labels it "Expired". The
+    # public flag only, as in :detailed: buyers never get the expiry date.
+    field(:expired) { |l| l.expired? }
     # TASK-BE-SAVEDLIST (FlowApp #255) — the feed heart. Before this, :list
     # never rendered is_saved at all (it only existed on :detailed), so no
     # feed card — web Bazaar or mobile Browse — could paint a filled heart

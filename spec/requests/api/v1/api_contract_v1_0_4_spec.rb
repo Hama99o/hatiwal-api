@@ -69,7 +69,10 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # the notice itself stays a plain :text message whose body is the whole
     # sentence, so an old app shows exactly what it showed before (see "an old
     # app reads a tappable Support notice from its body" below).
-    "messages[].action" => "Support notice button (null on every other message)"
+    "messages[].action" => "Support notice button (null on every other message)",
+    # e5 run-312 (1.1.7): the public "off the market" flag on :list, so Saved
+    # can label an expired listing. A boolean an old app ignores; no date.
+    "listings[].expired" => "Saved expired label (boolean; buyers never get the date)"
   }.freeze
 
   # Values are irrelevant; their JSON TYPE is the contract.
