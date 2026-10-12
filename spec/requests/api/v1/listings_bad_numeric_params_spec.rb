@@ -59,6 +59,26 @@ RSpec.describe "Api::V1::Listings with unreadable numeric filters", type: :reque
     end
   end
 
+  # Night QA on qa117 (dd, 2026-10-12): seller_active_days=99999999 answered
+  # 500 (PG::DatetimeFieldOverflow: the cutoff became a date in 271765 BC), and
+  # 0 or a negative count emptied the feed (a cutoff in the future). A count of
+  # days outside 1..3650 means nothing, so it is ignored like the other
+  # unreadable values. The apps only ever send 7.
+  %w[99999999 999999999999 3651 0 -5].each do |days|
+    it "ignores seller_active_days=#{days} (out of range)" do
+      get "/api/v1/listings", params: { seller_active_days: days }, headers: headers
+      expect(response).to have_http_status(:ok)
+      expect(titles).to include("Kabul Lamp")
+    end
+  end
+
+  it "seller_active_days in range still filters" do
+    listing.user.update_column(:last_sign_in_at, 30.days.ago)
+    create(:listing, :active, title: "Fresh Seller Cup", user: create(:user, last_sign_in_at: 1.day.ago))
+    get "/api/v1/listings", params: { seller_active_days: "7" }, headers: headers
+    expect(titles).to eq([ "Fresh Seller Cup" ])
+  end
+
   it "readable values still filter (the guard is not a no-op)" do
     create(:listing, :active, title: "Cheap Cup", price: 50)
     get "/api/v1/listings", params: { price_min: "100", price_max: "1000.5" }, headers: headers

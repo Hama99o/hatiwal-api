@@ -1,4 +1,6 @@
 class Api::V1::ListingsController < Api::V1::BaseController
+  SELLER_ACTIVE_DAYS_RANGE = (1..3650)
+
   # Guests can browse the feed and view a listing without logging in. Auth is
   # optional here (resolves current_user if a token is present); save/unsave
   # still require authentication via BaseController.
@@ -31,7 +33,11 @@ class Api::V1::ListingsController < Api::V1::BaseController
     category_id = number_param(:category_id, integer: true)
     price_min = number_param(:price_min)
     price_max = number_param(:price_max)
+    # A day count outside 1..3650 means nothing: 0 or less put the cutoff in
+    # the future (an empty feed), a huge one overflowed Postgres' timestamp
+    # (500). Ignored like any unreadable filter; the apps send 7.
     seller_active_days = number_param(:seller_active_days, integer: true)
+    seller_active_days = nil unless SELLER_ACTIVE_DAYS_RANGE.cover?(seller_active_days)
 
     listings = listings.by_seller(user_id) if user_id
     listings = listings.personal if user_id && shop_id.nil?
