@@ -13,6 +13,9 @@ RSpec.describe "Api::V1::Auth::AppleAuthController", type: :request do
   let(:sub) { "001234.abcdef0123456789.0123" }
   let(:email) { "ahmad@example.com" }
 
+  # Off by default (apple_auth_flag_spec.rb); these specs cover it turned on.
+  before { allow(Api::V1::Auth::AppleAuthController).to receive(:enabled?).and_return(true) }
+
   before do
     Rails.cache.delete(Apple::IdentityToken::JWKS_CACHE_KEY)
     jwks = { keys: [ JWT::JWK.new(rsa, kid: kid).export.merge(alg: "RS256", use: "sig") ] }

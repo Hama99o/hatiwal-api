@@ -6,6 +6,13 @@ the WEB client id, and the iOS redirect scheme was used on every platform. 1.1.7
 with the native library and shows the button on Android and iOS. On iOS it sits beside Sign in with
 Apple (App Store guideline 4.8).
 
+> **OFF in the 1.1.7 app (owner rule, 2026-10-12): it does not ship until the console setup below
+> is done.** The app code and tests are in place, but the button is hidden unless
+> `EXPO_PUBLIC_GOOGLE_SIGN_IN=on`, and `app.json` carries no google-signin plugin, so a build
+> succeeds without the Google clients. The web keeps its 1.1.6 Google sign-in unchanged (web
+> fb10810 was reverted by fcbf9b7), and `/auth/google` stays on for it. See "Turning it on" at the
+> end.
+
 ## How it works
 
 1. **App** (`hatiwal-mobile`, `src/components/auth/GoogleSignInButton.tsx`) uses
@@ -14,8 +21,8 @@ Apple (App Store guideline 4.8).
    - It is configured with `{ webClientId, iosClientId }`. Because of `webClientId`, Google issues
      the **ID token for the web client** (that is its `aud`), on both platforms.
    - It is shown on Login and Register by `src/lib/googleSignIn.ts`:
-     - **One flag, on by default.** `EXPO_PUBLIC_GOOGLE_SIGN_IN=off` hides it everywhere.
-     - It is also hidden with no web client id, and on iOS with no iOS client id.
+     - **One flag, OFF by default.** `EXPO_PUBLIC_GOOGLE_SIGN_IN=on` shows it.
+     - Even then it is hidden with no web client id, and on iOS with no iOS client id.
    - A cancelled sheet is silent.
 2. **Web** (`hatiwal-web`, `src/components/auth/login-form.tsx`) uses Google Identity Services with
    `NEXT_PUBLIC_GOOGLE_CLIENT_ID`. Its token also carries the web client's `aud`.
@@ -82,14 +89,14 @@ All three OAuth clients live in **the same Google Cloud project** as the existin
 |---|---|---|
 | EAS env (production) | `EXPO_PUBLIC_GOOGLE_CLIENT_ID` | the **web** client id |
 | EAS env (production) | `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` | the **iOS** client id (matches `iosUrlScheme`) |
-| EAS env (optional) | `EXPO_PUBLIC_GOOGLE_SIGN_IN` | `off` hides the button. Leave it unset for 1.1.7 |
+| EAS env | `EXPO_PUBLIC_GOOGLE_SIGN_IN` | `on` shows the button. Unset (the default) hides it |
 | API credentials | `google_client_id` | the web client id |
 | API credentials | `google_ios_client_id` | the iOS client id. Only needed if a token's `aud` is ever the iOS client (it is the web client with `webClientId` set) |
 | web `.env.production` | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | the web client id (already set) |
 
 Client ids are not secrets, but they still live in env and credentials, never in committed code.
-`app.json` carries the reversed iOS client id only because the native plugin needs it at build
-time.
+When it is turned on, `app.json` carries the reversed iOS client id only because the native plugin
+needs it at build time.
 
 ## Deploying it
 
@@ -102,3 +109,21 @@ time.
   is covered by:
   - API: `spec/requests/api/v1/auth/google_auth_spec.rb`.
   - App: `GoogleSignInButton.test.tsx`, `googleSignIn.test.ts` and `authErrors.test.ts`.
+
+## Turning it on (the app)
+
+In this order:
+
+1. **Console**: the owner's one-time setup above (Android clients with the app-signing SHA-1 and
+   the upload-key SHA-1, the iOS client, the consent screen in production).
+2. **App config**: in `hatiwal-mobile/app.json`, add back to `plugins`:
+   `["@react-native-google-signin/google-signin", { "iosUrlScheme": "com.googleusercontent.apps.<the iOS client>" }]`
+   (removed on 2026-10-12; the commit that removed it shows the exact lines).
+3. **App env**: in the EAS env of the build profile, set `EXPO_PUBLIC_GOOGLE_CLIENT_ID`,
+   `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` and `EXPO_PUBLIC_GOOGLE_SIGN_IN=on`.
+4. **Web (optional)**: re-apply web fb10810 (reverted by fcbf9b7) for the unverified-address
+   sentence on hatiwal.com.
+5. **Build** new Android and iOS builds (EAS); check sign-in on the Play internal track
+   (app-signing SHA-1) and the EAS-installed APK (upload SHA-1) before release.
+
+The API needs nothing: `/auth/google` is already on for the web.

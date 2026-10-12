@@ -16,7 +16,15 @@
 # devise_token_auth's sign_in) and in the body (like /auth/google).
 #
 # A public endpoint: ApplicationController, not Api::V1::BaseController.
+#
+# OFF until APPLE_SIGN_IN_ENABLED is set (owner rule 2026-10-12: it does not
+# ship before the Apple console setup is done): the endpoint answers 404.
 class Api::V1::Auth::AppleAuthController < ApplicationController
+  def self.enabled?
+    ActiveModel::Type::Boolean.new.cast(ENV.fetch("APPLE_SIGN_IN_ENABLED", nil)) == true
+  end
+
+  before_action :render_not_found, unless: -> { self.class.enabled? }
   # The other door into account creation, and each call may reach Apple.
   throttle to: 20, within: 1.hour, by: :ip, only: :create
 

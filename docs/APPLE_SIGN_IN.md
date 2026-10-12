@@ -4,6 +4,12 @@ Owner decision, 2026-10-09: Sign in with Apple on **iOS only** first; Google lat
 guideline 4.8 asks for it as soon as an app offers a third-party login on iOS, and it gives people
 a private-relay address if they do not want to share their email.
 
+> **OFF in 1.1.7 (owner rule, 2026-10-12): it does not ship until the console setup below is
+> done.** The code and tests are in place, but the API answers `POST /auth/apple` with 404 unless
+> `APPLE_SIGN_IN_ENABLED` is set, the app hides the button unless `EXPO_PUBLIC_APPLE_SIGN_IN=on`,
+> and `app.json` carries no Sign in with Apple config, so a build succeeds without the App ID
+> capability. See "Turning it on" at the end.
+
 ## How it works
 
 1. **App** (`hatiwal-mobile`, `src/components/auth/AppleSignInButton.tsx`). Apple's own button, on
@@ -48,8 +54,8 @@ a private-relay address if they do not want to share their email.
 ## The owner's one-time setup (Apple Developer → Certificates, Identifiers & Profiles)
 
 1. **App ID** `com.hatiwal.app` → Capabilities → tick **Sign In with Apple** → Save. EAS uses it
-   at the next build; the app's `app.json` already has `ios.usesAppleSignIn: true` and the
-   `expo-apple-authentication` plugin.
+   at the next build, once `app.json` has `ios.usesAppleSignIn: true` and the
+   `expo-apple-authentication` plugin again (see "Turning it on").
 2. **Keys** → **+** → name it "Hatiwal Sign in with Apple" → tick **Sign in with Apple** →
    Configure → primary App ID `com.hatiwal.app` → Continue → Register → **Download** the `.p8`.
    Apple lets you download it **once**. Note the **Key ID** shown on that page.
@@ -95,3 +101,18 @@ git. With nothing configured, verification still works and revocation is a logge
   capability, so no device test has been done yet. The behaviour is covered by
   `spec/requests/api/v1/auth/apple_auth_spec.rb`, `spec/services/apple/tokens_spec.rb`, and in
   the app by `AppleSignInButton.test.tsx`, `auth.apple.test.ts` and `authErrors.test.ts`.
+
+## Turning it on
+
+In this order. Until every step is done, leave it off: a build that asks for the entitlement
+without the App ID capability fails to sign.
+
+1. **Console**: the owner's one-time setup above (App ID capability, key, Team ID).
+2. **API**: put the `apple:` credentials (or the ENV) in production, and set
+   `APPLE_SIGN_IN_ENABLED=true` in the API's env (`.env.production` + Kamal env). Deploy.
+   `POST /api/v1/auth/apple` then answers instead of 404.
+3. **App config**: in `hatiwal-mobile/app.json`, add back `"usesAppleSignIn": true` under `ios`
+   and `"expo-apple-authentication"` to `plugins` (both were removed on 2026-10-12, so the commit
+   that removed them shows the exact lines).
+4. **App flag**: set `EXPO_PUBLIC_APPLE_SIGN_IN=on` in the EAS env of the build profile.
+5. **Build** a new iOS build (EAS) and check on TestFlight before release.

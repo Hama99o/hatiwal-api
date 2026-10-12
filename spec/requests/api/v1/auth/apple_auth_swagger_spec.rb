@@ -5,6 +5,9 @@ RSpec.describe "Sign in with Apple", type: :request do
   let(:rsa) { OpenSSL::PKey::RSA.generate(2048) }
   let(:raw_nonce) { "swagger-nonce" }
 
+  # Off by default (apple_auth_flag_spec.rb); these specs cover it turned on.
+  before { allow(Api::V1::Auth::AppleAuthController).to receive(:enabled?).and_return(true) }
+
   before do
     Rails.cache.delete(Apple::IdentityToken::JWKS_CACHE_KEY)
     stub_request(:get, Apple::IdentityToken::JWKS_URL)
