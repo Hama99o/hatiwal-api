@@ -4,6 +4,9 @@ class Api::V1::Auth::PasswordsController < DeviseTokenAuth::PasswordsController
   # Each call sends a real email to a real address. Unbounded, this is a
   # free mail bomb aimed at any user whose email address is known.
   throttle to: 5, within: 1.hour, by: :ip, only: :create
+  # Hunt-2 (1.1.7): and per address, so changing IPs can't mail one person
+  # without end.
+  throttle to: 3, within: 1.hour, by: :email, only: :create
 
   # DTA validates redirect_url before create — we skip it because our
   # PasswordsController manages the reset URL internally via WEB_RESET_URL env var.

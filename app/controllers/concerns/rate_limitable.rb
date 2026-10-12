@@ -16,6 +16,8 @@
 # Choosing `by:`
 #   :user keys on the authenticated user, and is right for anything behind
 #   authentication — one abusive account cannot spend anyone else's quota.
+#   :email (hunt-2, 1.1.7) keys on the `email` param, for an endpoint that mails
+#   whoever it names (password reset): no IP limit protects the recipient.
 #   :ip is only for the endpoints that hand out the session in the first place,
 #   where there is no user yet. Keep IP limits GENEROUS: mobile users in
 #   Afghanistan sit behind carrier-grade NAT, so a whole city can share one
@@ -36,7 +38,7 @@ module RateLimitable
 
   class_methods do
     def throttle(to:, within:, by: :ip, **options)
-      raise ArgumentError, "throttle by: must be :ip or :user" unless [ :ip, :user ].include?(by)
+      raise ArgumentError, "throttle by: must be :ip, :user or :email" unless [ :ip, :user, :email ].include?(by)
 
       rate_limit(
         to:     to,
@@ -76,6 +78,11 @@ module RateLimitable
   # keeps counting instead of lumping every anonymous caller under one nil key.
   def rate_limit_key(by)
     return "ip:#{request.remote_ip}" if by == :ip
+
+    if by == :email
+      email = params[:email].to_s.strip.downcase
+      return email.present? ? "email:#{email}" : "ip:#{request.remote_ip}"
+    end
 
     current_user ? "user:#{current_user.id}" : "ip:#{request.remote_ip}"
   end

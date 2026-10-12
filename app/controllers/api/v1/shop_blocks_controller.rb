@@ -3,6 +3,9 @@
 # existing block check — chats, offers, pushes — applies unchanged), which
 # remembers the shop so the blocked list shows the shop, never the person.
 class Api::V1::ShopBlocksController < Api::V1::BaseController
+  # Hunt-2 (1.1.7), like BlocksController.
+  throttle to: 60, within: 1.hour, by: :user, only: %i[create destroy]
+
   before_action :set_shop
 
   # POST /api/v1/shops/:shop_id/block

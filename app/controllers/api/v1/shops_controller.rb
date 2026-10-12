@@ -12,6 +12,8 @@ class Api::V1::ShopsController < Api::V1::BaseController
 
   # Opening shops is rare; this only stops a script.
   throttle to: 10, within: 1.day, by: :user, only: :create
+  # Hunt-2 (1.1.7): edits (each can carry a logo and a cover upload).
+  throttle to: 60, within: 1.hour, by: :user, only: :update
   # Owner rule (1.1.6): a confirmed email before opening a shop.
   before_action :require_confirmed_email!, only: :create
 

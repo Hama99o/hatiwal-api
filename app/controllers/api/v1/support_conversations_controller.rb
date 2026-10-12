@@ -11,6 +11,9 @@
 # (any member may open it; it is shown only while that shop is selected);
 # without, the caller's own (Buyer mode and Seller as Me).
 class Api::V1::SupportConversationsController < Api::V1::BaseController
+  # Hunt-2 (1.1.7): idempotent, but each call is a write.
+  throttle to: 60, within: 1.hour, by: :user, only: :create
+
   def create
     authorize Conversation, :start_support?
 

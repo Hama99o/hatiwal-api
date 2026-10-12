@@ -1,4 +1,7 @@
 class Api::V1::BlocksController < Api::V1::BaseController
+  # Hunt-2 (1.1.7): block/unblock toggling notifies and rewrites feeds.
+  throttle to: 60, within: 1.hour, by: :user, only: %i[create destroy]
+
   # GET /api/v1/blocks — the users the current user has blocked, newest first.
   def index
     blocks = policy_scope(Block)
