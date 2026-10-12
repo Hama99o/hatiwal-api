@@ -9,7 +9,7 @@ class Report < ApplicationRecord
     wrong_category: 3,
     prohibited_item: 4,
     other: 5
-  }
+  }, validate: true # an unknown reason is a 422, not an ArgumentError 500 (night QA 2026-10-12)
 
   enum :status, { pending: 0, reviewed: 1, resolved: 2, dismissed: 3 }
 

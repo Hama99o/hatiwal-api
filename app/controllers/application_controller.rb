@@ -13,6 +13,10 @@ class ApplicationController < ActionController::API
   # the base ParseError to :bad_request by exact class name, so its ParamBuilder
   # subclasses (ParameterTypeError/InvalidParameterError) would otherwise 500.
   rescue_from ActionDispatch::ParamError, with: :render_bad_request
+  # `params.require(:listing).permit(...)` on a String / Array / number sent in
+  # place of the object raised NoMethodError, a 500 (night QA 2026-10-12). Only
+  # that exact case is a 400; any other NoMethodError is re-raised.
+  rescue_from NoMethodError, with: :render_bad_request_for_wrong_param_shape
 
   before_action :set_active_storage_url_options
 
@@ -180,6 +184,12 @@ class ApplicationController < ActionController::API
 
   def render_bad_request
     render json: { error: "Bad request" }, status: :bad_request
+  end
+
+  def render_bad_request_for_wrong_param_shape(error)
+    raise error unless error.name == :permit && !error.receiver.is_a?(ActionController::Parameters)
+
+    render_bad_request
   end
 
   # General-purpose success helper for actions that return a small bespoke

@@ -28,7 +28,8 @@ class Listing < ApplicationRecord
   enum :status, { draft: 0, active: 1, reserved: 2, sold: 3 }
   # Optional item condition. Keys avoid the reserved word `new` (would clash
   # with Listing.new); the mobile app maps them to "New / Like new / Good / Fair".
-  enum :condition, { brand_new: 0, like_new: 1, good: 2, fair: 3 }, prefix: :condition
+  # validate: an unknown value is a 422, not an ArgumentError 500 (night QA 2026-10-12).
+  enum :condition, { brand_new: 0, like_new: 1, good: 2, fair: 3 }, prefix: :condition, validate: { allow_nil: true }
 
   validates :title, presence: true, length: { maximum: 150 }
   # The `price` column is decimal(12, 2), so any value above 9_999_999_999.99
