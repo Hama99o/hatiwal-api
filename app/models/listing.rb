@@ -192,9 +192,11 @@ class Listing < ApplicationRecord
   # Filtering by a category includes everything filed under its subcategories:
   # the create-listing picker lets a seller file an item under
   # "Electronics > Phones", and that item is still an Electronics listing.
-  # Expressed as a subquery so it stays one round-trip and composes with the
-  # rest of the browse scope chain.
-  scope :by_category, ->(id) { where(category_id: Category.self_and_children(id).select(:id)) }
+  # The ids are read first (one tiny query on ~80 categories) and inlined: with
+  # a literal list Postgres can estimate the category's share of the feed and
+  # pick a good plan; with a subquery it guessed blind and sorted ~70k
+  # price-matching rows for a category page (docs/PERFORMANCE_100K.md).
+  scope :by_category, ->(id) { where(category_id: Category.self_and_children(id).pluck(:id)) }
   scope :by_seller,   ->(id) { where(user_id: id) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :not_removed, -> { where(removed_at: nil) }
@@ -348,7 +350,12 @@ class Listing < ApplicationRecord
   # the box is further than the radius, so it could not rank above any row in
   # that circle, and the first `needed` rows — the page — come out exactly as the
   # unboxed sort would order them. When no radius is enough, no box (as before).
-  NEAREST_RADII_KM = [ 50, 150, 400, 1000 ].freeze
+  #
+  # The small radii (2, 5, 15 km) are for dense cities: at 100k users Kabul
+  # alone holds ~85k live listings within 50 km, and sorting all of them by
+  # Haversine cost ~300 ms per page; a 2 km box holds a few thousand
+  # (docs/PERFORMANCE_100K.md). The page is identical whatever the radius.
+  NEAREST_RADII_KM = [ 2, 5, 15, 50, 150, 400, 1000 ].freeze
   KM_PER_DEGREE = 111.32
 
   # Rows whose point is inside the square that encloses the circle of `km`.
@@ -362,9 +369,12 @@ class Listing < ApplicationRecord
   end
 
   # The radius to box a nearest-first page with, or nil for "no box".
+  # `limit(needed).count` counts at most `needed` rows (a COUNT over a LIMITed
+  # subquery): the question is only "are there enough?", and counting every
+  # row of a city's circle to answer it cost ~220 ms in Kabul.
   def self.nearest_window_km(scope, lat, lng, needed)
     NEAREST_RADII_KM.find do |km|
-      scope.within_box(lat, lng, km).within_radius(lat, lng, km).count >= needed
+      scope.within_box(lat, lng, km).within_radius(lat, lng, km).limit(needed).count >= needed
     end
   end
 

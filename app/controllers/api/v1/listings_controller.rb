@@ -108,7 +108,11 @@ class Api::V1::ListingsController < Api::V1::BaseController
     paginate_blue(
       ListingSerializer,
       listings,
-      extra: { view: :list, viewed_ids: viewed_listing_ids(listings), saved_ids: saved_listing_ids(listings) },
+      # Procs: run on the loaded page (paginate_blue), so each is one lookup on
+      # at most a page of ids, not a subquery over the whole feed.
+      extra: { view: :list,
+               viewed_ids: ->(page) { viewed_listing_ids(page) },
+               saved_ids: ->(page) { saved_listing_ids(page) } },
       count: total
     )
   end
@@ -183,14 +187,18 @@ class Api::V1::ListingsController < Api::V1::BaseController
 
   private
 
-  # IDs of listings the current user has already opened, scoped to the current
-  # result set — one indexed query, used by the serializer to flag each card as
-  # "seen". Empty when not signed in.
-  def viewed_listing_ids(scope)
+  # IDs of listings the current user has already opened, among `records` (the
+  # rendered page) — one indexed query, used by the serializer to flag each card
+  # as "seen". Empty when not signed in.
+  #
+  # The page's ids, never the unpaginated scope as a subquery: on the feed that
+  # subquery re-ran the whole browsable filter (216k rows at 100k users) twice
+  # per request, ~370 ms (docs/PERFORMANCE_100K.md).
+  def viewed_listing_ids(records)
     return Set.new if current_user.nil?
 
     current_user.listing_views
-                .where(listing_id: scope.reorder(nil).select(:id))
+                .where(listing_id: records.map(&:id))
                 .pluck(:listing_id)
                 .to_set
   end
@@ -200,11 +208,11 @@ class Api::V1::ListingsController < Api::V1::BaseController
   # per-record `saved_listings.exists?` like the :detailed field uses (that
   # would be an N+1 across a full page). Empty when not signed in — a guest
   # always gets `false` for every row via the serializer's fallback.
-  def saved_listing_ids(scope)
+  def saved_listing_ids(records)
     return Set.new if current_user.nil?
 
     current_user.saved_listings
-                .where(listing_id: scope.reorder(nil).select(:id))
+                .where(listing_id: records.map(&:id))
                 .pluck(:listing_id)
                 .to_set
   end

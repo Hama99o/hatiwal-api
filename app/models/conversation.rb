@@ -120,11 +120,16 @@ class Conversation < ApplicationRecord
   # SHOP-3 — "the seller side" of a chat: its seller, or any member of the
   # chat's shop (its own shop for a Message-shop chat, else its listing's).
   # Personal chats have no shop, so a team member never reaches one.
+  #
+  # `shop_id = ANY (ARRAY(...))`, not a correlated `EXISTS`: the member's shop
+  # ids are computed ONCE, so Postgres can OR three index scans (buyer_id,
+  # seller_id, shop_id). The EXISTS form forced a sequential scan of every
+  # conversation, running the subquery per row: ~500 ms per inbox page and per
+  # /users/me poll for every shop member at 150k conversations
+  # (docs/PERFORMANCE_100K.md). Same rows: a NULL shop_id matches neither form.
   SELLER_SIDE_SQL = <<~SQL.squish.freeze
-    (conversations.seller_id = :u OR EXISTS (
-      SELECT 1 FROM shop_members sm
-       WHERE sm.user_id = :u
-         AND sm.shop_id = conversations.shop_id))
+    (conversations.seller_id = :u OR conversations.shop_id = ANY (ARRAY(
+      SELECT sm.shop_id FROM shop_members sm WHERE sm.user_id = :u)))
   SQL
 
   # Messages `:u` hasn't read that count as inbound: not their own, and, on
