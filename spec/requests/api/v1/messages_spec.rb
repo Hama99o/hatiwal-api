@@ -349,7 +349,9 @@ RSpec.describe "Api::V1::Messages", type: :request do
       Message::USER_SENDABLE_KINDS.each do |allowed_kind|
         it "accepts kind:'#{allowed_kind}'" do
           post "/api/v1/conversations/#{conversation.id}/messages",
-               params: { body: "body for #{allowed_kind}", kind: allowed_kind },
+               # An offer's body must read as one (Message#offer_body_readable).
+               params: { body: Message::OFFER_KINDS.include?(allowed_kind.to_sym) ? "5000|AFN|5500" : "body for #{allowed_kind}",
+                         kind: allowed_kind },
                headers: headers, as: :json
 
           expect(response).to have_http_status(:created)

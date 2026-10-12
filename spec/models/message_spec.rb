@@ -99,7 +99,9 @@ RSpec.describe Message, type: :model do
 
     Message::USER_SENDABLE_KINDS.each do |allowed_kind|
       it "is valid when kind is :#{allowed_kind}" do
-        expect(build(:message, kind: allowed_kind.to_sym)).to be_valid
+        # An offer's body must read as one (Message#offer_body_readable).
+        body = Message::OFFER_KINDS.include?(allowed_kind.to_sym) ? "5000|AFN|5500" : "body"
+        expect(build(:message, kind: allowed_kind.to_sym, body: body)).to be_valid
       end
     end
   end

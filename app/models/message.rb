@@ -109,6 +109,7 @@ class Message < ApplicationRecord
             numericality: { only_integer: true, greater_than: 0 },
             allow_nil: true
   validate :offer_quantity_within_available_units, if: -> { offer_quantity.present? }
+  validate :offer_body_readable, on: :create, if: :offer_kind?
 
   scope :ordered,      -> { order(:created_at) }            # chronological (oldest→newest)
   scope :newest_first, -> { order(created_at: :desc) }      # paginated chat: most recent page first
@@ -140,6 +141,23 @@ class Message < ApplicationRecord
   # `offer? || offer_counter?` pair that MessageSerializer had written out twice
   # already (once per parsed offer field) — one predicate, one constant, so
   # "which kinds are offers" can never answer differently in two places.
+  # An offer's body is "amount|currency|listedPrice", and every client formats
+  # the currency with Intl.NumberFormat, which THROWS on a code that is not one
+  # of a few letters: a crafted "5|!!|5" crashed the seller's offer bubble and
+  # Chats tab in every shipped app (night QA 2026-10-12). Every client sends a
+  # positive amount and the listing's own currency; nothing else is an offer.
+  # The listed price is not checked: clients read it with Number(), and a bad
+  # one shows as text instead of throwing. Only on create: old rows still load.
+  OFFER_AMOUNT_FORMAT = /\A\d+(\.\d+)?([eE][+-]?\d+)?\z/
+
+  def self.readable_offer_body?(body)
+    amount, currency = body.to_s.split("|", 3)
+    return false unless amount&.match?(OFFER_AMOUNT_FORMAT) && Listing::CURRENCIES.include?(currency)
+
+    value = Float(amount, exception: false)
+    value.present? && value.finite? && value.positive?
+  end
+
   def offer_kind?
     OFFER_KINDS.include?(kind&.to_sym)
   end
@@ -163,6 +181,12 @@ class Message < ApplicationRecord
   end
 
   private
+
+  def offer_body_readable
+    return if body.blank? || self.class.readable_offer_body?(body)
+
+    errors.add(:body, :invalid, message: "is not a valid offer (amount|currency|listed price)")
+  end
 
   def normalize_support_context
     return self.context = nil unless conversation&.kind_support? && user_id.present?
