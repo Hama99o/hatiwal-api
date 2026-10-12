@@ -25,9 +25,12 @@ RSpec.describe Conversations::StartService do
       .and have_enqueued_job(SendMessagePushJob).with { |id| expect(id).to eq(Message.last.id) }
   end
 
+  # Owner decision 2026-10-12: Contact seller again lands in the existing chat
+  # and sends nothing (the typed text is not added).
   it "sends nothing again when the conversation already exists" do
-    create(:conversation, listing: listing, buyer: buyer, seller: seller)
+    existing = create(:conversation, listing: listing, buyer: buyer, seller: seller)
     expect { service.call }.not_to have_enqueued_job
+    expect(existing.messages.count).to eq(0)
   end
 
   it "sets buyer and seller correctly" do

@@ -17,7 +17,7 @@ class Conversations::StartService
   end
 
   def call
-    return reopened(existing_conversation) if existing_conversation
+    return returned_to(reopened(existing_conversation)) if existing_conversation
 
     seller = chat_seller
     raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(seller)
@@ -62,6 +62,9 @@ class Conversations::StartService
     conversation
   end
 
+  # The buyer already has a chat on this listing (the throttle asks).
+  def existing? = existing_conversation.present?
+
   private
 
   # A shop product's chat is with the shop: its seller is the shop's owner.
@@ -87,6 +90,17 @@ class Conversations::StartService
 
     Conversation.where(listing: @listing, buyer: @buyer, seller: chat_seller)
                 .where(shop_id: Shop.where(status: :closed).select(:id)).order(:id).first
+  end
+
+  # The buyer came back from the listing to a chat they already have (owner
+  # decision 2026-10-12): they land in it, and NOTHING is added. Contact seller
+  # does not send its typed text again; Make offer posts its offer next, into
+  # this chat. A chat the buyer had archived or deleted comes back to their
+  # inbox, so it is where they can find it; the seller's side is untouched.
+  def returned_to(conversation)
+    shown = { buyer_archived_at: nil, buyer_deleted_at: nil }
+    conversation.update_columns(shown) if shown.keys.any? { |column| conversation[column].present? }
+    conversation
   end
 
   # Moved away and back: the chat that was closed by the move opens again.

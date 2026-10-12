@@ -10,7 +10,10 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   # spam vector: one account messaging every seller in the city. Only NEW
   # threads are limited — replies inside an existing thread go through
   # MessagesController, which has its own, much higher limit.
-  throttle to: 30, within: 1.day, by: :user, only: :create
+  # Writing again from the listing into a chat the buyer already has is a reply
+  # (owner, 2026-10-12), so it is limited like one, not as a new start.
+  throttle to: 30, within: 1.day, by: :user, only: :create, unless: :existing_listing_chat?
+  throttle to: 120, within: 1.hour, by: :user, only: :create, if: :existing_listing_chat?
   before_action :set_conversation, only: [ :show ]
   before_action :set_conversation_for_mutation, only: [ :destroy, :mark_read, :mark_unread, :archive, :unarchive ]
 
@@ -192,6 +195,10 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def set_listing
     @listing = Listing.find(params[:listing_id])
+  end
+
+  def existing_listing_chat?
+    Conversations::StartService.new(buyer: current_user, listing: @listing, message_body: nil).existing?
   end
 
   def set_conversation
