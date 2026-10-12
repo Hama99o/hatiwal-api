@@ -4,6 +4,7 @@ class ApplicationController < ActionController::API
   include Pagy::Backend
   include RateLimitable
   include SessionKeepAlive
+  include UploadParamsGuard
 
   rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
