@@ -1,0 +1,61 @@
+<% content_for(:title) { "Flagged listings" } %>
+
+<header class="hw-page-header">
+  <div>
+    <h1 class="hw-page-header__title main-content__page-title">Flagged listings</h1>
+    <p class="hw-page-header__subtitle">
+      Listings and shops that matched a <%= link_to "prohibited term", admin_prohibited_terms_path %> or were reported as a prohibited item.
+      Nothing is blocked automatically: every decision is yours. Open flags come oldest first.
+    </p>
+  </div>
+  <nav class="hw-segmented" aria-label="Kind">
+    <%= link_to "All", admin_flags_path(status: @status), class: "growth-period #{'growth-period--active' if @kind.nil?}", id: "flag-kind-all" %>
+    <%= link_to "Listings", admin_flags_path(status: @status, kind: "listings"), class: "growth-period #{'growth-period--active' if @kind == 'listings'}", id: "flag-kind-listings" %>
+    <%= link_to "Shops", admin_flags_path(status: @status, kind: "shops"), class: "growth-period #{'growth-period--active' if @kind == 'shops'}", id: "flag-kind-shops" %>
+  </nav>
+</header>
+
+<nav class="hw-segmented hw-gap-bottom" aria-label="Status" id="flag-filters">
+  <% { "open" => "Open", "dismissed" => "Dismissed", "actioned" => "Taken down", "all" => "All" }.each do |key, label| %>
+    <%= link_to "#{label} (#{@counts[key]})", admin_flags_path(status: key, kind: @kind),
+          class: "growth-period #{'growth-period--active' if @status == key}", id: "flag-filter-#{key}" %>
+  <% end %>
+</nav>
+
+<section class="main-content__body main-content__body--flush">
+  <% if @flags.any? %>
+    <table id="flag-queue">
+      <thead>
+        <tr><th>Flagged</th><th>Matched term</th><th>Category</th><th>Source</th><th>Reports</th><th>Status</th><th>Flagged</th><th></th></tr>
+      </thead>
+      <tbody>
+        <% @flags.each do |flag| %>
+          <% target = flag.flaggable %>
+          <tr id="flag-row-<%= flag.id %>">
+            <td dir="auto">
+              <% if target.nil? %>
+                <span class="hw-text-muted">(deleted <%= flag.flaggable_type.downcase %>)</span>
+              <% elsif flag.listing? %>
+                <%= link_to target.title.presence || "Listing ##{target.id}", admin_listing_path(target) %>
+                <span class="hw-text-muted">#<%= target.id %> · <%= target.status %></span>
+              <% else %>
+                🏪 <%= link_to target.name, admin_shop_path(target) %>
+                <span class="hw-text-muted">#<%= target.id %> · <%= target.status %></span>
+              <% end %>
+            </td>
+            <td dir="auto"><%= flag.matched_term.presence || "—" %></td>
+            <td class="hw-nowrap"><%= flag.category ? flag.category.humanize : "—" %></td>
+            <td class="hw-nowrap"><%= flag.source.humanize %></td>
+            <td><%= flag.listing? ? @report_counts.fetch(flag.flaggable_id, 0) : "—" %></td>
+            <td><%= render "status_badge", flag: flag %></td>
+            <td class="hw-nowrap hw-text-muted"><%= time_ago_in_words(flag.created_at) %> ago</td>
+            <td><%= link_to(flag.open? ? "Review →" : "Open", admin_flag_path(flag), class: flag.open? ? "button" : "hw-link") %></td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+    <%= paginate @flags %>
+  <% else %>
+    <p class="hw-empty hw-pad" id="flag-empty"><%= @status == "open" ? "No open flags. Nothing waiting." : "No flags here." %></p>
+  <% end %>
+</section>

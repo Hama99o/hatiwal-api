@@ -1,0 +1,65 @@
+# Starting list of prohibited terms (owner, 2026-10-13). Loaded ONCE into
+# prohibited_terms by db/migrate/20261013100100_seed_prohibited_terms.rb and by
+# `bin/rails prohibited_terms:seed`; both only ADD missing rows and never edit
+# one. The migration runs once, so later deploys never bring back a term the
+# admin deleted (a manual `prohibited_terms:seed` would). After that, the admin
+# page "Prohibited terms" is where terms are kept.
+#
+# category => locale => [terms]. locale "any" = the same spelling in Pashto and
+# Dari. Terms are normalized on save (ي→ی, ك→ک, آ→ا, no harakat / ZWNJ, digits
+# to ASCII), so one spelling per variant is enough; ZWNJ words are listed both
+# joined and spaced. A trailing "*" means "words starting with".
+#
+# NOT here on purpose, because they cause false positives:
+#   * ALLOWED by the owner: knives (چاقو، چاړه), tobacco / cigarettes (سګرټ،
+#     سیګار), naswar (نسوار), animals (sheep, birds, ...).
+#   * شیشه (glass, also slang for meth), "gun" (glue gun, spray gun, massage
+#     gun), "bullet" / "cartridge" (bullet camera, printer cartridge), ګولۍ
+#     (bullet AND pill), "coke", "weed", "pot", "ice", "crack", "speed", "wine"
+#     (a colour), "c4" / "m4" / "colt" (car models), "rpg" (game genre),
+#     "alcohol" / الکل (rubbing alcohol, wipes), bare سلاح / اسلحه / وسله
+#     ("سلاح سرد" = knives), bare "kidney" (kidney beans), "تابلیت" (tablet PC).
+firearms:
+  en: [pistol, handgun, revolver, rifle, shotgun, firearm, kalashnikov, "ak 47", ak47, "hunting gun", "machine gun", "air gun", "sniper rifle", glock, m16, uzi]
+  any: [تفنگ, تفنگها, تفنگچه, تمانچه, تومانچه, کلاشینکوف, کلاشنکوف, کلشینکوف, ماشیندار, "سلاح گرم", "اسلحه گرم"]
+  ps: [ټوپک, ټوپکې, ټوپکونه, تمانچې]
+ammunition:
+  en: [ammunition, ammo, gunpowder, "gun powder", "live rounds", "shotgun shells"]
+  any: [مرمی, مهمات, باروت, کارتوس]
+  ps: [مرمۍ, کارتوسونه]
+  fa: [فشنگ]
+explosives:
+  en: [explosive, grenade, "hand grenade", dynamite, tnt, detonator, landmine, "land mine", "rocket launcher", "rpg 7", "suicide vest"]
+  any: [نارنجک, دینامیت, "مواد منفجره", ماین]
+  ps: ["لاسي بم", "چاودیدونکي توکي"]
+  fa: ["بمب دستی", "مین زمینی"]
+drugs:
+  en: [heroin, opium, hashish, charas, taryak, tariak, cannabis, marijuana, marihuana, cocaine, methamphetamine, "crystal meth", meth, mdma, lsd, fentanyl, ketamine, narcotic]
+  any: [هیروئین, هیرویین, هروئین, تریاک, افیون, چرس, حشیش, بنگ, کوکنار, کوکائین, کوکایین, ماریجوانا, "ماری جوانا", "مواد مخدر", متامفتامین, میتامفیتامین, "کریستال میت", کراک]
+  ps: ["نشه يي توکي", "نشه ئي توکي", "مخدره توکي"]
+alcohol:
+  en: [whisky, whiskey, vodka, beer, liquor, alcoholic, brandy, cognac, "red wine", "white wine"]
+  any: [شراب, ویسکی, ودکا, آبجو, کنیاک, "مشروب الکلی", "مشروبات الکلی"]
+fake_documents:
+  en: ["fake passport", "fake id", "fake tazkira", "fake tazkera", "fake license", "fake licence", "fake driving license", "fake driving licence", "fake diploma", "fake degree", "fake certificate", "fake document", "fake visa", "forged document", "forged passport", "counterfeit money", "fake money"]
+  fa: ["پاسپورت جعلی", "تذکره جعلی", "جواز جعلی", "لایسنس جعلی", "دیپلوم جعلی", "شهادتنامه جعلی", "مدرک جعلی", "سند جعلی", "اسناد جعلی", "ویزه جعلی", "پول جعلی"]
+  ps: ["جعلي تذکره", "جعلي پاسپورت", "جعلي جواز", "جعلي لایسنس", "جعلي دیپلوم", "جعلي اسناد", "جعلي ویزه", "جعلي پیسې"]
+stolen_goods:
+  en: [stolen]
+  fa: [دزدی, "دزدی شده", سرقتی, مسروقه, "مال دزدی"]
+  ps: [غلا, "د غلا مال"]
+adult:
+  en: [porn, porno, pornography, pornographic, xxx, "sex toy", "sex video", "sex tape", "adult video", "escort service", "call girl"]
+  any: [پورن, پورنو, سکس, "فیلم سوپر", "فلم سوپر"]
+gambling:
+  en: [gambling, casino, betting, roulette]
+  any: [قمار, قماربازی, "قمار بازی", شرطبندی, "شرط بندی", کازینو]
+  ps: [جواري]
+human_trafficking:
+  en: ["human trafficking", "kidney for sale", "sell kidney", "selling kidney", "selling my kidney", "human organ", "organ for sale", "child for sale", "baby for sale"]
+  fa: ["قاچاق انسان", "فروش کلیه", "کلیه برای فروش", "اعضای بدن", "فروش طفل", "فروش کودک"]
+  ps: ["د انسان قاچاق", "پښتورګی خرڅوم", "د پښتورګي خرڅلاو", "انساني غړي"]
+medicine:
+  en: [medicine, "prescription drug", "prescription medicine", tramadol, codeine, morphine, diazepam, alprazolam, xanax, valium, oxycodone, insulin, antibiotic]
+  any: [دوا, دارو, داروها, ترامادول, کودئین, مورفین, دیازپام, والیوم, زاناکس, انسولین, "آنتی بیوتیک"]
+  ps: [درمل]

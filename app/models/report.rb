@@ -27,7 +27,19 @@ class Report < ApplicationRecord
   }
   validate :not_reporting_own_content
 
+  # Prohibited items (owner, 2026-10-13): a "prohibited item" report on a
+  # listing opens / joins its Flag for the admins; 3 distinct reporters move a
+  # live listing to draft (Flag.raise_for_report!). Never fails the report.
+  after_create_commit :raise_prohibited_flag, if: :prohibited_item?
+
   private
+
+  def raise_prohibited_flag
+    Flag.raise_for_report!(self)
+  rescue StandardError => e
+    Rails.error.report(e, handled: true, context: { report_id: id })
+    nil
+  end
 
   def not_reporting_own_content
     if reportable.is_a?(Listing) && reportable.user_id == reporter_id

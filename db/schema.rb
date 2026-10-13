@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_12_100100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_13_100100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -234,6 +234,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_100100) do
     t.index ["status"], name: "index_conversations_on_status"
   end
 
+  create_table "flags", force: :cascade do |t|
+    t.datetime "acted_at"
+    t.bigint "acted_by_id"
+    t.string "action_taken"
+    t.integer "category"
+    t.datetime "created_at", null: false
+    t.bigint "flaggable_id", null: false
+    t.string "flaggable_type", null: false
+    t.string "matched_term"
+    t.text "note"
+    t.bigint "prohibited_term_id"
+    t.integer "source", default: 0, null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["acted_by_id"], name: "index_flags_on_acted_by_id"
+    t.index ["flaggable_type", "flaggable_id"], name: "index_flags_on_flaggable"
+    t.index ["flaggable_type", "flaggable_id"], name: "index_flags_one_open_per_flaggable", unique: true, where: "(status = 0)"
+    t.index ["prohibited_term_id"], name: "index_flags_on_prohibited_term_id"
+    t.index ["status", "created_at"], name: "index_flags_on_status_and_created_at"
+  end
+
   create_table "hidden_listings", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.bigint "listing_id", null: false
@@ -338,6 +359,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_100100) do
     t.index ["responds_to_id"], name: "index_messages_on_responds_to_id"
     t.index ["user_id"], name: "index_messages_on_user_id"
     t.check_constraint "offer_quantity IS NULL OR offer_quantity >= 1", name: "messages_offer_quantity_positive"
+  end
+
+  create_table "prohibited_terms", force: :cascade do |t|
+    t.integer "category", null: false
+    t.datetime "created_at", null: false
+    t.integer "locale", default: 3, null: false
+    t.text "note"
+    t.string "term", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category"], name: "index_prohibited_terms_on_category"
+    t.index ["term", "locale"], name: "index_prohibited_terms_on_term_and_locale", unique: true
   end
 
   create_table "reports", force: :cascade do |t|
@@ -650,6 +682,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_100100) do
   add_foreign_key "conversations", "shops", on_delete: :nullify
   add_foreign_key "conversations", "users", column: "buyer_id"
   add_foreign_key "conversations", "users", column: "seller_id"
+  add_foreign_key "flags", "admin_users", column: "acted_by_id", on_delete: :nullify
+  add_foreign_key "flags", "prohibited_terms", on_delete: :nullify
   add_foreign_key "hidden_listings", "listings"
   add_foreign_key "hidden_listings", "users"
   add_foreign_key "listing_price_histories", "listings"

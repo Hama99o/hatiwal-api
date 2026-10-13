@@ -1,0 +1,26 @@
+# Prohibited items (owner, 2026-10-13): Support messages to a seller whose
+# listing or shop was taken down. Sent in en / ps / fa; any other language
+# reads English (SupportNoticeJob.prohibited_locale).
+en:
+  support:
+    notices:
+      listing_prohibited_removed: "%{name}, your listing «%{title}» was taken off Hatiwal and moved to your drafts: %{reason}.%{warning}%{note} What can't be sold on Hatiwal: %{link}"
+      listing_prohibited_auto_drafted: "%{name}, your listing «%{title}» was moved to your drafts because several people reported it as an item that can't be sold on Hatiwal. Our team will review it. What can't be sold on Hatiwal: %{link}"
+    prohibited:
+      warning: " A warning was added to your account (%{count} of %{limit}). At %{limit} warnings the account is suspended."
+      note: " Note from our team: %{note}"
+      shop_warning: "a warning was added to your account (%{count} of %{limit})"
+      shop_note: "note from our team: %{note}"
+      reasons:
+        firearms: "firearms, hunting guns included, are not allowed on Hatiwal"
+        ammunition: "ammunition is not allowed on Hatiwal"
+        explosives: "explosives and grenades are not allowed on Hatiwal"
+        drugs: "drugs and narcotics are not allowed on Hatiwal"
+        alcohol: "alcohol is not allowed on Hatiwal"
+        fake_documents: "fake or forged documents (tazkira, passport, driving licence, diploma) are not allowed on Hatiwal"
+        stolen_goods: "stolen goods are not allowed on Hatiwal"
+        adult: "adult content is not allowed on Hatiwal"
+        gambling: "gambling is not allowed on Hatiwal"
+        human_trafficking: "selling human organs, or people, is not allowed on Hatiwal"
+        medicine: "medicines can't be sold on Hatiwal"
+        other: "this item is on Hatiwal's list of prohibited items"

@@ -1,0 +1,9 @@
+<%# The term form, with how a term is matched. %>
+<p class="hw-note" id="prohibited-term-hint">
+  A term matches whole words only (“pistol” matches “pistols”, never “pistolet”), and several words must be next to each other.
+  End a term with <code>*</code> to match every word that starts with it (<code>هیروئین*</code>).
+  Spelling is normalized when you save: ي/ك become ی/ک, آ becomes ا, harakat, ZWNJ and tatweel are removed, digits become 0–9.
+  A match never blocks a listing: it opens a flag in <%= link_to "Flagged listings", admin_flags_path %>.
+  Avoid words with an innocent meaning (شیشه = glass); knives, tobacco, naswar and animals are allowed.
+</p>
+<%= render partial: "administrate/application/form", locals: { page: page } %>

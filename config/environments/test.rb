@@ -39,6 +39,9 @@ Rails.application.configure do
   # Set host to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "example.com" }
 
+  # Prohibited-item flag emails to admins: off in tests (specs switch it on).
+  config.x.flag_emails_enabled = false
+
   # Print deprecation notices to the stderr.
   config.active_support.deprecation = :stderr
 

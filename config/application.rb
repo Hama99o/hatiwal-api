@@ -108,5 +108,10 @@ module HatiwalApi
     # the From identical to the account actually sending. When a real sender
     # for hatiwal.com exists, change it here (docs/EMAIL.md).
     config.x.mail_sender = Rails.application.credentials[:smtp_username].presence || "noreply@hatiwal.com"
+
+    # Prohibited items (owner, 2026-10-13): email every admin account on each
+    # NEW flag. FLAG_EMAILS_ENABLED=false turns it off; on by default in
+    # production only (test.rb forces it off).
+    config.x.flag_emails_enabled = ENV.fetch("FLAG_EMAILS_ENABLED", Rails.env.production? ? "true" : "false") == "true"
   end
 end

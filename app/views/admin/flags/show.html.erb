@@ -1,0 +1,112 @@
+<%# One flag: what was flagged, why, the reports behind it, and the three
+    decisions (each asks for confirmation; all are audit-logged). %>
+<%
+  flag = @flag
+  target = flag.flaggable
+  person = flag.responsible_user
+  what = flag.listing? ? "listing" : "shop"
+%>
+<% content_for(:title) { "Flag ##{flag.id}" } %>
+
+<header class="hw-page-header">
+  <div>
+    <h1 class="hw-page-header__title main-content__page-title">
+      Flag #<%= flag.id %> — <span dir="auto"><%= flag.flaggable_label %></span>
+      <%= render "status_badge", flag: flag %>
+    </h1>
+    <p class="hw-page-header__subtitle">
+      <%= flag.source == "term" ? "Matched a prohibited term" : "Reported as a prohibited item" %>
+      <%= time_ago_in_words(flag.created_at) %> ago
+      <% unless flag.open? %> · decided by <%= flag.acted_by&.to_s || "—" %> <%= flag.acted_at && "#{time_ago_in_words(flag.acted_at)} ago" %><% end %>
+    </p>
+  </div>
+  <div class="hw-actions">
+    <%= link_to "← Flagged listings", admin_flags_path, class: "button button--alt", id: "flag-back" %>
+  </div>
+</header>
+
+<div class="hw-panels">
+  <section class="hw-panel hw-panel--danger hw-panel--wide" id="flag-card">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">What was flagged</h2></div>
+    <div class="hw-callout">
+      <% if target.nil? %>
+        The <%= what %> no longer exists.
+      <% elsif flag.listing? %>
+        <strong>Listing:</strong> <%= link_to target.title.presence || "Listing ##{target.id}", admin_listing_path(target), dir: "auto", id: "flag-target" %>
+        (#<%= target.id %>, <%= target.status %><%= ", from shop #{target.shop.name}" if target.shop %>)
+        <br><strong>Description:</strong> <span dir="auto"><%= target.description.presence || "—" %></span>
+      <% else %>
+        <strong>Shop:</strong> 🏪 <%= link_to target.name, admin_shop_path(target), dir: "auto", id: "flag-target" %>
+        (#<%= target.id %>, <%= target.status %>)
+        <br><strong>Description:</strong> <span dir="auto"><%= target.description.presence || "—" %></span>
+      <% end %>
+      <br><strong>Matched term:</strong> <span dir="auto" id="flag-matched-term"><%= flag.matched_term.presence || "— (report only)" %></span>
+      <br><strong>Category:</strong> <%= flag.category ? flag.category.humanize : "—" %>
+      <% if person %>
+        <br><strong><%= flag.listing? ? "Seller" : "Owner" %>:</strong>
+        <%= link_to person.full_name.presence || "User ##{person.id}", admin_user_path(person), dir: "auto" %>
+        · <%= pluralize(person.active_warnings_count, "active warning") %> of <%= User::WARNING_BLOCK_THRESHOLD %>
+        · language: <%= person.preferred_language.presence || "—" %>
+      <% end %>
+      <% if flag.note.present? %><br><strong>Admin note:</strong> <span dir="auto"><%= flag.note %></span><% end %>
+    </div>
+
+    <% if flag.open? && target %>
+      <%= form_with url: dismiss_admin_flag_path(flag), method: :patch, data: { turbo: false }, id: "flag-decision" do |f| %>
+        <div class="hw-form-row">
+          <label for="flag-category">Category</label>
+          <%= f.select :category, ProhibitedTerm.categories.keys.map { |c| [ c.humanize, c ] },
+                { selected: flag.category || "other" }, class: "hw-select", id: "flag-category" %>
+        </div>
+        <%= f.text_area :note, class: "hw-textarea", rows: 2, id: "flag-note",
+              placeholder: "Optional note for the #{flag.listing? ? 'seller' : 'owner'}: added, as you write it, to the Support message they receive." %>
+        <p class="hw-note">
+          Take down: <%= flag.listing? ? "the listing goes back to the seller's drafts (any hold is cancelled)" : "the shop is suspended (hidden from search, its team sells as themselves)" %>,
+          and they get a Support message saying why, in their language, with the link to the prohibited-items page.
+          A warning is a strike: <%= User::WARNING_BLOCK_THRESHOLD %> active warnings suspend the account.
+        </p>
+        <div class="hw-actions">
+          <%= f.button "Take down + warning", formaction: take_down_warn_admin_flag_path(flag), class: "button button--danger", id: "flag-take-down-warn",
+                data: { confirm: "Take down this #{what}, give #{person&.full_name || 'the seller'} a warning, and tell them why?" } %>
+          <%= f.button "Take down", formaction: take_down_admin_flag_path(flag), class: "button button--danger", id: "flag-take-down",
+                data: { confirm: "Take down this #{what} and tell the #{flag.listing? ? 'seller' : 'owner'} why?" } %>
+          <%= f.button "Dismiss", formaction: dismiss_admin_flag_path(flag), class: "button button--alt", id: "flag-dismiss",
+                data: { confirm: "Dismiss this flag? Nothing is said to the seller." } %>
+        </div>
+      <% end %>
+    <% end %>
+  </section>
+
+  <section class="hw-panel hw-panel--wide" id="flag-reports">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Prohibited-item reports (<%= @reports.size %>)</h2></div>
+    <% if @reports.any? %>
+      <table>
+        <thead><tr><th>Reporter</th><th>Details</th><th>Status</th><th>When</th></tr></thead>
+        <tbody>
+          <% @reports.each do |report| %>
+            <tr>
+              <td dir="auto"><%= link_to report.reporter.full_name.presence || "User ##{report.reporter_id}", admin_user_path(report.reporter) %></td>
+              <td dir="auto"><%= report.description.presence || "—" %></td>
+              <td><%= link_to report.status.humanize, admin_report_path(report) %></td>
+              <td class="hw-nowrap hw-text-muted"><%= time_ago_in_words(report.created_at) %> ago</td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+      <p class="hw-note"><%= Flag::AUTO_DRAFT_REPORTERS %> different reporters move a live listing to draft automatically; the flag stays open for you.</p>
+    <% else %>
+      <p class="hw-empty">No reports.</p>
+    <% end %>
+  </section>
+
+  <% if @audit.present? %>
+    <section class="hw-panel hw-panel--wide" id="flag-audit">
+      <div class="hw-panel__head"><h2 class="hw-panel__title">Audit log for this <%= what %></h2></div>
+      <ul>
+        <% @audit.each do |log| %>
+          <li><%= l(log.created_at, format: :short) %> · <%= log.admin_label %> · <%= log.action %><%= " · #{log.details}" if log.details.present? %></li>
+        <% end %>
+      </ul>
+    </section>
+  <% end %>
+</div>

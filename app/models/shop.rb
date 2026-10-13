@@ -35,6 +35,9 @@ class Shop < ApplicationRecord
   # A deleted shop's products go back to being the owner's personal listings
   # (the owner is moved to "Me" too — users.active_shop_id is nullified by FK).
   has_many :listings, dependent: :nullify
+  # Prohibited items: the shop's name and description are scanned when saved
+  # (#prohibited_scan_due?); a match only opens a Flag.
+  include ProhibitedScannable
 
   # Verified shop (docs/SHOPS.md): applied for through VER-1's requests.
   has_many :verification_requests, as: :subject, dependent: :destroy, inverse_of: :subject
@@ -378,6 +381,15 @@ class Shop < ApplicationRecord
   # gone; reactivating it put a nameless shop back on the market). Edge-case
   # pass 2026-10-08: the admin got a bare 422 page instead of a reason.
   class ClosedShop < StandardError; end
+
+  # ── Prohibited items (ProhibitedScannable) ─────────────────────────────────
+  def prohibited_scan_due?
+    !closed? && (previously_new_record? || saved_change_to_name? || saved_change_to_description?)
+  end
+
+  def prohibited_scan_texts
+    [ name, description ]
+  end
 
   # Both return true when the status changed, false for a no-op. A repeat used
   # to notify the team again every time (d0 hunt 2026-10-09).

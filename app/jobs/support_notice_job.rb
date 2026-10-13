@@ -37,6 +37,15 @@ class SupportNoticeJob < ApplicationJob
   # listing reminds in the shop's own thread.
   LISTING_NOTICES = %i[listing_expires_week listing_expires_day].freeze
 
+  # Prohibited items (owner, 2026-10-13): to the listing's seller, about THAT
+  # listing, in their language (en / ps / fa; anything else reads English),
+  # with the reason for its category and the link to the public list. A shop's
+  # listing is told in the shop's own thread. Sent whatever the listing's state
+  # is by then: it is a record of what Hatiwal did.
+  PROHIBITED_NOTICES = %i[listing_prohibited_removed listing_prohibited_auto_drafted].freeze
+  PROHIBITED_LOCALES = %w[en ps fa].freeze
+  PROHIBITED_PAGE = "https://hatiwal.com/%<locale>s/prohibited-items".freeze
+
   SHOP_NOTICES = %i[shop_verified shop_verification_rejected shop_badge_removed].freeze
 
   # Owner, 2026-10-12: Support is per identity. These are about THE SHOP, so they
@@ -113,8 +122,41 @@ class SupportNoticeJob < ApplicationJob
     end
   end
 
+  # Prohibited items: `category` (ProhibitedTerm::CATEGORIES key) says why,
+  # `note` is the admin's optional words, `warnings` the seller's active
+  # warning count when a warning came with it.
+  def self.enqueue_prohibited(listing, key, category: nil, note: nil, warnings: nil)
+    raise ArgumentError, "unknown support notice: #{key}" unless PROHIBITED_NOTICES.include?(key.to_sym)
+    return unless listing&.user&.persisted?
+
+    perform_later(listing.user_id, key.to_s, listing.shop_id,
+                  { "listing_id" => listing.id, "category" => category&.to_s, "note" => note.presence, "warnings" => warnings }.compact)
+  end
+
+  # The Support thread language for prohibited-item messages: en / ps / fa,
+  # English for anything else (Urdu is hidden, owner 2026-10-05).
+  def self.prohibited_locale(user)
+    PROHIBITED_LOCALES.include?(user.preferred_language.to_s) ? user.preferred_language.to_sym : :en
+  end
+
+  def self.prohibited_page(locale)
+    format(PROHIBITED_PAGE, locale: locale)
+  end
+
+  # "<why> (<link>)" plus the note / warning, in `locale`: the reason a shop is
+  # suspended for (Shop#suspend! puts it in its own notice).
+  def self.prohibited_shop_reason(category, locale:, note: nil, warnings: nil)
+    I18n.with_locale(locale) do
+      parts = [ "#{I18n.t("support.prohibited.reasons.#{category}")} (#{prohibited_page(locale)})" ]
+      parts << I18n.t("support.prohibited.shop_warning", count: warnings, limit: User::WARNING_BLOCK_THRESHOLD) if warnings
+      parts << I18n.t("support.prohibited.shop_note", note: note) if note.present?
+      parts.join("; ")
+    end
+  end
+
   def perform(user_id, key, shop_id = nil, team = {})
     key = key.to_sym
+    return perform_prohibited(user_id, key, team) if PROHIBITED_NOTICES.include?(key)
     return perform_listing(user_id, key, team) if LISTING_NOTICES.include?(key)
     return perform_team(user_id, key, shop_id, team) if TEAM_NOTICES.key?(key)
 
@@ -162,6 +204,28 @@ class SupportNoticeJob < ApplicationJob
       I18n.t("support.notices.#{key}", name: user.firstname.presence || user.full_name, title: listing.title)
     end
     deliver(user, text, shop: (listing.shop if listing.shop_id), push: false, action: action_for(key, listing: listing))
+  end
+
+  def perform_prohibited(user_id, key, data)
+    user = User.find_by(id: user_id)
+    return if user.nil? || user.support_account? || user.deleted_at.present?
+
+    listing = Listing.find_by(id: data["listing_id"])
+    return unless listing
+
+    deliver(user, prohibited_text(user, key, listing, data), shop: listing.shop)
+  end
+
+  def prohibited_text(user, key, listing, data)
+    locale = self.class.prohibited_locale(user)
+    I18n.with_locale(locale) do
+      category = data["category"].presence_in(ProhibitedTerm::CATEGORIES.keys.map(&:to_s)) || "other"
+      warning = data["warnings"] ? I18n.t("support.prohibited.warning", count: data["warnings"], limit: User::WARNING_BLOCK_THRESHOLD) : ""
+      note = data["note"].present? ? I18n.t("support.prohibited.note", note: data["note"]) : ""
+      I18n.t("support.notices.#{key}", name: user.firstname.presence || user.full_name, title: listing.title,
+                                       reason: I18n.t("support.prohibited.reasons.#{category}"),
+                                       warning: warning, note: note, link: self.class.prohibited_page(locale))
+    end
   end
 
   # Into the shop's thread when `shop` is given, else the person's own; both

@@ -24,7 +24,7 @@ Rails.application.routes.draw do
   # the exact names. Declared BEFORE the resources so `/admin/users/new` is not
   # swallowed by the `/admin/users/:id` show route.
   scope path: "admin", module: "admin" do
-    %i[categories listings reports users admin_users].each do |res|
+    %i[categories listings reports users admin_users prohibited_terms].each do |res|
       singular = res.to_s.singularize
       get "#{res}/new",      to: "#{res}#new",  as: "new_admin_#{singular}"
       get "#{res}/:id/edit", to: "#{res}#edit", as: "edit_admin_#{singular}"
@@ -56,6 +56,16 @@ Rails.application.routes.draw do
       end
     end
     resources :user_warnings, only: [ :index, :show ]
+    # Prohibited items (owner, 2026-10-13, option B: ALL MANUAL): the flag
+    # queue ("Flagged listings") and the term list that feeds it.
+    resources :flags, only: %i[index show] do
+      member do
+        patch :dismiss
+        patch :take_down
+        patch :take_down_warn
+      end
+    end
+    resources :prohibited_terms
     # VER-1: the verification queue. `document` streams one ID photo for a
     # token that expires in 5 minutes; every view is audit-logged.
     # SHOP-1 — shops: moderate, not edit.

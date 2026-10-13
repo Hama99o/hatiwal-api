@@ -18,6 +18,9 @@ class Listing < ApplicationRecord
   has_many :listing_views, dependent: :destroy
   has_many :conversations, dependent: :nullify
   has_many :reports, as: :reportable, dependent: :destroy
+  # Prohibited items: a listing is scanned when it goes live and when its text
+  # changes while live (#prohibited_scan_due?); a match only opens a Flag.
+  include ProhibitedScannable
   has_many :price_histories, class_name: ListingPriceHistory.name, dependent: :destroy
   has_many :hidden_listings, dependent: :destroy
   # Named `sale_transactions` (not `transactions`) to avoid colliding with
@@ -987,6 +990,34 @@ class Listing < ApplicationRecord
   # Hides the listing from the public feed/detail page while keeping the record.
   def removed?
     removed_at.present?
+  end
+
+  # ── Prohibited items (ProhibitedScannable) ───────────────────────────────────
+  # Scanned when it goes live (created live, or published from draft / sold)
+  # and when its title or description changes while live. Drafts are not
+  # public, so they wait for their publish.
+  def prohibited_scan_due?
+    return false unless live?
+
+    went_live = previously_new_record? || (saved_change_to_status? && !%w[active reserved].include?(status_before_last_save))
+    went_live || saved_change_to_title? || saved_change_to_description?
+  end
+
+  def prohibited_scan_texts
+    [ title, description ]
+  end
+
+  # An admin's prohibited-item take-down (ProhibitedItems::Moderation): back to
+  # the seller's drafts, any open hold cancelled first (same as #unpublish).
+  # Already offline: nothing to change.
+  def move_to_draft_for_moderation!
+    return false unless live?
+
+    self.class.transaction do
+      cancel_open_transaction!
+      draft!
+    end
+    true
   end
 
   def take_down!(reason: nil)

@@ -1,0 +1,8 @@
+A <%= @flag.listing? ? "listing" : "shop" %> was flagged on Hatiwal and is waiting for a decision.
+
+<%= @flag.listing? ? "Listing" : "Shop" %>: <%= @flag.flaggable_label %>
+Matched term: <%= @flag.matched_term.presence || "— (reported)" %>
+Category: <%= @flag.category ? @flag.category.humanize : "—" %>
+Source: <%= @flag.source.humanize %>
+
+Nothing was blocked. Review it: <%= @url %>

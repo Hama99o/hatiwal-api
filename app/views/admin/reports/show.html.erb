@@ -63,6 +63,9 @@
       <% end %>
     </div>
 
+    <% if is_listing && report.prohibited_item? && (open_flag = target.flags.open.first) %>
+      <p class="hw-note" id="report-flag-link">This listing is in <%= link_to "Flagged listings (flag ##{open_flag.id})", admin_flag_path(open_flag) %>: decide there to send the seller the prohibited-item message.</p>
+    <% end %>
     <p class="hw-note">For a permanent ban, open the user above and use the block panel.</p>
   </section>
 </div>

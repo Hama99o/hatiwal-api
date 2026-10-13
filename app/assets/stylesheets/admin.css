@@ -151,6 +151,8 @@ code {
   line-height: 1.35rem;
   text-align: center;
 }
+/* Prohibited items: open flags are a safety queue, so their count is red. */
+.nav-badge--danger { background: var(--hw-danger); color: #ffffff; }
 
 .main-content {
   flex: 1 1 auto;
