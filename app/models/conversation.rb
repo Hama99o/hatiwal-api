@@ -195,7 +195,7 @@ class Conversation < ApplicationRecord
          OR b.firstname ILIKE :like OR b.lastname ILIKE :like
          OR ((s.firstname ILIKE :like OR s.lastname ILIKE :like) AND sh.id IS NULL)
          OR sh.name ILIKE :like
-         OR messages.body ILIKE :like",
+         OR (messages.body ILIKE :like AND messages.deleted_at IS NULL)",
         like: like
       )
       .distinct

@@ -307,5 +307,17 @@ class Api::V1::ListingsController < Api::V1::BaseController
     # a separate COUNT(*) query — avoids an N+1 on the detail endpoint.
     scope = scope.includes(:saved_listings) if action_name == "show"
     @listing = scope.find(params[:id])
+    raise ActiveRecord::RecordNotFound if draft_for_viewer?
+  end
+
+  # A draft (never published, or unpublished: "hidden from buyers") is only for
+  # whoever manages it — the poster, or the members of its shop. Anyone else
+  # gets the same 404 as a missing id (IDOR sweep 2026-10-13: a guest opened any
+  # draft by id). Unsave and unhide only remove the caller's own row, so they
+  # still work on a listing that went back to draft.
+  DRAFT_TOLERANT_ACTIONS = %w[unsave unhide].freeze
+
+  def draft_for_viewer?
+    @listing.draft? && !DRAFT_TOLERANT_ACTIONS.include?(action_name) && !@listing.manageable_by?(current_user)
   end
 end

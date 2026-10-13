@@ -3,7 +3,7 @@ require "swagger_helper"
 RSpec.describe "Api::V1::Reports", type: :request do
   let(:reporter) { create(:user) }
   let(:headers)  { auth_headers_for(reporter) }
-  let(:listing)  { create(:listing) }
+  let(:listing)  { create(:listing, :active) }
 
   # ── GET /api/v1/reports ──────────────────────────────────────────────────────
 
@@ -34,8 +34,8 @@ RSpec.describe "Api::V1::Reports", type: :request do
 
       response "200", "returns only the current user's reports with pagination" do
         let(:other_user)     { create(:user) }
-        let(:other_listing)  { create(:listing) }
-        let(:second_listing) { create(:listing) }
+        let(:other_listing)  { create(:listing, :active) }
+        let(:second_listing) { create(:listing, :active) }
 
         before do
           # Two reports from reporter — different reportables to satisfy uniqueness
@@ -101,7 +101,7 @@ RSpec.describe "Api::V1::Reports", type: :request do
 
       response "200", "pagination meta is present" do
         before do
-          3.times { create(:report, reporter: reporter, reportable: create(:listing)) }
+          3.times { create(:report, reporter: reporter, reportable: create(:listing, :active)) }
         end
 
         run_test! do |response|
@@ -193,7 +193,7 @@ RSpec.describe "Api::V1::Reports", type: :request do
       end
 
       response "422", "rejects reporting own listing" do
-        let(:own_listing) { create(:listing, user: reporter) }
+        let(:own_listing) { create(:listing, :active, user: reporter) }
         let(:report) do
           {
             report: {
@@ -217,8 +217,8 @@ RSpec.describe "Api::V1::Reports", type: :request do
   describe "GET /api/v1/reports — isolation" do
     it "does not return another user's reports" do
       other         = create(:user)
-      other_listing = create(:listing)
-      my_listing    = create(:listing)
+      other_listing = create(:listing, :active)
+      my_listing    = create(:listing, :active)
       create(:report, reporter: other,    reportable: other_listing, reason: :spam)
       create(:report, reporter: reporter, reportable: my_listing,    reason: :fraud)
 

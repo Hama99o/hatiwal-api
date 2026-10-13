@@ -590,6 +590,18 @@ class Shop < ApplicationRecord
 
   # Removed or left: the person drops back to Me at once, keeps their personal
   # account, and (removed) is told.
+  # A chat subscription is authorized once, when it is made
+  # (ConversationChannel#subscribed), so a member who leaves the team kept
+  # receiving the shop's chats live until their app reconnected (IDOR sweep
+  # 2026-10-13, reproduced on the QA API). Dropping their connections makes the
+  # app reconnect, and the shop's chats then refuse the subscription. Never
+  # fails the removal, which is already committed.
+  def disconnect_cable!(user)
+    ActionCable.server.remote_connections.where(current_user: user).disconnect(reconnect: true)
+  rescue StandardError => e
+    Rails.logger.warn("[shop-team] cable disconnect failed for user #{user.id}: #{e.class}: #{e.message}")
+  end
+
   def drop_member!(member, action, actor:, **data)
     transaction do
       # The shop keeps what was posted for it: the leaving member's products
@@ -602,6 +614,7 @@ class Shop < ApplicationRecord
     end
     cancel_request_if_applicant_gone!(member.user)
     drop_badge_if_applicant_gone!(member.user)
+    disconnect_cable!(member.user)
     if action == :removed
       ShopTeamPushJob.perform_later("shop_membership_changed", member.user_id, id, actor&.id, "removed")
       SupportNoticeJob.enqueue(member.user, :shop_member_removed, shop: self)

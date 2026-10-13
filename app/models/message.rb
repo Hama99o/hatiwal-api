@@ -42,6 +42,10 @@ class Message < ApplicationRecord
   validate :kind_allowed_in_support_thread, if: -> { conversation&.kind_support? || conversation&.shop_chat? }
   validate :responds_to_must_be_in_same_conversation, if: -> { responds_to_id.present? }
   validate :reply_answers_the_other_side, on: :create, if: -> { responds_to_id.present? && REPLY_TARGETS.key?(kind) }
+  # A reply kind always names the message it answers: without it the check
+  # above never ran, and a buyer could post a bare "offer accepted" or a
+  # "counter-offer" to nothing (IDOR sweep 2026-10-13). Every client sends it.
+  validates :responds_to_id, presence: true, on: :create, if: -> { REPLY_TARGETS.key?(kind) }
 
   # ── SF-B11: an offer carries how many units it is for ───────────────────────
   #
