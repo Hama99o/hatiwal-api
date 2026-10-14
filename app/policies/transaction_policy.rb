@@ -22,8 +22,10 @@ class TransactionPolicy < ApplicationPolicy
     def resolve
       return scope.none if user.nil?
 
-      # SHOP-3: plus the sales a member recorded for a shop.
-      scope.for_user(user).or(scope.where(recorded_by_id: user.id))
+      # SHOP-3: plus the sales a member recorded for a shop — while they are
+      # still on its team (IDOR sweep 2026-10-13: a removed member kept reading
+      # the shop's ledger rows they had recorded).
+      scope.for_user(user).or(scope.where(recorded_by_id: user.id, shop_id: user.shop_members.select(:shop_id)))
     end
   end
 

@@ -123,8 +123,12 @@ RSpec.describe Message, "offer quantity (SF-B11)", type: :model do
   describe "a kind that is not an offer" do
     %i[text meetup_proposal offer_accepted offer_declined document image_message].each do |kind|
       it "discards a quantity sent with kind #{kind}" do
+        # An accept/decline answers the seller's offer (responds_to_id is required).
+        target = if Message::REPLY_TARGETS.key?(kind.to_s)
+                   create(:message, conversation: batch_thread, user: seller, kind: :offer, body: "5000|AFN|5500")
+        end
         message = build(:message, conversation: batch_thread, user: buyer, kind: kind,
-                                  body: "whatever", offer_quantity: 5)
+                                  body: "whatever", offer_quantity: 5, responds_to: target)
 
         expect(message).to be_valid
         message.save!

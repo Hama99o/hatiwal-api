@@ -119,8 +119,9 @@ RSpec.describe "Api::V1::Messages", type: :request do
     end
 
     it "creates a meetup accepted response" do
+      proposal = conversation.messages.create!(user: seller, kind: :meetup_proposal, body: "Cafe Aria | Tomorrow 3pm")
       post "/api/v1/conversations/#{conversation.id}/messages",
-           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_accepted" }, headers: headers, as: :json
+           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_accepted", responds_to_id: proposal.id }, headers: headers, as: :json
 
       expect(response).to have_http_status(:created)
       expect(JSON.parse(response.body)["message"]["kind"]).to eq("meetup_accepted")
@@ -246,8 +247,9 @@ RSpec.describe "Api::V1::Messages", type: :request do
     # ── end TASK-O829 ─────────────────────────────────────────────────────────
 
     it "creates a meetup declined response" do
+      proposal = conversation.messages.create!(user: seller, kind: :meetup_proposal, body: "Cafe Aria | Tomorrow 3pm")
       post "/api/v1/conversations/#{conversation.id}/messages",
-           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_declined" }, headers: headers, as: :json
+           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_declined", responds_to_id: proposal.id }, headers: headers, as: :json
 
       expect(response).to have_http_status(:created)
       expect(JSON.parse(response.body)["message"]["kind"]).to eq("meetup_declined")
@@ -348,10 +350,15 @@ RSpec.describe "Api::V1::Messages", type: :request do
 
       Message::USER_SENDABLE_KINDS.each do |allowed_kind|
         it "accepts kind:'#{allowed_kind}'" do
+          # A reply kind answers the seller's message of the right kind.
+          target = if (kinds = Message::REPLY_TARGETS[allowed_kind])
+                     conversation.messages.create!(user: seller, kind: kinds.first,
+                                                   body: Message::OFFER_KINDS.include?(kinds.first.to_sym) ? "5000|AFN|5500" : "Cafe | 3pm")
+          end
           post "/api/v1/conversations/#{conversation.id}/messages",
                # An offer's body must read as one (Message#offer_body_readable).
                params: { body: Message::OFFER_KINDS.include?(allowed_kind.to_sym) ? "5000|AFN|5500" : "body for #{allowed_kind}",
-                         kind: allowed_kind },
+                         kind: allowed_kind, responds_to_id: target&.id },
                headers: headers, as: :json
 
           expect(response).to have_http_status(:created)

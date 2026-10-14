@@ -78,7 +78,10 @@ RSpec.describe Message, type: :model do
     let(:conversation) { create(:conversation) }
 
     it "is valid with kind :offer_counter and a pipe-encoded body" do
-      msg = build(:message, conversation: conversation, kind: :offer_counter, body: "8500|AFN|10000")
+      # A counter answers the other side's offer (responds_to_id is required).
+      offer = create(:message, conversation: conversation, user: conversation.buyer, kind: :offer, body: "8000|AFN|10000")
+      msg = build(:message, conversation: conversation, user: conversation.seller, kind: :offer_counter,
+                            body: "8500|AFN|10000", responds_to: offer)
       expect(msg).to be_valid
     end
 
@@ -101,7 +104,14 @@ RSpec.describe Message, type: :model do
       it "is valid when kind is :#{allowed_kind}" do
         # An offer's body must read as one (Message#offer_body_readable).
         body = Message::OFFER_KINDS.include?(allowed_kind.to_sym) ? "5000|AFN|5500" : "body"
-        expect(build(:message, kind: allowed_kind.to_sym, body: body)).to be_valid
+        # A reply kind answers the other side's message of the right kind.
+        conversation = create(:conversation)
+        target = if (kinds = Message::REPLY_TARGETS[allowed_kind])
+                   create(:message, conversation: conversation, user: conversation.seller, kind: kinds.first,
+                                    body: Message::OFFER_KINDS.include?(kinds.first.to_sym) ? "5000|AFN|5500" : "Cafe | 3pm")
+        end
+        expect(build(:message, conversation: conversation, user: conversation.buyer, kind: allowed_kind.to_sym,
+                               body: body, responds_to: target)).to be_valid
       end
     end
   end
