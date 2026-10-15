@@ -1,7 +1,8 @@
 # Data: the Stays category tree on every database (production included), via
-# Categories::StaysTree — idempotent: creates what is missing, sets kind "stay"
-# on the tree, and moves Property › Guest Houses under Stays (same row, its
-# listings follow). Never deletes anything.
+# Categories::StaysTree.apply! — idempotent; creates the Stays root and its own
+# subcategories (kind "stay"). Moving Property › Guest Houses is the NEXT
+# migration, kept separate (docs/STAYS_DESIGN.md §2.1, owner question).
+# Reversible: down removes the Stays categories that hold no listing.
 class SeedStaysCategories < ActiveRecord::Migration[8.1]
   def up
     Category.reset_column_information
@@ -9,6 +10,7 @@ class SeedStaysCategories < ActiveRecord::Migration[8.1]
   end
 
   def down
-    # Leave the categories: listings may already use them.
+    Category.reset_column_information
+    say "stays tree removed: #{Categories::StaysTree.remove!.inspect}"
   end
 end

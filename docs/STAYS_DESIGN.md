@@ -41,7 +41,10 @@ That is the whole scope of this note.
   `kind` on every category, and a client switches form, detail and filters on `kind == "stay"`.
   The next type (Jobs: "salary per month") is a new kind, not new client code paths.
 - **The existing `Property › Guest Houses` (slug `guest-houses`) MOVES under Stays** (same row,
-  same id), so its listings follow. They have no `price_unit` (shown as a plain price, as today)
+  same id), so its listings follow. The move is its own reversible data migration
+  (`20261016100200_move_guest_houses_to_stays`, `StaysTree.move_guest_houses!` /
+  `restore_guest_houses!`), separate from the tree (`20261016100100`). **Option B** = delete that one
+  migration (and its seeds line) and add a `guest-stays` row to `StaysTree::CHILDREN`. They have no `price_unit` (shown as a plain price, as today)
   and no details. **Open question for the owner:** were those listings sold or let, rather than
   stayed in? If so, they stay under Property and Stays gets its own `guest-stays` slug.
 

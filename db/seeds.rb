@@ -187,6 +187,7 @@ end
 # Stays (hotel rooms, guest houses, B&B, short-stay apartments) — the same tree
 # the 20261016100100 data migration puts on every database.
 Categories::StaysTree.apply!
+Categories::StaysTree.move_guest_houses! # option A (see 20261016100200)
 
 # Handle old top-level "animals" category — deactivate it (listings stay on it, new ones use "livestock")
 if animals_top_level
