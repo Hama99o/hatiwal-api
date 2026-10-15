@@ -92,6 +92,11 @@ class ListingSerializer < ApplicationSerializer
 
   fields :id, :title, :price, :currency, :status, :location, :address, :condition, :created_at
 
+  # Stays (docs/STAYS_DESIGN.md): "AFN 1,500 / night" and a room's facts. On the
+  # base fields so every view carries them; older apps ignore unknown keys.
+  field(:price_unit) { |l| l.price_unit }
+  field(:details) { |l| l.details.presence || {} }
+
   # Multi-quantity (docs/SPIKE_LISTING_QUANTITY.md, Tier 1). On the BASE fields,
   # so every view — feed, seller list, detail, owner detail — agrees. That
   # matters more than it looks: the clients gate per-unit price rendering

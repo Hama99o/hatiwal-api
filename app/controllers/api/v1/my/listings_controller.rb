@@ -375,8 +375,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     params.require(:listing).permit(
       :title, :description, :price, :currency,
       :category_id, :location, :address, :latitude, :longitude, :condition,
-      :negotiable, :quantity,
-      images: []
+      :negotiable, :quantity, :price_unit,
+      images: [],
+      # A stay's facts (Listing::StayDetails validates them).
+      details: [ :guests, :beds, :bathroom, :check_in, :check_out, { amenities: [] } ]
     )
   end
 

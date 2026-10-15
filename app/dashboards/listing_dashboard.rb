@@ -11,6 +11,8 @@ class ListingDashboard < Administrate::BaseDashboard
     category: Field::BelongsTo,
     price: Field::Number.with_options(decimals: 2),
     currency: Field::String,
+    price_unit: Field::Select.with_options(collection: Listing::PRICE_UNITS, include_blank: true),
+    details: Field::Text,
     condition: Field::Select.with_options(
       searchable: false,
       collection: ->(field) { field.resource.class.send(field.attribute.to_s.pluralize).keys }
@@ -51,6 +53,8 @@ class ListingDashboard < Administrate::BaseDashboard
     price
     currency
     condition
+    price_unit
+    details
     status
     location
     description

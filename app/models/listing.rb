@@ -48,6 +48,19 @@ class Listing < ApplicationRecord
   # 1 so nothing existing changes; the 999 ceiling is a sanity bound, not a
   # business rule — this is a local marketplace, not a warehouse.
   validates :quantity, numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: 999 }
+
+  # Stays (docs/STAYS_DESIGN.md §2.2–2.4). `price_unit` nil = a total price (every
+  # item); a stay is priced per night (default) or per month; Property rent may be
+  # per month. `details` are a stay's typed facts (Listing::StayDetails) and stay
+  # empty for everything else.
+  PRICE_UNIT_NIGHT = "night".freeze
+  PRICE_UNIT_MONTH = "month".freeze
+  PRICE_UNITS = [ PRICE_UNIT_NIGHT, PRICE_UNIT_MONTH ].freeze
+  MONTHLY_RENT_SLUGS = %w[apartments-rent shops-offices].freeze
+
+  before_validation :prepare_stay_fields
+  validate :price_unit_fits_category
+  validate :details_fit_category
   validates :sold_units, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   # SF-B6 — a seller editing `quantity` DOWN below what they have ALREADY sold
   # used to reach the DB CHECK constraint `listings_sold_units_within_quantity`
@@ -289,6 +302,9 @@ class Listing < ApplicationRecord
   scope :price_at_most,  ->(max) { where("price <= ?", max) }
   scope :in_location,    ->(text) { where("LOWER(location) LIKE ?", "%#{text.to_s.downcase.strip}%") }
   scope :by_condition,   ->(c) { where(condition: c) }
+  scope :for_guests,     ->(n) { where("(listings.details->>'guests')::int >= ?", n) }
+  scope :with_amenities, ->(list) { where("listings.details->'amenities' @> ?::jsonb", list.to_json) }
+  scope :priced_per,     ->(unit) { where(price_unit: unit) }
   # Filter to listings whose seller has signed in within the last +days+ days.
   # Uses a JOIN on users — no extra SELECT per listing since the join is inlined
   # into the existing query chain; user/avatar eager-loading is unaffected.
@@ -1575,5 +1591,50 @@ class Listing < ApplicationRecord
 
   def set_sold_at
     self.sold_at = Time.current
+  end
+
+  public
+
+  def stay?
+    category&.stay? || false
+  end
+
+  # The price units this listing's category allows (empty = a total price only).
+  def allowed_price_units
+    return PRICE_UNITS if stay?
+    return [ PRICE_UNIT_MONTH ] if MONTHLY_RENT_SLUGS.include?(category&.slug)
+
+    []
+  end
+
+  private
+
+  def prepare_stay_fields
+    self.details = {} if details.nil?
+    # Moved to another category: drop a unit / details that no longer apply,
+    # rather than failing a save the seller did not see coming.
+    if persisted? && will_save_change_to_category_id?
+      self.price_unit = nil if price_unit.present? && !allowed_price_units.include?(price_unit)
+      self.details = {} unless stay?
+    end
+    return unless stay?
+
+    self.price_unit ||= PRICE_UNIT_NIGHT
+    self.condition = nil
+    self.details = StayDetails.normalize(details)
+  end
+
+  def price_unit_fits_category
+    return if price_unit.nil?
+
+    errors.add(:price_unit, :inclusion, message: "is not available for this category") unless allowed_price_units.include?(price_unit)
+  end
+
+  def details_fit_category
+    if stay?
+      StayDetails.errors_for(details).each { |message| errors.add(:details, message) }
+    elsif details.present?
+      errors.add(:details, "are only for stays")
+    end
   end
 end

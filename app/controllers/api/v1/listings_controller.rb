@@ -49,6 +49,13 @@ class Api::V1::ListingsController < Api::V1::BaseController
     listings = listings.by_condition(params[:condition]) if params[:condition].present?
     listings = listings.price_at_least(price_min) if price_min
     listings = listings.price_at_most(price_max) if price_max
+    # Stays (docs/STAYS_DESIGN.md §2.6): rooms for N guests, with these
+    # amenities, priced per night/month. Unreadable values are ignored.
+    guests = number_param(:guests, integer: true)
+    listings = listings.for_guests(guests) if guests&.positive?
+    amenities = Array(params[:amenities]).map(&:to_s) & Listing::StayDetails::AMENITIES
+    listings = listings.with_amenities(amenities) if amenities.any?
+    listings = listings.priced_per(params[:price_unit].to_s) if Listing::PRICE_UNITS.include?(params[:price_unit].to_s)
 
     if geo_filter?
       listings = listings.within_radius(*buyer_point, number_param(:radius))

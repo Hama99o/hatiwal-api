@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_13_100100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_16_100100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -192,6 +192,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_100100) do
     t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
     t.string "icon"
+    t.string "kind", default: "item", null: false
     t.string "name_en", null: false
     t.string "name_fa", null: false
     t.string "name_ps", null: false
@@ -296,6 +297,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_100100) do
     t.datetime "created_at", null: false
     t.string "currency", default: "AFN", null: false
     t.text "description"
+    t.jsonb "details", default: {}, null: false
     t.datetime "expires_at"
     t.datetime "expiry_reminder_day_for"
     t.datetime "expiry_reminder_week_for"
@@ -304,6 +306,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_100100) do
     t.decimal "longitude", precision: 10, scale: 6
     t.boolean "negotiable", default: true, null: false
     t.decimal "price", precision: 12, scale: 2, null: false
+    t.string "price_unit"
     t.datetime "published_at"
     t.integer "quantity", default: 1, null: false
     t.datetime "removed_at"
@@ -324,6 +327,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_100100) do
     t.index ["category_id"], name: "index_listings_on_category_id"
     t.index ["condition"], name: "index_listings_on_condition"
     t.index ["created_at"], name: "index_listings_on_created_at"
+    t.index ["details"], name: "index_listings_on_details", using: :gin
     t.index ["expires_at"], name: "index_listings_on_expires_at"
     t.index ["latitude", "longitude"], name: "index_listings_on_point_browsable", where: "((latitude IS NOT NULL) AND (longitude IS NOT NULL) AND (removed_at IS NULL))"
     t.index ["price"], name: "index_listings_on_price"

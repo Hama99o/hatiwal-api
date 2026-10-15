@@ -157,7 +157,7 @@ SUBCATEGORIES = [
   { parent_slug: "property", name_en: "Apartments for Rent", name_ps: "د کرایې اپارتمانونه",  name_fa: "آپارتمان اجاره‌ای", name_ur: "جائیداد", slug: "apartments-rent", icon: "🏢", position: 2 },
   { parent_slug: "property", name_en: "Land & Plots",        name_ps: "ځمکه او نمرې",         name_fa: "زمین و قطعه", name_ur: "جائیداد",      slug: "land-plots",     icon: "🗺️", position: 3 },
   { parent_slug: "property", name_en: "Shops & Offices",     name_ps: "دوکانونه او دفترونه",  name_fa: "دکان و دفتر", name_ur: "جائیداد",      slug: "shops-offices",  icon: "🏪", position: 4 },
-  { parent_slug: "property", name_en: "Guest Houses",        name_ps: "مېلمه ځایونه",         name_fa: "مهمان‌خانه", name_ur: "جائیداد",       slug: "guest-houses",   icon: "🛏️", position: 5 },
+  # "guest-houses" moved to the Stays tree (Categories::StaysTree, docs/STAYS_DESIGN.md).
 
   { parent_slug: "jobs", name_en: "Full-time Jobs",         name_ps: "بشپړ وخت دندې",        name_fa: "کار تمام‌وقت", name_ur: "ملازمتیں",     slug: "jobs-fulltime",  icon: "💼", position: 1 },
   { parent_slug: "jobs", name_en: "Part-time & Daily Work", name_ps: "نیم وخت او ورځنۍ",     name_fa: "پاره‌وقت و روزمزد", name_ur: "ملازمتیں", slug: "jobs-parttime", icon: "⏰", position: 2 },
@@ -183,6 +183,10 @@ SUBCATEGORIES.each do |attrs|
   cat.active = true unless cat.persisted?
   cat.save!
 end
+
+# Stays (hotel rooms, guest houses, B&B, short-stay apartments) — the same tree
+# the 20261016100100 data migration puts on every database.
+Categories::StaysTree.apply!
 
 # Handle old top-level "animals" category — deactivate it (listings stay on it, new ones use "livestock")
 if animals_top_level

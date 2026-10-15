@@ -28,6 +28,18 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
 
   # Additive keys since the recording, each with the reason it is safe.
   ALLOWED_ADDITIONS = {
+    # Stays (docs/STAYS_DESIGN.md §2.9). v1.0.4 ignores unknown keys: a stay
+    # shows as a plain listing with its price. For every item these are
+    # "item" / null / {} — nothing an old client can misread.
+    "listings[].category.kind" => "stays: category kind (\"item\" for every pre-stays category)",
+    "listing.category.kind" => "stays: category kind",
+    "conversation.listing.category.kind" => "stays: category kind",
+    "listings[].price_unit" => "stays: price unit (null = a total price, every item)",
+    "listing.price_unit" => "stays: price unit",
+    "conversations[].listing.price_unit" => "stays: price unit in the inbox row",
+    "conversation.listing.price_unit" => "stays: price unit in the thread header",
+    "listings[].details" => "stays: a room's facts ({} for every item)",
+    "listing.details" => "stays: a room's facts",
     # Support messaging. Always "listing" for every pre-existing conversation.
     "conversations[].kind" => "support messaging",
     "conversation.kind" => "support messaging",
