@@ -23,6 +23,12 @@ RSpec.describe UserWarning, "subject (user or shop)" do
     expect(build(:user_warning, user: user, shop: shop)).to be_invalid
   end
 
+  it "reads its display reason safely with no user (a shop warning)" do
+    warning = create(:user_warning, :for_shop, shop: shop)
+    expect { warning.display_reason }.not_to raise_error
+    expect(warning.display_reason).to be_present
+  end
+
   it "keeps the optional poster and listing links" do
     poster = create(:user)
     listing = create(:listing, :active, user: poster)
