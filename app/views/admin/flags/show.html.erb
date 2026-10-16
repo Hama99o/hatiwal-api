@@ -52,7 +52,10 @@
     </div>
 
     <% if flag.open? && target %>
-      <%= form_with url: dismiss_admin_flag_path(flag), method: :patch, data: { turbo: false }, id: "flag-decision" do |f| %>
+      <%# Session token, not the per-form one: Take down / Take down + warning post this same
+          form to other actions (formaction), and a per-form token only fits the Dismiss URL. %>
+      <%= form_with url: dismiss_admin_flag_path(flag), method: :patch, data: { turbo: false }, id: "flag-decision",
+                    authenticity_token: form_authenticity_token do |f| %>
         <div class="hw-form-row">
           <label for="flag-category">Category</label>
           <%= f.select :category, ProhibitedTerm.categories.keys.map { |c| [ c.humanize, c ] },

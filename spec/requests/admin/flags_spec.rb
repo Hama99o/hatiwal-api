@@ -106,4 +106,45 @@ RSpec.describe "Admin flagged listings", type: :request do
       expect(flash[:alert]).to include("closed")
     end
   end
+
+  # The owner's "Take down" answered 422 in production (2026-10-16): the one form posts
+  # to three actions through formaction, and a per-form CSRF token only fits the form's
+  # own URL (dismiss). test.rb turns forgery protection off, so turn it on here.
+  describe "deciding through the real form, with CSRF protection on" do
+    before { sign_in admin, scope: :admin_user }
+
+    around do |example|
+      ActionController::Base.allow_forgery_protection = true
+      example.run
+    ensure
+      ActionController::Base.allow_forgery_protection = false
+    end
+
+    def form_token
+      get admin_flag_path(flag)
+      form = response.body[%r{<form[^>]*id="flag-decision".*?</form>}m]
+      expect(form).to include(%(formaction="#{take_down_admin_flag_path(flag)}"))
+      form[/name="authenticity_token" value="([^"]+)"/, 1]
+    end
+
+    it "Take down works with the token the form carries" do
+      token = form_token
+      patch take_down_admin_flag_path(flag), params: { authenticity_token: token, category: "firearms" }
+      expect(response).to have_http_status(:redirect)
+      expect(listing.reload).to be_draft
+    end
+
+    it "Take down + warning works with the same token" do
+      token = form_token
+      patch take_down_warn_admin_flag_path(flag), params: { authenticity_token: token, category: "firearms" }
+      expect(response).to have_http_status(:redirect)
+      expect(listing.reload).to be_draft
+    end
+
+    it "Dismiss still works with the same token" do
+      token = form_token
+      patch dismiss_admin_flag_path(flag), params: { authenticity_token: token, category: "other" }
+      expect(flag.reload.status).to eq("dismissed")
+    end
+  end
 end
