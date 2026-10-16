@@ -10,8 +10,16 @@ class UserWarning < ApplicationRecord
   # How long a warning counts toward the block threshold before it decays.
   ACTIVE_PERIOD = 30.days
 
-  belongs_to :user
+  # A warning belongs to EITHER a user (personal strike) OR a shop (the business
+  # answers for what it sells, owner 2026-10-16) — exactly one. `posted_by` is the
+  # team member who posted a taken-down shop listing; `listing` is what it was about.
+  belongs_to :user, optional: true
+  belongs_to :shop, optional: true
+  belongs_to :posted_by, class_name: User.name, optional: true
+  belongs_to :listing, optional: true
   belongs_to :admin_user, optional: true
+
+  validate :exactly_one_subject
 
   # A warning issued from a report stores a CODE ("report:fraud"), shown in the
   # reader's language (d0 hunt 2026-10-09: it stored English, "Reported as
@@ -57,6 +65,13 @@ class UserWarning < ApplicationRecord
   end
 
   private
+
+  # A warning strikes a user OR a shop, never both and never neither.
+  def exactly_one_subject
+    return if user_id.present? ^ shop_id.present?
+
+    errors.add(:base, "a warning belongs to exactly one of a user or a shop")
+  end
 
   def set_expiry
     self.expires_at ||= Time.current + ACTIVE_PERIOD

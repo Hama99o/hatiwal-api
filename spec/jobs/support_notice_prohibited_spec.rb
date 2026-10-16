@@ -68,12 +68,27 @@ RSpec.describe SupportNoticeJob, "prohibited-item notices", type: :job do
     expect(body_for(seller)).to include("چند نفر", "https://hatiwal.com/fa/prohibited-items")
   end
 
-  it "speaks in the shop's thread for a shop's listing" do
+  # Owner, 2026-10-16: a poster's ACCOUNT strike is personal (their own thread);
+  # the shop OWNER hears in the shop thread, naming the poster.
+  it "speaks in the poster's OWN thread for their account strike, not the shop thread" do
     owner = create(:user, preferred_language: "en")
     shop = create(:shop, owner: owner)
     listing = create(:listing, :active, user: owner, shop: shop)
     run(listing, "listing_prohibited_removed", "category" => "adult")
-    expect(Conversation.kind_support.find_by(shop_id: shop.id).messages.sole.body).to include("adult content")
+    expect(body_for(owner)).to include("adult content")
+    expect(Conversation.kind_support.find_by(shop_id: shop.id)).to be_nil
+  end
+
+  it "speaks in the shop's thread to the owner, naming the poster and the shop's strike count" do
+    owner = create(:user, preferred_language: "en")
+    shop = create(:shop, owner: owner)
+    poster = create(:user, firstname: "Sami")
+    shop.shop_members.create!(user: poster, role: :staff)
+    listing = create(:listing, :active, user: poster, shop: shop)
+    described_class.perform_now(owner.id, "listing_prohibited_shop_owner", shop.id,
+                                { "listing_id" => listing.id, "category" => "adult", "warnings" => 1, "poster" => poster.full_name })
+    body = Conversation.kind_support.find_by(shop_id: shop.id).messages.sole.body
+    expect(body).to include("adult content", poster.full_name, "(1 of #{Shop::SHOP_WARNING_BLOCK_THRESHOLD})")
   end
 
   it "says nothing for a deleted listing" do

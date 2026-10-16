@@ -6,8 +6,10 @@ ur:
     notices:
       listing_prohibited_removed: "%{name}, your listing «%{title}» was taken off Hatiwal and moved to your drafts: %{reason}.%{warning}%{note} What can't be sold on Hatiwal: %{link}"
       listing_prohibited_auto_drafted: "%{name}, your listing «%{title}» was moved to your drafts because several people reported it as an item that can't be sold on Hatiwal. Our team will review it. What can't be sold on Hatiwal: %{link}"
+      listing_prohibited_shop_owner: "%{name}, «%{title}» — posted by %{poster} — was taken off Hatiwal: %{reason}.%{warning}%{note} What can’t be sold on Hatiwal: %{link}"
     prohibited:
       warning: " A warning was added to your account (%{count} of %{limit}). At %{limit} warnings the account is suspended."
+      shop_strike: " A warning was added to your shop (%{count} of %{limit}). At %{limit} the shop is suspended and its listings are hidden."
       note: " Note from our team: %{note}"
       shop_warning: "a warning was added to your account (%{count} of %{limit})"
       shop_note: "note from our team: %{note}"

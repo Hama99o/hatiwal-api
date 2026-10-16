@@ -38,8 +38,7 @@ class ProhibitedItems::Moderation
 
   def take_down!(warn: false)
     decide!(:actioned, warn ? "take_down_warn" : "take_down") do
-      warnings = warn ? issue_warning! : nil
-      flag.listing? ? take_down_listing!(warnings) : take_down_shop!(warnings)
+      flag.listing? ? take_down_listing!(warn) : take_down_shop!(warn)
       flag.reports.where(status: %i[pending reviewed]).update_all(status: Report.statuses[:resolved], updated_at: Time.current)
     end
   end
@@ -58,37 +57,67 @@ class ProhibitedItems::Moderation
     flag
   end
 
-  def issue_warning!
-    user = flag.responsible_user
-    raise Refused, "No user to warn." unless user
-
-    user.issue_warning!(admin_user: admin, category: :prohibited_item,
-                        reason: "Prohibited item (#{category.humanize.downcase}): #{flag.flaggable_label} (flag ##{flag.id})")
-    user.active_warnings_count
+  def warn_reason
+    "Prohibited item (#{category.humanize.downcase}): #{flag.flaggable_label} (flag ##{flag.id})"
   end
 
+  # A listing in a SHOP strikes BOTH the poster (personal account) AND the shop
+  # (owner, 2026-10-16). A personal listing strikes only the poster, as before.
   # Back to drafts while live; a sold listing (not live, not a draft) is
-  # soft-removed instead, the existing admin take-down. The seller is told
-  # either way.
-  def take_down_listing!(warnings)
+  # soft-removed instead. One decision = at most one strike each (the flag lock
+  # in #decide! makes take_down! run once).
+  def take_down_listing!(warn)
     listing = flag.flaggable
+    poster = listing.user
+    user_count = strike_poster!(poster, listing) if warn && poster
+    shop_count = strike_shop!(listing.shop, poster: poster, listing: listing) if warn && listing.shop
+
     if listing.live?
       listing.move_to_draft_for_moderation!
     elsif !listing.draft?
       listing.take_down!(reason: "Prohibited item: #{category.humanize.downcase}")
     end
-    SupportNoticeJob.enqueue_prohibited(listing, :listing_prohibited_removed, category: category, note: note, warnings: warnings)
+
+    # The poster hears about their account strike in their OWN Support thread; the
+    # shop OWNER hears, in the shop thread, who posted it and the shop's strike count.
+    SupportNoticeJob.enqueue_prohibited(listing, :listing_prohibited_removed, category: category, note: note, warnings: user_count)
+    return unless listing.shop
+
+    SupportNoticeJob.enqueue_prohibited_shop_owner(listing, category: category, note: note,
+                                                           warnings: shop_count, poster: poster)
   end
 
   # Shops are taken down the way an admin already suspends one (Shop#suspend!:
   # hidden from search, the team sells as themselves, the owner is told in the
-  # shop's Support thread). The reason carries the category and the link.
-  def take_down_shop!(warnings)
+  # shop's Support thread). A warning strikes the SHOP (owner, 2026-10-16: the
+  # business answers, not the owner's personal account). The reason carries the
+  # category and the link.
+  def take_down_shop!(warn)
     shop = flag.flaggable
     raise Refused, "#{shop.name} is closed by its owner: there is nothing to take down." if shop.closed?
+
+    shop_count = strike_shop!(shop, poster: nil, listing: nil) if warn
     return if shop.suspended?
 
     locale = SupportNoticeJob.prohibited_locale(shop.owner)
-    shop.suspend!(reason: SupportNoticeJob.prohibited_shop_reason(category, locale: locale, note: note, warnings: warnings))
+    shop.suspend!(reason: SupportNoticeJob.prohibited_shop_reason(category, locale: locale, note: note, warnings: shop_count))
+  end
+
+  # Strike the poster's personal account; returns their active count. User#issue_warning!
+  # is left intact (no new args) — the listing link is set on the returned warning.
+  def strike_poster!(poster, listing)
+    warning = poster.issue_warning!(admin_user: admin, category: :prohibited_item, reason: warn_reason)
+    warning.update!(listing: listing) if listing
+    poster.active_warnings_count
+  end
+
+  # Strike the shop (3 active → Shop#suspend! fires inside issue_warning!);
+  # returns the shop's active count.
+  def strike_shop!(shop, poster:, listing:)
+    return nil if shop.closed?
+
+    shop.issue_warning!(admin_user: admin, category: :prohibited_item, reason: warn_reason,
+                        posted_by: poster, listing: listing)
+    shop.active_warnings_count
   end
 end

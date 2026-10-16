@@ -14,5 +14,13 @@ FactoryBot.define do
       category { :harassment }
       reason { "Harassing other users" }
     end
+
+    # A shop strike (owner, 2026-10-16): belongs to a shop, not a user.
+    trait :for_shop do
+      user { nil }
+      association :shop
+      category { :prohibited_item }
+      reason { "Prohibited item (firearms): Kalashnikov" }
+    end
   end
 end

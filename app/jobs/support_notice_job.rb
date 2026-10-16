@@ -42,7 +42,7 @@ class SupportNoticeJob < ApplicationJob
   # with the reason for its category and the link to the public list. A shop's
   # listing is told in the shop's own thread. Sent whatever the listing's state
   # is by then: it is a record of what Hatiwal did.
-  PROHIBITED_NOTICES = %i[listing_prohibited_removed listing_prohibited_auto_drafted].freeze
+  PROHIBITED_NOTICES = %i[listing_prohibited_removed listing_prohibited_auto_drafted listing_prohibited_shop_owner].freeze
   PROHIBITED_LOCALES = %w[en ps fa].freeze
   PROHIBITED_PAGE = "https://hatiwal.com/%<locale>s/prohibited-items".freeze
 
@@ -133,6 +133,18 @@ class SupportNoticeJob < ApplicationJob
                   { "listing_id" => listing.id, "category" => category&.to_s, "note" => note.presence, "warnings" => warnings }.compact)
   end
 
+  # The shop OWNER's message when a team member's listing is taken down (owner,
+  # 2026-10-16): it names the poster and carries the SHOP's strike count. Posted
+  # in the shop's Support thread (the owner's seat), separate from the poster's
+  # own account-strike message.
+  def self.enqueue_prohibited_shop_owner(listing, category: nil, note: nil, warnings: nil, poster: nil)
+    return unless listing&.shop&.owner&.persisted?
+
+    perform_later(listing.shop.owner_id, "listing_prohibited_shop_owner", listing.shop_id,
+                  { "listing_id" => listing.id, "category" => category&.to_s, "note" => note.presence,
+                    "warnings" => warnings, "poster" => poster&.full_name }.compact)
+  end
+
   # The Support thread language for prohibited-item messages: en / ps / fa,
   # English for anything else (Urdu is hidden, owner 2026-10-05).
   def self.prohibited_locale(user)
@@ -213,19 +225,34 @@ class SupportNoticeJob < ApplicationJob
     listing = Listing.find_by(id: data["listing_id"])
     return unless listing
 
-    deliver(user, prohibited_text(user, key, listing, data), shop: listing.shop)
+    # The poster's account-strike message is personal; the shop-owner message and
+    # the auto-draft notice go to the shop's thread (where the team/owner read).
+    thread_shop = key == :listing_prohibited_removed ? nil : listing.shop
+    deliver(user, prohibited_text(user, key, listing, data), shop: thread_shop)
   end
 
   def prohibited_text(user, key, listing, data)
     locale = self.class.prohibited_locale(user)
     I18n.with_locale(locale) do
       category = data["category"].presence_in(ProhibitedTerm::CATEGORIES.keys.map(&:to_s)) || "other"
-      warning = data["warnings"] ? I18n.t("support.prohibited.warning", count: data["warnings"], limit: User::WARNING_BLOCK_THRESHOLD) : ""
+      shop_owner = key.to_s == "listing_prohibited_shop_owner"
+      warning = warning_line(data["warnings"], shop: shop_owner)
       note = data["note"].present? ? I18n.t("support.prohibited.note", note: data["note"]) : ""
       I18n.t("support.notices.#{key}", name: user.firstname.presence || user.full_name, title: listing.title,
+                                       poster: data["poster"].to_s,
                                        reason: I18n.t("support.prohibited.reasons.#{category}"),
                                        warning: warning, note: note, link: self.class.prohibited_page(locale))
     end
+  end
+
+  # The strike line for a message: a shop strike counts to the shop threshold, a
+  # personal strike to the user one. Empty when no warning came with the take-down.
+  def warning_line(count, shop:)
+    return "" unless count
+
+    key = shop ? "support.prohibited.shop_strike" : "support.prohibited.warning"
+    limit = shop ? Shop::SHOP_WARNING_BLOCK_THRESHOLD : User::WARNING_BLOCK_THRESHOLD
+    I18n.t(key, count: count, limit: limit)
   end
 
   # Into the shop's thread when `shop` is given, else the person's own; both

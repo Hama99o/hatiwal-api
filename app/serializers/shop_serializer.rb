@@ -58,5 +58,11 @@ class ShopSerializer < ApplicationSerializer
     field(:phone) { |s| s.phone }
     # Read from the (preloaded) members, never a query per row.
     field(:role) { |s, opts| opts[:current_user] && s.shop_members.find { |m| m.user_id == opts[:current_user].id }&.role }
+    # Prohibited-item strikes against the SHOP (owner, 2026-10-16) — MEMBERS ONLY,
+    # never the public shop face. The banner reads these: at the threshold the
+    # shop is suspended and its listings hidden.
+    field(:active_warnings_count) { |s| s.active_warnings_count }
+    field(:warnings_threshold) { |_s| Shop::SHOP_WARNING_BLOCK_THRESHOLD }
+    field(:latest_warning) { |s| WarningJson.latest(s) }
   end
 end

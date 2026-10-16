@@ -84,15 +84,62 @@ RSpec.describe ProhibitedItems::Moderation do
         expect(reason).to include(I18n.t("support.prohibited.reasons.alcohol", locale: :fa), "hatiwal.com/fa/prohibited-items", "rename it")
       end
 
-      it "warns the shop's owner" do
+      it "strikes the SHOP, not the owner's personal account (owner, 2026-10-16)" do
         described_class.new(shop_flag, admin: admin).take_down!(warn: true)
-        expect(seller.warnings.count).to eq(1)
+        expect(shop.warnings.count).to eq(1)
+        expect(seller.warnings.count).to eq(0)
       end
 
       it "refuses a closed shop" do
         shop.update_columns(status: Shop.statuses[:closed])
         expect { described_class.new(shop_flag, admin: admin).take_down! }.to raise_error(described_class::Refused)
         expect(shop_flag.reload).to be_open
+      end
+    end
+
+    context "a listing that belongs to a shop (owner, 2026-10-16: both answer)" do
+      let(:poster) { create(:user, preferred_language: "ps") }
+      let(:shop_owner) { create(:user) }
+      let(:shop) { create(:shop, owner: shop_owner) }
+      let(:shop_listing) do
+        shop.shop_members.create!(user: poster, role: :staff)
+        create(:listing, :active, user: poster, shop: shop, title: "AK")
+      end
+      let!(:shop_listing_flag) { create(:flag, flaggable: shop_listing, category: :firearms) }
+
+      it "strikes BOTH the poster and the shop, drafts the listing, and records the poster on the shop warning" do
+        described_class.new(shop_listing_flag, admin: admin).take_down!(warn: true)
+        expect(poster.active_warnings_count).to eq(1)
+        expect(shop.active_warnings_count).to eq(1)
+        expect(shop_listing.reload).to be_draft
+        expect(shop.warnings.last).to have_attributes(posted_by_id: poster.id, listing_id: shop_listing.id)
+      end
+
+      it "messages the poster's account and the shop owner (naming the poster)" do
+        described_class.new(shop_listing_flag, admin: admin).take_down!(warn: true)
+        expect(SupportNoticeJob).to have_been_enqueued
+          .with(poster.id, "listing_prohibited_removed", shop.id, hash_including("warnings" => 1))
+        expect(SupportNoticeJob).to have_been_enqueued
+          .with(shop_owner.id, "listing_prohibited_shop_owner", shop.id, hash_including("warnings" => 1, "poster" => poster.full_name))
+      end
+
+      it "a plain take_down (no warning) strikes neither" do
+        described_class.new(shop_listing_flag, admin: admin).take_down!
+        expect([ poster.active_warnings_count, shop.active_warnings_count ]).to eq([ 0, 0 ])
+      end
+
+      it "is idempotent — a second decision raises, never a second strike each" do
+        described_class.new(shop_listing_flag, admin: admin).take_down!(warn: true)
+        expect { described_class.new(shop_listing_flag, admin: admin).take_down!(warn: true) }
+          .to raise_error(described_class::Refused)
+        expect([ poster.active_warnings_count, shop.active_warnings_count ]).to eq([ 1, 1 ])
+      end
+
+      it "a NON-shop listing strikes only the poster (unchanged)" do
+        personal = create(:listing, :active, user: poster, title: "Lone")
+        personal_flag = create(:flag, flaggable: personal, category: :firearms)
+        described_class.new(personal_flag, admin: admin).take_down!(warn: true)
+        expect(poster.active_warnings_count).to eq(1)
       end
     end
   end

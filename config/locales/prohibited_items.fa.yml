@@ -3,8 +3,10 @@ fa:
     notices:
       listing_prohibited_removed: "%{name}، آگهی شما «%{title}» از هتیوال برداشته شد و به پیش‌نویس‌های شما منتقل شد: %{reason}.%{warning}%{note} اجناسی که در هتیوال فروخته نمی‌شوند: %{link}"
       listing_prohibited_auto_drafted: "%{name}، آگهی شما «%{title}» به پیش‌نویس‌های شما منتقل شد، چون چند نفر آن را به عنوان جنس ممنوع در هتیوال گزارش دادند. تیم ما آن را بررسی می‌کند. اجناسی که در هتیوال فروخته نمی‌شوند: %{link}"
+      listing_prohibited_shop_owner: "%{name}، «%{title}» که توسط %{poster} منتشر شده بود، از هتیوال برداشته شد: %{reason}.%{warning}%{note} اجناسی که در هتیوال فروخته نمی‌شوند: %{link}"
     prohibited:
       warning: " یک اخطار به حساب شما اضافه شد (%{count} از %{limit}). با %{limit} اخطار، حساب تعلیق می‌شود."
+      shop_strike: " یک اخطار به فروشگاه شما اضافه شد (%{count} از %{limit}). با %{limit} فروشگاه تعلیق می‌شود و آگهی‌هایش پنهان می‌شوند."
       note: " یادداشت تیم ما: %{note}"
       shop_warning: "یک اخطار به حساب شما اضافه شد (%{count} از %{limit})"
       shop_note: "یادداشت تیم ما: %{note}"

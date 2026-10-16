@@ -121,6 +121,9 @@ class UserSerializer < ApplicationSerializer
     # /users/me payload without an extra request.
     field(:active_warnings_count) { |u| u.active_warnings_count }
     field(:warning_threshold) { |_u| User::WARNING_BLOCK_THRESHOLD }
+    # The most recent strike, for the banner (owner, 2026-10-16): { category,
+    # reason, created_at, listing_title } or null. Same shape as the shop view.
+    field(:latest_warning) { |u| WarningJson.latest(u) }
     # Away mode — expose the computed away? flag and the datetime (as ISO-8601)
     # when the seller is CURRENTLY away. Returns nil when not away so the edit
     # toggle knows to show "off" state. Owner can set a new future date via PUT /users/me.

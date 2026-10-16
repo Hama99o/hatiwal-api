@@ -4,15 +4,16 @@
 class ShopPolicy < ApplicationPolicy
   EDITORS = %w[owner manager].freeze
 
-  # A suspended or still-pending shop is visible to its own members only.
+  # A suspended/pending shop — or one whose OWNER is suspended (owner, 2026-10-16,
+  # computed) — is visible to its own members only.
   def index? = true
-  def show? = record.active? || member?
+  def show? = record.available_to_buyers? || member?
   def create? = user.present?
   def update? = EDITORS.include?(role)
   def destroy? = role == "owner"
   def member? = record.member?(user)
   # SHOP-2: "Message shop" without a product (own shop refused by the service, with its code).
-  def message? = user.present? && record.active?
+  def message? = user.present? && record.available_to_buyers?
   # privacy-b: block / report a shop by its id — anyone signed in who is not on
   # its team (a member blocking their own shop would block their owner).
   def block? = user.present? && !member?

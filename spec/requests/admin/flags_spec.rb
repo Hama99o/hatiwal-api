@@ -147,4 +147,30 @@ RSpec.describe "Admin flagged listings", type: :request do
       expect(flag.reload.status).to eq("dismissed")
     end
   end
+
+  # A listing in a shop: the business answers too (owner, 2026-10-16).
+  describe "a shop listing strikes both the poster and the shop" do
+    let(:shop_owner) { create(:user) }
+    let(:shop) { create(:shop, owner: shop_owner) }
+    let(:poster) { create(:user).tap { |u| shop.shop_members.create!(user: u, role: :staff) } }
+    let(:shop_listing) { create(:listing, :active, user: poster, shop: shop, title: "AK") }
+    let!(:shop_flag) { create(:flag, flaggable: shop_listing, category: :firearms) }
+
+    before { sign_in admin, scope: :admin_user }
+
+    it "Take down + warning strikes BOTH the poster's account and the shop" do
+      patch take_down_warn_admin_flag_path(shop_flag), params: { category: "firearms" }
+      expect(poster.reload.active_warnings_count).to eq(1)
+      expect(shop.reload.active_warnings_count).to eq(1)
+      expect(shop_listing.reload).to be_draft
+    end
+
+    it "the flag page shows the shop's warning count alongside the seller's" do
+      shop.issue_warning!(reason: "earlier", category: :prohibited_item)
+      get admin_flag_path(shop_flag)
+      expect(response.body).to include("flag-shop-warnings")
+      expect(response.body[/id="flag-shop-warnings"[^>]*>([^<]+)</, 1])
+        .to include("1 active warning of #{Shop::SHOP_WARNING_BLOCK_THRESHOLD}")
+    end
+  end
 end

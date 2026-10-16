@@ -48,6 +48,14 @@
         · <%= pluralize(person.active_warnings_count, "active warning") %> of <%= User::WARNING_BLOCK_THRESHOLD %>
         · language: <%= person.preferred_language.presence || "—" %>
       <% end %>
+      <%# Shop strikes (owner, 2026-10-16): a shop listing or a flagged shop
+          answers for the business. "Take down + warning" strikes the shop too. %>
+      <% shop = flag.listing? ? target&.shop : target %>
+      <% if shop %>
+        <br><strong>Shop:</strong>
+        <%= link_to shop.name, admin_shop_path(shop), dir: "auto", id: "flag-shop" %>
+        · <span id="flag-shop-warnings"><%= pluralize(shop.active_warnings_count, "active warning") %> of <%= Shop::SHOP_WARNING_BLOCK_THRESHOLD %></span>
+      <% end %>
       <% if flag.note.present? %><br><strong>Admin note:</strong> <span dir="auto"><%= flag.note %></span><% end %>
     </div>
 

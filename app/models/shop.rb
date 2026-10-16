@@ -35,6 +35,9 @@ class Shop < ApplicationRecord
   # A deleted shop's products go back to being the owner's personal listings
   # (the owner is moved to "Me" too — users.active_shop_id is nullified by FK).
   has_many :listings, dependent: :nullify
+  # Prohibited-item strikes against the SHOP (owner, 2026-10-16): 3 active = the
+  # shop is suspended, through the same Shop#suspend! path.
+  has_many :warnings, class_name: UserWarning.name, dependent: :destroy
   # Prohibited items: the shop's name and description are scanned when saved
   # (#prohibited_scan_due?); a match only opens a Flag.
   include ProhibitedScannable
@@ -67,8 +70,14 @@ class Shop < ApplicationRecord
   before_create :apply_approval_switch
   after_create :add_owner_as_member
 
-  scope :visible, -> { active }
+  # Visible to buyers = active AND run by an active owner. A suspended/banned
+  # owner takes their shop dark too (owner, 2026-10-16, computed — no second
+  # manual step: reinstating the owner brings the shop back automatically).
+  scope :visible, -> { active.where.not(owner_id: User.where.not(status: :active).select(:id)) }
   scope :recent, -> { order(created_at: :desc) }
+
+  # 3 active shop warnings suspend the shop (mirrors User::WARNING_BLOCK_THRESHOLD).
+  SHOP_WARNING_BLOCK_THRESHOLD = 3
 
   # Whether new shops wait for an admin before they appear. A safety switch for
   # when fake shops become a problem; off unless the env says "true".
@@ -403,6 +412,35 @@ class Shop < ApplicationRecord
     end
     notify_moderation!(:suspended, reason)
     true
+  end
+
+  # ── Prohibited-item strikes (owner, 2026-10-16) ────────────────────────────
+  def active_warnings
+    warnings.active
+  end
+
+  def active_warnings_count
+    active_warnings.count
+  end
+
+  # Issue a strike to the SHOP; 3 active ones suspend it through the existing
+  # path. `posted_by` records the team member whose listing triggered it, and
+  # `listing` what it was about. Returns the warning.
+  def issue_warning!(reason:, admin_user: nil, category: :other, posted_by: nil, listing: nil)
+    warning = warnings.create!(admin_user: admin_user, reason: reason, category: category,
+                               posted_by: posted_by, listing: listing)
+    if active? && active_warnings_count >= SHOP_WARNING_BLOCK_THRESHOLD
+      suspend!(reason: I18n.t("accounts.shop_auto_suspended_reason",
+                             count: SHOP_WARNING_BLOCK_THRESHOLD, default: "Suspended: %<count>s active warnings." % { count: SHOP_WARNING_BLOCK_THRESHOLD }))
+    end
+    warning
+  end
+
+  # Buyers can see/use the shop only when it is active AND its owner is active.
+  # A suspended/banned owner takes the shop dark (computed; restored when the
+  # owner is reinstated). Mirrors the `visible` scope for a single record.
+  def available_to_buyers?
+    active? && owner&.status == "active"
   end
 
   # Only a SUSPENDED shop is reactivated. A pending shop (SHOP_APPROVAL_REQUIRED)
