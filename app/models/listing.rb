@@ -144,6 +144,25 @@ class Listing < ApplicationRecord
   MAX_DESCRIPTION_LENGTH = 3_000
   validates :description, length: { maximum: MAX_DESCRIPTION_LENGTH }
 
+  # VID (1.1.9, docs/LISTING_VIDEO.md): one optional video per listing, beside
+  # the photos — never the cover. The phone compresses it to ~720p / 2 Mbit/s
+  # before upload (a 30 s clip is ~5–8 MB); 25 MB is only the server's safety
+  # net. The poster is a frame the client grabs, so the server needs no ffmpeg.
+  # Uploaded through PUT /my/listings/:id/video, never with the listing save, so
+  # a slow upload can't block publishing.
+  has_one_attached :video
+  has_one_attached :video_poster
+  VIDEO_TYPES          = %w[video/mp4 video/quicktime].freeze
+  MAX_VIDEO_SIZE       = 25.megabytes
+  MAX_VIDEO_POSTER_SIZE = 5.megabytes
+  MAX_VIDEO_DURATION_S = 60
+  # A sold, expired or deleted listing keeps its video this long (an undo of
+  # sold, a renew or a restore inside the window keeps it), then
+  # PurgeListingVideosJob deletes it. Photos stay.
+  VIDEO_KEPT_FOR = 30.days
+  validates :video, attached_file: { types: VIDEO_TYPES, max_size: MAX_VIDEO_SIZE }
+  validates :video_poster, attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: MAX_VIDEO_POSTER_SIZE }
+
   # A listing must carry at least one photo before it goes live. This is a
   # photo-first marketplace: a photoless card renders as the grey "no photo" box,
   # which reads to buyers as broken or fake.
@@ -223,6 +242,19 @@ class Listing < ApplicationRecord
   # tab that offers Renew, or it would drop out of `browsable` (`not_expired`)
   # and appear in NO seller tab at all. Name kept for its callers.
   scope :expired_active, -> { live.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
+  # VID — listings whose video is due for deletion: deleted, sold or expired
+  # VIDEO_KEPT_FOR ago or more. Read from the CURRENT state at run time, so an
+  # undo of sold (sold_at cleared), a renew (new expires_at) or a restore
+  # (removed_at cleared) inside the window simply drops out — nothing to cancel.
+  # The SQL twin of #off_market_since.
+  scope :video_purgeable, lambda {
+    joins(:video_attachment).where(
+      "listings.removed_at <= :cutoff " \
+      "OR (listings.status = :sold AND listings.sold_at <= :cutoff) " \
+      "OR (listings.status IN (:live) AND listings.expires_at <= :cutoff)",
+      cutoff: VIDEO_KEPT_FOR.ago, sold: statuses[:sold], live: statuses.values_at(:active, :reserved)
+    )
+  }
 
   # Sort the result set by the supplied key. Falls back to newest (bumped_at
   # desc) for any absent or unrecognised value — the SORT_KEYS whitelist prevents
@@ -1222,6 +1254,77 @@ class Listing < ApplicationRecord
   # Light variants, one per photo in image_urls' order (PublicImageUrl::SIZES).
   def image_thumb_urls = images.attached? ? images.map { |a| PublicImageUrl.variant(a, :thumb) }.compact : []
   def image_medium_urls = images.attached? ? images.map { |a| PublicImageUrl.variant(a, :medium) }.compact : []
+
+  # ── Video (VID) ──────────────────────────────────────────────────────────────
+  # The blob route: it redirects to the Disk service, which answers HTTP Range,
+  # so players stream the progressive MP4 (no HLS in v1).
+  def video_url = video.attached? ? PublicImageUrl.original(video) : nil
+  def video_poster_url = video_poster.attached? ? PublicImageUrl.variant(video_poster, :medium) : nil
+  def has_video? = video.attached?
+
+  # The length the client measured (stored on the blob at upload). Active
+  # Storage's own analyzer overwrites it with ffprobe's when that is installed.
+  def video_duration_s
+    duration = video.attached? ? video.blob.metadata["duration"] : nil
+    duration.present? ? duration.to_f.round : nil
+  end
+
+  # Replaces any previous video and poster: has_one_attached purges the old
+  # blobs once the save commits. `duration_s` is the client's measurement; a clip
+  # over MAX_VIDEO_DURATION_S is refused (the apps trim to 60 s before upload, so
+  # only a hand-made request gets here). Returns false with errors on the
+  # listing, and then nothing has changed.
+  def attach_video!(file:, poster: nil, duration_s: nil)
+    duration = duration_s.presence&.to_f
+    if duration && (duration <= 0 || duration > MAX_VIDEO_DURATION_S + 1)
+      errors.add(:video, :video_too_long, count: MAX_VIDEO_DURATION_S)
+      return false
+    end
+
+    video_blob = ActiveStorage::Blob.create_and_upload!(
+      io: file, filename: file.original_filename.presence || "video.mp4",
+      content_type: file.content_type, metadata: duration ? { "duration" => duration } : {}
+    )
+    self.video = video_blob
+    self.video_poster = poster.presence
+    if save
+      warm_video_poster
+      return true
+    end
+
+    video_blob.purge_later
+    failed = errors.dup
+    reload # drop the pending attachments
+    errors.merge!(failed)
+    false
+  end
+
+  # Make the poster's gallery variant now, at upload, so the first buyer to open
+  # the listing gets it at once instead of waiting for it to be generated (it is
+  # the only thing the gallery shows until someone taps ▶). Best effort.
+  def warm_video_poster
+    return unless video_poster.attached? && video_poster.blob.variable?
+
+    video_poster.blob.analyze unless video_poster.blob.analyzed?
+    video_poster.variant(resize_to_limit: PublicImageUrl.box(video_poster.blob, :medium), format: :webp, saver: PublicImageUrl::SAVER).processed
+  rescue StandardError => e
+    Rails.logger.warn("[VID] poster variant not pre-generated for listing #{id}: #{e.class}")
+  end
+
+  def purge_video!
+    video.purge_later if video.attached?
+    video_poster.purge_later if video_poster.attached?
+  end
+
+  # When the listing left the market for good, or nil while it is still on it
+  # (or a draft): deleted (removed_at), sold (sold_at), or expired (expires_at).
+  def off_market_since
+    return removed_at if removed?
+    return sold_at if sold?
+    return expires_at if expired?
+
+    nil
+  end
 
   # Images as {id, url} pairs. `id` is the blob's stable signed_id, which the
   # edit form echoes back in `removed_image_ids` to delete specific photos —

@@ -37,6 +37,7 @@ Rails.application.routes.draw do
       member do
         patch :take_down
         patch :restore
+        patch :remove_video
       end
     end
     resources :reports do
@@ -301,6 +302,9 @@ Rails.application.routes.draw do
           end
           # GET /my/listings/:listing_id/analytics
           resource :analytics, only: [ :show ], controller: "listing_analytics"
+          # VID: PUT/DELETE /my/listings/:listing_id/video — multipart, apart
+          # from the listing save so a slow upload never blocks publishing.
+          resource :video, only: [ :update, :destroy ], controller: "listing_videos"
           # GET /my/listings/status_counts — per-status counts for the seller.
           # Must be a COLLECTION route so it is matched BEFORE /my/listings/:id.
           collection do

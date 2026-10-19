@@ -18,6 +18,7 @@ ps:
     messages:
       invalid_file_type: "د دوتنې ډول یې نه منل کېږي (%{content_type})"
       file_too_large: "له %{limit} حد څخه لویه ده"
+      video_too_long: "له %{count} ثانیو اوږده ده"
       too_many_files: "له %{count} دوتنو زیاتې نشي کېدای"
   activerecord:
     errors:

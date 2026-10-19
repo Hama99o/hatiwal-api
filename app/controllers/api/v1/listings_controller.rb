@@ -115,7 +115,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
       :sale_transactions,
       { user: { avatar_attachment: :blob },
         shop: { logo_attachment: :blob },
-        images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+        images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob }
     )
 
     paginate_blue(
@@ -188,7 +188,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
                    # SF-B2 — preloaded for the base `held_units` field; see
                    # Listing#open_sale's loaded-array guard.
                    :sale_transactions,
-                   { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+                   { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob }
                  )
     render_blue_collection(
       ListingSerializer,

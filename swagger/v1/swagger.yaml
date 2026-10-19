@@ -60,6 +60,47 @@ paths:
                 required:
                 - platform
                 - status
+  "/api/v1/auth/apple":
+    post:
+      summary: Sign in (or up) with Apple
+      tags:
+      - Auth
+      description: Verifies Apple's identity token (JWKS, iss, aud = bundle id, exp,
+        SHA-256 nonce), finds the person by Apple id, links a verified email, or creates
+        the account; returns the same tokens as email sign-in (headers + body). iOS
+        only for now.
+      parameters: []
+      responses:
+        '200':
+          description: signed in (tokens in headers and body)
+        '401':
+          description: apple_token_invalid
+        '422':
+          description: apple_token_missing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - identity_token
+              - nonce
+              properties:
+                identity_token:
+                  type: string
+                  description: Apple's JWT
+                nonce:
+                  type: string
+                  description: the RAW nonce (its SHA-256 was sent to Apple)
+                authorization_code:
+                  type: string
+                  description: optional; kept only to revoke on account deletion
+                given_name:
+                  type: string
+                  description: first sign-in only
+                family_name:
+                  type: string
+                  description: first sign-in only
   "/api/v1/shops":
     post:
       summary: open your shop
@@ -986,6 +1027,60 @@ paths:
           description: the listing fails validation
         '200':
           description: successful
+  "/api/v1/my/listings/{listing_id}/video":
+    parameters:
+    - name: listing_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    - name: access-token
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: client
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: uid
+      in: header
+      required: true
+      schema:
+        type: string
+    put:
+      summary: set (or replace) the listing's video
+      tags:
+      - Listings
+      description: 'Multipart. `video`: MP4 or QuickTime, at most 25 MB and 60 s (the
+        apps compress to ~720p and trim before upload). `poster`: an image frame from
+        the client, optional. `duration_s`: the client''s measurement. Replaces any
+        previous video. Only whoever manages the listing (the poster or a shop member);
+        not on a sold or deleted listing.'
+      security:
+      - bearer: []
+      parameters: []
+      responses:
+        '200':
+          description: attached; the listing comes back with its video
+        '422':
+          description: not a video
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: string
+        required: true
+    delete:
+      summary: remove the listing's video
+      tags:
+      - Listings
+      security:
+      - bearer: []
+      responses:
+        '200':
+          description: removed; the photos stay
   "/api/v1/my/reviews/pending":
     get:
       summary: sold sales the caller still owes a review on
@@ -1959,9 +2054,11 @@ paths:
         listing: null, viewer_role: null). Owner, 2026-10-12: Support is per identity.
         Without shop_id, the caller''s own thread (Buyer mode and Seller as Me); with
         shop_id, that SHOP''s thread (members only, 403 otherwise), shared by its
-        team and shown only while that shop is selected. GET /conversations pins each
-        identity''s thread first (role=buying, role=selling&shop_id=none, role=selling&shop_id=<id>);
-        me.unread_counts.support is the person''s thread''s unread (also inside buying).'
+        team and shown only while that shop is selected. GET /conversations lists
+        each identity''s thread by its last message like any chat, not pinned (owner,
+        2026-10-08; role=buying, role=selling&shop_id=none, role=selling&shop_id=<id>).
+        It can be archived, never deleted. me.unread_counts.support is the person''s
+        thread''s unread (also inside buying).'
       security:
       - bearer: []
       parameters:

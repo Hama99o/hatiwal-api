@@ -18,6 +18,7 @@ fa:
     messages:
       invalid_file_type: "نوع فایل پشتیبانی نمی‌شود (%{content_type})"
       file_too_large: "بزرگ‌تر از حد %{limit} است"
+      video_too_long: "طولانی‌تر از %{count} ثانیه است"
       too_many_files: "نمی‌تواند بیشتر از %{count} فایل داشته باشد"
   activerecord:
     errors:

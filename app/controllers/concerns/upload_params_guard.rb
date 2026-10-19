@@ -16,6 +16,7 @@ module UploadParamsGuard
   # Every attachment param on the JSON API, as a path into params.
   UPLOAD_PARAM_PATHS = [
     %i[listing images],
+    %i[video], %i[poster], # VID: My::ListingVideosController
     %i[user avatar],
     %i[shop logo], %i[shop cover],
     %i[attachment],

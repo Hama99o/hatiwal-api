@@ -60,6 +60,16 @@ module Admin
       redirect_to [ namespace, listing ], notice: "Listing restored."
     end
 
+    # VID: delete just the video (and its poster); the listing and its photos
+    # stay. A take-down treats the video like the photos — it stays until
+    # PurgeListingVideosJob — so this is for a bad video on a good listing.
+    def remove_video
+      listing = find_resource(params[:id])
+      listing.purge_video!
+      log_admin_action("remove_listing_video", target: listing)
+      redirect_to [ namespace, listing ], notice: "Video removed."
+    end
+
     # Override this method to specify custom lookup behavior.
     # This will be used to set the resource for the `show`, `edit`, and `update`
     # actions.

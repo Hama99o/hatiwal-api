@@ -70,6 +70,12 @@ class ListingPolicy < ApplicationPolicy
 
   def analytics? = owner?
 
+  # VID — whoever manages the listing (poster or shop member) sets or removes
+  # its video. No new video on a sold or deleted listing: it would only wait
+  # for PurgeListingVideosJob. Removing is always allowed.
+  def update_video?  = owner? && !record.sold? && !record.removed?
+  def destroy_video? = owner?
+
   # SF-B1 — a reserved listing that the feed now offers MUST be messageable, or
   # the buyer hits a dead end on a listing we just showed them. With no payment
   # holding a deal together, deals fall through constantly; that second
