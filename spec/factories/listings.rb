@@ -31,5 +31,22 @@ FactoryBot.define do
         )
       end
     end
+
+    # VID: a real (2 s, 320x240) MP4 plus a poster frame.
+    trait :with_video do
+      after(:create) do |listing|
+        listing.video.attach(
+          io:           File.open(Rails.root.join("spec/fixtures/files/test_video.mp4")),
+          filename:     "test_video.mp4",
+          content_type: "video/mp4",
+          metadata:     { "duration" => 2.0 }
+        )
+        listing.video_poster.attach(
+          io:           File.open(Rails.root.join("spec/fixtures/files/test_image.jpg")),
+          filename:     "poster.jpg",
+          content_type: "image/jpeg"
+        )
+      end
+    end
   end
 end

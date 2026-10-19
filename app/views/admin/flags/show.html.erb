@@ -35,6 +35,8 @@
         <strong>Listing:</strong> <%= link_to target.title.presence || "Listing ##{target.id}", admin_listing_path(target), dir: "auto", id: "flag-target" %>
         (#<%= target.id %>, <%= target.status %><%= ", from shop #{target.shop.name}" if target.shop %>)
         <br><strong>Description:</strong> <span dir="auto"><%= target.description.presence || "—" %></span>
+        <%# VID: a flag on a listing covers its video too. %>
+        <%= render "admin/listings/video", listing: target %>
       <% else %>
         <strong>Shop:</strong> 🏪 <%= link_to target.name, admin_shop_path(target), dir: "auto", id: "flag-target" %>
         (#<%= target.id %>, <%= target.status %>)

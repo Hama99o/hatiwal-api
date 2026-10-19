@@ -40,6 +40,12 @@
       <% end %>
     <% end %>
   </section>
+  <% if listing.has_video? %>
+    <section class="hw-panel hw-panel--wide">
+      <div class="hw-panel__head"><h2 class="hw-panel__title">Video</h2></div>
+      <%= render "admin/listings/video", listing: listing, removable: true %>
+    </section>
+  <% end %>
 </div>
 <h2 class="hw-section__title hw-record-title">All fields</h2>
 <% end %>

@@ -1,0 +1,20 @@
+<%# VID: a listing's video for moderation. preload="none": nothing downloads
+    until the admin presses play. Shared by the listing and flag pages.
+    Relative blob paths: the admin is the same app, and its controllers do not
+    set Active Storage's url_options (listing.video_url would be nil here). %>
+<% if listing.has_video? %>
+  <div class="hw-listing-video" id="listing-video">
+    <video controls preload="none" playsinline width="320"
+           src="<%= main_app.rails_blob_path(listing.video) %>"
+           <% if listing.video_poster.attached? %>poster="<%= main_app.rails_blob_path(listing.video_poster) %>"<% end %>></video>
+    <p class="hw-panel__text">
+      Video<%= " · #{listing.video_duration_s} s" if listing.video_duration_s %>
+      · <%= number_to_human_size(listing.video.blob.byte_size) %>
+    </p>
+    <% if local_assigns[:removable] %>
+      <%= button_to "Remove video", remove_video_admin_listing_path(listing),
+            method: :patch, data: { turbo: false, confirm: "Remove this listing's video? The photos stay." },
+            class: "button button--danger", id: "remove-listing-video" %>
+    <% end %>
+  </div>
+<% end %>

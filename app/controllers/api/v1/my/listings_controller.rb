@@ -21,7 +21,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
                     # buyer's avatar — eager-load both so a feed full of
                     # reserved/sold rows stays a constant number of queries.
                     sale_transactions: { buyer: { avatar_attachment: :blob } },
-                    images_attachments: { blob: { variant_records: { image_attachment: :blob } } }
+                    images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob
                   )
     ).ordered
     listings = listings.for_status_filter(params[:status]) if params[:status].present?

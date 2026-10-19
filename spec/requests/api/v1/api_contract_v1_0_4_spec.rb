@@ -84,7 +84,15 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     "messages[].action" => "Support notice button (null on every other message)",
     # e5 run-312 (1.1.7): the public "off the market" flag on :list, so Saved
     # can label an expired listing. A boolean an old app ignores; no date.
-    "listings[].expired" => "Saved expired label (boolean; buyers never get the date)"
+    "listings[].expired" => "Saved expired label (boolean; buyers never get the date)",
+    # VID (1.1.9, docs/LISTING_VIDEO.md): one optional video per listing. Cards
+    # get a boolean, the detail its URLs + length; all false/nil without a
+    # video. v1.0.4 ignores them and shows the photos exactly as before.
+    "listings[].has_video" => "VID card ▶ (boolean)",
+    "listing.has_video" => "VID (boolean)",
+    "listing.video_url" => "VID video (null without one)",
+    "listing.video_poster_url" => "VID poster frame (null without one)",
+    "listing.video_duration_s" => "VID length in seconds (null without one)"
   }.freeze
 
   # Values are irrelevant; their JSON TYPE is the contract.

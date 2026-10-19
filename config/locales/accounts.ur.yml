@@ -18,6 +18,7 @@ ur:
     messages:
       invalid_file_type: "فائل کی قسم قابل قبول نہیں (%{content_type})"
       file_too_large: "%{limit} کی حد سے بڑی ہے"
+      video_too_long: "%{count} سیکنڈ سے لمبی ہے"
       too_many_files: "%{count} سے زیادہ فائلیں نہیں ہو سکتیں"
   activerecord:
     errors:
