@@ -60,6 +60,21 @@ RSpec.describe "Admin: revoke a warning", type: :request do
     expect(AdminAuditLog.where(action: "revoke_warning", target: shop)).to exist
   end
 
+  it "revokes from the warning's own page and comes back to it" do
+    warning = create(:user_warning)
+
+    get admin_user_warning_path(warning)
+    expect(response.body).to include("revoke-warning-#{warning.id}", "Revoke warning")
+
+    patch revoke_admin_user_warning_path(warning, from: "warning"), params: { revoke_reason: "Mistake" }
+
+    expect(response).to redirect_to(admin_user_warning_path(warning))
+    expect(warning.reload).to be_revoked
+    follow_redirect!
+    expect(response.body).to include("Revoked", "Mistake")
+    expect(response.body).not_to include("revoke-warning-#{warning.id}")
+  end
+
   it "requires an admin" do
     sign_out :admin_user
     warning = create(:user_warning)

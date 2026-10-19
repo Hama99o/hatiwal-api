@@ -19,6 +19,10 @@ class UserWarningDashboard < Administrate::BaseDashboard
     reason: Field::Text,
     expires_at: Field::DateTime,
     acknowledged_at: Field::DateTime,
+    # Revoke (owner, 2026-10-19).
+    revoked_at: Field::DateTime,
+    revoke_reason: Field::String,
+    revoked_by_label: Field::String,
     created_at: Field::DateTime,
     updated_at: Field::DateTime
   }.freeze
@@ -46,6 +50,9 @@ class UserWarningDashboard < Administrate::BaseDashboard
     created_at
     expires_at
     acknowledged_at
+    revoked_at
+    revoke_reason
+    revoked_by_label
     updated_at
   ].freeze
 

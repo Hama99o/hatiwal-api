@@ -1,0 +1,18 @@
+<%# The default show page, plus "Revoke" (owner, 2026-10-19). %>
+<% warning = page.resource %>
+<% content_for(:after_main) do %>
+  <section class="hw-panel hw-panel--warning" id="warning-revoke">
+    <% if warning.revoked? %>
+      <p class="hw-panel__text">Revoked <%= l(warning.revoked_at, format: :short) %><%= " by #{warning.revoked_by}" if warning.revoked_by %>: <span dir="auto"><%= warning.revoke_reason %></span></p>
+    <% elsif warning.active? %>
+      <p class="hw-panel__text hw-panel__text--muted">Revoking stops this warning counting at once; the <%= warning.shop ? "shop's team" : "user" %> no longer sees it. Kept in the history and the audit log.</p>
+      <%= form_with url: revoke_admin_user_warning_path(warning, from: "warning"), method: :patch, data: { turbo: false }, id: "revoke-warning-#{warning.id}", class: "hw-form-row" do %>
+        <%= text_field_tag :revoke_reason, nil, placeholder: "Why (kept in the audit log)", class: "hw-input", dir: "auto", required: true %>
+        <%= submit_tag "Revoke warning", class: "button button--danger", data: { confirm: "Revoke this warning? It stops counting at once." } %>
+      <% end %>
+    <% else %>
+      <p class="hw-panel__text hw-panel__text--muted">Expired: it no longer counts.</p>
+    <% end %>
+  </section>
+<% end %>
+<%= render template: "administrate/application/show", locals: { page: page } %>

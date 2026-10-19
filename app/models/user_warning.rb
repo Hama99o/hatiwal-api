@@ -85,6 +85,10 @@ class UserWarning < ApplicationRecord
     admin_user&.to_s || "—"
   end
 
+  def revoked_by_label
+    revoked_by&.to_s
+  end
+
   private
 
   # A warning strikes a user OR a shop, never both and never neither.

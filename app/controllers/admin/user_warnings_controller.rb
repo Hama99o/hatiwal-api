@@ -16,7 +16,8 @@ module Admin
     def revoke
       warning = find_resource(params[:id])
       subject = warning.user || warning.shop
-      back = subject ? [ namespace, subject ] : [ namespace, warning ]
+      # From the warning's own page, come back to it; otherwise to the user/shop.
+      back = subject && params[:from] != "warning" ? [ namespace, subject ] : [ namespace, warning ]
       reason = params[:revoke_reason].to_s.strip
       return redirect_to(back, alert: "Write why the warning is revoked.") if reason.blank?
       return redirect_to(back, alert: "This warning was already revoked.") unless warning.revoke!(admin_user: current_admin_user, reason: reason)
