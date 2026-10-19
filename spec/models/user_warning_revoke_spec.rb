@@ -58,4 +58,18 @@ RSpec.describe UserWarning, "#revoke!" do
     expect(shop.active_warnings_count).to eq(2)
     expect(shop.reload).to be_suspended
   end
+
+  # Two admins (or a double click: the admin has no rails-ujs disable-with) can
+  # send two revokes at once; each request loads the row before the other
+  # writes. The second must see the first and change nothing (QA 2026-10-19:
+  # both went through, the second reason overwrote the first, two audit rows).
+  it "refuses a revoke from a stale copy of an already revoked warning" do
+    warning = create(:user_warning)
+    stale = UserWarning.find(warning.id)
+
+    expect(warning.revoke!(admin_user: admin, reason: "First")).to be(true)
+    expect(stale.revoke!(admin_user: admin, reason: "Second")).to be(false)
+
+    expect(warning.reload.revoke_reason).to eq("First")
+  end
 end

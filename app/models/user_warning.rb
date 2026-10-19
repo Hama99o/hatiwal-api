@@ -72,10 +72,19 @@ class UserWarning < ApplicationRecord
   # this brings them under the threshold; a suspended SHOP is not reactivated
   # here, because its suspension may have been a manual one (the admin decides).
   # Returns false when it was already revoked.
+  #
+  # The check runs under a row lock on a fresh read: two revokes sent at once
+  # (two admins, or a double click) would otherwise both pass `revoked?` on
+  # their own copy, the second overwriting the reason (QA 2026-10-19).
   def revoke!(admin_user:, reason:)
-    return false if revoked?
+    revoked_now = with_lock do
+      next false if revoked?
 
-    update!(revoked_at: Time.current, revoked_by: admin_user, revoke_reason: reason)
+      update!(revoked_at: Time.current, revoked_by: admin_user, revoke_reason: reason)
+      true
+    end
+    return false unless revoked_now
+
     user&.reinstate_if_decayed!
     true
   end
