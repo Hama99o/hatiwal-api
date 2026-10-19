@@ -3,7 +3,7 @@ class Api::V1::Users::WarningsController < Api::V1::BaseController
   # "X of N warnings" banner and the reasons. Warnings are issued by admins only.
   def index
     authorize UserWarning
-    warnings = current_user.warnings.recent
+    warnings = current_user.warnings.not_revoked.recent
     render_ok({
       warnings: UserWarningSerializer.render_as_hash(warnings),
       meta: {

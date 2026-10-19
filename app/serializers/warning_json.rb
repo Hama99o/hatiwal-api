@@ -7,7 +7,7 @@ module WarningJson
   module_function
 
   def latest(subject)
-    warning = subject.warnings.recent.first
+    warning = subject.warnings.not_revoked.recent.first
     return nil unless warning
 
     {

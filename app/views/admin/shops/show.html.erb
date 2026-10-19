@@ -60,6 +60,22 @@
     <% end %>
   </section>
 
+  <section id="shop-warnings" class="hw-panel hw-panel--warning">
+    <div class="hw-panel__head">
+      <h2 class="hw-panel__title">Warnings — <%= shop.active_warnings_count %> of <%= Shop::SHOP_WARNING_BLOCK_THRESHOLD %> active</h2>
+    </div>
+    <p class="hw-panel__text hw-panel__text--muted">
+      Each warning is active for <%= UserWarning::ACTIVE_PERIOD.inspect %>. Reaching <%= Shop::SHOP_WARNING_BLOCK_THRESHOLD %> suspends the shop.
+      Revoking one does not reactivate a suspended shop: use Reactivate above.
+    </p>
+    <% shop_warnings = shop.warnings.recent.includes(:revoked_by) %>
+    <% if shop_warnings.any? %>
+      <%= render "admin/user_warnings/table", warnings: shop_warnings %>
+    <% else %>
+      <p class="hw-empty">No warnings.</p>
+    <% end %>
+  </section>
+
   <section id="shop-verification" class="hw-panel">
     <div class="hw-panel__head"><h2 class="hw-panel__title">Verification</h2></div>
     <% if shop.verified? %>

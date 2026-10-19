@@ -123,27 +123,7 @@
     <% end %>
 
     <% if warnings.any? %>
-      <div class="hw-table-wrap">
-        <table class="hw-table">
-          <thead><tr><th>Category</th><th>Reason</th><th>Issued</th><th>Status</th></tr></thead>
-          <tbody>
-            <% warnings.each do |w| %>
-              <tr>
-                <td class="hw-nowrap"><%= w.category.to_s.humanize %></td>
-                <td dir="auto"><%= w.reason %></td>
-                <td class="hw-nowrap"><%= w.created_at.strftime("%Y-%m-%d") %></td>
-                <td>
-                  <% if w.active? %>
-                    <span class="hw-badge hw-badge--warning">active → expires <%= w.expires_at.strftime("%Y-%m-%d") %></span>
-                  <% else %>
-                    <span class="hw-badge hw-badge--plain">expired</span>
-                  <% end %>
-                </td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
-      </div>
+      <%= render "admin/user_warnings/table", warnings: warnings %>
     <% else %>
       <p class="hw-empty">No warnings yet.</p>
     <% end %>
