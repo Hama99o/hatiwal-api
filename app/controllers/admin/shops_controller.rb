@@ -26,6 +26,26 @@ module Admin
       redirect_to [ namespace, shop ], notice: "#{shop.name} is suspended: hidden from search, members sell as themselves."
     end
 
+    # SHOP-MEDIA: delete a bad video or photo; the shop and the rest stay.
+    # Suspension / take-down already hide them with the shop (#show 404s).
+    def remove_video
+      shop = find_resource(params[:id])
+      shop.purge_video!
+      log_admin_action("remove_shop_video", target: shop)
+      redirect_to [ namespace, shop ], notice: "Video removed."
+    end
+
+    def remove_gallery_photo
+      shop = find_resource(params[:id])
+      blob = ActiveStorage::Blob.find_signed(params[:photo_id].to_s)
+      attachment = blob && shop.gallery_photos.attachments.find { |a| a.blob_id == blob.id }
+      return redirect_to([ namespace, shop ], alert: "That photo is not this shop's.") unless attachment
+
+      attachment.purge_later
+      log_admin_action("remove_shop_photo", target: shop, details: blob.filename.to_s)
+      redirect_to [ namespace, shop ], notice: "Photo removed."
+    end
+
     def reactivate
       shop = find_resource(params[:id])
       return refuse_closed(shop) if shop.closed?

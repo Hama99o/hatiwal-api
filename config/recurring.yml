@@ -29,6 +29,10 @@ production:
   purge_listing_videos:
     class: PurgeListingVideosJob
     schedule: every day at 2:30am
+  # SHOP-MEDIA: photos + video of shops closed 30+ days ago (docs/SHOP_MEDIA.md).
+  purge_shop_media:
+    class: PurgeShopMediaJob
+    schedule: every day at 2:45am
   # Listing expiry reminders, 7 days and 1 day before (owner, 2026-10-12).
   listing_expiry_reminders:
     class: ListingExpiryReminderJob

@@ -43,7 +43,7 @@
   <% if listing.has_video? %>
     <section class="hw-panel hw-panel--wide">
       <div class="hw-panel__head"><h2 class="hw-panel__title">Video</h2></div>
-      <%= render "admin/listings/video", listing: listing, removable: true %>
+      <%= render "admin/shared/video", record: listing, remove_path: remove_video_admin_listing_path(listing) %>
     </section>
   <% end %>
 </div>

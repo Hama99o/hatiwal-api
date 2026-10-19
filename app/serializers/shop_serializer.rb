@@ -46,6 +46,15 @@ class ShopSerializer < ApplicationSerializer
     # The SHOP's own reviews (Shop#reviews), never the owner's personal ones.
     field(:avg_rating) { |s| s.review_stats.first }
     field(:review_count) { |s| s.review_stats.last }
+    # SHOP-MEDIA (docs/SHOP_MEDIA.md): up to 5 photos of the real shop + one
+    # video ("▶ Video" near the top of the shop page; loads only on tap). Empty
+    # / false / nil without them. Not on :card — that view rides inside listing
+    # cards, conversations and invites, where the media is never shown.
+    field(:has_video) { |s| s.has_video? }
+    field(:video_url) { |s| s.video_url }
+    field(:video_poster_url) { |s| s.video_poster_url }
+    field(:video_duration_s) { |s| s.video_duration_s }
+    field(:gallery_photos) { |s| s.gallery_photo_entries }
   end
 
   view :owner do
