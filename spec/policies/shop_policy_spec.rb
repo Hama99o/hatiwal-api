@@ -35,4 +35,19 @@ RSpec.describe ShopPolicy do
     expect(described_class::Scope.new(stranger, Shop).resolve).not_to include(other_suspended)
     expect(described_class::Scope.new(nil, Shop).resolve).to contain_exactly(visible)
   end
+
+  describe "#update_media? (SHOP-MEDIA)" do
+    let(:shop) { create(:shop) }
+
+    it "the owner and managers, never staff or strangers, never a closed shop" do
+      manager = create(:shop_member, shop: shop, role: :manager).user
+      staff = create(:shop_member, shop: shop, role: :staff).user
+      expect(described_class.new(shop.owner, shop).update_media?).to be true
+      expect(described_class.new(manager, shop).update_media?).to be true
+      expect(described_class.new(staff, shop).update_media?).to be false
+      expect(described_class.new(create(:user), shop).update_media?).to be false
+      shop.update_columns(status: Shop.statuses[:closed])
+      expect(described_class.new(shop.owner, shop).update_media?).to be false
+    end
+  end
 end

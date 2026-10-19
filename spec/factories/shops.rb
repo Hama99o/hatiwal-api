@@ -13,6 +13,26 @@ FactoryBot.define do
     phone { "+93 70 123 4567" }
     hours { { "sat" => [ %w[08:00 18:00] ], "fri" => [] } }
 
+    # SHOP-MEDIA: a real (2 s) MP4 + poster, and two gallery photos in order.
+    trait :with_video do
+      after(:create) do |shop|
+        shop.video.attach(io: File.open(Rails.root.join("spec/fixtures/files/test_video.mp4")),
+                          filename: "test_video.mp4", content_type: "video/mp4", metadata: { "duration" => 2.0 })
+        shop.video_poster.attach(io: File.open(Rails.root.join("spec/fixtures/files/test_image.jpg")),
+                                 filename: "poster.jpg", content_type: "image/jpeg")
+      end
+    end
+
+    trait :with_gallery do
+      after(:create) do |shop|
+        %w[front.jpg team.jpg].each_with_index do |name, i|
+          blob = ActiveStorage::Blob.create_and_upload!(io: File.open(Rails.root.join("spec/fixtures/files/test_image.jpg")),
+                                                        filename: name, content_type: "image/jpeg", metadata: { "position" => i })
+          shop.gallery_photos.attach(blob)
+        end
+      end
+    end
+
     trait :suspended do
       status { :suspended }
     end

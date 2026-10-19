@@ -36,11 +36,13 @@
         (#<%= target.id %>, <%= target.status %><%= ", from shop #{target.shop.name}" if target.shop %>)
         <br><strong>Description:</strong> <span dir="auto"><%= target.description.presence || "—" %></span>
         <%# VID: a flag on a listing covers its video too. %>
-        <%= render "admin/listings/video", listing: target %>
+        <%= render "admin/shared/video", record: target %>
       <% else %>
         <strong>Shop:</strong> 🏪 <%= link_to target.name, admin_shop_path(target), dir: "auto", id: "flag-target" %>
         (#<%= target.id %>, <%= target.status %>)
         <br><strong>Description:</strong> <span dir="auto"><%= target.description.presence || "—" %></span>
+        <%# SHOP-MEDIA: a flag on the shop covers its photos + video. %>
+        <%= render "admin/shared/video", record: target %>
       <% end %>
       <br><strong>Matched term:</strong> <span dir="auto" id="flag-matched-term"><%= flag.matched_term.presence || "— (report only)" %></span>
       <br><strong>Category:</strong> <%= flag.category ? flag.category.humanize : "—" %>

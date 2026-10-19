@@ -62,6 +62,18 @@ class Shop < ApplicationRecord
   validates :latitude, :longitude, presence: true
   validates :logo, attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: LOGO_MAX_SIZE }
   validates :cover, attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: LOGO_MAX_SIZE }
+
+  # SHOP-MEDIA (docs/SHOP_MEDIA.md, owner 2026-10-19): up to 5 photos of the
+  # real shop and one video, so a buyer can see it is not a scam. The video is
+  # the listing video's system (HasVideo); the photos follow the listing photos'
+  # limits. Their order is each blob's metadata "position" (the blobs belong to
+  # this shop alone), set by #update_gallery! — no column needed.
+  include HasVideo
+  has_many_attached :gallery_photos
+  MAX_GALLERY_PHOTOS = 5
+  validates :gallery_photos, attached_file: { types: AttachedFileValidator::IMAGE_TYPES,
+                                              max_size: Listing::MAX_IMAGE_SIZE,
+                                              max_count: MAX_GALLERY_PHOTOS }
   validate :location_in_service_area
   validate :hours_well_formed
   validate :not_a_duplicate_of_own_shop
@@ -75,6 +87,13 @@ class Shop < ApplicationRecord
   # manual step: reinstating the owner brings the shop back automatically).
   scope :visible, -> { active.where.not(owner_id: User.where.not(status: :active).select(:id)) }
   scope :recent, -> { order(created_at: :desc) }
+  # SHOP-MEDIA — closed VIDEO_KEPT_FOR (30 days) ago or more and still holding
+  # photos or a video. Read from the CURRENT state, so a shop reopened inside
+  # the window (closed_at cleared) simply drops out.
+  scope :media_purgeable, lambda {
+    closed.where(closed_at: ..VIDEO_KEPT_FOR.ago)
+          .where(id: ActiveStorage::Attachment.where(record_type: name, name: %w[video video_poster gallery_photos]).select(:record_id))
+  }
 
   # 3 active shop warnings suspend the shop (mirrors User::WARNING_BLOCK_THRESHOLD).
   SHOP_WARNING_BLOCK_THRESHOLD = 3
@@ -381,6 +400,52 @@ class Shop < ApplicationRecord
                      description: nil, latitude: nil, longitude: nil, verified_at: nil, verified_by_id: nil,
                      closed_at: Time.current, updated_at: Time.current)
     end
+  end
+
+  # ── Shop photos + video (SHOP-MEDIA) ───────────────────────────────────────
+  # The gallery in the seller's order (blob metadata "position", then upload order).
+  def ordered_gallery_photos
+    gallery_photos.attachments.sort_by { |a| [ a.blob.metadata["position"] || Float::INFINITY, a.id ] }
+  end
+
+  # {id, url, medium_url, thumb_url} per photo, in order. `id` is the blob's
+  # signed id: what PUT /shops/:id/gallery takes back in `keep_ids` to keep or
+  # reorder a photo (only this shop's own photos are ever accepted).
+  def gallery_photo_entries
+    ordered_gallery_photos.map do |a|
+      { id: a.blob.signed_id, url: PublicImageUrl.for(a),
+        medium_url: PublicImageUrl.variant(a, :medium), thumb_url: PublicImageUrl.variant(a, :thumb) }
+    end
+  end
+
+  # One save for add + remove + reorder: the gallery becomes `keep_ids` (this
+  # shop's photos, in that order) followed by `uploads`. A photo left out is
+  # purged once the save commits. Over MAX_GALLERY_PHOTOS, or a non-image, is a
+  # validation error and nothing changes (new blobs are dropped).
+  def update_gallery!(keep_ids:, uploads:)
+    own = gallery_photos.blobs.index_by(&:id)
+    keep = Array(keep_ids).filter_map { |sid| own[ActiveStorage::Blob.find_signed(sid)&.id] }.uniq
+    fresh = Array(uploads).map do |file|
+      ActiveStorage::Blob.create_and_upload!(io: file, filename: file.original_filename.presence || "photo.jpg",
+                                             content_type: file.content_type)
+    end
+    ordered = keep + fresh
+    self.gallery_photos = ordered
+    unless save
+      fresh.each(&:purge_later)
+      failed = errors.dup
+      reload
+      errors.merge!(failed)
+      return false
+    end
+
+    ordered.each_with_index { |blob, i| blob.update!(metadata: blob.metadata.merge("position" => i)) }
+    true
+  end
+
+  def purge_media!
+    purge_video!
+    gallery_photos.purge_later if gallery_photos.attached?
   end
 
   # ── Admin moderation ───────────────────────────────────────────────────────

@@ -78,6 +78,9 @@ Rails.application.routes.draw do
         patch :reactivate
         post :remove_badge
         delete "members/:member_id", action: :remove_member, as: :remove_member
+        # SHOP-MEDIA: remove the shop's video, or one of its photos (audit-logged).
+        patch :remove_video
+        patch :remove_gallery_photo
       end
     end
     # UPD-1 — "App versions": force update / reminder settings + old-version message
@@ -211,6 +214,10 @@ Rails.application.routes.draw do
       # SHOP-1 — shops (hatiwal-mobile/docs/SHOPS.md)
       resources :shops, only: %i[index show create update destroy] do
         member { post :move_listings }
+        # SHOP-MEDIA (docs/SHOP_MEDIA.md): the shop's video (the VID endpoints'
+        # twin) and its gallery — one PUT adds, removes and reorders the photos.
+        resource :video, only: %i[update destroy], controller: "shop_videos"
+        resource :gallery, only: %i[update], controller: "shop_galleries"
         # The SHOP's reviews: buyers' reviews of sales of its products (public).
         resources :reviews, only: %i[index], controller: "shop_reviews"
         # SHOP-2 — "Message shop" from the shop page (no product): find-or-create.

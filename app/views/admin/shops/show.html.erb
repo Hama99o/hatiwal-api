@@ -155,6 +155,23 @@
     </p>
   </section>
 
+  <%# SHOP-MEDIA: the shop's photos + video, each removable (audit-logged). %>
+  <% if shop.has_video? || shop.gallery_photos.attached? %>
+    <section id="shop-media" class="hw-panel hw-panel--wide">
+      <div class="hw-panel__head"><h2 class="hw-panel__title">Photos &amp; video</h2></div>
+      <%= render "admin/shared/video", record: shop, remove_path: remove_video_admin_shop_path(shop) %>
+      <div class="hw-form-row" id="shop-gallery">
+        <% shop.ordered_gallery_photos.each do |photo| %>
+          <div class="hw-shop-photo">
+            <img src="<%= main_app.rails_blob_path(photo) %>" alt="<%= photo.filename %>" width="120" height="120" style="object-fit: cover">
+            <%= button_to "Remove", remove_gallery_photo_admin_shop_path(shop, photo_id: photo.blob.signed_id),
+                  method: :patch, data: { turbo: false, confirm: "Remove this photo?" }, class: "button button--danger" %>
+          </div>
+        <% end %>
+      </div>
+    </section>
+  <% end %>
+
   <section id="shop-history" class="hw-panel hw-panel--wide">
     <div class="hw-panel__head"><h2 class="hw-panel__title">History</h2></div>
     <% if history.any? %>

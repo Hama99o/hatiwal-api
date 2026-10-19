@@ -1687,6 +1687,109 @@ paths:
       responses:
         '200':
           description: sent again
+  "/api/v1/shops/{shop_id}/video":
+    parameters:
+    - name: shop_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    - name: access-token
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: client
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: uid
+      in: header
+      required: true
+      schema:
+        type: string
+    put:
+      summary: set (or replace) the shop's video
+      tags:
+      - Shops
+      description: 'The listing video''s rules (PUT /my/listings/:id/video): multipart
+        `video` (MP4/QuickTime, ≤ 25 MB, ≤ 60 s), optional `poster` image and `duration_s`.
+        The shop''s owner or a manager; never a closed shop. Answers the shop (owner
+        view).'
+      security:
+      - bearer: []
+      parameters: []
+      responses:
+        '200':
+          description: attached
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: string
+        required: true
+    delete:
+      summary: remove the shop's video
+      tags:
+      - Shops
+      security:
+      - bearer: []
+      responses:
+        '200':
+          description: removed
+  "/api/v1/shops/{shop_id}/gallery":
+    parameters:
+    - name: shop_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    - name: access-token
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: client
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: uid
+      in: header
+      required: true
+      schema:
+        type: string
+    put:
+      summary: add, remove and reorder the shop's photos (up to 5)
+      tags:
+      - Shops
+      description: 'Multipart. `gallery[keep_ids][]`: the shop''s own photo ids (`gallery_photos[].id`)
+        in the order to show; `gallery[photos][]`: new image files, appended. A photo
+        left out of keep_ids is deleted. More than 5 → 422.'
+      security:
+      - bearer: []
+      parameters: []
+      responses:
+        '200':
+          description: the gallery, in order
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                keep_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: the shop's own photo ids, in order
+                photos:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: new photos, appended
   "/api/v1/shops/{shop_id}/reviews":
     get:
       summary: the shop's reviews (public)

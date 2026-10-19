@@ -10,6 +10,9 @@ class ShopPolicy < ApplicationPolicy
   def show? = record.available_to_buyers? || member?
   def create? = user.present?
   def update? = EDITORS.include?(role)
+  # SHOP-MEDIA: the shop's photos + video — whoever may edit the shop, while it
+  # is not closed (a closed shop's media only waits for its purge).
+  def update_media? = update? && !record.closed?
   def destroy? = role == "owner"
   def member? = record.member?(user)
   # SHOP-2: "Message shop" without a product (own shop refused by the service, with its code).
