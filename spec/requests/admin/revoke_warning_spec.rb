@@ -64,7 +64,7 @@ RSpec.describe "Admin: revoke a warning", type: :request do
     warning = create(:user_warning)
 
     get admin_user_warning_path(warning)
-    expect(response.body).to include("revoke-warning-#{warning.id}", "Revoke warning")
+    expect(response.body).to include("revoke-warning-#{warning.id}", "Revoke warning", "Revoked by", "Issued by")
 
     patch revoke_admin_user_warning_path(warning, from: "warning"), params: { revoke_reason: "Mistake" }
 

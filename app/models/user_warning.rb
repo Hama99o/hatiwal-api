@@ -98,6 +98,14 @@ class UserWarning < ApplicationRecord
     revoked_by&.to_s
   end
 
+  # Admin field labels (the admin is English-only, so not in config/locales,
+  # which must carry every key in all locales). Administrate showed "Revoked by label".
+  ADMIN_FIELD_LABELS = { "admin_label" => "Issued by", "revoked_by_label" => "Revoked by" }.freeze
+
+  def self.human_attribute_name(attribute, options = {})
+    ADMIN_FIELD_LABELS[attribute.to_s] || super
+  end
+
   private
 
   # A warning strikes a user OR a shop, never both and never neither.
