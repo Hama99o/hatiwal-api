@@ -18,6 +18,8 @@ class UserWarning < ApplicationRecord
   belongs_to :posted_by, class_name: User.name, optional: true
   belongs_to :listing, optional: true
   belongs_to :admin_user, optional: true
+  # Who cancelled it (owner, 2026-10-19: "Revoke warning" in the admin).
+  belongs_to :revoked_by, class_name: AdminUser.name, optional: true
 
   validate :exactly_one_subject
 
@@ -51,12 +53,31 @@ class UserWarning < ApplicationRecord
 
   before_validation :set_expiry, on: :create
 
-  scope :active,  -> { where(expires_at: Time.current..) }
-  scope :expired, -> { where(expires_at: ...Time.current) }
+  # A revoked warning never counts again, and the person no longer sees it.
+  scope :not_revoked, -> { where(revoked_at: nil) }
+  scope :active,  -> { not_revoked.where(expires_at: Time.current..) }
+  scope :expired, -> { where(expires_at: ...Time.current).or(where.not(revoked_at: nil)) }
   scope :recent,  -> { order(created_at: :desc) }
 
   def active?
-    expires_at > Time.current
+    !revoked? && expires_at > Time.current
+  end
+
+  def revoked?
+    revoked_at.present?
+  end
+
+  # Cancel a warning (a mistake, or an appeal the admin accepts). The row stays
+  # for the history. A user auto-suspended by strikes is reinstated at once when
+  # this brings them under the threshold; a suspended SHOP is not reactivated
+  # here, because its suspension may have been a manual one (the admin decides).
+  # Returns false when it was already revoked.
+  def revoke!(admin_user:, reason:)
+    return false if revoked?
+
+    update!(revoked_at: Time.current, revoked_by: admin_user, revoke_reason: reason)
+    user&.reinstate_if_decayed!
+    true
   end
 
   # Display label for the issuing admin (no AdminUser dashboard to link to).

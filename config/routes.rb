@@ -56,7 +56,9 @@ Rails.application.routes.draw do
         patch :confirm_email
       end
     end
-    resources :user_warnings, only: [ :index, :show ]
+    resources :user_warnings, only: [ :index, :show ] do
+      member { patch :revoke }
+    end
     # Prohibited items (owner, 2026-10-13, option B: ALL MANUAL): the flag
     # queue ("Flagged listings") and the term list that feeds it.
     resources :flags, only: %i[index show] do

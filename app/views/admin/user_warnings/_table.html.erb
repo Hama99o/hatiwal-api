@@ -1,0 +1,34 @@
+<%# The warnings of a user or a shop, with "Revoke" on each active one
+    (owner, 2026-10-19). Locals: warnings. %>
+<div class="hw-table-wrap">
+  <table class="hw-table">
+    <thead><tr><th>Category</th><th>Reason</th><th>Issued</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      <% warnings.each do |w| %>
+        <tr id="warning-<%= w.id %>">
+          <td class="hw-nowrap"><%= w.category.to_s.humanize %></td>
+          <td dir="auto"><%= w.reason %></td>
+          <td class="hw-nowrap"><%= w.created_at.strftime("%Y-%m-%d") %></td>
+          <td>
+            <% if w.revoked? %>
+              <span class="hw-badge hw-badge--plain">revoked <%= w.revoked_at.strftime("%Y-%m-%d") %><%= " by #{w.revoked_by}" if w.revoked_by %></span>
+              <div class="hw-text-muted" dir="auto"><%= w.revoke_reason %></div>
+            <% elsif w.active? %>
+              <span class="hw-badge hw-badge--warning">active → expires <%= w.expires_at.strftime("%Y-%m-%d") %></span>
+            <% else %>
+              <span class="hw-badge hw-badge--plain">expired</span>
+            <% end %>
+          </td>
+          <td>
+            <% if w.active? %>
+              <%= form_with url: revoke_admin_user_warning_path(w), method: :patch, data: { turbo: false }, id: "revoke-warning-#{w.id}", class: "hw-form-row" do %>
+                <%= text_field_tag :revoke_reason, nil, placeholder: "Why (kept in the audit log)", class: "hw-input", dir: "auto", required: true %>
+                <%= submit_tag "Revoke", class: "button button--alt", data: { confirm: "Revoke this warning? It stops counting at once." } %>
+              <% end %>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</div>
