@@ -18,6 +18,11 @@ RSpec.describe Listing, "video" do
       expect(listing.video_poster_url).to be_present
     end
 
+    it "makes the poster's gallery variant at upload, so the first viewer doesn't wait" do
+      listing.attach_video!(file: mp4, poster: jpg, duration_s: 2)
+      expect(listing.video_poster.blob.variant_records.count).to eq(1)
+    end
+
     it "refuses a non-video and leaves no blob behind" do
       expect(listing.attach_video!(file: jpg)).to be(false)
       expect(listing.errors[:video].join).to match(/unsupported file type/)

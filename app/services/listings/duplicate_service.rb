@@ -14,6 +14,11 @@
 # original's file. Re-attaching the same blob would tie the two listings
 # together — deleting one (has_many_attached purges its blobs) would take the
 # other's photos with it.
+#
+# VID (owner 2026-10-19): the video and its poster are copied the SAME way, with
+# the clip's duration. A shared blob would be worse for video than for photos:
+# PurgeListingVideosJob, "Remove video" and a replace all purge the blob, so a
+# sold original's 30-day purge would delete the live duplicate's video.
 class Listings::DuplicateService
   Error = Listings::MoveService::Error
 
@@ -41,6 +46,7 @@ class Listings::DuplicateService
     ActiveRecord::Base.transaction do
       copy.save!
       copy_photos_to(copy)
+      copy_video_to(copy)
     end
     copy
   end
@@ -72,15 +78,30 @@ class Listings::DuplicateService
   # duplicate (owner bug, 2026-10-08, dev DB).
   def copy_photos_to(copy)
     @listing.images.each do |image|
-      blob = image.blob
-      blob.open do |file|
-        new_blob = ActiveStorage::Blob.create_and_upload!(
-          io: file, filename: blob.filename.to_s, content_type: blob.content_type, metadata: blob.metadata.slice("width", "height")
-        )
-        copy.images.attach(new_blob)
-      end
+      copy.images.attach(copied_blob(image.blob, keep: %w[width height]))
     rescue ActiveStorage::FileNotFoundError
-      Rails.logger.warn("[Listings::DuplicateService] listing #{@listing.id}: photo blob #{blob.id} has no file, not copied")
+      Rails.logger.warn("[Listings::DuplicateService] listing #{@listing.id}: photo blob #{image.blob_id} has no file, not copied")
+    end
+  end
+
+  # The video (a sold original's too, while it is not purged yet) and then its
+  # poster. A video whose file is gone is skipped like a photo; a poster alone
+  # is never copied.
+  def copy_video_to(copy)
+    return unless @listing.video.attached?
+
+    copy.video.attach(copied_blob(@listing.video.blob, keep: %w[duration]))
+    copy.video_poster.attach(copied_blob(@listing.video_poster.blob, keep: %w[width height])) if @listing.video_poster.attached?
+  rescue ActiveStorage::FileNotFoundError
+    Rails.logger.warn("[Listings::DuplicateService] listing #{@listing.id}: video file missing, not copied")
+  end
+
+  # A NEW blob with the same bytes, uploaded while the original's file is open.
+  def copied_blob(blob, keep:)
+    blob.open do |file|
+      ActiveStorage::Blob.create_and_upload!(
+        io: file, filename: blob.filename.to_s, content_type: blob.content_type, metadata: blob.metadata.slice(*keep)
+      )
     end
   end
 end

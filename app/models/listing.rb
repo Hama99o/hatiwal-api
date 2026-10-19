@@ -1287,13 +1287,28 @@ class Listing < ApplicationRecord
     )
     self.video = video_blob
     self.video_poster = poster.presence
-    return true if save
+    if save
+      warm_video_poster
+      return true
+    end
 
     video_blob.purge_later
     failed = errors.dup
     reload # drop the pending attachments
     errors.merge!(failed)
     false
+  end
+
+  # Make the poster's gallery variant now, at upload, so the first buyer to open
+  # the listing gets it at once instead of waiting for it to be generated (it is
+  # the only thing the gallery shows until someone taps ▶). Best effort.
+  def warm_video_poster
+    return unless video_poster.attached? && video_poster.blob.variable?
+
+    video_poster.blob.analyze unless video_poster.blob.analyzed?
+    video_poster.variant(resize_to_limit: PublicImageUrl.box(video_poster.blob, :medium), format: :webp, saver: PublicImageUrl::SAVER).processed
+  rescue StandardError => e
+    Rails.logger.warn("[VID] poster variant not pre-generated for listing #{id}: #{e.class}")
   end
 
   def purge_video!
