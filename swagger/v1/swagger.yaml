@@ -395,6 +395,68 @@ paths:
         '200':
           description: price_dropped=true composes with sort=nearest without a Postgres
             error
+          content:
+            application/json:
+              example:
+                listings:
+                - address:
+                  available_units: 1
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 823
+                    kind: item
+                    name_en: Category 820
+                    name_fa: دسته 820
+                    name_ps: کټاګورۍ 820
+                    name_ur: Category 820
+                    parent_id:
+                    position: 1
+                    slug: category-822
+                  category_id: 823
+                  condition:
+                  created_at: '2026-10-23T22:12:16.449Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 737
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: '800.0'
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent: 20
+                  price_dropped: false
+                  price_dropped_at: '2026-10-23T22:12:16Z'
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 1677
+                    name: Felica McDermott
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: active
+                  thumbnail_url:
+                  title: Gorgeous Copper Shoes
+                  views_count: 0
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 1
+                    total_pages: 1
   "/api/v1/listings/{id}":
     parameters:
     - name: id
@@ -430,6 +492,85 @@ paths:
           description: not found
         '200':
           description: saves_count is an integer, never a nested list of savers
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 850
+                    kind: item
+                    name_en: Category 847
+                    name_fa: دسته 847
+                    name_ps: کټاګورۍ 847
+                    name_ur: Category 847
+                    parent_id:
+                    position: 1
+                    slug: category-849
+                  category_id: 850
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-23T22:12:24.150Z'
+                  currency: AFN
+                  description: Eum reprehenderit velit. Vero illum cupiditate. In
+                    veniam quas.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 765
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: approximate
+                  location_radius_m: 500
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  price: '67556.06'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:12:24.150Z'
+                  quantity: 1
+                  reserved_at:
+                  sales_count: 0
+                  saves_count: 4
+                  seller:
+                    id: 1720
+                    name: Nicholle Ferry
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label:
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Fantastic Bronze Clock
+                  updated_at: '2026-10-23T22:12:24.150Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 1
   "/api/v1/listings/{id}/save":
     parameters:
     - name: id
@@ -463,6 +604,11 @@ paths:
         '200':
           description: save is idempotent — saving twice still returns 200 and persists
             one record
+          content:
+            application/json:
+              example:
+                saved: true
+                id: 76
         '401':
           description: unauthenticated user cannot save
   "/api/v1/listings/{id}/unsave":
@@ -498,6 +644,10 @@ paths:
         '200':
           description: unsave is idempotent — calling when not saved still returns
             200
+          content:
+            application/json:
+              example:
+                saved: false
         '401':
           description: unauthenticated user cannot unsave
   "/api/v1/listings/{id}/similar":
@@ -517,6 +667,163 @@ paths:
       responses:
         '200':
           description: another user's dismissal does not shrink my rail
+          content:
+            application/json:
+              example:
+                listings:
+                - address:
+                  available_units: 1
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 859
+                    kind: item
+                    name_en: Category 856
+                    name_fa: دسته 856
+                    name_ps: کټاګورۍ 856
+                    name_ur: Category 856
+                    parent_id:
+                    position: 1
+                    slug: category-858
+                  category_id: 859
+                  condition:
+                  created_at: '2026-10-23T22:12:26.326Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 776
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: '63830.94'
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent:
+                  price_dropped: false
+                  price_dropped_at:
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 1742
+                    name: Oscar Schuster
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: active
+                  thumbnail_url:
+                  title: Intelligent Bronze Table
+                  views_count: 0
+                - address:
+                  available_units: 1
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 859
+                    kind: item
+                    name_en: Category 856
+                    name_fa: دسته 856
+                    name_ps: کټاګورۍ 856
+                    name_ur: Category 856
+                    parent_id:
+                    position: 1
+                    slug: category-858
+                  category_id: 859
+                  condition:
+                  created_at: '2026-10-23T22:12:26.257Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 775
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: '45783.2'
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent:
+                  price_dropped: false
+                  price_dropped_at:
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 1741
+                    name: Marine Considine
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: active
+                  thumbnail_url:
+                  title: Awesome Paper Coat
+                  views_count: 0
+                - address:
+                  available_units: 1
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 859
+                    kind: item
+                    name_en: Category 856
+                    name_fa: دسته 856
+                    name_ps: کټاګورۍ 856
+                    name_ur: Category 856
+                    parent_id:
+                    position: 1
+                    slug: category-858
+                  category_id: 859
+                  condition:
+                  created_at: '2026-10-23T22:12:26.205Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 774
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: '29047.32'
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent:
+                  price_dropped: false
+                  price_dropped_at:
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 1740
+                    name: Roscoe Prosacco
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: active
+                  thumbnail_url:
+                  title: Gorgeous Paper Bottle
+                  views_count: 0
         '404':
           description: not found for non-existent listing
       security:
@@ -596,8 +903,38 @@ paths:
           description: unauthorized
         '201':
           description: offer for 3 of the 15 units
+          content:
+            application/json:
+              example:
+                message:
+                  action:
+                  attachment_url:
+                  body: 12000|AFN|14000
+                  created_at: '2026-10-23T22:12:34.193Z'
+                  deleted: false
+                  deleted_at:
+                  id: 145
+                  kind: offer
+                  notice:
+                  offer_amount: 12000.0
+                  offer_currency: AFN
+                  offer_quantity: 3
+                  read_at:
+                  responds_to_id:
+                  sender:
+                    id: 1797
+                    name: Ronnie Mitchell
+                    avatar_url:
+                    avatar_thumb_url:
         '422':
           description: offer for more units than the listing has left
+          content:
+            application/json:
+              example:
+                errors:
+                - Offer quantity cannot be more than the 15 units still available.
+                  Set it to 15 or fewer.
+                code: offer_quantity_above_available_units
       requestBody:
         content:
           application/json:
@@ -691,6 +1028,22 @@ paths:
           description: not on that shop's team
         '200':
           description: Me
+          content:
+            application/json:
+              example:
+                analytics:
+                  shop:
+                  total: 5
+                  active: 2
+                  expired: 1
+                  sold: 1
+                  draft: 1
+                  sales: 0
+                  units_sold: 0
+                  views: 16
+                  chats: 0
+                  team:
+                  team_unattributed:
   "/api/v1/my/listings/{id}/duplicate":
     parameters:
     - name: id
@@ -732,6 +1085,105 @@ paths:
           description: not on the target shop's team
         '201':
           description: the draft, with its photos
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1100
+                    kind: item
+                    name_en: Category 1097
+                    name_fa: دسته 1097
+                    name_ps: کټاګورۍ 1097
+                    name_ur: Category 1097
+                    parent_id:
+                    position: 1
+                    slug: category-1099
+                  category_id: 1100
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-23T22:13:30.104Z'
+                  currency: AFN
+                  description: Expedita quia sit. Ex facere dolore. Tempore libero
+                    quisquam.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 1083
+                  image_attachments:
+                  - id: eyJfcmFpbHMiOnsiZGF0YSI6NTI5LCJwdXIiOiJibG9iX2lkIn19--2fa13527660d4b0f760831beee783318e3f90576
+                    url: http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTI5LCJwdXIiOiJibG9iX2lkIn19--2fa13527660d4b0f760831beee783318e3f90576/test_image.jpg
+                  image_medium_urls:
+                  - http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTI5LCJwdXIiOiJibG9iX2lkIn19--2fa13527660d4b0f760831beee783318e3f90576/test_image.jpg
+                  image_thumb_urls:
+                  - http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTI5LCJwdXIiOiJibG9iX2lkIn19--2fa13527660d4b0f760831beee783318e3f90576/test_image.jpg
+                  images:
+                  - http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTI5LCJwdXIiOiJibG9iX2lkIn19--2fa13527660d4b0f760831beee783318e3f90576/test_image.jpg
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:13:30.104Z'
+                  posted_by:
+                    id: 2188
+                    name: Hank Greenholt
+                  price: '43553.58'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at:
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2188
+                    shop_id: 96
+                    name: Safi Mobile
+                    city: Herat
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    as_shop: true
+                    phone:
+                    whatsapp_number:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label:
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                    city:
+                    id: 96
+                    logo_thumb_url:
+                    logo_url:
+                    name: Safi Mobile
+                    province: Herat
+                    verified: false
+                  sold_at:
+                  status: draft
+                  thumbnail_url: http://www.example.com/rails/active_storage/representations/redirect/eyJfcmFpbHMiOnsiZGF0YSI6NTI5LCJwdXIiOiJibG9iX2lkIn19--2fa13527660d4b0f760831beee783318e3f90576/eyJfcmFpbHMiOnsiZGF0YSI6eyJmb3JtYXQiOiJqcGciLCJyZXNpemVfdG9fbGltaXQiOls2MDAsNjAwXSwic2F2ZXIiOnsic3RyaXAiOnRydWV9fSwicHVyIjoidmFyaWF0aW9uIn19--1d4a3b3f40a60d047cb8ec7aeb0da2eaf7cae92d/test_image.jpg
+                  title: Gorgeous Paper Shoes
+                  updated_at: '2026-10-23T22:13:30.165Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
       requestBody:
         content:
           application/json:
@@ -777,8 +1229,95 @@ paths:
           description: unauthorized
         '200':
           description: successful
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1179
+                    kind: item
+                    name_en: Category 1176
+                    name_fa: دسته 1176
+                    name_ps: کټاګورۍ 1176
+                    name_ur: Category 1176
+                    parent_id:
+                    position: 1
+                    slug: category-1178
+                  category_id: 1179
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-23T22:14:14.192Z'
+                  currency: AFN
+                  description: Labore deleniti officia. Amet qui in. Est et ut.
+                  details: {}
+                  expired: false
+                  expires_at: '2027-01-21T22:14:14.308Z'
+                  has_video: false
+                  held_units: 0
+                  id: 1161
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:14:14.192Z'
+                  posted_by:
+                  price: '88180.4'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:14:14.192Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2412
+                    name: Ahmad Bode
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Heavy Duty Leather Wallet
+                  updated_at: '2026-10-23T22:14:14.341Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
         '422':
           description: the listing fails validation
+          content:
+            application/json:
+              example:
+                errors:
+                - Latitude must be less than or equal to 90
   "/api/v1/my/listings/{id}/unpublish":
     parameters:
     - name: id
@@ -815,8 +1354,96 @@ paths:
           description: unauthorized
         '200':
           description: successful
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1182
+                    kind: item
+                    name_en: Category 1179
+                    name_fa: دسته 1179
+                    name_ps: کټاګورۍ 1179
+                    name_ur: Category 1179
+                    parent_id:
+                    position: 1
+                    slug: category-1181
+                  category_id: 1182
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-23T22:14:15.058Z'
+                  currency: AFN
+                  description: Modi inventore eum. Placeat itaque sunt. Quia laudantium
+                    culpa.
+                  details: {}
+                  expired: false
+                  expires_at: '2026-10-21T22:14:14.996Z'
+                  has_video: false
+                  held_units: 0
+                  id: 1164
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:14:15.058Z'
+                  posted_by:
+                  price: '5966.04'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:14:15.058Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2415
+                    name: Mazie Daniel
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: draft
+                  thumbnail_url:
+                  title: Enormous Bronze Bag
+                  updated_at: '2026-10-23T22:14:15.215Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
         '422':
           description: the listing fails validation
+          content:
+            application/json:
+              example:
+                errors:
+                - Latitude must be less than or equal to 90
   "/api/v1/my/listings/{id}/activate":
     parameters:
     - name: id
@@ -853,8 +1480,96 @@ paths:
           description: unauthorized
         '200':
           description: successful
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1185
+                    kind: item
+                    name_en: Category 1182
+                    name_fa: دسته 1182
+                    name_ps: کټاګورۍ 1182
+                    name_ur: Category 1182
+                    parent_id:
+                    position: 1
+                    slug: category-1184
+                  category_id: 1185
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-23T22:14:15.813Z'
+                  currency: AFN
+                  description: Numquam repellendus perferendis. Magnam in rerum. Officiis
+                    dolores doloremque.
+                  details: {}
+                  expired: true
+                  expires_at: '2026-10-21T22:14:15.790Z'
+                  has_video: false
+                  held_units: 0
+                  id: 1167
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:14:15.813Z'
+                  posted_by:
+                  price: '86996.52'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:14:16.028Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2418
+                    name: Janae Langosh
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Ergonomic Silk Pants
+                  updated_at: '2026-10-23T22:14:16.029Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
         '422':
           description: the listing fails validation
+          content:
+            application/json:
+              example:
+                errors:
+                - Latitude must be less than or equal to 90
   "/api/v1/my/listings/{id}/move":
     parameters:
     - name: id
@@ -901,6 +1616,100 @@ paths:
           description: cannot move (held, sold, removed, already there)
         '200':
           description: moved
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1200
+                    kind: item
+                    name_en: Category 1197
+                    name_fa: دسته 1197
+                    name_ps: کټاګورۍ 1197
+                    name_ur: Category 1197
+                    parent_id:
+                    position: 1
+                    slug: category-1199
+                  category_id: 1200
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-23T22:14:19.050Z'
+                  currency: AFN
+                  description: Error quia voluptatum. Quis quos odio. Officia repudiandae
+                    sit.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 1179
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:14:19.050Z'
+                  posted_by:
+                    id: 2431
+                    name: Wayne Greenholt
+                  price: '78471.59'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:14:19.050Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2431
+                    shop_id: 100
+                    name: Safi Mobile
+                    city: Herat
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    as_shop: true
+                    phone:
+                    whatsapp_number:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label:
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                    city:
+                    id: 100
+                    logo_thumb_url:
+                    logo_url:
+                    name: Safi Mobile
+                    province: Herat
+                    verified: false
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Sleek Bronze Knife
+                  updated_at: '2026-10-23T22:14:19.263Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
       requestBody:
         content:
           application/json:
@@ -924,6 +1733,12 @@ paths:
       description: |
         Edits a listing the caller owns. Photos are appended (never replaced) and
         removed by signed id via `removed_image_ids`.
+
+        OFFLINE phase 0 — `image_order[]` sets the photos' order: the signed ids
+        of `image_attachments`, plus `new:<n>` for the n-th photo of this
+        request's `images[]`. Unknown tokens are ignored; a photo left out of
+        the list keeps its place after the listed ones (never deleted). Without
+        the field, the order is unchanged.
 
         SF-B6 — changing `quantity` reconciles the listing's own status:
 
@@ -967,8 +1782,97 @@ paths:
           description: unauthorized
         '200':
           description: quantity raised — the sold-out listing re-opens with its stock
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 5
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1258
+                    kind: item
+                    name_en: Category 1255
+                    name_fa: دسته 1255
+                    name_ps: کټاګورۍ 1255
+                    name_ur: Category 1255
+                    parent_id:
+                    position: 1
+                    slug: category-1257
+                  category_id: 1258
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-23T22:14:40.214Z'
+                  currency: AFN
+                  description: Eos rem ut. Labore eius rerum. Ratione libero quia.
+                  details: {}
+                  expired: false
+                  expires_at: '2027-01-21T22:14:40.354Z'
+                  has_video: false
+                  held_units: 0
+                  id: 1232
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: true
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:14:40.214Z'
+                  posted_by:
+                  price: '18208.14'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:14:40.361Z'
+                  quantity: 20
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2494
+                    name: Clair Nicolas
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Incredible Iron Clock
+                  updated_at: '2026-10-23T22:14:40.362Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
         '422':
           description: quantity below the units already sold
+          content:
+            application/json:
+              example:
+                errors:
+                - Quantity cannot be less than the 15 units already sold. Set it to
+                  15 or more, or undo a sale first.
+                code: quantity_below_sold_units
       requestBody:
         content:
           application/json:
@@ -985,6 +1889,12 @@ paths:
                     quantity:
                       type: integer
                       description: Total units; may not be below sold_units
+                    image_order:
+                      type: array
+                      items:
+                        type: string
+                      description: Photo signed ids and new:<n> tokens, in display
+                        order
         required: true
   "/api/v1/my/listings/{id}/relaunch":
     parameters:
@@ -1027,6 +1937,89 @@ paths:
           description: the listing fails validation
         '200':
           description: successful
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped: true
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1283
+                    kind: item
+                    name_en: Category 1280
+                    name_fa: دسته 1280
+                    name_ps: کټاګورۍ 1280
+                    name_ur: Category 1280
+                    parent_id:
+                    position: 1
+                    slug: category-1282
+                  category_id: 1283
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-07-15T22:14:51.079Z'
+                  currency: AFN
+                  description: Consequatur iste eos. Quibusdam ut non. Facere amet
+                    neque.
+                  details: {}
+                  expired: false
+                  expires_at: '2027-01-21T22:14:51.207Z'
+                  has_video: false
+                  held_units: 0
+                  id: 1257
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:14:51.207Z'
+                  posted_by:
+                  price: '53245.09'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:14:51.100Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2545
+                    name: Jon Cronin
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Sleek Marble Table
+                  updated_at: '2026-10-23T22:14:51.230Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
   "/api/v1/my/listings/{listing_id}/video":
     parameters:
     - name: listing_id
@@ -1111,6 +2104,44 @@ paths:
           description: requires authentication
         '200':
           description: lists unreviewed sold sales
+          content:
+            application/json:
+              example:
+                transactions:
+                - buyer:
+                    id: 2737
+                    name: Laure Breitenberg
+                    avatar_url:
+                    avatar_thumb_url:
+                  completed_at: '2026-10-23T22:15:42.037Z'
+                  created_at: '2026-10-23T22:15:42.046Z'
+                  currency: AFN
+                  final_price: '65541.28'
+                  id: 201
+                  listing:
+                    id: 1468
+                    title: Heavy Duty Rubber Bottle
+                    thumbnail_url:
+                    price: '65541.28'
+                    currency: AFN
+                    status: active
+                    multi_unit: false
+                    available_units: 1
+                  quantity: 1
+                  role: seller
+                  seller:
+                    id: 2736
+                    name: Emerald Erdman
+                    avatar_url:
+                    avatar_thumb_url:
+                  status: sold
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 1
+                    total_pages: 1
   "/api/v1/my/transactions":
     get:
       summary: list the caller's transactions (as buyer and/or seller)
@@ -1159,6 +2190,71 @@ paths:
           description: unauthorized
         '200':
           description: "?listing_id= narrows to one listing's ledger"
+          content:
+            application/json:
+              example:
+                transactions:
+                - buyer:
+                    id: 2963
+                    name: Tempie Macejkovic
+                    avatar_url:
+                    avatar_thumb_url:
+                  completed_at:
+                  created_at: '2026-10-23T22:16:18.085Z'
+                  currency: AFN
+                  final_price: '19625.86'
+                  id: 234
+                  listing:
+                    id: 1617
+                    title: Heavy Duty Rubber Table
+                    thumbnail_url:
+                    price: '19625.86'
+                    currency: AFN
+                    status: active
+                    multi_unit: false
+                    available_units: 1
+                  quantity: 1
+                  role: buyer
+                  seller:
+                    id: 2965
+                    name: Denita Greenfelder
+                    avatar_url:
+                    avatar_thumb_url:
+                  status: reserved
+                - buyer:
+                    id: 2964
+                    name: Palmer Hettinger
+                    avatar_url:
+                    avatar_thumb_url:
+                  completed_at:
+                  created_at: '2026-10-23T22:16:17.916Z'
+                  currency: AFN
+                  final_price: '68041.11'
+                  id: 233
+                  listing:
+                    id: 1616
+                    title: Rustic Wool Plate
+                    thumbnail_url:
+                    price: '68041.11'
+                    currency: AFN
+                    status: active
+                    multi_unit: false
+                    available_units: 1
+                  quantity: 1
+                  role: seller
+                  seller:
+                    id: 2963
+                    name: Tempie Macejkovic
+                    avatar_url:
+                    avatar_thumb_url:
+                  status: reserved
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 2
+                    total_pages: 1
   "/api/v1/my/transactions/{id}":
     parameters:
     - name: id
@@ -1200,6 +2296,130 @@ paths:
           description: unauthorized
         '200':
           description: sale corrected; listing status and stock reconciled
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 4
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1503
+                    kind: item
+                    name_en: Category 1500
+                    name_fa: دسته 1500
+                    name_ps: کټاګورۍ 1500
+                    name_ur: Category 1500
+                    parent_id:
+                    position: 1
+                    slug: category-1502
+                  category_id: 1503
+                  condition:
+                  conversations_count: 1
+                  created_at: '2026-10-23T22:16:19.554Z'
+                  currency: AFN
+                  description: Consequatur saepe consectetur. Nemo a magnam. Dolore
+                    consequatur rerum.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 1624
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: true
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:16:19.554Z'
+                  posted_by:
+                  price: '1000.0'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:16:19.554Z'
+                  quantity: 5
+                  reserved_at:
+                  sale:
+                    id: 241
+                    status: sold
+                    final_price: '1000.0'
+                    currency: AFN
+                    quantity: 1
+                    completed_at: '2026-10-23T22:16:19.627Z'
+                    buyer:
+                      id: 2976
+                      name: Elton Hyatt
+                      avatar_url:
+                      avatar_thumb_url:
+                      verified: false
+                    conversation_id: 601
+                  sales_count: 1
+                  saves_count: 0
+                  seller:
+                    id: 2975
+                    name: Lamar Mueller
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Sleek Paper Bag
+                  updated_at: '2026-10-23T22:16:19.869Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
+                transaction:
+                  buyer:
+                    id: 2976
+                    name: Elton Hyatt
+                    avatar_url:
+                    avatar_thumb_url:
+                  completed_at: '2026-10-23T22:16:19.627Z'
+                  created_at: '2026-10-23T22:16:19.639Z'
+                  currency: AFN
+                  final_price: '1000.0'
+                  id: 241
+                  listing:
+                    id: 1624
+                    title: Sleek Paper Bag
+                    thumbnail_url:
+                    price: '1000.0'
+                    currency: AFN
+                    status: active
+                    multi_unit: true
+                    available_units: 4
+                  quantity: 1
+                  role: seller
+                  seller:
+                    id: 2975
+                    name: Lamar Mueller
+                    avatar_url:
+                    avatar_thumb_url:
+                  status: sold
         '422':
           description: the corrected quantity exceeds the listing's stock
       requestBody:
@@ -1252,6 +2472,89 @@ paths:
           description: unauthorized
         '200':
           description: sale removed, stock restored, listing re-opened
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 5
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1506
+                    kind: item
+                    name_en: Category 1503
+                    name_fa: دسته 1503
+                    name_ps: کټاګورۍ 1503
+                    name_ur: Category 1503
+                    parent_id:
+                    position: 1
+                    slug: category-1505
+                  category_id: 1506
+                  condition:
+                  conversations_count: 1
+                  created_at: '2026-10-23T22:16:20.767Z'
+                  currency: AFN
+                  description: Libero iure placeat. Consequatur sint qui. Quis voluptas
+                    et.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 1627
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: true
+                  negotiable: true
+                  next_bump_at: '2026-10-30T22:16:20.767Z'
+                  posted_by:
+                  price: '1000.0'
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-23T22:16:20.767Z'
+                  quantity: 5
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2981
+                    name: Jimmie Cummerata
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Mediocre Concrete Shoes
+                  updated_at: '2026-10-23T22:16:21.149Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
         '422':
           description: the sale already has a review
   "/api/v1/my/shop_invites":
@@ -1321,6 +2624,33 @@ paths:
           description: requires authentication
         '200':
           description: pagination meta is present
+          content:
+            application/json:
+              example:
+                reports:
+                - created_at: '2026-10-23T22:17:30.447Z'
+                  description: Detailed description
+                  id: 14
+                  reason: fraud
+                  reportable_id: 1856
+                  reportable_label: Small Silk Keyboard
+                  reportable_type: Listing
+                  status: resolved
+                - created_at: '2026-10-23T22:17:30.348Z'
+                  description: This listing looks suspicious.
+                  id: 13
+                  reason: spam
+                  reportable_id: 1855
+                  reportable_label: Intelligent Bronze Hat
+                  reportable_type: Listing
+                  status: pending
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 2
+                    total_pages: 1
     post:
       summary: submit a report
       tags:
@@ -1349,6 +2679,10 @@ paths:
           description: requires authentication
         '201':
           description: creates a report
+          content:
+            application/json:
+              example:
+                message: Report submitted
         '422':
           description: rejects reporting own listing
       requestBody:
@@ -1412,6 +2746,24 @@ paths:
           description: requires authentication
         '201':
           description: creates a hidden review
+          content:
+            application/json:
+              example:
+                review:
+                  comment: Smooth deal
+                  created_at: '2026-10-23T22:17:37.620Z'
+                  id: 9
+                  rating: 5
+                  revealed_at:
+                  reviewee_id: 3324
+                  reviewer:
+                    id: 3323
+                    name: Charolette Leffler
+                    avatar_url:
+                    avatar_thumb_url:
+                  role: of_buyer
+                  transaction_id: 262
+                  visible: false
         '403':
           description: rejects a non-party
       requestBody:
@@ -1469,6 +2821,31 @@ paths:
       responses:
         '200':
           description: returns only visible reviews
+          content:
+            application/json:
+              example:
+                reviews:
+                - comment: Great to deal with.
+                  created_at: '2026-10-23T22:17:38.285Z'
+                  id: 10
+                  rating: 4
+                  revealed_at: '2026-10-23T22:17:38.277Z'
+                  reviewee_id: 3328
+                  reviewer:
+                    id: 3329
+                    name: Alonso Herzog
+                    avatar_url:
+                    avatar_thumb_url:
+                  role: of_seller
+                  transaction_id: 264
+                  visible: true
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 1
+                    total_pages: 1
   "/api/v1/shop_invites/{token}":
     get:
       summary: the invite, for anyone holding the link (public)
@@ -2346,6 +3723,68 @@ paths:
       responses:
         '200':
           description: returns only that seller's sold listings (authenticated)
+          content:
+            application/json:
+              example:
+                listings:
+                - address:
+                  available_units: 1
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 2180
+                    kind: item
+                    name_en: Category 2188
+                    name_fa: دسته 2188
+                    name_ps: کټاګورۍ 2188
+                    name_ur: Category 2188
+                    parent_id:
+                    position: 1
+                    slug: category-2160
+                  category_id: 2180
+                  condition:
+                  created_at: '2026-10-23T22:20:34.752Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 2176
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: '93558.16'
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent:
+                  price_dropped: false
+                  price_dropped_at:
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 4118
+                    name: Ahmad Shah
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: sold
+                  thumbnail_url:
+                  title: Intelligent Cotton Computer
+                  views_count: 0
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 1
+                    total_pages: 1
         '404':
           description: seller not found
   "/api/v1/verification_requests/current":

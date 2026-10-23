@@ -1212,7 +1212,7 @@ class Listing < ApplicationRecord
   def thumbnail_url
     return nil unless images.attached?
 
-    image = images.first
+    image = ordered_images.first
     # Non-image blobs (e.g. a stray PDF) aren't variable — fall back to the original.
     return PublicImageUrl.for(image) unless image.blob.variable?
 
@@ -1235,12 +1235,53 @@ class Listing < ApplicationRecord
   def image_urls
     return [] unless images.attached?
 
-    images.map { |a| PublicImageUrl.for(a) }.compact
+    ordered_images.map { |a| PublicImageUrl.for(a) }.compact
   end
 
   # Light variants, one per photo in image_urls' order (PublicImageUrl::SIZES).
-  def image_thumb_urls = images.attached? ? images.map { |a| PublicImageUrl.variant(a, :thumb) }.compact : []
-  def image_medium_urls = images.attached? ? images.map { |a| PublicImageUrl.variant(a, :medium) }.compact : []
+  def image_thumb_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :thumb) }.compact : []
+  def image_medium_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :medium) }.compact : []
+
+  # ── Photo order (OFFLINE phase 0, docs/OFFLINE_MODE.md §2.5) ─────────────────
+  # The photos in the seller's order: each blob's metadata "position" (the
+  # listing's blobs are its own — a duplicate copies them), then upload order.
+  # The shop gallery keeps its order the same way (Shop#ordered_gallery_photos).
+  # Every reader of the photos goes through this, so the cover, the gallery and
+  # the edit form always agree. Sorted in Ruby: the attachments and blobs are
+  # already eager-loaded by every list query, so this adds no query.
+  def ordered_images
+    return [] unless images.attached?
+
+    images.attachments.sort_by { |a| [ a.blob.metadata["position"] || Float::INFINITY, a.id ] }
+  end
+
+  # A photo uploaded in the same request is named "new:<n>", <n> its index in
+  # that request's `images[]` (it has no signed id yet), so a seller can put a
+  # new photo before an old one in a single save.
+  IMAGE_ORDER_NEW_TOKEN = /\Anew:(\d+)\z/
+
+  # `image_order` from the edit form: the photos' signed ids (image_attachments'
+  # `id`) and "new:<n>" tokens, in the order the seller wants. A token that is
+  # not one of this listing's photos is ignored; a photo the list leaves out
+  # keeps its place AFTER the listed ones (it is never deleted here — deleting
+  # is removed_image_ids). `nil` (a client that does not send it, e.g. 1.1.8)
+  # changes nothing.
+  def apply_image_order!(tokens, uploaded: [])
+    return if tokens.nil? || !images.attached?
+
+    own = images.attachments.index_by(&:blob_id)
+    listed = Array(tokens).filter_map do |token|
+      new_index = token.to_s[IMAGE_ORDER_NEW_TOKEN, 1]
+      new_index ? uploaded[new_index.to_i] : own[ActiveStorage::Blob.find_signed(token.to_s)&.id]
+    end.uniq
+    rest = ordered_images - listed
+    (listed + rest).each_with_index do |attachment, i|
+      blob = attachment.blob
+      next if blob.metadata["position"] == i
+
+      blob.update!(metadata: blob.metadata.merge("position" => i))
+    end
+  end
 
   # When the listing left the market for good, or nil while it is still on it
   # (or a draft): deleted (removed_at), sold (sold_at), or expired (expires_at).
@@ -1258,7 +1299,7 @@ class Listing < ApplicationRecord
   def image_attachments
     return [] unless images.attached?
 
-    images.map { |a| { id: a.blob.signed_id, url: PublicImageUrl.for(a) } }
+    ordered_images.map { |a| { id: a.blob.signed_id, url: PublicImageUrl.for(a) } }
   rescue StandardError
     []
   end

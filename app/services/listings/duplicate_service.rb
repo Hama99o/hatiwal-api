@@ -77,7 +77,7 @@ class Listings::DuplicateService
   # It used to raise ActiveStorage::FileNotFoundError and fail the whole
   # duplicate (owner bug, 2026-10-08, dev DB).
   def copy_photos_to(copy)
-    @listing.images.each do |image|
+    @listing.ordered_images.each do |image|
       copy.images.attach(copied_blob(image.blob, keep: %w[width height]))
     rescue ActiveStorage::FileNotFoundError
       Rails.logger.warn("[Listings::DuplicateService] listing #{@listing.id}: photo blob #{image.blob_id} has no file, not copied")

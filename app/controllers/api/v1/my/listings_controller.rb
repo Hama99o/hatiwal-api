@@ -69,6 +69,7 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     # re-upload. See attach_new_images / purge_removed_images.
     if @listing.update(listing_params.except(:images)) && attach_new_images
       purge_removed_images
+      @listing.apply_image_order!(params.dig(:listing, :image_order), uploaded: @uploaded_images || [])
       @listing.record_owner_location_guess! if @listing.saved_change_to_latitude? || @listing.saved_change_to_longitude?
       # TASK-R418 (CR fix, CYCLE-4): :owner_detailed — a seller editing the
       # title/description/photos of a RESERVED or SOLD listing must keep
@@ -395,8 +396,12 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     new_images = params.dig(:listing, :images)
     return true if new_images.blank?
 
+    before = @listing.images.attachments.map(&:id)
     @listing.images.attach(new_images)
-    @listing.save
+    saved = @listing.save
+    # This request's photos in upload order — what image_order's "new:<n>" names.
+    @uploaded_images = @listing.images.attachments.reject { |a| before.include?(a.id) }.sort_by(&:id) if saved
+    saved
   end
 
   # Remove only the photos the client explicitly dropped, identified by the

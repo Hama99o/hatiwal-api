@@ -47,6 +47,12 @@ RSpec.describe "Api::V1::My::Listings quantity edits (SF-B6, SF-B8)", type: :req
         Edits a listing the caller owns. Photos are appended (never replaced) and
         removed by signed id via `removed_image_ids`.
 
+        OFFLINE phase 0 — `image_order[]` sets the photos' order: the signed ids
+        of `image_attachments`, plus `new:<n>` for the n-th photo of this
+        request's `images[]`. Unknown tokens are ignored; a photo left out of
+        the list keeps its place after the listed ones (never deleted). Without
+        the field, the order is unchanged.
+
         SF-B6 — changing `quantity` reconciles the listing's own status:
 
         * raising it above `sold_units` re-opens a `sold` listing as `active`,
@@ -80,7 +86,9 @@ RSpec.describe "Api::V1::My::Listings quantity edits (SF-B6, SF-B8)", type: :req
             properties: {
               title:    { type: :string },
               price:    { type: :number },
-              quantity: { type: :integer, description: "Total units; may not be below sold_units" }
+              quantity: { type: :integer, description: "Total units; may not be below sold_units" },
+              image_order: { type: :array, items: { type: :string },
+                             description: "Photo signed ids and new:<n> tokens, in display order" }
             }
           }
         }
