@@ -178,7 +178,7 @@ GEM
       activesupport (>= 6.1)
     groupdate (6.8.0)
       activesupport (>= 7.2)
-    guard (2.20.1)
+    guard (2.20.2)
       formatador (>= 0.2.4)
       listen (>= 2.7, < 4.0)
       logger (~> 1.6)
@@ -646,7 +646,7 @@ CHECKSUMS
   fugit (1.12.2) sha256=643f2bf28db263bd400cbf8e0dd8b76b2c9b94bdb130e12d2394de04d9c20e5e
   globalid (1.3.0) sha256=05c639ad6eb4594522a0b07983022f04aa7254626ab69445a0e493aa3786ff11
   groupdate (6.8.0) sha256=16f90ea18ca981c38e41e592416480b28353aa5e5cc3e7cb13a68b8fb5d40510
-  guard (2.20.1) sha256=ab9cd7873854e6b76080c0589f781ff3e390e441bdda20165804df54f977015a
+  guard (2.20.2) sha256=2d0574d35619669f2f71739a0313290810b9cf66b2263f5d97e815fcce598d4d
   guard-compat (1.2.1) sha256=3ad21ab0070107f92edfd82610b5cdc2fb8e368851e72362ada9703443d646fe
   guard-rspec (4.7.3) sha256=a47ba03cbd1e3c71e6ae8645cea97e203098a248aede507461a43e906e2f75ca
   guard-rubocop (1.5.0) sha256=3041d796dcb5ee31e352de74732250826f5f235b4ff48df9dbf424a6dc736251
