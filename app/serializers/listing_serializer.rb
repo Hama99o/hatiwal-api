@@ -129,6 +129,9 @@ class ListingSerializer < ApplicationSerializer
 
   view :list do
     fields :category_id, :views_count, :negotiable
+    # OFFLINE §4.8: the feed's "newest" order is bumped_at (Listing.sorted), so
+    # the phone needs it to sort the listings it already has the same way offline.
+    fields :bumped_at
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
     field(:image_thumb_urls) { |l| l.image_thumb_urls }
@@ -201,6 +204,11 @@ class ListingSerializer < ApplicationSerializer
   # it has no use for.
   view :seller_list do
     fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at, :negotiable, :shop_id
+    # OFFLINE §4.8: My listings is searched on the phone when offline, and
+    # Listing.search matches the description too — without it the offline
+    # results would miss listings found only by their description. Same order
+    # field as the feed (bumped_at).
+    fields :description, :bumped_at
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
     field(:image_thumb_urls) { |l| l.image_thumb_urls }
