@@ -3,6 +3,9 @@
 # Kept apart from the listing save so the listing publishes with its photos and
 # the video follows in the background.
 class Api::V1::My::ListingVideosController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :update, :destroy
+
   include VideoUploadActions
 
   before_action :set_listing

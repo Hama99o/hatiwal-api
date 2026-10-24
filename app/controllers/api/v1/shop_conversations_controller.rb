@@ -3,6 +3,9 @@
 # has no product. 201 when it is created, 200 with the same chat after.
 # (hatiwal-mobile/docs/SHOPS.md, "Phase 2 — definition of done")
 class Api::V1::ShopConversationsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create
+
   # Same budget as starting a chat about a listing: this reaches a stranger's inbox.
   throttle to: 30, within: 1.day, by: :user, only: :create
 

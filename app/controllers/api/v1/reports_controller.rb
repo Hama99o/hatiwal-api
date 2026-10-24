@@ -1,4 +1,7 @@
 class Api::V1::ReportsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create
+
   # Reporting is a trust tool, so it is also a harassment tool: unbounded, one
   # account can bury a rival seller under reports, or bury the admin queue.
   # Duplicate reports are already rejected by Report's uniqueness rule, so this

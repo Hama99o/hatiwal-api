@@ -10,6 +10,9 @@
 # is that a sale with a review already attached cannot be voided or reassigned
 # (Transaction::REVIEWED_SALE_ERROR), not a clock.
 class Api::V1::My::TransactionsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :update, :destroy
+
   before_action :set_transaction, only: [ :update, :destroy ]
 
   def index

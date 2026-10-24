@@ -1,4 +1,7 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create, :update, :destroy, :publish, :unpublish, :sold, :renew, :relaunch, :activate
+
   before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew, :relaunch, :move, :duplicate ]
 
   # Feed flooding. A real seller listing 30 items in one day is already an
@@ -104,6 +107,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   end
 
   def publish
+    return render_already_in_state if already_in_state?(:live)
+
     authorize @listing, :publish?
 
     # Listing#publish flips the status AND starts the expiry clock in a single
@@ -208,6 +213,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # status flip and the seller is answered with the field error instead of an
   # empty 500.
   def unpublish
+    return render_already_in_state if already_in_state?(:draft)
+
     authorize @listing, :unpublish?
     ActiveRecord::Base.transaction do
       @listing.cancel_open_transaction!
@@ -270,6 +277,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # releasing a hold is the seller's documented way OUT of SF-B8's refusal, so it
   # must never be the action that dead-ends in an unexplained 500.
   def activate
+    return render_already_in_state if already_in_state?(:live_without_hold)
+
     authorize @listing, :activate?
     ActiveRecord::Base.transaction do
       @listing.cancel_open_transaction!
@@ -290,6 +299,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # Listing that never actually reached `sold` — counters bumped for a sale
   # that, from the Listing's own status, never happened.
   def sold
+    return render_already_in_state if already_in_state?(:sold)
+
     authorize @listing, :sold?
     txn = nil
     ActiveRecord::Base.transaction do
@@ -343,6 +354,30 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # apps say it in the reader's language (a bare "Forbidden" read as English).
   def render_listing_removed
     render_coded_error("this listing was deleted", code: :listing_removed, status: :forbidden)
+  end
+
+  # OFFLINE §10.3 — a status change is a TARGET state. A queued "publish" or
+  # "mark sold" that reaches a listing already in that state (made so on the
+  # web, by a teammate, or by this same request's lost first answer) is a
+  # success with `already: true`, not a 403/422 the seller has to deal with.
+  # Permission still comes first: only who may edit the listing learns anything.
+  ALREADY_STATES = {
+    live: ->(l) { l.live? },
+    draft: ->(l) { l.draft? },
+    sold: ->(l) { l.sold? },
+    live_without_hold: ->(l) { l.active? && l.held_units.zero? }
+  }.freeze
+
+  def already_in_state?(target)
+    return false if @listing.removed?
+
+    authorize @listing, :update?
+    ALREADY_STATES.fetch(target).call(@listing)
+  end
+
+  def render_already_in_state
+    render_ok({ ListingSerializer.model_name.singular => ListingSerializer.render_as_hash(@listing, view: :owner_detailed),
+                already: true })
   end
 
   def set_listing

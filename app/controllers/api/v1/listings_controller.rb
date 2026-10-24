@@ -1,4 +1,7 @@
 class Api::V1::ListingsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :save, :unsave, :hide, :unhide
+
   SELLER_ACTIVE_DAYS_RANGE = (1..3650)
 
   # Guests can browse the feed and view a listing without logging in. Auth is

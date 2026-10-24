@@ -1,4 +1,7 @@
 class Api::V1::BlocksController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create, :destroy
+
   # Hunt-2 (1.1.7): block/unblock toggling notifies and rewrites feeds.
   throttle to: 60, within: 1.hour, by: :user, only: %i[create destroy]
 

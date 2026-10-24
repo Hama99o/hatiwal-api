@@ -15,6 +15,12 @@ RSpec.configure do |config|
     DatabaseCleaner.strategy = :truncation
   end
 
+  # Specs that run code on other threads (e.g. two concurrent requests with one
+  # Idempotency-Key) need committed rows, which a wrapping transaction hides.
+  config.before(:each, db_truncation: true) do
+    DatabaseCleaner.strategy = :truncation
+  end
+
   config.before(:each) do
     DatabaseCleaner.start
   end

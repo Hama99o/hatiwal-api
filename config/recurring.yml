@@ -37,3 +37,6 @@ production:
   listing_expiry_reminders:
     class: ListingExpiryReminderJob
     schedule: every hour at minute 25
+  purge_idempotency_keys:
+    class: PurgeIdempotencyKeysJob
+    schedule: every day at 2am

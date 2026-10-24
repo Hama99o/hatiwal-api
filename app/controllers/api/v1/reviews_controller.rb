@@ -3,6 +3,9 @@
 #   POST  /api/v1/transactions/:transaction_id/reviews — leave a review
 #   PATCH /api/v1/reviews/:id              — edit your own review while hidden
 class Api::V1::ReviewsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create
+
   # Hunt-2 (1.1.7).
   throttle to: 60, within: 1.day, by: :user, only: %i[create update]
 

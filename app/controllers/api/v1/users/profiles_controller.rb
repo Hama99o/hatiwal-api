@@ -1,4 +1,7 @@
 class Api::V1::Users::ProfilesController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :update_me
+
   before_action :set_user, only: [ :show ]
   # Hunt-2 (1.1.7): far above the app's own calls (push token, theme, language).
   throttle to: 120, within: 1.hour, by: :user, only: :update_me

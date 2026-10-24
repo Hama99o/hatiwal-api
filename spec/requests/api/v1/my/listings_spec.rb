@@ -464,10 +464,13 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(draft.reload).to be_active
       end
 
-      it "forbids publishing a non-draft" do
+      # OFFLINE §10.3: publish is a target state — already live is a success
+      # (200, already: true), not a 403 (listing_target_state_spec.rb).
+      it "answers 'already' when publishing a listing that is already live" do
         active = create(:listing, :active, user: user)
         put "/api/v1/my/listings/#{active.id}/publish", headers: headers, as: :json
-        expect(response).to have_http_status(:forbidden)
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["already"]).to be(true)
       end
     end
 
@@ -583,14 +586,17 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
       # before it ever reaches the bump logic. Guards the invariant explicitly
       # so nobody removes the `sold?` terminal check without noticing it is
       # the ONLY thing preventing the counter from double-counting.
-      it "rejects a repeat sold call on an already-sold listing and never double-counts sold_count" do
+      # OFFLINE §10.3: a repeat sold call is answered "already" (200) — and
+      # still never double-counts sold_count or records a second sale.
+      it "answers 'already' to a repeat sold call and never double-counts sold_count" do
         sold = create(:listing, :sold, user: user)
 
         expect do
           put "/api/v1/my/listings/#{sold.id}/sold", headers: headers, as: :json
-        end.not_to change { user.reload.sold_count }
+        end.not_to change { [ user.reload.sold_count, Transaction.count ] }
 
-        expect(response).to have_http_status(:forbidden)
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["already"]).to be(true)
       end
 
       # ── TASK-TX01 ──────────────────────────────────────────────────────────
@@ -788,10 +794,12 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(active.reload).to be_draft
       end
 
-      it "forbids unpublishing a non-live listing" do
+      it "answers 'already' for a draft, and forbids unpublishing a sold listing" do
+        # OFFLINE §10.3: already a draft is the target state.
         draft = create(:listing, :draft, user: user)
         put "/api/v1/my/listings/#{draft.id}/unpublish", headers: headers, as: :json
-        expect(response).to have_http_status(:forbidden)
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["already"]).to be(true)
 
         sold = create(:listing, :sold, user: user)
         put "/api/v1/my/listings/#{sold.id}/unpublish", headers: headers, as: :json
@@ -834,9 +842,17 @@ RSpec.describe "Api::V1::My::Listings", type: :request do
         expect(reserved.reload).to be_active
       end
 
-      it "forbids activating a non-reserved listing" do
+      # OFFLINE §10.3: releasing a hold that is not there is the target state.
+      it "answers 'already' when activating a live listing that holds nothing" do
         active = create(:listing, :active, user: user)
         put "/api/v1/my/listings/#{active.id}/activate", headers: headers, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(JSON.parse(response.body)["already"]).to be(true)
+      end
+
+      it "still forbids activating a draft" do
+        draft = create(:listing, :draft, user: user)
+        put "/api/v1/my/listings/#{draft.id}/activate", headers: headers, as: :json
         expect(response).to have_http_status(:forbidden)
       end
 

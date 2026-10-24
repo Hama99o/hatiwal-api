@@ -3,6 +3,9 @@
 # existing block check — chats, offers, pushes — applies unchanged), which
 # remembers the shop so the blocked list shows the shop, never the person.
 class Api::V1::ShopBlocksController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create, :destroy
+
   # Hunt-2 (1.1.7), like BlocksController.
   throttle to: 60, within: 1.hour, by: :user, only: %i[create destroy]
 
