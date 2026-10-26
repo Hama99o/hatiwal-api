@@ -38,6 +38,12 @@ class Message < ApplicationRecord
               max_size: MAX_ATTACHMENT_SIZE
             }
   validate :kind_must_not_be_system_when_user_authored
+
+  # OFFLINE §10.1: the phone's own id for a message it queued. Unique per sender
+  # (partial index); the same charset as an Idempotency-Key.
+  validates :client_uuid, format: { with: IdempotencyKey::FORMAT }, allow_nil: true
+  validates :client_uuid, uniqueness: { scope: :user_id }, allow_nil: true, on: :create
+  CLIENT_UUID_TAKEN_CODE = "client_uuid_taken".freeze
   # SHOP-2: a shop chat has no product, so no offers or deal kinds either.
   validate :kind_allowed_in_support_thread, if: -> { conversation&.kind_support? || conversation&.shop_chat? }
   validate :responds_to_must_be_in_same_conversation, if: -> { responds_to_id.present? }
@@ -180,6 +186,7 @@ class Message < ApplicationRecord
   def error_code
     return OFFER_QUANTITY_ABOVE_AVAILABLE_CODE if errors.where(:offer_quantity, OFFER_QUANTITY_ABOVE_AVAILABLE).any?
     return INVALID_CONTEXT_CODE if errors.include?(:context)
+    return CLIENT_UUID_TAKEN_CODE if errors.where(:client_uuid, :taken).any?
 
     nil
   end

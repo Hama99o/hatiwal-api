@@ -1,5 +1,8 @@
 class MessageSerializer < ApplicationSerializer
   fields :id, :kind, :read_at, :created_at, :responds_to_id
+  # OFFLINE §10.1: the sender's own id for the message (null from 1.1.x apps); the
+  # optimistic bubble and the sender's other devices match on it.
+  field :client_uuid
 
   field(:deleted) { |m| m.deleted? }
   # A server notice ({notice, shop_id, name}), so each viewer reads it in their

@@ -41,6 +41,13 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
     authorize @conversation, :send_message?
 
+    # OFFLINE §10.1: a message the phone already got through (its answer was
+    # lost) comes back as it is, never as a second message, even without an
+    # Idempotency-Key.
+    if (sent = already_sent_message)
+      return render_blue(MessageSerializer, sent, view: :default, options: { current_user: current_user })
+    end
+
     @message = @conversation.messages.new(safe_message_params)
     @message.user = current_user
     @message.attachment = params[:attachment] if params[:attachment].present?
@@ -85,6 +92,12 @@ class Api::V1::MessagesController < Api::V1::BaseController
     @conversation = policy_scope(Conversation).find(params[:conversation_id])
   end
 
+  def already_sent_message
+    return if params[:client_uuid].blank?
+
+    @conversation.messages.find_by(user: current_user, client_uuid: params[:client_uuid].to_s)
+  end
+
   def set_message
     @message = @conversation.messages.find(params[:id])
   rescue ActiveRecord::RecordNotFound
@@ -105,7 +118,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
   # `Message#discard_meaningless_offer_quantity`, which follows the rule
   # `Listing#units_for_sale` already set.
   def safe_message_params
-    permitted = params.permit(:body, :responds_to_id, :offer_quantity)
+    permitted = params.permit(:body, :responds_to_id, :offer_quantity, :client_uuid)
     raw_kind  = params[:kind].presence
     # Support: where the message was written from (Message#normalize_support_context).
     permitted[:context] = params[:context].permit(:mode, :shop_id).to_h if params[:context].respond_to?(:permit)

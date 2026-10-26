@@ -43,6 +43,26 @@ RSpec.describe Message, type: :model do
     end
   end
 
+  # OFFLINE §10.1
+  describe "client_uuid" do
+    it "is optional" do
+      expect(build(:message, client_uuid: nil)).to be_valid
+    end
+
+    it "must look like a key (8-64 letters, digits, - or _)" do
+      expect(build(:message, client_uuid: "short")).not_to be_valid
+      expect(build(:message, client_uuid: SecureRandom.uuid)).to be_valid
+    end
+
+    it "is unique per sender, with a stable code" do
+      first = create(:message, client_uuid: "abcdefgh-1")
+      again = build(:message, user: first.user, client_uuid: "abcdefgh-1")
+      expect(again).not_to be_valid
+      expect(again.error_code).to eq(Message::CLIENT_UUID_TAKEN_CODE)
+      expect(build(:message, client_uuid: "abcdefgh-1")).to be_valid # another sender
+    end
+  end
+
   describe "enums" do
     it {
       should define_enum_for(:kind).with_values(
