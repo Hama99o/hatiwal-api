@@ -149,6 +149,10 @@ class Listing < ApplicationRecord
   # never with the listing save, so a slow upload can't block publishing. The
   # attachments, validation and attach/purge live in HasVideo (shared with Shop).
   include HasVideo
+  include FieldEdits
+  # OFFLINE §7.2: what an edit conflict can name (the fields a seller edits).
+  tracks_field_edits :title, :description, :price, :currency, :category_id, :location, :address,
+                     :latitude, :longitude, :condition, :negotiable, :quantity, :price_unit
 
   # A listing must carry at least one photo before it goes live. This is a
   # photo-first marketplace: a photoless card renders as the grey "no photo" box,

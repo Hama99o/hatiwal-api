@@ -44,10 +44,17 @@ class Api::V1::My::TransactionsController < Api::V1::BaseController
   def update
     authorize @transaction, :update?
 
+    # OFFLINE §10.2: with `base`, a field a teammate changed meanwhile is not
+    # overwritten (the rest applies) and the answer is a 409 naming it.
+    changes = correction_params
+    edit = Edits::WithBase.split(@transaction, changes.slice(:quantity, :buyer_id, :final_price).compact, transaction_base)
+    changes = changes.merge(edit.attrs.symbolize_keys)
+    edit.conflicts.each_key { |field| changes[field.to_sym] = nil }
+
     @transaction.listing.correct_sold_transaction!(
-      transaction: @transaction, **correction_params
+      transaction: @transaction, **changes
     )
-    render_correction_response(@transaction.destroyed? ? nil : @transaction.reload)
+    render_correction_response(@transaction.destroyed? ? nil : @transaction.reload, conflicts: edit.conflicts)
   rescue Listing::CorrectionBlocked => e
     render_reviewed_sale_refusal(e)
   rescue ActiveRecord::RecordInvalid => e
@@ -97,12 +104,19 @@ class Api::V1::My::TransactionsController < Api::V1::BaseController
   # repaint stock, status and the `sale` block from one response instead of
   # refetching. `transaction` is absent when the sale was voided — there is
   # nothing left to render.
-  def render_correction_response(txn)
+  def render_correction_response(txn, conflicts: {})
     payload = {
       listing: ListingSerializer.render_as_hash(@transaction.listing.reload, view: :owner_detailed)
     }
     payload[:transaction] = TransactionSerializer.render_as_hash(txn, current_user: current_user) if txn
+    return render_ok(payload.merge(code: "edit_conflict", fields: conflicts), status: :conflict) if conflicts.any?
+
     render_ok(payload)
+  end
+
+  def transaction_base
+    base = params[:base]
+    base.respond_to?(:permit) ? base.permit(:quantity, :buyer_id, :final_price).to_h : {}
   end
 
   # The one deliberate refusal (Transaction::REVIEWED_SALE_ERROR). Carries a

@@ -92,7 +92,12 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     # gallery: assigning `images` directly would replace ALL attachments
     # (Rails replace_on_assign_to_many), destroying photos the client didn't
     # re-upload. See attach_new_images / purge_removed_images.
-    if @listing.update(listing_params.except(:images)) && attach_new_images
+    #
+    # OFFLINE §10.2: with `base` (the values the seller saw), a field changed
+    # elsewhere meanwhile is NOT overwritten: the others apply, and the answer
+    # is a 409 edit_conflict naming it. Without `base` (1.1.x): as before.
+    edit = Edits::WithBase.split(@listing, listing_params.except(:images), edit_base)
+    if @listing.update(edit.attrs) && attach_new_images
       purge_removed_images
       @listing.apply_image_order!(params.dig(:listing, :image_order), uploaded: @uploaded_images || [])
       @listing.record_owner_location_guess! if @listing.saved_change_to_latitude? || @listing.saved_change_to_longitude?
@@ -100,6 +105,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
       # title/description/photos of a RESERVED or SOLD listing must keep
       # seeing the `sale` block in the response, not have it silently
       # disappear because this one action rendered a different view.
+      return render_edit_conflict(edit.conflicts) if edit.conflicts.any?
+
       render_blue(ListingSerializer, @listing, view: :owner_detailed)
     else
       # SF-B6: `code:` carries the ONE edit failure the seller has to act on —
@@ -378,6 +385,17 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   # A deleted (or taken-down) listing is not renewed: 403 with a code, so the
   # apps say it in the reader's language (a bare "Forbidden" read as English).
+  # The fields the client saw, for the ones it edits (OFFLINE §10.2).
+  def edit_base
+    base = params.dig(:listing, :base) || params[:base]
+    base.respond_to?(:permit) ? base.permit(*Listing::TRACKED_EDIT_FIELDS).to_h : {}
+  end
+
+  def render_edit_conflict(conflicts)
+    render_ok({ ListingSerializer.model_name.singular => ListingSerializer.render_as_hash(@listing, view: :owner_detailed),
+                code: "edit_conflict", fields: conflicts }, status: :conflict)
+  end
+
   def render_shop_unavailable
     render_unprocessable_entity(I18n.t("shops.errors.cannot_sell_as"), code: :shop_unavailable)
   end

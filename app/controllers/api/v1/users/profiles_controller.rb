@@ -13,7 +13,13 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
   def update_me
     # Owner decision, 2026-10-08: once verified, a person stays verified — a
     # name change no longer drops the badge (drop_badge_after_name_change!).
-    if current_user.update(profile_params)
+    #
+    # OFFLINE §10.2: with `base` (what the phone saw), a field changed on
+    # another device meanwhile is not overwritten; the rest applies; 409.
+    edit = Edits::WithBase.split(current_user, profile_params, profile_base)
+    if current_user.update(edit.attrs)
+      return render_profile_conflict(edit.conflicts) if edit.conflicts.any?
+
       render_blue(UserSerializer, current_user, view: :me)
     else
       render_unprocessable_entity(current_user)
@@ -41,6 +47,19 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
     # publicly_active: a deleted or pending-deletion account has no public profile
     # (RecordNotFound → 404 via the global rescue).
     @user = User.publicly_active.find(params[:id])
+  end
+
+  # Only what a person edits by hand can conflict (not the push token, prefs).
+  PROFILE_BASE_FIELDS = %i[firstname lastname phone bio city province whatsapp_number].freeze
+
+  def profile_base
+    base = params.dig(:user, :base)
+    base.respond_to?(:permit) ? base.permit(*PROFILE_BASE_FIELDS).to_h : {}
+  end
+
+  def render_profile_conflict(conflicts)
+    render_ok({ user: UserSerializer.render_as_hash(current_user, view: :me), code: "edit_conflict", fields: conflicts },
+              status: :conflict)
   end
 
   def profile_params
