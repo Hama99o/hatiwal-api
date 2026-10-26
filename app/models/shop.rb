@@ -119,6 +119,11 @@ class Shop < ApplicationRecord
     shop_members.exists?(user_id: user.id)
   end
 
+  # Who may post AS this shop: an active shop, one of its members. Every role
+  # sells today (owner, manager, staff — docs/SHOPS.md); a role that may not
+  # would be refused here, the one place both "sell as" and OFFLINE §10.6 ask.
+  def may_sell?(user) = active? && member?(user)
+
   # ── SHOP-3: the team (docs/SHOPS.md, "Phase 3 — the team") ─────────────────
   def owner?(user) = user.present? && owner_id == user.id
   def team_full? = shop_members.count >= TEAM_LIMIT

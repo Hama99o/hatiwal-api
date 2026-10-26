@@ -722,7 +722,7 @@ class User < ApplicationRecord
   # Switch who the user sells as. nil = Me. Returns false (and changes nothing)
   # for a shop they are not a member of, or one that is not active.
   def sell_as!(shop)
-    return false if shop && !(shop.active? && shop.member?(self))
+    return false if shop && !shop.may_sell?(self)
 
     update!(active_shop: shop)
   end
@@ -760,10 +760,20 @@ class User < ApplicationRecord
     Listing.where(user_id: id, shop_id: nil).or(Listing.where(shop_id: shop_members.select(:shop_id)))
   end
 
-  def listings_for_selling_identity
-    shop = selling_shop
+  def listings_for_selling_identity(shop = selling_shop)
     # SHOP-3: a shop's products are every member's to manage, whoever posted them.
     shop ? shop.listings : listings.where(shop_id: nil)
+  end
+
+  # OFFLINE §10.6: the identity a write names itself — `shop_id` nil / blank is
+  # Me — instead of whatever the user is selling as on the server right now (a
+  # write queued offline as the shop must land in the shop). [:ok, shop_or_nil],
+  # or [:unavailable] for a shop they may not post as (left it, closed, never theirs).
+  def identity_for(shop_id)
+    return [ :ok, nil ] if shop_id.blank?
+
+    shop = Shop.find_by(id: shop_id)
+    shop&.may_sell?(self) ? [ :ok, shop ] : [ :unavailable ]
   end
 
   private

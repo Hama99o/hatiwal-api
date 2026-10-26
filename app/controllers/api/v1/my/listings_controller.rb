@@ -3,6 +3,12 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   idempotent :create, :update, :destroy, :publish, :unpublish, :sold, :renew, :relaunch, :activate
 
   before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew, :relaunch, :move, :duplicate ]
+  # A removed listing (deleted by the seller, taken down, or its account being
+  # deleted) changes no more: it was SOLD, edited and published again before
+  # this (B4, found by the offline work). renew/relaunch already refused it;
+  # move and duplicate already did too, with their own codes (move_not_movable,
+  # duplicate_removed) that the apps know, so they keep them.
+  before_action :refuse_removed_listing, only: [ :update, :publish, :unpublish, :reserve, :activate, :sold ]
 
   # Feed flooding. A real seller listing 30 items in one day is already an
   # outlier on a local marketplace; a script posting 10 000 is what buries
@@ -13,9 +19,16 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   throttle to: 30, within: 1.day, by: :user, only: %i[create duplicate]
 
   def index
-    # SHOP-1: "My listings" as Me, "My shop" as a shop (User#selling_shop).
+    # SHOP-1: "My listings" as Me, "My shop" as a shop (User#selling_shop) —
+    # or, OFFLINE §10.6, the identity the app asks for (`selling_as`: me | a shop
+    # id), so it caches each identity under its own key.
+    shop = current_user.selling_shop
+    if params.key?(:selling_as)
+      status, shop = current_user.identity_for(params[:selling_as] == "me" ? nil : params[:selling_as])
+      return render_shop_unavailable if status == :unavailable
+    end
     listings = policy_scope(
-      current_user.listings_for_selling_identity
+      current_user.listings_for_selling_identity(shop)
                   .not_removed
                   .includes(
                     :category, :conversations, :price_histories, :user, # :user — posted_by
@@ -45,8 +58,17 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   def create
     @listing = current_user.listings.new(listing_params)
     # SHOP-1: "+ Sell" posts as whoever the user is selling as. Decided here,
-    # never by a client param, so nobody can post into a shop they have left.
-    @listing.shop = current_user.selling_shop
+    # never trusted from the client: a `shop_id` (OFFLINE §10.6 — the identity
+    # the listing was made under, maybe offline) is checked exactly like
+    # "sell as", so nobody can post into a shop they have left.
+    if params.key?(:shop_id)
+      status, shop = current_user.identity_for(params[:shop_id])
+      return render_shop_unavailable if status == :unavailable
+
+      @listing.shop = shop
+    else
+      @listing.shop = current_user.selling_shop
+    end
     authorize @listing
 
     if @listing.save
@@ -95,6 +117,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   def destroy
     authorize @listing
+    # Already removed (another device, a retry after a lost answer — OFFLINE
+    # §10.3): done. And never overwrite why it was removed: a seller's delete
+    # used to replace an admin's take-down reason with "deleted_by_seller" (B7).
+    return head :no_content if @listing.removed?
 
     # Soft-remove instead of hard delete: hides the listing from the feed and
     # My Shop but keeps its conversations/messages, so the buyer's chat history
@@ -352,6 +378,14 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   # A deleted (or taken-down) listing is not renewed: 403 with a code, so the
   # apps say it in the reader's language (a bare "Forbidden" read as English).
+  def render_shop_unavailable
+    render_unprocessable_entity(I18n.t("shops.errors.cannot_sell_as"), code: :shop_unavailable)
+  end
+
+  def refuse_removed_listing
+    render_listing_removed if @listing.removed?
+  end
+
   def render_listing_removed
     render_coded_error("this listing was deleted", code: :listing_removed, status: :forbidden)
   end
