@@ -117,4 +117,44 @@ RSpec.describe "My listings — photo order", type: :request do
     copy = Listings::DuplicateService.new(listing: Listing.find(listing.id), actor: seller, shop_id: nil).call
     expect(copy.ordered_images.map { |a| a.blob.filename.to_s }).to eq(%w[c.jpg b.jpg a.jpg])
   end
+
+  # B12 (2026-10-27): on CREATE the cover the seller chose was lost — the app
+  # appended photos as their compression finished, and the API had no order
+  # field on POST. Now POST takes image_order too ("new:<n>" only: every photo
+  # is new), and the app sends it.
+  describe "POST /api/v1/my/listings — image_order on create" do
+    let(:category) { create(:category) }
+
+    def post_listing(extra)
+      post "/api/v1/my/listings",
+           params: { listing: { title: "Toyota Corolla 2003", price: 320_000, currency: "AFN",
+                                category_id: category.id, location: "Kabul" }.merge(extra) },
+           headers: headers
+    end
+
+    it "the 2nd photo chosen as cover comes back first, the others in the seller's order" do
+      post_listing(images: [ real_photo("p0.jpg"), real_photo("p1.jpg"), real_photo("p2.jpg") ],
+                   image_order: %w[new:1 new:0 new:2])
+
+      expect(response).to have_http_status(:created)
+      body = JSON.parse(response.body)
+      expect(names_in_order(body)).to eq(%w[p1.jpg p0.jpg p2.jpg])
+      # The cover everywhere (thumbnail_url, the feed card) is ordered_images.first.
+      expect(Listing.find(body["listing"]["id"]).ordered_images.first.blob.filename.to_s).to eq("p1.jpg")
+    end
+
+    it "keeps upload order when no image_order is sent (a 1.1.x app)" do
+      post_listing(images: [ real_photo("p0.jpg"), real_photo("p1.jpg"), real_photo("p2.jpg") ])
+
+      expect(response).to have_http_status(:created)
+      expect(names_in_order(JSON.parse(response.body))).to eq(%w[p0.jpg p1.jpg p2.jpg])
+    end
+
+    it "ignores garbage and out-of-range tokens on create" do
+      post_listing(images: [ real_photo("p0.jpg"), real_photo("p1.jpg") ], image_order: %w[new:9 junk new:1])
+
+      expect(response).to have_http_status(:created)
+      expect(names_in_order(JSON.parse(response.body))).to eq(%w[p1.jpg p0.jpg])
+    end
+  end
 end

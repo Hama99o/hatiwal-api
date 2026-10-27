@@ -72,6 +72,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     authorize @listing
 
     if @listing.save
+      # B12: the cover the seller chose. On create every photo is new, so
+      # image_order is all "new:<n>" tokens, <n> the index in this request's
+      # images[] (= attachment id order). Absent (a 1.1.x app): upload order.
+      @listing.apply_image_order!(params.dig(:listing, :image_order), uploaded: @listing.images.attachments.sort_by(&:id))
       @listing.record_owner_location_guess!
       # TASK-R418 (CR fix, CYCLE-4): every owner-scoped single-listing render
       # in this controller uses :owner_detailed, not just show/reserve/sold —
