@@ -55,7 +55,7 @@ RSpec.describe "Edits with a base — profile and sale", type: :request do
       sale.update!(final_price: 950)
       correct({ final_price: 850 }, base: { final_price: 900 })
       expect(response).to have_http_status(:conflict)
-      expect(body["fields"]["final_price"]).to include("theirs" => "950.0")
+      expect(body["fields"]["final_price"]).to include("theirs" => 950.0)
       expect(sale.reload.final_price).to eq(950)
     end
 

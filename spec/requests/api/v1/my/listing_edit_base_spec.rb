@@ -44,6 +44,8 @@ RSpec.describe "My listings — edits with a base", type: :request do
     expect(body["code"]).to eq("edit_conflict")
     price = body["fields"]["price"]
     expect([ price["yours"].to_f, price["theirs"].to_f ]).to eq([ 450.0, 480.0 ])
+    # Money as JSON numbers (ad9af59), in a conflict too — never "480.0".
+    expect(price["theirs"]).to be_a(Float)
     expect(price["changed_by_name"]).to eq("Hamid Rahimi")
     expect(Time.zone.parse(price["changed_at"])).to eq(Time.zone.parse("2026-10-26 14:02"))
     expect(body["fields"].keys).to eq([ "price" ])

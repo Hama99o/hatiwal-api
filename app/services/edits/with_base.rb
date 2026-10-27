@@ -45,7 +45,13 @@ module Edits
     def conflict(field, yours, theirs)
       # Models that track their edits (FieldEdits) say who; the others say when.
       edit = @record.respond_to?(:last_field_edit) ? @record.last_field_edit(field) : { at: @record.updated_at, by_name: nil }
-      { yours: yours, theirs: theirs, changed_at: edit[:at], changed_by_name: edit[:by_name] }
+      { yours: json_value(yours), theirs: json_value(theirs), changed_at: edit[:at], changed_by_name: edit[:by_name] }
+    end
+
+    # Money and other decimals as JSON numbers, like every serializer
+    # (ApplicationSerializer.money): a BigDecimal would go out as "480.0".
+    def json_value(value)
+      value.is_a?(BigDecimal) ? value.to_f : value
     end
   end
 end
