@@ -49,7 +49,10 @@ module RateLimitable
         # a counter.
         name:   "#{by}-#{to}-per-#{within.to_i}",
         by:     -> { rate_limit_key(by) },
-        with:   -> { render_too_many_requests },
+        # OFFLINE §8.3: the app's outbox waits this long before trying again.
+        # The window's full length — an upper bound (the counter is a fixed
+        # window that started at the first request, so it is over by then).
+        with:   -> { render_too_many_requests(retry_after: within) },
         **options
       )
     end
@@ -87,7 +90,8 @@ module RateLimitable
     current_user ? "user:#{current_user.id}" : "ip:#{request.remote_ip}"
   end
 
-  def render_too_many_requests
+  def render_too_many_requests(retry_after: nil)
+    response.set_header("Retry-After", retry_after.to_i.to_s) if retry_after
     render json: {
       error:   "rate_limited",
       message: "Too many requests. Please wait a moment and try again."

@@ -50,6 +50,23 @@ RSpec.describe "Rate limiting", type: :request do
     end
   end
 
+  describe "reports, keyed by user (20 a day)" do
+    let(:reporter) { create(:user) }
+
+    it "the 21st is refused with Retry-After: the rest of the day window, never a sooner retry" do
+      headers = auth_headers_for(reporter)
+      20.times do
+        post "/api/v1/reports", params: { report: { reportable_type: "User", reportable_id: create(:user).id, reason: "spam" } },
+                                headers: headers, as: :json
+      end
+      post "/api/v1/reports", params: { report: { reportable_type: "User", reportable_id: create(:user).id, reason: "spam" } },
+                              headers: headers, as: :json
+
+      expect(response).to have_http_status(:too_many_requests)
+      expect(response.headers["Retry-After"]).to eq(1.day.to_i.to_s)
+    end
+  end
+
   describe "listing creation, keyed by user" do
     let(:category) { create(:category) }
 
@@ -68,6 +85,9 @@ RSpec.describe "Rate limiting", type: :request do
       create_listing(headers)
 
       expect(response).to have_http_status(:too_many_requests)
+      # OFFLINE §8.3: when to try again — the window's length (a day), so an
+      # app's outbox waits instead of retrying every few minutes.
+      expect(response.headers["Retry-After"]).to eq(1.day.to_i.to_s)
     end
 
     it "does not spend anybody else's quota" do
