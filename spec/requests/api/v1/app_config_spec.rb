@@ -86,4 +86,21 @@ RSpec.describe "Api::V1::AppConfig", type: :request do
     expect(response.headers["Cache-Control"]).not_to include("public")
     expect(queries.grep(/"users"/)).to be_empty
   end
+
+  # OFFLINE §8.6: the rules the phone checks before a listing is queued — the
+  # model's own limits, so the phone and the server never drift.
+  it "carries the listing rules, from the model's own limits" do
+    get "/api/v1/app_config"
+    rules = JSON.parse(response.body)["listing_rules"]
+    expect(rules).to include(
+      "title_max" => Listing::MAX_TITLE_LENGTH,
+      "description_max" => Listing::MAX_DESCRIPTION_LENGTH,
+      "quantity_max" => Listing::MAX_QUANTITY,
+      "max_photos" => Listing::MAX_IMAGES,
+      "photo_required_to_publish" => true,
+      "video_max_seconds" => HasVideo::MAX_VIDEO_DURATION_S,
+      "video_max_bytes" => HasVideo::MAX_VIDEO_SIZE
+    )
+    expect(rules["price_max"].to_d).to eq(Listing::MAX_PRICE.to_d)
+  end
 end

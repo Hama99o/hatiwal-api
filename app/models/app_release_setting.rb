@@ -57,7 +57,9 @@ class AppReleaseSetting < ApplicationRecord
       min_version: settings["min_version"],
       latest_version: settings["latest_version"],
       store_url: settings["store_url"],
-      status: status(version, settings)
+      status: status(version, settings),
+      # OFFLINE §8.6: what a listing must satisfy, checked on the phone first.
+      listing_rules: Listing.client_rules
     }
   end
 

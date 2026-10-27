@@ -61,7 +61,9 @@ RSpec.describe "Admin shops", type: :request do
     get admin_shop_path(shop)
     expect(response).to have_http_status(:ok)
     expect(response.body).to include("shop-moderation", "shop-verification", "shop-members", "shop-products",
-                                     "shop-reports", "shop-history", "Rose lipstick", owner.full_name)
+                                     "shop-reports", "shop-history", "Rose lipstick",
+                                     # Escaped as the page writes it: a Faker name like "O'Keefe" made this flaky.
+                                     ERB::Util.html_escape(owner.full_name))
   end
 
   it "suspends: the shop leaves search, members sell as Me, it is logged" do

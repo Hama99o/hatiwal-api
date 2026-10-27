@@ -34,7 +34,8 @@ class Listing < ApplicationRecord
   # validate: an unknown value is a 422, not an ArgumentError 500 (night QA 2026-10-12).
   enum :condition, { brand_new: 0, like_new: 1, good: 2, fair: 3 }, prefix: :condition, validate: { allow_nil: true }
 
-  validates :title, presence: true, length: { maximum: 150 }
+  MAX_TITLE_LENGTH = 150
+  validates :title, presence: true, length: { maximum: MAX_TITLE_LENGTH }
   # The `price` column is decimal(12, 2), so any value above 9_999_999_999.99
   # overflows in Postgres and raises ActiveRecord::RangeError *after* validation
   # has already passed. That surfaces to the mobile app as a 500 with no field
@@ -47,7 +48,8 @@ class Listing < ApplicationRecord
   # Multi-quantity listings (docs/SPIKE_LISTING_QUANTITY.md, Tier 1). Defaults to
   # 1 so nothing existing changes; the 999 ceiling is a sanity bound, not a
   # business rule — this is a local marketplace, not a warehouse.
-  validates :quantity, numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: 999 }
+  MAX_QUANTITY = 999
+  validates :quantity, numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: MAX_QUANTITY }
 
   # Stays (docs/STAYS_DESIGN.md §2.2–2.4). `price_unit` nil = a total price (every
   # item); a stay is priced per night (default) or per month; Property rent may be
@@ -142,6 +144,23 @@ class Listing < ApplicationRecord
   # POST a megabyte of prose per listing. 3 000 characters is far longer than any
   # real item description needs (the title cap is 150, a chat message 1 000).
   MAX_DESCRIPTION_LENGTH = 3_000
+
+  # OFFLINE §8.6 / §10.4 — the rules the app checks on the phone (also offline)
+  # before a listing enters its queue, read from the SAME constants the
+  # validations use, so the two never drift. Served in GET /app_config.
+  def self.client_rules
+    {
+      title_max: MAX_TITLE_LENGTH,
+      description_max: MAX_DESCRIPTION_LENGTH,
+      price_max: MAX_PRICE,
+      quantity_min: 1,
+      quantity_max: MAX_QUANTITY,
+      max_photos: MAX_IMAGES,
+      photo_required_to_publish: true,
+      video_max_seconds: HasVideo::MAX_VIDEO_DURATION_S,
+      video_max_bytes: HasVideo::MAX_VIDEO_SIZE
+    }
+  end
   validates :description, length: { maximum: MAX_DESCRIPTION_LENGTH }
 
   # VID (1.1.9, docs/LISTING_VIDEO.md): one optional video per listing, beside
