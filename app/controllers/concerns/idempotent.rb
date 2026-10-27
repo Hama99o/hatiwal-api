@@ -14,8 +14,13 @@
 #   - completed → the stored answer, same code and body, and nothing runs again
 #     (header `Idempotent-Replayed: true`);
 #   - still in progress → 409 `idempotency_in_progress`: the client retries later;
+#     in progress for longer than IdempotencyKey::IN_PROGRESS_TTL → that request
+#     died, and this one takes the row over and runs;
 #   - a DIFFERENT request under the same key → 422 `idempotency_key_reused`.
-# A 5xx or an exception is NOT kept: the row is removed so a retry can run.
+# A 5xx, a 429 or an exception is NOT kept: the row is removed so a retry can
+# run. The rate limit runs INSIDE this wrapper (its before_action is declared
+# after `idempotent`), so a kept 429 was replayed to every retry with the key,
+# without Retry-After, long after the window (QA audit 2026-10-27 A1).
 #
 # The fingerprint is the method, the path and the PARAMETERS — not the raw body:
 # a multipart retry carries a new random boundary, so the raw bytes differ for
@@ -58,6 +63,8 @@ module Idempotent
     if existing.request_fingerprint != fingerprint
       render_unprocessable_entity("This Idempotency-Key was already used for a different request",
                                   code: "idempotency_key_reused")
+    elsif existing.in_progress? && existing.take_over_if_stale!
+      return existing
     elsif existing.in_progress?
       render_ok({ error: "The first request with this Idempotency-Key is still running", code: "idempotency_in_progress" },
                 status: :conflict)
@@ -69,7 +76,7 @@ module Idempotent
 
   def run_and_store(record)
     yield
-    if response.status >= 500
+    if response.status >= 500 || response.status == 429
       record.destroy
     else
       record.update!(status: :completed, response_code: response.status, response_body: stored_body)

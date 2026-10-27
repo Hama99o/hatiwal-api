@@ -49,6 +49,32 @@ RSpec.describe "Idempotency-Key", type: :request do
     expect(JSON.parse(response.body)["code"]).to eq("idempotency_in_progress")
   end
 
+  # QA audit 2026-10-27 A3: a request that died (the API crashed, OOM) left its
+  # row in_progress forever — every retry got 409, and the outbox waited for good.
+  it "a key in progress for longer than IN_PROGRESS_TTL is taken over: the retry runs, once" do
+    create_listing(key: key)
+    # As if that request had died mid-way: no listing, its row left in progress.
+    user.listings.last.destroy!
+    IdempotencyKey.find_by!(user: user, key: key)
+                  .update_columns(status: IdempotencyKey.statuses[:in_progress], response_code: nil,
+                                  response_body: nil, updated_at: (IdempotencyKey::IN_PROGRESS_TTL + 1.minute).ago)
+
+    expect { create_listing(key: key) }.to change(Listing, :count).by(1)
+    expect(response).to have_http_status(:created)
+    expect(IdempotencyKey.find_by!(user: user, key: key)).to be_completed
+
+    expect { create_listing(key: key) }.not_to change(Listing, :count) # replayed from then on
+    expect(response.headers["Idempotent-Replayed"]).to eq("true")
+  end
+
+  it "a key in progress for less than IN_PROGRESS_TTL is still 409 (it may be running)" do
+    create_listing(key: key)
+    IdempotencyKey.find_by!(user: user, key: key)
+                  .update_columns(status: IdempotencyKey.statuses[:in_progress], updated_at: 1.minute.ago)
+    expect { create_listing(key: key) }.not_to change(Listing, :count)
+    expect(response).to have_http_status(:conflict)
+  end
+
   it "a refusal (4xx) is the answer too: a replay gets the same 422, still no listing" do
     bad = params.deep_merge(listing: { price: -5 })
     create_listing(key: key, body: bad)
@@ -67,6 +93,24 @@ RSpec.describe "Idempotency-Key", type: :request do
 
     allow_any_instance_of(Listing).to receive(:save).and_call_original # rubocop:disable RSpec/AnyInstance
     expect { create_listing(key: key) }.to change(Listing, :count).by(1)
+  end
+
+  # QA audit 2026-10-27 A1: the throttle runs INSIDE the idempotency wrapper, so
+  # a 429 was stored as the key's answer — every retry with that key replayed
+  # the 429 (with no Retry-After), long after the window was over.
+  it "a 429 is NOT kept: while limited each retry gets a fresh 429 with Retry-After, after the window it runs" do
+    30.times { create_listing(key: SecureRandom.uuid) } # the day's limit (30 creates)
+    create_listing(key: key)
+    expect(response).to have_http_status(:too_many_requests)
+
+    create_listing(key: key)
+    expect(response).to have_http_status(:too_many_requests)
+    expect(response.headers["Retry-After"]).to eq(1.day.to_i.to_s)
+    expect(response.headers["Idempotent-Replayed"]).to be_nil
+
+    RateLimitable.store.clear # the window is over
+    expect { create_listing(key: key) }.to change(Listing, :count).by(1)
+    expect(response).to have_http_status(:created)
   end
 
   it "keys are per user: another user's same key is a different request" do

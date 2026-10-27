@@ -21,6 +21,20 @@ RSpec.describe IdempotencyKey, type: :model do
     row.user.delete
     expect(described_class.exists?(row.id)).to be(false)
   end
+
+  describe "#take_over_if_stale! (QA audit 2026-10-27 A3)" do
+    it "takes over an in-progress row older than IN_PROGRESS_TTL for exactly one caller" do
+      row = create(:idempotency_key, status: :in_progress, updated_at: (described_class::IN_PROGRESS_TTL + 1.minute).ago)
+      other = described_class.find(row.id) # a second retry, arriving at the same moment
+      expect(row.take_over_if_stale!).to be(true)
+      expect(other.take_over_if_stale!).to be(false)
+    end
+
+    it "leaves a recent in-progress row and a completed row alone" do
+      expect(create(:idempotency_key, status: :in_progress, updated_at: 1.minute.ago).take_over_if_stale!).to be(false)
+      expect(create(:idempotency_key, status: :completed, updated_at: 1.hour.ago).take_over_if_stale!).to be(false)
+    end
+  end
 end
 
 RSpec.describe PurgeIdempotencyKeysJob, type: :job do
