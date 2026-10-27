@@ -113,4 +113,32 @@ RSpec.describe "My listings — the identity a write names", type: :request do
       expect(ids).to eq([ in_shop.id ])
     end
   end
+
+  describe "GET /my/listings/status_counts?selling_as=" do
+    before do
+      create(:listing, :active, user: seller)
+      create_list(:listing, 2, :active, user: seller, shop: shop)
+    end
+
+    it "counts the identity asked for, whatever the server's 'selling as'" do
+      seller.sell_as!(shop)
+      get "/api/v1/my/listings/status_counts", params: { selling_as: "me" }, headers: headers
+      expect(body["all"]).to eq(1)
+      seller.sell_as!(nil)
+      get "/api/v1/my/listings/status_counts", params: { selling_as: shop.id }, headers: headers
+      expect(body["all"]).to eq(2)
+    end
+
+    it "a shop it may not see → 422 shop_unavailable" do
+      get "/api/v1/my/listings/status_counts", params: { selling_as: create(:shop).id }, headers: headers
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(body["code"]).to eq("shop_unavailable")
+    end
+
+    it "no selling_as (1.1.x): as before" do
+      seller.sell_as!(shop)
+      get "/api/v1/my/listings/status_counts", headers: headers
+      expect(body["all"]).to eq(2)
+    end
+  end
 end

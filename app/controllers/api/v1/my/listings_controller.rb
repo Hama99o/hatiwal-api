@@ -1,4 +1,6 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
+  include SellingIdentityParam
+
   # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
   idempotent :create, :update, :destroy, :publish, :unpublish, :sold, :renew, :relaunch, :activate
 
@@ -22,11 +24,9 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     # SHOP-1: "My listings" as Me, "My shop" as a shop (User#selling_shop) —
     # or, OFFLINE §10.6, the identity the app asks for (`selling_as`: me | a shop
     # id), so it caches each identity under its own key.
-    shop = current_user.selling_shop
-    if params.key?(:selling_as)
-      status, shop = current_user.identity_for(params[:selling_as] == "me" ? nil : params[:selling_as])
-      return render_shop_unavailable if status == :unavailable
-    end
+    status, shop = requested_selling_identity
+    return render_shop_unavailable if status == :unavailable
+
     listings = policy_scope(
       current_user.listings_for_selling_identity(shop)
                   .not_removed
@@ -398,10 +398,6 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   def render_edit_conflict(conflicts)
     render_ok({ ListingSerializer.model_name.singular => ListingSerializer.render_as_hash(@listing, view: :owner_detailed),
                 code: "edit_conflict", fields: conflicts }, status: :conflict)
-  end
-
-  def render_shop_unavailable
-    render_unprocessable_entity(I18n.t("shops.errors.cannot_sell_as"), code: :shop_unavailable)
   end
 
   def refuse_removed_listing
