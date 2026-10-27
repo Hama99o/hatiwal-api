@@ -1,6 +1,6 @@
 class Api::V1::ConversationsController < Api::V1::BaseController
   # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
-  idempotent :create
+  idempotent :create, :destroy
 
   # Allowed values for the `role` index param (TASK-R517) — "conversations
   # where I am buying" vs "conversations where I am selling". A frozen

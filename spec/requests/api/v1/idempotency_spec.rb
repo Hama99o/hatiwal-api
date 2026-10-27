@@ -139,4 +139,15 @@ RSpec.describe "Idempotency-Key", type: :request do
       expect(IdempotencyKey.where(user: user, key: key).count).to eq(1)
     end
   end
+
+  # §18.2 row 8: "Relaunch all expired" can be queued offline too.
+  it "relaunch_expired: a replay returns the first answer (the same count), nothing is relaunched twice" do
+    create(:listing, :active, user: user, expires_at: 2.days.ago)
+    post "/api/v1/my/listings/relaunch_expired", params: { shop_id: nil }, headers: headers.merge("Idempotency-Key" => key), as: :json
+    first = JSON.parse(response.body)
+    expect(first["renewed"]).to eq(1)
+    post "/api/v1/my/listings/relaunch_expired", params: { shop_id: nil }, headers: headers.merge("Idempotency-Key" => key), as: :json
+    expect(JSON.parse(response.body)).to eq(first)
+    expect(response.headers["Idempotent-Replayed"]).to eq("true")
+  end
 end

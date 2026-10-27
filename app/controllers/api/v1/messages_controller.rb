@@ -1,6 +1,6 @@
 class Api::V1::MessagesController < Api::V1::BaseController
   # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
-  idempotent :create
+  idempotent :create, :destroy
 
   before_action :set_conversation
   before_action :set_message, only: [ :destroy ]

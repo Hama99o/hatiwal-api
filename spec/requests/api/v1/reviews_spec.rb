@@ -133,6 +133,9 @@ RSpec.describe "Api::V1::Reviews", type: :request do
              params: { review: { rating: 3 } }, headers: auth_headers_for(seller), as: :json
       end
       expect(response).to have_http_status(:unprocessable_content)
+      # OFFLINE §5 row 23: a stable code — a review queued offline that another
+      # device already left is done for the app, not a refusal.
+      expect(JSON.parse(response.body)["code"]).to eq("already_reviewed")
     end
 
     it "rejects an out-of-range rating" do
@@ -149,6 +152,19 @@ RSpec.describe "Api::V1::Reviews", type: :request do
             params: { review: { rating: 5 } }, headers: auth_headers_for(seller), as: :json
       expect(response).to have_http_status(:ok)
       expect(review.reload.rating).to eq(5)
+    end
+
+    it "OFFLINE §10.2: an edit with a base keeps a field changed elsewhere meanwhile (409), applies the rest" do
+      review = create(:review, sale: sale, reviewer: seller, reviewee: buyer, role: :of_buyer, rating: 3, comment: "ok")
+      review.update!(rating: 2) # the author's other device
+      patch "/api/v1/reviews/#{review.id}",
+            params: { review: { rating: 5, comment: "great", base: { rating: 3, comment: "ok" } } },
+            headers: headers, as: :json
+      expect(response).to have_http_status(:conflict)
+      body = JSON.parse(response.body)
+      expect(body["code"]).to eq("edit_conflict")
+      expect(body["fields"].keys).to eq([ "rating" ])
+      expect(review.reload).to have_attributes(rating: 2, comment: "great")
     end
 
     it "forbids editing once visible (locked)" do

@@ -6,6 +6,9 @@
 #   GET  /my/analytics?shop_id=<id>            (none / blank = Me)
 #   POST /my/listings/relaunch_expired {shop_id}
 class Api::V1::My::AnalyticsController < Api::V1::BaseController
+  # OFFLINE §10.1: "Relaunch all" queued offline and retried runs once.
+  idempotent :relaunch_expired
+
   before_action :set_identity
 
   def show
