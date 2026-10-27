@@ -163,8 +163,10 @@ class ApplicationController < ActionController::API
     render json: { error: "Not found" }, status: :not_found
   end
 
-  def render_forbidden
-    render json: { error: "Forbidden" }, status: :forbidden
+  def render_forbidden(message = "Forbidden", code: nil)
+    body = { error: message }
+    body[:code] = code if code.present?
+    render json: body, status: :forbidden
   end
 
   # Rejects a suspended/banned user on authenticated requests with a clear,

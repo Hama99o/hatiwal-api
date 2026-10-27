@@ -64,10 +64,14 @@ RSpec.describe "Shop team products and sales", type: :request do
     expect(response).to have_http_status(:not_found)
   end
 
+  # 403 listing_not_managed, not 404 (QA audit 2026-10-27 A5: the app's queue
+  # reads a 404 on a delete as "gone already: done").
   it "a removed member can't touch it any more" do
     shop.remove_team_member!(staff, by: owner)
     put "/api/v1/my/listings/#{product.id}", params: { listing: { title: "Nope" } }.to_json, headers: h(staff)
-    expect(response).to have_http_status(:not_found)
+    expect(response).to have_http_status(:forbidden)
+    expect(json["code"]).to eq("listing_not_managed")
+    expect(product.reload.title).not_to eq("Nope")
   end
 
   it "closing the shop gives a STAFF-posted product to the OWNER, not to the staff member" do

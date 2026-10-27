@@ -436,6 +436,22 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     # SHOP-3: a shop's products are every member's to manage.
     @listing = current_user.manageable_listings.find(params[:id])
     @listing.acting_user = current_user
+  rescue ActiveRecord::RecordNotFound
+    # Not theirs ANY MORE — they left or were removed from its shop, with a
+    # write queued on the phone: 403 with a code. A 404 there reads as "gone
+    # already: done" and the seller was never told (QA audit 2026-10-27 A5).
+    # Anyone else still learns nothing: a plain 404, as before.
+    listing = Listing.find_by(id: params[:id])
+    raise unless listing && former_manager_of?(listing)
+
+    render_forbidden("You no longer manage this listing", code: "listing_not_managed")
+  end
+
+  def former_manager_of?(listing)
+    return true if listing.user_id == current_user.id
+    return false if listing.shop_id.nil?
+
+    ShopAuditEvent.where(shop_id: listing.shop_id, target_user_id: current_user.id, action: %w[removed left]).exists?
   end
 
   # `buyer_id`/`final_price`/`clear_buyer`/`quantity` are accepted flat (not

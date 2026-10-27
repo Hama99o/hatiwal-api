@@ -82,7 +82,14 @@ class Api::V1::My::TransactionsController < Api::V1::BaseController
     # the policy then narrows write access to the seller of a SOLD row.
     @transaction = policy_scope(Transaction).find(params[:id])
   rescue ActiveRecord::RecordNotFound
-    render_not_found
+    # A sale the caller recorded, sold or bought but may not touch any more
+    # (removed from the shop): 403 with a code, so a queued void is told, not
+    # taken as done (QA audit 2026-10-27 A5). Anyone else's sale: a plain 404.
+    if Transaction.where(id: params[:id]).merge(Transaction.for_user(current_user).or(Transaction.where(recorded_by_id: current_user.id))).exists?
+      render_forbidden("You no longer manage this sale", code: "sale_not_managed")
+    else
+      render_not_found
+    end
   end
 
   # Flat params, matching the lifecycle-command convention
