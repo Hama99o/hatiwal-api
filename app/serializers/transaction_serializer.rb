@@ -8,7 +8,8 @@ class TransactionSerializer < ApplicationSerializer
   # seller enters it in a field whose placeholder is the listing's own per-unit
   # price and whose caption says "the price for one item". A client showing a
   # total must multiply.
-  fields :id, :status, :final_price, :currency, :quantity, :completed_at, :created_at
+  fields :id, :status, :currency, :quantity, :completed_at, :created_at
+  field(:final_price) { |t| money(t.final_price) }
 
   # "buyer" | "seller" | nil (nil when no viewer context, e.g. the reserve/sold
   # lifecycle response where the caller is always the seller by definition).
@@ -23,7 +24,7 @@ class TransactionSerializer < ApplicationSerializer
     l = t.listing
     next nil if l.nil?
 
-    { id: l.id, title: l.title, thumbnail_url: l.thumbnail_url, price: l.price, currency: l.currency, status: l.status,
+    { id: l.id, title: l.title, thumbnail_url: l.thumbnail_url, price: money(l.price), currency: l.currency, status: l.status,
       multi_unit: l.multi_unit?, available_units: l.available_units }
   end
 

@@ -50,7 +50,7 @@ class ListingSerializer < ApplicationSerializer
     {
       id: txn.id,
       status: txn.status,
-      final_price: txn.final_price,
+      final_price: ApplicationSerializer.money(txn.final_price),
       currency: txn.currency,
       # How many units this buyer took. 1 on a single-item listing (the column
       # default), so nothing changes for the majority case — but on a batch it is
@@ -90,7 +90,8 @@ class ListingSerializer < ApplicationSerializer
     }
   end
 
-  fields :id, :title, :price, :currency, :status, :location, :address, :condition, :created_at
+  fields :id, :title, :currency, :status, :location, :address, :condition, :created_at
+  field(:price) { |l| money(l.price) }
 
   # Stays (docs/STAYS_DESIGN.md): "AFN 1,500 / night" and a room's facts. On the
   # base fields so every view carries them; older apps ignore unknown keys.
@@ -187,13 +188,13 @@ class ListingSerializer < ApplicationSerializer
     # controller passes a `saved_by_listing_id` map (Saved screen, TASK-Y316).
     # nil/false on every other :list surface (browse, my listings, viewed, hidden).
     field(:price_at_save) do |l, opts|
-      opts[:saved_by_listing_id]&.[](l.id)&.price_at_save
+      money(opts[:saved_by_listing_id]&.[](l.id)&.price_at_save)
     end
     field(:price_dropped) do |l, opts|
       opts[:saved_by_listing_id]&.[](l.id)&.price_dropped? || false
     end
     field(:price_drop_amount) do |l, opts|
-      opts[:saved_by_listing_id]&.[](l.id)&.price_drop_amount
+      money(opts[:saved_by_listing_id]&.[](l.id)&.price_drop_amount)
     end
   end
 

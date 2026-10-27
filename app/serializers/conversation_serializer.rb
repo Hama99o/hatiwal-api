@@ -97,7 +97,7 @@ class ConversationSerializer < ApplicationSerializer
       # the whole batch (docs/SPIKE_LISTING_QUANTITY.md §0c). Plain columns on
       # the same preloaded association — still no N+1.
       { id: c.listing_id, title: c.listing.title, thumbnail_url: c.listing.thumbnail_url, status: c.listing.status,
-        price: c.listing.price, currency: c.listing.currency, price_unit: c.listing.price_unit,
+        price: money(c.listing.price), currency: c.listing.currency, price_unit: c.listing.price_unit,
         multi_unit: c.listing.multi_unit?, available_units: c.listing.available_units }
     end
     field(:other_participant) do |c, opts|
@@ -185,7 +185,7 @@ class ConversationSerializer < ApplicationSerializer
       current_user = opts[:current_user]
       txn = c.listing.current_sale
       viewer_is_sale_buyer = txn.present? && current_user.present? && txn.buyer_id == current_user.id
-      { id: c.listing_id, title: c.listing.title, price: c.listing.price, currency: c.listing.currency,
+      { id: c.listing_id, title: c.listing.title, price: money(c.listing.price), currency: c.listing.currency,
         # Stays: "/ night" next to the price in the thread header (STAYS_DESIGN).
         price_unit: c.listing.price_unit,
         thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location,

@@ -97,6 +97,24 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     "listing.video_duration_s" => "VID length in seconds (null without one)"
   }.freeze
 
+  # Type changes made on purpose, each with why it is safe for v1.0.4.
+  # Money was a BigDecimal STRING ("560000.0"); it is a JSON number now
+  # (hotfix-price-number, 2026-10-27): mobile 1.1.7+ shows no price for a
+  # string (P0). Every client formats a number fine — v1.0.4 passes it to
+  # Intl.NumberFormat, which takes a number; the web uses Number(...).
+  MONEY_TO_NUMBER = { from: %w[string], to: %w[float], reason: "money as a JSON number (P0 price fix)" }.freeze
+  ALLOWED_TYPE_CHANGES = {
+    "conversations[].listing.price" => MONEY_TO_NUMBER,
+    "conversation.listing.price" => MONEY_TO_NUMBER,
+    "listings[].price" => MONEY_TO_NUMBER,
+    "listing.price" => MONEY_TO_NUMBER
+  }.freeze
+
+  def allowed_type_change?(path, before, after)
+    rule = ALLOWED_TYPE_CHANGES[path]
+    rule && before == rule[:from] && after == rule[:to]
+  end
+
   # Values are irrelevant; their JSON TYPE is the contract.
   def json_type(value)
     case value
@@ -230,7 +248,9 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
         a = after["shape"][path]
         next problems << "#{name}: #{path} REMOVED" unless a
 
-        problems << "#{name}: #{path} type #{b['types']} -> #{a['types']}" if b["types"] != a["types"]
+        if b["types"] != a["types"] && !allowed_type_change?(path, b["types"], a["types"])
+          problems << "#{name}: #{path} type #{b['types']} -> #{a['types']}"
+        end
         problems << "#{name}: #{path} count #{b['count']} -> #{a['count']}" if b["count"] != a["count"]
         if b["keys"] && (a["keys"] & b["keys"]) != b["keys"]
           problems << "#{name}: #{path} key order #{b['keys']} -> #{a['keys'] & b['keys']}"
