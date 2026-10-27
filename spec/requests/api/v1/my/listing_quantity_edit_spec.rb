@@ -74,6 +74,14 @@ RSpec.describe "Api::V1::My::Listings quantity edits (SF-B6, SF-B8)", type: :req
         The two floors report EXCLUSIVELY — whichever is higher raises the error,
         so `code` is one value and the minimum named in the message is always the
         minimum that actually works.
+
+        OFFLINE §10.2 — `base` (optional): for each field sent, the value the
+        client SAW when the edit was made (an edit queued offline). A field
+        whose server value changed meanwhile is not overwritten: the other
+        fields are applied, and the answer is 409 `code: "edit_conflict"` with
+        `fields: {field: {yours, theirs, changed_at, changed_by_name}}` (the
+        listing as it is now, too). The same value already there (`theirs ==
+        yours`) is a success. Without `base` (1.1.x apps): last write wins.
       DESC
       consumes "application/json"
       produces "application/json"
@@ -88,7 +96,9 @@ RSpec.describe "Api::V1::My::Listings quantity edits (SF-B6, SF-B8)", type: :req
               price:    { type: :number },
               quantity: { type: :integer, description: "Total units; may not be below sold_units" },
               image_order: { type: :array, items: { type: :string },
-                             description: "Photo signed ids and new:<n> tokens, in display order" }
+                             description: "Photo signed ids and new:<n> tokens, in display order" },
+              base: { type: :object, additionalProperties: true,
+                      description: "OFFLINE §10.2 — per field sent, the value the client saw (snake_case keys)" }
             }
           }
         }
@@ -101,6 +111,10 @@ RSpec.describe "Api::V1::My::Listings quantity edits (SF-B6, SF-B8)", type: :req
       parameter name: :"access-token", in: :header, type: :string, required: false
       parameter name: :client,         in: :header, type: :string, required: false
       parameter name: :uid,            in: :header, type: :string, required: false
+      parameter name: :"Idempotency-Key", in: :header, type: :string, required: false,
+                description: "OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with the same key " \
+                             "replays the first answer (one write); the same key with another body → 422."
+      let(:"Idempotency-Key") { nil }
 
       let(:record)         { sold_out(total: 15, expires_at: 3.days.ago) }
       let(:id)             { record.id }
@@ -109,6 +123,20 @@ RSpec.describe "Api::V1::My::Listings quantity edits (SF-B6, SF-B8)", type: :req
       response "401", "unauthorized" do
         let(:"access-token") { nil }
         run_test! { expect(response).to have_http_status(:unauthorized) }
+      end
+
+      response "409", "OFFLINE §10.2 — a field changed elsewhere since the client saw it: the rest is applied" do
+        let(:record) { create(:listing, :active, user: seller, title: "Old title", price: 480) }
+        let(:listing_update) { { listing: { title: "New title", price: 450, base: { title: "Old title", price: 500 } } } }
+        let(:"Idempotency-Key") { "swagger-edit-conflict-1" }
+
+        run_test! do |response|
+          body = JSON.parse(response.body)
+          expect(body["code"]).to eq("edit_conflict")
+          expect(body["fields"].keys).to eq([ "price" ])
+          expect(record.reload.title).to eq("New title")
+          expect(record.price.to_d).to eq(480)
+        end
       end
 
       response "200", "quantity raised — the sold-out listing re-opens with its stock" do

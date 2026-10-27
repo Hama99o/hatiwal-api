@@ -87,6 +87,10 @@ RSpec.describe "Api::V1::Messages offer quantity (SF-B11)", type: :request do
                             description: "Message being answered — must be in the SAME conversation" },
           offer_quantity: { type: :integer, nullable: true,
                             description: "SF-B11 — units this offer is for; null means unspecified" },
+          client_uuid: { type: :string, nullable: true,
+                         description: "OFFLINE §10.1 — the app's own id for the message (8-64 of A-Z a-z 0-9 - _). " \
+                                      "Sent again (a retry after a lost answer), the stored message is returned, " \
+                                      "never a second one. Echoed on the message." },
           context: { type: :object, nullable: true,
                      description: "Support thread only (1.1.6): where the message is written from. " \
                                   "mode buyer|seller; shop_id only with seller, and only a shop the sender is in. " \
@@ -104,6 +108,10 @@ RSpec.describe "Api::V1::Messages offer quantity (SF-B11)", type: :request do
       parameter name: :"access-token", in: :header, type: :string, required: false
       parameter name: :client,         in: :header, type: :string, required: false
       parameter name: :uid,            in: :header, type: :string, required: false
+      parameter name: :"Idempotency-Key", in: :header, type: :string, required: false,
+                description: "OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with the same key " \
+                             "replays the first answer (one write); the same key with another body → 422."
+      let(:"Idempotency-Key") { nil }
 
       let(:conversation_id) { batch_thread.id }
       let(:message)         { { body: "12000|AFN|14000", kind: "offer", offer_quantity: 3 } }
