@@ -21,6 +21,16 @@ RSpec.describe ApplicationCable::Connection, type: :channel do
     expect(connection.current_user).to eq(user)
   end
 
+  # hatiwal-web (src/lib/cable.ts): a browser cannot set WebSocket headers, so it keeps the query
+  # string, and the browser adds its own Origin and @rails/actioncable's subprotocols — headers,
+  # but not session headers: the query is still read.
+  it "connects the web client's exact shape: the query session, with a browser's Origin and subprotocols" do
+    connect "/hatiwal-cable?access_token=#{CGI.escape(auth['access-token'])}&client=#{CGI.escape(auth['client'])}&uid=#{CGI.escape(auth['uid'])}",
+            headers: { "Origin" => "https://web.example", "Sec-WebSocket-Protocol" => "actioncable-v1-json, actioncable-unsupported" }
+
+    expect(connection.current_user).to eq(user)
+  end
+
   it "headers present but wrong: rejected, even with a valid session in the query (no mixing sources)" do
     expect do
       connect "/hatiwal-cable", headers: { "access-token" => "wrong", "client" => auth["client"], "uid" => auth["uid"] },
