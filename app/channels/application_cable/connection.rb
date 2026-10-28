@@ -9,6 +9,14 @@ module ApplicationCable
     private
 
     def find_verified_user
+      # hatiwal-web (a browser cannot set WebSocket headers): a single-use ticket,
+      # and nothing else beside it — a bad one never falls back to a session.
+      if request.params.key?(:ticket)
+        return reject_unauthorized_connection if session_sent?
+
+        return CableTicket.consume(request.params[:ticket]) || reject_unauthorized_connection
+      end
+
       token, client_id, uid = session_credentials
 
       return reject_unauthorized_connection unless token.present? && client_id.present? && uid.present?
@@ -25,6 +33,10 @@ module ApplicationCable
     # (privacy review 2026-10-28).
     SESSION_HEADERS = %w[access-token client uid].freeze
     SESSION_PARAMS = %i[access_token client uid].freeze
+
+    def session_sent?
+      SESSION_HEADERS.any? { |name| request.headers[name].present? } || SESSION_PARAMS.any? { |name| request.params[name].present? }
+    end
 
     def session_credentials
       from_headers = SESSION_HEADERS.map { |name| request.headers[name] }

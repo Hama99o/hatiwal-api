@@ -207,6 +207,8 @@ Rails.application.routes.draw do
 
       # UPD-1 — force update / update reminder (public)
       get "app_config", to: "app_configs#show", as: :app_config
+      # Privacy review 2026-10-28: a single-use pass for the cable's connect URL (hatiwal-web).
+      post "cable_ticket", to: "cable_tickets#create", as: :cable_ticket
 
       # Reports
       resources :reports, only: [ :create, :index ]

@@ -40,3 +40,6 @@ production:
   purge_idempotency_keys:
     class: PurgeIdempotencyKeysJob
     schedule: every day at 2am
+  purge_cable_tickets:
+    class: PurgeCableTicketsJob
+    schedule: every 10 minutes

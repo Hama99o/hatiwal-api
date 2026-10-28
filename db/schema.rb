@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_28_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -186,6 +186,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
     t.index [ "blocker_id", "blocked_id" ], name: "index_blocks_on_blocker_id_and_blocked_id", unique: true
     t.index [ "blocker_id" ], name: "index_blocks_on_blocker_id"
     t.index [ "shop_id" ], name: "index_blocks_on_shop_id"
+  end
+
+  create_table "cable_tickets", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "digest", limit: 64, null: false
+    t.datetime "expires_at", null: false
+    t.bigint "user_id", null: false
+    t.index [ "digest" ], name: "index_cable_tickets_on_digest", unique: true
+    t.index [ "expires_at" ], name: "index_cable_tickets_on_expires_at"
+    t.index [ "user_id" ], name: "index_cable_tickets_on_user_id"
   end
 
   create_table "categories", force: :cascade do |t|
@@ -707,6 +717,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_26_120000) do
   add_foreign_key "app_update_notices", "users"
   add_foreign_key "blocks", "users", column: "blocked_id"
   add_foreign_key "blocks", "users", column: "blocker_id"
+  add_foreign_key "cable_tickets", "users", on_delete: :cascade
   add_foreign_key "categories", "categories", column: "parent_id", on_delete: :restrict
   add_foreign_key "conversations", "listings"
   add_foreign_key "conversations", "shops", on_delete: :nullify

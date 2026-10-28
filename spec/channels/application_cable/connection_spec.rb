@@ -5,6 +5,8 @@ require "rails_helper"
 # API may log request URLs. 1.2.0 apps send the devise_token_auth HEADERS
 # instead; 1.1.x apps still send the query and keep working.
 RSpec.describe ApplicationCable::Connection, type: :channel do
+  include ActiveSupport::Testing::TimeHelpers
+
   let(:user) { create(:user) }
   let(:auth) { user.create_new_auth_token } # { "access-token", "client", "uid", … }
 
@@ -46,5 +48,43 @@ RSpec.describe ApplicationCable::Connection, type: :channel do
 
   it "no session anywhere: rejected" do
     expect { connect "/hatiwal-cable" }.to have_rejected_connection
+  end
+
+  describe "a single-use ticket (POST /api/v1/cable_ticket; hatiwal-web)" do
+    it "connects ONCE, as the user it was issued to; a replay is refused" do
+      ticket = CableTicket.issue!(user)
+      connect "/hatiwal-cable?ticket=#{ticket}"
+      expect(connection.current_user).to eq(user)
+
+      expect { connect "/hatiwal-cable?ticket=#{ticket}" }.to have_rejected_connection
+    end
+
+    it "an expired ticket is refused" do
+      ticket = CableTicket.issue!(user)
+      travel(CableTicket::TTL + 1.second) do
+        expect { connect "/hatiwal-cable?ticket=#{ticket}" }.to have_rejected_connection
+      end
+    end
+
+    it "a ticket binds to its issuer only: with another user's session beside it, refused (no mixing)" do
+      other = create(:user).create_new_auth_token
+      ticket = CableTicket.issue!(user)
+      expect do
+        connect "/hatiwal-cable?ticket=#{ticket}", headers: { "access-token" => other["access-token"], "client" => other["client"], "uid" => other["uid"] }
+      end.to have_rejected_connection
+      expect do
+        connect "/hatiwal-cable?ticket=#{ticket}&access_token=x&client=y&uid=z"
+      end.to have_rejected_connection
+    end
+
+    it "a bad ticket never falls back to anything else" do
+      expect { connect "/hatiwal-cable?ticket=nope" }.to have_rejected_connection
+    end
+  end
+
+  it "the ticket and the legacy session never reach a log: both are filtered parameters" do
+    filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
+    expect(filter.filter("ticket" => "t-123", "access_token" => "a", "client" => "c", "uid" => "u@example.com"))
+      .to include("ticket" => "[FILTERED]", "access_token" => "[FILTERED]", "uid" => "[FILTERED]")
   end
 end
