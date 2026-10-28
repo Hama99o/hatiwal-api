@@ -21,7 +21,18 @@ RSpec.describe "Api::V1::AppConfig", type: :request do
                  min_version: { type: :string, nullable: true },
                  latest_version: { type: :string, nullable: true },
                  store_url: { type: :string, nullable: true },
-                 status: { type: :string, enum: AppReleaseSetting::STATUSES }
+                 status: { type: :string, enum: AppReleaseSetting::STATUSES },
+                 listing_rules: {
+                   type: :object,
+                   description: "OFFLINE §8.6 / §10.4 — the server's listing limits, so a listing made offline " \
+                                "is checked on the phone with the server's own numbers (Listing.client_rules)",
+                   properties: {
+                     title_max: { type: :integer }, description_max: { type: :integer }, price_max: { type: :number },
+                     quantity_min: { type: :integer }, quantity_max: { type: :integer }, max_photos: { type: :integer },
+                     photo_required_to_publish: { type: :boolean }, video_max_seconds: { type: :integer },
+                     video_max_bytes: { type: :integer }
+                   }
+                 }
                },
                required: %w[platform status]
         let(:"X-App-Platform") { "android" }

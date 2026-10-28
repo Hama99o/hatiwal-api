@@ -9,6 +9,7 @@ RSpec.describe "Api::V1::Reviews", type: :request do
   # ── POST /api/v1/transactions/:transaction_id/reviews ─────────────────────────
   path "/api/v1/transactions/{transaction_id}/reviews" do
     post "leave a review on a sold sale" do
+      idempotency_key_header
       tags "Reviews"
       description <<~DESC
         The caller (a party to a SOLD transaction) rates the other party. The

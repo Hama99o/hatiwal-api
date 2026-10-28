@@ -20,6 +20,7 @@ RSpec.describe "Api::V1::My::ListingVideos", type: :request do
     let(:uid)            { headers["uid"] }
 
     put "set (or replace) the listing's video" do
+      idempotency_key_header
       tags "Listings"
       description "Multipart. `video`: MP4 or QuickTime, at most 25 MB and 60 s (the apps compress to ~720p and " \
                   "trim before upload). `poster`: an image frame from the client, optional. `duration_s`: the " \
@@ -60,6 +61,7 @@ RSpec.describe "Api::V1::My::ListingVideos", type: :request do
     end
 
     delete "remove the listing's video" do
+      idempotency_key_header
       tags "Listings"
       produces "application/json"
       security [ { bearer: [] } ]

@@ -116,6 +116,7 @@ RSpec.describe "Api::V1::Reports", type: :request do
     # ── POST /api/v1/reports ─────────────────────────────────────────────────
 
     post "submit a report" do
+      idempotency_key_header
       tags "Reports"
       description "Submits a polymorphic report against a Listing or User."
       consumes "application/json"

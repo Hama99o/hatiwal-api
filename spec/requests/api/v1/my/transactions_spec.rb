@@ -130,6 +130,7 @@ RSpec.describe "Api::V1::My::TransactionsController", type: :request do
     let(:id) { sale.id }
 
     patch("correct a recorded sale") do
+      idempotency_key_header
       tags "Transactions"
       description <<~DESC
         SF-B4 — edit a sale the seller already recorded: its quantity, its price,
@@ -140,6 +141,12 @@ RSpec.describe "Api::V1::My::TransactionsController", type: :request do
         status (a `sold` listing re-opens as `active` when the correction leaves
         units unsold). Refused with 422 + `code: "sale_has_review"` when the sale
         already has a review AND the change would void it or move its buyer.
+
+        OFFLINE §10.2 — `base` (optional): for quantity / buyer_id / final_price,
+        the value the client saw. One changed elsewhere meanwhile is not
+        overwritten (the rest applies) → 409 `code: "edit_conflict"` + `fields`.
+        A sale the caller recorded for a shop they no longer manage → 403
+        `code: "sale_not_managed"` (a queued correction is told, not lost).
       DESC
       consumes "application/json"
       produces "application/json"
@@ -150,7 +157,9 @@ RSpec.describe "Api::V1::My::TransactionsController", type: :request do
           quantity:    { type: :integer, description: "New unit count; 0 voids the sale" },
           buyer_id:    { type: :integer, description: "Reassign to another conversation participant" },
           clear_buyer: { type: :boolean, description: "Reassign to 'not on Hatiwal'" },
-          final_price: { type: :number,  description: "Per-unit price actually agreed" }
+          final_price: { type: :number,  description: "Per-unit price actually agreed" },
+          base:        { type: :object, additionalProperties: true,
+                         description: "OFFLINE §10.2 — per field sent, the value the client saw" }
         }
       }
 
@@ -183,6 +192,31 @@ RSpec.describe "Api::V1::My::TransactionsController", type: :request do
         end
       end
 
+      response "409", "a field changed elsewhere meanwhile: kept, named; the rest applied" do
+        # The phone saw 4 units; the sale says 5 now (another device) — its "3" is not applied.
+        let(:correction) { { quantity: 3, base: { quantity: 4 } } }
+        run_test! do |response|
+          body = JSON.parse(response.body)
+          expect(body["code"]).to eq("edit_conflict")
+          expect(body["fields"].keys).to eq([ "quantity" ])
+        end
+      end
+
+      response "403", "a sale the caller recorded for a shop they were removed from" do
+        let(:id) do
+          owner = create(:user)
+          shop = create(:shop, owner: owner)
+          shop.shop_members.create!(user: seller, role: :staff)
+          product = create(:listing, :active, user: owner, shop: shop)
+          Conversations::StartService.new(buyer: buyer, listing: product, message_body: "I'll take it").call
+          put "/api/v1/my/listings/#{product.id}/sold", params: { buyer_id: buyer.id }, headers: headers, as: :json
+          sale = product.reload.sale_transactions.sole
+          shop.remove_team_member!(seller, by: owner)
+          sale.id
+        end
+        run_test! { |response| expect(JSON.parse(response.body)["code"]).to eq("sale_not_managed") }
+      end
+
       response "422", "the corrected quantity exceeds the listing's stock" do
         let(:correction) { { quantity: 99 } }
         run_test! do |response|
@@ -192,6 +226,7 @@ RSpec.describe "Api::V1::My::TransactionsController", type: :request do
     end
 
     delete("void a recorded sale") do
+      idempotency_key_header
       tags "Transactions"
       description <<~DESC
         SF-B4 — "Undo". Removes the sale, puts its units back in stock, gives back

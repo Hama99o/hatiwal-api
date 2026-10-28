@@ -12,6 +12,7 @@ RSpec.describe "Api::V1::My::Listings relaunch", type: :request do
     parameter name: :id, in: :path, type: :integer, required: true
 
     put("relaunch one of the caller's own listings (renew + weekly bump)") do
+      idempotency_key_header
       tags "Listings"
       description <<~DESC
         Restarts the 90-day run (like renew), and moves the listing back to the

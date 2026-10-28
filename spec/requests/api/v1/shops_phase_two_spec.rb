@@ -90,6 +90,7 @@ RSpec.describe "Shops phase 2", type: :request do
 
   path "/api/v1/shops/{shop_id}/conversations" do
     post "Message shop (a chat without a product)" do
+      idempotency_key_header
       tags "Shops"
       description "Find-or-create the caller's one chat with the shop that has no product. 201 when created, 200 with " \
                   "the same chat after. `message` is optional. Refused: own shop / a shop you're a member of " \
