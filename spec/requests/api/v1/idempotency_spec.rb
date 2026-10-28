@@ -194,4 +194,25 @@ RSpec.describe "Idempotency-Key", type: :request do
     expect(JSON.parse(response.body)).to eq(first)
     expect(response.headers["Idempotent-Replayed"]).to eq("true")
   end
+
+  # Coverage pass 2026-10-28: an answer with NO body (204: an unblock, a chat or
+  # message delete, a listing delete) is kept and replayed as itself — the phone
+  # retries exactly these when an answer is lost.
+  it "a 204 with no body is kept and replayed as a 204, and the delete runs once" do
+    other = create(:user)
+    user.blocked_users << other
+    unblock = -> { delete "/api/v1/users/#{other.id}/block", headers: headers.merge("Idempotency-Key" => key) }
+
+    unblock.call
+    expect(response).to have_http_status(:no_content)
+    stored = IdempotencyKey.find_by!(user: user, key: key)
+    expect(stored).to have_attributes(status: "completed", response_code: 204, response_body: nil)
+
+    user.blocked_users << other # blocked again on another device meanwhile
+    unblock.call
+    expect(response).to have_http_status(:no_content)
+    expect(response.body).to be_empty
+    expect(response.headers["Idempotent-Replayed"]).to eq("true")
+    expect(user.reload.blocked_users).to include(other) # the replay did not unblock again
+  end
 end

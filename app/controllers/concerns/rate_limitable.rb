@@ -90,8 +90,8 @@ module RateLimitable
     current_user ? "user:#{current_user.id}" : "ip:#{request.remote_ip}"
   end
 
-  def render_too_many_requests(retry_after: nil)
-    response.set_header("Retry-After", retry_after.to_i.to_s) if retry_after
+  def render_too_many_requests(retry_after:)
+    response.set_header("Retry-After", retry_after.to_i.to_s)
     render json: {
       error:   "rate_limited",
       message: "Too many requests. Please wait a moment and try again."

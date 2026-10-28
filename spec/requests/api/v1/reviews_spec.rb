@@ -138,6 +138,27 @@ RSpec.describe "Api::V1::Reviews", type: :request do
       expect(JSON.parse(response.body)["code"]).to eq("already_reviewed")
     end
 
+    # Coverage pass 2026-10-28: two devices submit the same review at once. Both
+    # pass the uniqueness validation; the unique index stops the second, which is
+    # told `already_reviewed` (done, for the app) — never a 500.
+    it "the other device's review lands between the check and the insert: 422 already_reviewed" do
+      landed = false
+      allow_any_instance_of(Review).to receive(:valid?).and_wrap_original do |original, *args|
+        ok = original.call(*args)
+        unless landed
+          landed = true
+          create(:review, reviewer: seller, reviewee: buyer, sale: sale, role: :of_buyer, rating: 4)
+        end
+        ok
+      end
+      post "/api/v1/transactions/#{sale.id}/reviews",
+           params: { review: { rating: 3 } }, headers: auth_headers_for(seller), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(JSON.parse(response.body)["code"]).to eq("already_reviewed")
+      # (The stand-in for the other device's row is written inside this request's
+      # transaction here, so it is rolled back with it; in real life it commits.)
+    end
+
     it "rejects an out-of-range rating" do
       post "/api/v1/transactions/#{sale.id}/reviews",
            params: { review: { rating: 9 } }, headers: auth_headers_for(seller), as: :json
@@ -165,6 +186,14 @@ RSpec.describe "Api::V1::Reviews", type: :request do
       expect(body["code"]).to eq("edit_conflict")
       expect(body["fields"].keys).to eq([ "rating" ])
       expect(review.reload).to have_attributes(rating: 2, comment: "great")
+    end
+
+    it "an edit the model refuses (rating out of range) → 422, nothing changes" do
+      review = create(:review, reviewer: seller, reviewee: buyer, sale: sale, role: :of_buyer, rating: 3)
+      patch "/api/v1/reviews/#{review.id}",
+            params: { review: { rating: 9 } }, headers: auth_headers_for(seller), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(review.reload.rating).to eq(3)
     end
 
     it "forbids editing once visible (locked)" do

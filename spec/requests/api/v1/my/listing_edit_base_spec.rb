@@ -76,4 +76,27 @@ RSpec.describe "My listings — edits with a base", type: :request do
     expect(edit_stamp["by"]).to eq(seller.id)
     expect(listing.field_edits).not_to have_key("price")
   end
+
+  # Coverage pass 2026-10-28.
+  it "changed by the system (no person: an admin task, a job): the conflict names nobody, never a wrong name" do
+    listing.update!(price: 480) # acting_user nil
+    edit({ price: 450 }, base: { price: 500 })
+    expect(response).to have_http_status(:conflict)
+    expect(body["fields"]["price"]["changed_by_name"]).to be_nil
+    expect(body["fields"]["price"]["changed_at"]).to be_present
+  end
+
+  it "an empty field the form sends as \"\" matches one stored as nil: no false conflict" do
+    listing.update_columns(description: nil)
+    edit({ description: "Red, 21 gears" }, base: { description: "" })
+    expect(response).to have_http_status(:ok)
+    expect(listing.reload.description).to eq("Red, 21 gears")
+  end
+
+  it "and the other way round: a field stored as \"\" (an older web edit) matches the app's empty (nil) base" do
+    listing.update_columns(description: "")
+    edit({ description: "Red, 21 gears" }, base: { description: nil })
+    expect(response).to have_http_status(:ok)
+    expect(listing.reload.description).to eq("Red, 21 gears")
+  end
 end

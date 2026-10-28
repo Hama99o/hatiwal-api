@@ -64,4 +64,18 @@ RSpec.describe "Writes on a listing or sale the caller no longer manages", type:
     delete "/api/v1/my/transactions/#{Transaction.maximum(:id).to_i + 1000}", headers: h(staff)
     expect(response).to have_http_status(:not_found)
   end
+
+  # Coverage pass 2026-10-28: a product the member posted THEMSELVES for the shop.
+  # Removal hands it to the owner (Shop#drop_member!), so it is a former shop
+  # listing like any other: told, not a silent 404.
+  it "the member's own product of the shop, after they were removed: handed to the owner, 403 listing_not_managed" do
+    own = create(:listing, :active, user: staff, shop: shop)
+    remove_from_shop(staff)
+    expect(own.reload.user_id).to eq(owner.id)
+    delete "/api/v1/my/listings/#{own.id}", headers: h(staff)
+
+    expect(response).to have_http_status(:forbidden)
+    expect(json["code"]).to eq("listing_not_managed")
+    expect(own.reload.removed_at).to be_nil
+  end
 end

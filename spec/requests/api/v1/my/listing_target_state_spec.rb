@@ -76,4 +76,15 @@ RSpec.describe "My listings — target-state status changes", type: :request do
     delete "/api/v1/my/listings/#{listing.id}", headers: headers
     expect(response).to have_http_status(:no_content)
   end
+
+  # Coverage pass 2026-10-28: deleted on another device, then a queued publish
+  # arrives. A deleted listing is never "already live": refuse_removed_listing
+  # answers before the target-state check, and it stays deleted.
+  it "publish on a listing the seller deleted meanwhile → refused, not `already`, still deleted" do
+    listing = create(:listing, :active, user: seller, removed_at: Time.current, removed_reason: "deleted_by_seller")
+    put_action(listing, :publish)
+    expect(response).to have_http_status(:forbidden)
+    expect(body).not_to have_key("already")
+    expect(listing.reload.removed_at).to be_present
+  end
 end
