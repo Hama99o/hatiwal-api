@@ -451,7 +451,11 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     return true if listing.user_id == current_user.id
     return false if listing.shop_id.nil?
 
-    ShopAuditEvent.where(shop_id: listing.shop_id, target_user_id: current_user.id, action: %w[removed left]).exists?
+    # Only a listing that existed while they were in the shop: one made after they
+    # left (a draft they never saw) is a plain 404, or its id would tell a former
+    # member what their old shop has posted since (security review 2026-10-28).
+    ShopAuditEvent.where(shop_id: listing.shop_id, target_user_id: current_user.id, action: %w[removed left])
+                  .exists?([ "created_at >= ?", listing.created_at ])
   end
 
   # `buyer_id`/`final_price`/`clear_buyer`/`quantity` are accepted flat (not

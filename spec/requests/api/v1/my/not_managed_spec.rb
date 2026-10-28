@@ -21,6 +21,7 @@ RSpec.describe "Writes on a listing or sale the caller no longer manages", type:
 
   it "a listing of the shop, after the member was removed: 403 listing_not_managed, nothing changes" do
     staff
+    product # it existed while they were in the shop (one made after they left is a 404: offline_security_spec)
     remove_from_shop(staff)
     delete "/api/v1/my/listings/#{product.id}", headers: h(staff)
 

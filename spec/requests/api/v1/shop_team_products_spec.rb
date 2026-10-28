@@ -67,6 +67,7 @@ RSpec.describe "Shop team products and sales", type: :request do
   # 403 listing_not_managed, not 404 (QA audit 2026-10-27 A5: the app's queue
   # reads a 404 on a delete as "gone already: done").
   it "a removed member can't touch it any more" do
+    product # it existed while they were in the shop (one made after they left is a 404)
     shop.remove_team_member!(staff, by: owner)
     put "/api/v1/my/listings/#{product.id}", params: { listing: { title: "Nope" } }.to_json, headers: h(staff)
     expect(response).to have_http_status(:forbidden)

@@ -1293,7 +1293,10 @@ class Listing < ApplicationRecord
     return if tokens.nil? || !images.attached?
 
     own = images.attachments.index_by(&:blob_id)
-    listed = Array(tokens).filter_map do |token|
+    # A gallery holds at most MAX_IMAGES photos, so no real order is longer; each
+    # signed id costs a blob lookup, and an uncapped list was one query per token
+    # (security review 2026-10-28).
+    listed = Array(tokens).first(MAX_IMAGES).filter_map do |token|
       new_index = token.to_s[IMAGE_ORDER_NEW_TOKEN, 1]
       new_index ? uploaded[new_index.to_i] : own[ActiveStorage::Blob.find_signed(token.to_s)&.id]
     end.uniq
