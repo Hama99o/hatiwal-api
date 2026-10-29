@@ -4,11 +4,26 @@ class Api::V1::ListingsController < Api::V1::BaseController
 
   SELLER_ACTIVE_DAYS_RANGE = (1..3650)
 
+  # Search by image: the stable `code` of each refusal (the apps translate it)
+  # and its English text.
+  IMAGE_SEARCH_ERRORS = {
+    image_missing:   "Add one photo to search with.",
+    image_too_large: "This photo is too large (10 MB max).",
+    invalid_image:   "This file is not a photo we can read."
+  }.freeze
+  IMAGE_SEARCH_UNAVAILABLE = "Search by image is not available right now.".freeze
+
   # Guests can browse the feed and view a listing without logging in. Auth is
   # optional here (resolves current_user if a token is present); save/unsave
   # still require authentication via BaseController.
-  skip_before_action :authenticate_user!, only: [ :index, :show, :similar ]
-  before_action :authenticate_optional!, only: [ :index, :show, :similar ]
+  skip_before_action :authenticate_user!, only: [ :index, :show, :similar, :image_search ]
+  before_action :authenticate_optional!, only: [ :index, :show, :similar, :image_search ]
+  # Search by image costs ~0.3-0.5 s of CPU per photo, so it is limited more
+  # tightly than the feed. Declared AFTER authenticate_optional! so the :user
+  # limit sees the signed-in user (a guest counts against their IP); the :ip
+  # limit is generous on purpose (carrier-grade NAT, see RateLimitable).
+  throttle to: 30, within: 10.minutes, by: :user, only: :image_search
+  throttle to: 120, within: 10.minutes, by: :ip, only: :image_search
   before_action :set_listing, only: [ :show, :save, :unsave, :similar, :hide, :unhide ]
 
   def index
@@ -201,7 +216,83 @@ class Api::V1::ListingsController < Api::V1::BaseController
     )
   end
 
+  # POST /listings/image_search — multipart: `image` (one photo), plus the
+  # feed's cheap filters `category_id` and `location`. Returns the feed's :list
+  # cards, best match first, paginated like the feed (docs/IMAGE_SEARCH.md).
+  #
+  # The photo is read into memory, embedded and dropped: it is never attached,
+  # saved, logged or sent anywhere, and its tempfile is deleted at once.
+  def image_search
+    authorize Listing, :image_search?
+    return render_image_search_unavailable unless ImageSearch.enabled?
+
+    bytes, error = read_search_photo
+    return render_image_search_error(error) if error
+
+    ids = image_search_ids(bytes)
+    listings = Listing.where(id: ids).in_order_of(:id, ids).includes(
+      :category, :price_histories, :sale_transactions,
+      { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob },
+        images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob }
+    )
+    paginate_blue(
+      ListingSerializer, listings,
+      extra: { view: :list,
+               viewed_ids: ->(page) { viewed_listing_ids(page) },
+               saved_ids: ->(page) { saved_listing_ids(page) } }
+    )
+  rescue ImageSearch::Embedder::InvalidImage
+    render_image_search_error(:invalid_image)
+  rescue ImageSearch::Embedder::Unavailable
+    render_image_search_unavailable
+  end
+
   private
+
+  # Same size cap and type list as a listing photo; the type comes from the
+  # file's own leading bytes (Marcel), never from its name or declared type.
+  # Returns [bytes, nil] or [nil, error code].
+  def read_search_photo
+    upload = params[:image]
+    return [ nil, :image_missing ] unless upload.respond_to?(:tempfile)
+    return [ nil, :image_too_large ] if upload.size > Listing::MAX_IMAGE_SIZE
+
+    type = Marcel::MimeType.for(upload.tempfile)
+    return [ nil, :invalid_image ] unless AttachedFileValidator::IMAGE_TYPES.include?(type)
+
+    upload.tempfile.rewind
+    [ upload.tempfile.read, nil ]
+  ensure
+    upload.tempfile.close! if upload.respond_to?(:tempfile)
+  end
+
+  # The ids of the matching listings, best first. A blank photo (a covered
+  # lens) matches nothing rather than "everything on a white background".
+  def image_search_ids(bytes)
+    vector = ImageSearch::Embedder.embed(bytes)
+    ImageSearch::Search.call(vector, image_search_scope).map(&:listing_id)
+  rescue ImageSearch::Embedder::PlainImage
+    []
+  end
+
+  def render_image_search_error(code)
+    render_unprocessable_entity(IMAGE_SEARCH_ERRORS.fetch(code), code: code)
+  end
+
+  def render_image_search_unavailable
+    render_coded_error(IMAGE_SEARCH_UNAVAILABLE, code: :image_search_unavailable, status: :service_unavailable)
+  end
+
+  # Browsable listings only (never a draft, sold, removed, expired or blocked
+  # seller's listing), the viewer's "Not interested" ones left out, then the
+  # feed's category and free-text location filters.
+  def image_search_scope
+    listings = policy_scope(Listing.browsable).not_hidden_for(current_user)
+    category_id = number_param(:category_id, integer: true)
+    listings = listings.by_category(category_id) if category_id
+    listings = listings.in_location(params[:location]) if params[:location].present?
+    listings
+  end
 
   # IDs of listings the current user has already opened, among `records` (the
   # rendered page) — one indexed query, used by the serializer to flag each card

@@ -59,7 +59,11 @@ class AppReleaseSetting < ApplicationRecord
       store_url: settings["store_url"],
       status: status(version, settings),
       # OFFLINE §8.6: what a listing must satisfy, checked on the phone first.
-      listing_rules: Listing.client_rules
+      listing_rules: Listing.client_rules,
+      # Server features an app may only offer when this server has them. The
+      # 1.2.0 apps show the search-by-image camera button only when true
+      # (docs/IMAGE_SEARCH.md), so an API without the model never offers it.
+      features: { image_search: ImageSearch.enabled? }
     }
   end
 

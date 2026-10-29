@@ -173,6 +173,8 @@ Rails.application.routes.draw do
     namespace :v1 do
       # Public listing browser (buyer mode)
       resources :listings, only: [ :index, :show ] do
+        # Search by image (docs/IMAGE_SEARCH.md): multipart, one `image`.
+        collection { post :image_search }
         member do
           post   :save
           delete :unsave

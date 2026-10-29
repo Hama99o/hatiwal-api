@@ -61,4 +61,9 @@ Rails.application.configure do
   # In api_only mode sessions are stripped, so we add it back for tests.
   config.session_store :cookie_store, key: "_hatiwal_test_session"
   config.middleware.use ActionDispatch::Session::CookieStore, key: "_hatiwal_test_session"
+
+  # Search by image is off for the suite (no embed job for every photo a
+  # factory attaches); its own specs switch it on with the :image_search tag
+  # (spec/support/image_search.rb).
+  config.x.image_search_enabled = false
 end

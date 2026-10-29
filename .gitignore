@@ -58,3 +58,6 @@ backups/
 # Load test (docs/LOAD_TEST.md): generated auth tokens and run output — never committed.
 /loadtest/tokens/
 /loadtest/results/
+
+# ── Search-by-image model (bin/fetch-image-model; baked into the Docker image) ─
+/vendor/image_models

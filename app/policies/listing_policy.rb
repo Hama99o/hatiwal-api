@@ -2,6 +2,8 @@ class ListingPolicy < ApplicationPolicy
   def index?         = true
   def show?          = true
   def similar?       = true
+  # Search by image (docs/IMAGE_SEARCH.md): public like the feed it searches.
+  def image_search?  = true
   def sold_by?       = true  # public read — any viewer (including guests) may see a seller's sold items
   def viewed?        = true  # authenticated read — any user may list their own view history
   def create?        = true

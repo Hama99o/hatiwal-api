@@ -9,6 +9,10 @@ gem "kamal", require: false
 gem "thruster", require: false
 gem "image_processing", "~> 1.2"
 
+# Search by image (docs/IMAGE_SEARCH.md): runs the CLIP image model on the CPU.
+# The model files are baked into the Docker image (bin/fetch-image-model).
+gem "onnxruntime", "~> 0.11"
+
 # Auth
 gem "devise_token_auth"
 gem "devise"

@@ -43,3 +43,7 @@
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*
+
+# The search-by-image model is fetched INSIDE the build (bin/fetch-image-model),
+# never copied from a dev machine.
+/vendor/image_models

@@ -32,6 +32,13 @@ RSpec.describe "Api::V1::AppConfig", type: :request do
                      photo_required_to_publish: { type: :boolean }, video_max_seconds: { type: :integer },
                      video_max_bytes: { type: :integer }
                    }
+                 },
+                 features: {
+                   type: :object,
+                   description: "Server features an app may only offer when this server has them",
+                   properties: {
+                     image_search: { type: :boolean, description: "search by image (docs/IMAGE_SEARCH.md): show the camera button" }
+                   }
                  }
                },
                required: %w[platform status]
@@ -113,5 +120,25 @@ RSpec.describe "Api::V1::AppConfig", type: :request do
       "video_max_bytes" => HasVideo::MAX_VIDEO_SIZE
     )
     expect(rules["price_max"].to_d).to eq(Listing::MAX_PRICE.to_d)
+  end
+
+  describe "features.image_search" do
+    it "is true when this server has the image model", :image_search do
+      get "/api/v1/app_config"
+      expect(response.parsed_body.dig("features", "image_search")).to be true
+    end
+
+    it "is false without the model" do
+      allow(ImageSearch::Embedder).to receive(:available?).and_return(false)
+      get "/api/v1/app_config"
+      expect(response.parsed_body.dig("features", "image_search")).to be false
+    end
+
+    it "is false with the kill switch IMAGE_SEARCH_ENABLED=0, model or not", :image_search do
+      allow(ENV).to receive(:[]).and_call_original
+      allow(ENV).to receive(:[]).with("IMAGE_SEARCH_ENABLED").and_return("0")
+      get "/api/v1/app_config"
+      expect(response.parsed_body.dig("features", "image_search")).to be false
+    end
   end
 end

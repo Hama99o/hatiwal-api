@@ -13,11 +13,18 @@ RSpec.describe ListingPolicy do
     it { expect(policy.index?).to be true }
     it { expect(policy.show?).to be true }
     it { expect(policy.similar?).to be true }
+    it { expect(policy.image_search?).to be true }
     it { expect(policy.sold_by?).to be true }
     it { expect(policy.create?).to be true }
     it { expect(policy.save?).to be true }
     it { expect(policy.hide?).to be true }
     it { expect(policy.unhide?).to be true }
+  end
+
+  describe "#image_search?" do
+    it "is open to guests, like the feed it searches" do
+      expect(described_class.new(nil, Listing).image_search?).to be true
+    end
   end
 
   describe "#hide? / #unhide?" do

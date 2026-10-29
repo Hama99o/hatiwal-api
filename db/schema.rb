@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_28_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_200000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -287,6 +287,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_120000) do
     t.bigint "user_id", null: false
     t.index [ "created_at" ], name: "index_idempotency_keys_on_created_at"
     t.index [ "user_id", "key" ], name: "index_idempotency_keys_on_user_id_and_key", unique: true
+  end
+
+  create_table "listing_image_embeddings", force: :cascade do |t|
+    t.bigint "attachment_id", null: false
+    t.datetime "created_at", null: false
+    t.binary "embedding", null: false
+    t.bigint "listing_id", null: false
+    t.string "model_version", limit: 64, null: false
+    t.datetime "updated_at", null: false
+    t.index [ "attachment_id", "model_version" ], name: "index_listing_image_embeddings_on_attachment_and_model", unique: true
+    t.index [ "listing_id" ], name: "index_listing_image_embeddings_on_listing_id"
   end
 
   create_table "listing_price_histories", force: :cascade do |t|
@@ -728,6 +739,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_120000) do
   add_foreign_key "hidden_listings", "listings"
   add_foreign_key "hidden_listings", "users"
   add_foreign_key "idempotency_keys", "users", on_delete: :cascade
+  add_foreign_key "listing_image_embeddings", "active_storage_attachments", column: "attachment_id", on_delete: :cascade
+  add_foreign_key "listing_image_embeddings", "listings", on_delete: :cascade
   add_foreign_key "listing_price_histories", "listings"
   add_foreign_key "listing_views", "listings"
   add_foreign_key "listing_views", "users"

@@ -81,6 +81,15 @@ paths:
                         type: integer
                       video_max_bytes:
                         type: integer
+                  features:
+                    type: object
+                    description: Server features an app may only offer when this server
+                      has them
+                    properties:
+                      image_search:
+                        type: boolean
+                        description: 'search by image (docs/IMAGE_SEARCH.md): show
+                          the camera button'
                 required:
                 - platform
                 - status
@@ -388,6 +397,49 @@ paths:
                   type: string
               required:
               - email
+  "/api/v1/listings/image_search":
+    post:
+      summary: search listings by photo
+      tags:
+      - Listings
+      description: 'Search by image (docs/IMAGE_SEARCH.md). ONE photo (jpeg/png/webp/gif/heic/heif/avif,
+        checked by its bytes, 10 MB max); it is embedded in memory and never stored.
+        Returns browsable listings whose photos look similar, best first, as the feed''s
+        :list cards, paginated like the feed. Public (a signed-in viewer''s hidden
+        listings and blocked sellers are left out). Limits: 30 per 10 min per user
+        (a guest: per IP) and 120 per 10 min per IP, then 429. 503 code image_search_unavailable
+        when the server has no model (GET /app_config features.image_search is then
+        false).'
+      parameters: []
+      responses:
+        '200':
+          description: similar listings, best match first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  listings:
+                    type: array
+                    items:
+                      type: object
+                  meta:
+                    type: object
+                    properties:
+                      pagination:
+                        type: object
+                required:
+                - listings
+                - meta
+        '422':
+          description: not a photo (code invalid_image)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: string
+              format: binary
+        required: true
   "/api/v1/listings":
     get:
       summary: browse active listings

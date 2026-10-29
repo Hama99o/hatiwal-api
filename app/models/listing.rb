@@ -23,6 +23,8 @@ class Listing < ApplicationRecord
   include ProhibitedScannable
   has_many :price_histories, class_name: ListingPriceHistory.name, dependent: :destroy
   has_many :hidden_listings, dependent: :destroy
+  # Search by image: one CLIP vector per photo. The DB cascades the delete.
+  has_many :image_embeddings, class_name: ListingImageEmbedding.name, dependent: nil
   # Named `sale_transactions` (not `transactions`) to avoid colliding with
   # ActiveRecord::Base#transaction (the DB-transaction method every model
   # inherits) — see TASK-TX01.
