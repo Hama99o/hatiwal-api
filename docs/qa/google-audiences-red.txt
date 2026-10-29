@@ -1,0 +1,45 @@
+DB: hatiwal_test_api_release120
+DEPRECATION WARNING: Rswag::Ui: WARNING: The method will be renamed to "openapi_endpoint" in v3.0 (called from block in <compiled> at /rails/config/initializers/rswag_ui.rb:13)
+
+Google sign-in audiences during the project switch
+  GOOGLE_CLIENT_IDS lists the new web + iOS clients
+DEPRECATION WARNING: resource received a hash argument only. Please use a keyword instead. Support to hash argument will be removed in Rails 8.2. (called from block in <compiled> at /rails/config/routes.rb:155)
+DEPRECATION WARNING: resource received a hash argument path. Please use a keyword instead. Support to hash argument will be removed in Rails 8.2. (called from block in <compiled> at /rails/config/routes.rb:155)
+DEPRECATION WARNING: resource received a hash argument path_names. Please use a keyword instead. Support to hash argument will be removed in Rails 8.2. (called from block in <compiled> at /rails/config/routes.rb:155)
+DEPRECATION WARNING: resource received a hash argument controller. Please use a keyword instead. Support to hash argument will be removed in Rails 8.2. (called from block in <compiled> at /rails/config/routes.rb:155)
+    accepts the NEW web client (and so the new Android tokens, whose audience is the web id) (FAILED - 1)
+    accepts the NEW iOS client (FAILED - 2)
+    still accepts the OLD web and iOS clients (the live web, until the new one is deployed)
+    still refuses any other audience
+  the list comes from credentials (google_client_ids) instead
+    accepts the new ids from credentials (FAILED - 3)
+
+Failures:
+
+  1) Google sign-in audiences during the project switch GOOGLE_CLIENT_IDS lists the new web + iOS clients accepts the NEW web client (and so the new Android tokens, whose audience is the web id)
+     Failure/Error: expect(sign_in_with(new_web)).to have_http_status(:ok)
+       expected the response to have status code :ok (200) but it was :unauthorized (401)
+     # ./spec/requests/api/v1/auth/google_audiences_spec.rb:40:in 'block (3 levels) in <top (required)>'
+     # /usr/local/bundle/ruby/3.4.0/gems/webmock-3.26.2/lib/webmock/rspec.rb:39:in 'block (2 levels) in <compiled>'
+
+  2) Google sign-in audiences during the project switch GOOGLE_CLIENT_IDS lists the new web + iOS clients accepts the NEW iOS client
+     Failure/Error: expect(sign_in_with(new_ios)).to have_http_status(:ok)
+       expected the response to have status code :ok (200) but it was :unauthorized (401)
+     # ./spec/requests/api/v1/auth/google_audiences_spec.rb:44:in 'block (3 levels) in <top (required)>'
+     # /usr/local/bundle/ruby/3.4.0/gems/webmock-3.26.2/lib/webmock/rspec.rb:39:in 'block (2 levels) in <compiled>'
+
+  3) Google sign-in audiences during the project switch the list comes from credentials (google_client_ids) instead accepts the new ids from credentials
+     Failure/Error: expect(sign_in_with(new_web)).to have_http_status(:ok)
+       expected the response to have status code :ok (200) but it was :unauthorized (401)
+     # ./spec/requests/api/v1/auth/google_audiences_spec.rb:63:in 'block (3 levels) in <top (required)>'
+     # /usr/local/bundle/ruby/3.4.0/gems/webmock-3.26.2/lib/webmock/rspec.rb:39:in 'block (2 levels) in <compiled>'
+
+Finished in 2.39 seconds (files took 2.11 seconds to load)
+5 examples, 3 failures
+
+Failed examples:
+
+rspec ./spec/requests/api/v1/auth/google_audiences_spec.rb:39 # Google sign-in audiences during the project switch GOOGLE_CLIENT_IDS lists the new web + iOS clients accepts the NEW web client (and so the new Android tokens, whose audience is the web id)
+rspec ./spec/requests/api/v1/auth/google_audiences_spec.rb:43 # Google sign-in audiences during the project switch GOOGLE_CLIENT_IDS lists the new web + iOS clients accepts the NEW iOS client
+rspec ./spec/requests/api/v1/auth/google_audiences_spec.rb:62 # Google sign-in audiences during the project switch the list comes from credentials (google_client_ids) instead accepts the new ids from credentials
+
