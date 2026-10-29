@@ -150,6 +150,8 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
     )
     # Only a NEW account: a returning Google user is found above and never gets here.
     WelcomeSupportMessageJob.enqueue_for(user)
+    # Its Google photo as the avatar, in the background (owner, 2026-10-29).
+    GoogleAvatarImportJob.enqueue_for(user, payload[:picture])
     user
   end
 
