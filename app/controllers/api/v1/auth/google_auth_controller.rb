@@ -63,6 +63,13 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
     }, status: :ok
   end
 
+  # Every Google client id whose tokens this API accepts (see valid_audience?).
+  def self.allowed_audiences
+    creds = Rails.application.credentials
+    listed = Array(creds[:google_client_ids]) + ENV["GOOGLE_CLIENT_IDS"].to_s.split(",")
+    ([ creds[:google_client_id], creds[:google_ios_client_id] ] + listed).map { |id| id.to_s.strip }.compact_blank.uniq
+  end
+
   private
 
   def verify_google_id_token(id_token)
@@ -86,10 +93,13 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
   # attacker could otherwise mint a token from their own OAuth app and sign in
   # as (or auto-create) any account matching the token's email. The permissive
   # branch survives only for development/test convenience.
+  #
+  # The accepted ids are a LIST (the switch to the dedicated hatiwal-ece6b project, 2026-10-29): the old single ids
+  # (google_client_id — also the admin server-side flow's client — and google_ios_client_id) plus
+  # `google_client_ids` in credentials and/or ENV GOOGLE_CLIENT_IDS (comma-separated). Android tokens carry the
+  # web client as their audience. Remove an old id only once nothing signs in with it any more.
   def valid_audience?(aud)
-    web = Rails.application.credentials[:google_client_id]
-    ios = Rails.application.credentials[:google_ios_client_id]
-    allowed = [ web, ios ].compact_blank
+    allowed = self.class.allowed_audiences
 
     if allowed.empty?
       Rails.logger.error("Google auth: google_client_id missing from credentials — rejecting token") if Rails.env.production?
