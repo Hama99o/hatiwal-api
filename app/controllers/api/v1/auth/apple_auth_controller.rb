@@ -100,7 +100,9 @@ class Api::V1::Auth::AppleAuthController < ApplicationController
       password: SecureRandom.hex(24),
       status: :active,
       # Apple verifies every address it hands out, the private relay ones included.
-      confirmed_at: Time.current
+      confirmed_at: Time.current,
+      # The app's language, else the column default ("ps" put English users in Pashto, 2026-10-29).
+      **User.signup_language_attrs(params[:preferred_language])
     )
     unless user.persisted?
       render_unprocessable_entity(user)

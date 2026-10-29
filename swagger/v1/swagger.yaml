@@ -125,6 +125,14 @@ paths:
                 family_name:
                   type: string
                   description: first sign-in only
+                preferred_language:
+                  type: string
+                  enum:
+                  - en
+                  - ps
+                  - fa
+                  - ur
+                  description: the app's language; used only when the account is created
   "/api/v1/cable_ticket":
     post:
       summary: a single-use ticket for the cable's connect URL

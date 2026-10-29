@@ -145,6 +145,12 @@ class User < ApplicationRecord
   SUPPORTED_LANGUAGES = %w[en ps fa ur].freeze
 
   validates :preferred_language, inclusion: { in: SUPPORTED_LANGUAGES }, allow_blank: true
+
+  # The language a NEW Google/Apple account starts in: the app's, when it is one we
+  # ship; anything else keeps the column default. Never used on a returning account.
+  def self.signup_language_attrs(language)
+    SUPPORTED_LANGUAGES.include?(language.to_s) ? { preferred_language: language.to_s } : {}
+  end
   validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
   validates :push_token, length: { maximum: 200 }, allow_blank: true
   # A WhatsApp number, which is often NOT the account phone (different SIM).

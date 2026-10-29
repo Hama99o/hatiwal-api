@@ -37,7 +37,9 @@ RSpec.describe "Sign in with Apple", type: :request do
           nonce: { type: :string, description: "the RAW nonce (its SHA-256 was sent to Apple)" },
           authorization_code: { type: :string, description: "optional; kept only to revoke on account deletion" },
           given_name: { type: :string, description: "first sign-in only" },
-          family_name: { type: :string, description: "first sign-in only" }
+          family_name: { type: :string, description: "first sign-in only" },
+          preferred_language: { type: :string, enum: User::SUPPORTED_LANGUAGES,
+                                description: "the app's language; used only when the account is created" }
         }
       }
 

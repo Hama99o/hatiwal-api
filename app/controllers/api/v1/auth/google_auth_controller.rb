@@ -144,7 +144,9 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
       # above), so the address is already proven — asking the user to confirm an
       # email they never typed would be noise, and would leave every Google
       # account permanently "unconfirmed" in the admin view.
-      confirmed_at: Time.current
+      confirmed_at: Time.current,
+      # The app's language, else the column default ("ps" put English users in Pashto, 2026-10-29).
+      **User.signup_language_attrs(params[:preferred_language])
     )
     # Only a NEW account: a returning Google user is found above and never gets here.
     WelcomeSupportMessageJob.enqueue_for(user)
