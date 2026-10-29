@@ -17,7 +17,10 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
     # OFFLINE §10.2: with `base` (what the phone saw), a field changed on
     # another device meanwhile is not overwritten; the rest applies; 409.
     edit = Edits::WithBase.split(current_user, profile_params, profile_base)
-    if current_user.update(edit.attrs)
+    attrs = edit.attrs.to_h.stringify_keys
+    # The push token belongs to the device that sent it (its devise client): only that client's sign-out clears it.
+    attrs["push_token_client"] = (request.headers["client"] if attrs["push_token"].present?) if attrs.key?("push_token")
+    if current_user.update(attrs)
       return render_profile_conflict(edit.conflicts) if edit.conflicts.any?
 
       render_blue(UserSerializer, current_user, view: :me)
