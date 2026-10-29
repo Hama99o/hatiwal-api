@@ -20,11 +20,13 @@ RSpec.describe "Admin verification queue", type: :request do
   end
 
   it "lists waiting requests with counts per status" do
-    request_record
+    # A name with an apostrophe, every run: the page HTML-escapes it (O&#39;Conner). It used to come from Faker and
+    # failed whenever Faker drew one ("Damien O'Conner", 2026-10-29 full run).
+    user.update!(firstname: "Damien", lastname: "O'Conner")
     create(:verification_request).reject!(admin: admin, reason_code: "photo_not_clear")
     get admin_verification_requests_path
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("Waiting (1)", "Rejected (1)", user.full_name)
+    expect(response.body).to include("Waiting (1)", "Rejected (1)", ERB::Util.html_escape(user.full_name))
   end
 
   it "shows the card with the three photos through expiring document links" do
