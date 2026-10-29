@@ -150,6 +150,14 @@ RSpec.describe "Api::V1::Listings image search", :image_search, type: :request d
     expect(ImageSearch::Embedder).not_to have_received(:embed)
   end
 
+  it "accepts an iPhone HEIC photo (its bytes say image/heic)" do
+    listing_with_vector(fake_vector(0))
+
+    search({ image: Rack::Test::UploadedFile.new(Rails.root.join("spec/fixtures/files/car-corolla-1.heic"), "image/heic") })
+    expect(response).to have_http_status(:ok)
+    expect(ImageSearch::Embedder).to have_received(:embed)
+  end
+
   it "refuses a photo over 10 MB" do
     big = Tempfile.new([ "big", ".jpg" ])
     big.binmode

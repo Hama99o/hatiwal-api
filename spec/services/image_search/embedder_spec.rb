@@ -44,6 +44,16 @@ RSpec.describe ImageSearch::Embedder, :image_search, :image_model do
     expect(described_class.embed(grey).size).to eq(described_class::DIMENSIONS)
   end
 
+  # iPhone photos are HEIC (HEVC). The apps re-encode to JPEG before sending, but the web may send
+  # one as it is. The fixture is db/seeds/images/vehicles/car-corolla-1.jpg (CC0) at 480 px,
+  # encoded with heif-enc (x265). libvips decodes it through libheif's HEVC plugin, a hard
+  # dependency of the Debian libheif1 package, so the production image has it too.
+  it "reads an iPhone HEIC photo, close to the same photo as a JPEG" do
+    heic = File.binread(Rails.root.join("spec/fixtures/files/car-corolla-1.heic"))
+
+    expect(cosine(described_class.embed(heic), described_class.embed(seed_photo("vehicles/car-corolla-1.jpg")))).to be > 0.95
+  end
+
   it "refuses bytes that are not a photo, and an empty file" do
     expect { described_class.embed(File.binread(Rails.root.join("spec/fixtures/files/not_an_image.zip"))) }
       .to raise_error(described_class::InvalidImage)
