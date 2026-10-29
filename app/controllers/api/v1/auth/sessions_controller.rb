@@ -22,7 +22,12 @@ module Api
         # under a lock first: the delete then runs on the current tokens, and
         # DTA's sign-in (create_and_assign_token, also with_lock) waits for it.
         def destroy
-          current_user&.update_column(:push_token, nil)
+          # Only the device that registered the token (its devise client) clears it: a sign-out on the web or on
+          # another phone used to wipe the phone's token and its chat pushes stopped (QA B11 E, 2026-10-29). A
+          # token from before push_token_client existed keeps the old rule.
+          if current_user && (current_user.push_token_client.nil? || current_user.push_token_client == request.headers["client"])
+            current_user.update_columns(push_token: nil, push_token_client: nil)
+          end
           ActiveRecord::Base.transaction do
             @resource&.lock!
             super

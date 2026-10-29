@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_28_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_230000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -633,6 +633,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_120000) do
     t.string "push_registration_error", limit: 300
     t.datetime "push_registration_error_at"
     t.string "push_token"
+    t.string "push_token_client"
     t.datetime "remember_created_at"
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
