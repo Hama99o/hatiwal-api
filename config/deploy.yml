@@ -61,6 +61,10 @@ env:
     REDIS_URL: redis://hatiwal_api-redis:6379/0
     RAILS_LOG_TO_STDOUT: true
     SOLID_QUEUE_IN_PUMA: true
+    # Sign in with Apple (1.2.0, owner 2026-10-29). POST /auth/apple answers 404 without it. Ships in the same
+    # release as the Apple key in config/credentials.yml.enc (apple:), so a sign-in can exchange its code for the
+    # refresh token that account deletion revokes (Apple::Tokens). Not a secret.
+    APPLE_SIGN_IN_ENABLED: true
 
 aliases:
   console: app exec --interactive --reuse "bin/rails console"
