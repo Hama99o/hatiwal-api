@@ -8,6 +8,8 @@ class ShopPolicy < ApplicationPolicy
   # computed) — is visible to its own members only.
   def index? = true
   def show? = record.available_to_buyers? || member?
+  # IDEA-8: the printable QR card is public data, like the page it opens.
+  def qr_card? = record.available_to_buyers?
   def create? = user.present?
   def update? = EDITORS.include?(role)
   # SHOP-MEDIA: the shop's photos + video — whoever may edit the shop, while it

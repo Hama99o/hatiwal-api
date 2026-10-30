@@ -31,6 +31,7 @@ class Api::V1::ShopsController < Api::V1::BaseController
     return render_not_found if @shop.closed?
 
     authorize @shop
+    ShareLink.log_visit(:shop, @shop.id, src: params[:src], lang: params[:lang])
     view = @shop.member?(current_user) ? :owner : :public
     render_blue(ShopSerializer, @shop, view: view, options: { current_user: current_user })
   end

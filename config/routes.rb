@@ -215,6 +215,9 @@ Rails.application.routes.draw do
       # Reports
       resources :reports, only: [ :create, :index ]
 
+      # IDEA-8 — the printable QR card of a shop / a listing (public, PNG or PDF).
+      get "shops/:id/qr_card", to: "qr_cards#shop", as: :shop_qr_card, constraints: { format: /png|pdf/ }
+      get "listings/:id/qr_card", to: "qr_cards#listing", as: :listing_qr_card, constraints: { format: /png|pdf/ }
       # SHOP-1 — shops (hatiwal-mobile/docs/SHOPS.md)
       resources :shops, only: %i[index show create update destroy] do
         member { post :move_listings }

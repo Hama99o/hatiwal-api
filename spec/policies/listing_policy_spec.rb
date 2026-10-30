@@ -283,4 +283,19 @@ RSpec.describe ListingPolicy do
       expect(scope).not_to include(hidden_listing)
     end
   end
+
+  # IDEA-8: the printable QR card — only a listing buyers can browse.
+  describe "qr_card?" do
+    let(:user) { nil }
+
+    it "a live listing, for anyone" do
+      expect(policy.qr_card?).to be(true)
+    end
+
+    it "never a draft or a removed listing, not even for its seller" do
+      listing.update_columns(removed_at: Time.current)
+      expect(described_class.new(owner, listing).qr_card?).to be(false)
+      expect(described_class.new(owner, create(:listing, user: owner)).qr_card?).to be(false)
+    end
+  end
 end

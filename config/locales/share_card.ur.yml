@@ -1,0 +1,5 @@
+# IDEA-8 (1.2.1): the call to action under the QR on the printable shop / listing card (ShareCard).
+# Urdu is hidden (owner, 2026-10-05): the card is drawn in en / ps / fa only (ShareLink::LANGS); this key mirrors English for spec/i18n/locale_coverage_spec.rb.
+ur:
+  share_card:
+    scan: "Scan to open in Hatiwal"

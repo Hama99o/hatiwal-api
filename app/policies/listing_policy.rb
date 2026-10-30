@@ -2,6 +2,8 @@ class ListingPolicy < ApplicationPolicy
   def index?         = true
   def show?          = true
   def similar?       = true
+  # IDEA-8: the printable QR card — only a browsable listing (the controller finds it in Listing.browsable).
+  def qr_card?       = Listing.browsable.exists?(id: record.id)
   # Search by image (docs/IMAGE_SEARCH.md): public like the feed it searches.
   def image_search?  = true
   def sold_by?       = true  # public read — any viewer (including guests) may see a seller's sold items

@@ -342,6 +342,8 @@ class ListingSerializer < ApplicationSerializer
     # Canonical share URL — https when PUBLIC_SHARE_BASE_URL env is set, else nil.
     # Mobile falls back to a hatiwal:// deep link when this is nil.
     field(:share_url) { |l| Listing.share_url_for(l) }
+    # IDEA-8: the link-preview image (1200 x 630 JPEG) — the web's og:image.
+    field(:image_share_url) { |l| l.image_share_url }
   end
 
   # TASK-R418 — the owner's own listing detail + the reserve/sold lifecycle
