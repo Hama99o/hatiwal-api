@@ -73,6 +73,8 @@ class UserSerializer < ApplicationSerializer
            :phone, :bio, :province, :latitude, :longitude,
            :status, :preferred_language, :seller_mode, :preferred_theme, :verified,
            :created_at, :deletion_scheduled_at,
+           # Saved-search alerts: the account-wide switch (Settings row).
+           :saved_search_alerts,
            # The user's own contact details and visibility switches, so the
            # clients can render the inputs. Only ever in :me — never :public.
            :whatsapp_number, :show_phone_publicly, :show_address_publicly

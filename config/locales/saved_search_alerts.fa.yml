@@ -1,0 +1,9 @@
+# Saved-search alerts — see saved_search_alerts.en.yml.
+fa:
+  push:
+    saved_search:
+      one_title: "مورد جدید برای جستجوی «%{label}»"
+      one_body: "%{title}"
+      many_title: "%{count} مورد جدید برای «%{label}»"
+      many_body: "برای دیدن، ضربه بزنید."
+      your_search: "جستجوی شما"

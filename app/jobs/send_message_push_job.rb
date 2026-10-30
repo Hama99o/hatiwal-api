@@ -109,13 +109,5 @@ class SendMessagePushJob < ApplicationJob
     I18n.with_locale(recipient_locale(recipient)) { I18n.t("push.support.title") }
   end
 
-  # A language with no locale file is not an available locale, and
-  # I18n.with_locale RAISES on it — which is how every non-text push to an Urdu
-  # user failed before ur.yml existed. Fall back instead, so the next language
-  # added to User::SUPPORTED_LANGUAGES without a locale file degrades to the
-  # default rather than silently dropping pushes.
-  def recipient_locale(recipient)
-    locale = recipient.preferred_language.presence&.to_sym
-    locale && I18n.locale_available?(locale) ? locale : I18n.default_locale
-  end
+  def recipient_locale(recipient) = recipient.push_locale
 end

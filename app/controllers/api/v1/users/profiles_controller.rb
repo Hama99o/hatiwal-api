@@ -72,6 +72,8 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
       :city, :province, :latitude, :longitude,
       :preferred_language, :seller_mode, :preferred_theme, :avatar,
       :push_token, :away_until,
+      # Saved-search alerts: the account-wide switch (docs/SAVED_SEARCH_ALERTS.md).
+      :saved_search_alerts,
       # Why the app could NOT get a push token, when it couldn't — shown on the
       # admin dashboard (ClientVersionReporting). Capped and normalized there.
       :push_registration_error,

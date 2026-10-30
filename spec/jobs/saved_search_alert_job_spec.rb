@@ -11,7 +11,7 @@ RSpec.describe SavedSearchAlertJob, type: :job do
   let(:buyer)    { create(:user, preferred_language: "en", push_token: "ExponentPushToken[buyer]") }
   let(:seller)   { create(:user) }
   let(:category) { create(:category, name_en: "Phones", name_ps: "موبایلونه", name_fa: "گوشی") }
-  let(:search)   { create(:saved_search, user: buyer, location: nil, alert: true, category: category, query: "iphone") }
+  let!(:search)  { create(:saved_search, user: buyer, location: nil, alert: true, category: category, query: "iphone") } # before any match
   let(:pushes)   { [] }
 
   before do
@@ -87,20 +87,25 @@ RSpec.describe SavedSearchAlertJob, type: :job do
     expect(Rails.logger).to logged(/event=capped saved_search_id=#{search.id}/)
   end
 
-  it "never pushes in quiet hours (22:00–07:00 local): Kabul and Karachi have their own clocks" do
-    travel_to(Time.utc(2026, 11, 2, 18, 0)) do # 22:30 Kabul, 23:00 Karachi
-      match!
-      morning = Time.utc(2026, 11, 3, 2, 30) # 07:00 Kabul
-      expect { described_class.perform_now(search.id) }.to have_enqueued_job(described_class).with(search.id).at(morning)
-      expect(Rails.logger).to logged(/event=quiet saved_search_id=#{search.id}/)
-    end
+  it "never pushes in quiet hours (22:00–07:00 local): rescheduled to 07:00" do
+    travel_to(Time.utc(2026, 11, 2, 18, 0)) # 22:30 in Kabul
+    match!
 
-    travel_to(Time.utc(2026, 11, 2, 16, 45)) do # 21:15 Kabul (sends), 21:45 Karachi (sends)
-      buyer.update!(province: "Sindh")
-      expect(buyer.time_zone).to eq("Asia/Karachi")
-      described_class.perform_now(search.id)
-      expect(pushes.size).to eq(1)
-    end
+    morning = Time.utc(2026, 11, 3, 2, 30) # 07:00 in Kabul
+    expect { described_class.perform_now(search.id) }.to have_enqueued_job(described_class).with(search.id).at(morning)
+    expect(pushes).to be_empty
+    expect(Rails.logger).to logged(/event=quiet saved_search_id=#{search.id}/)
+  end
+
+  it "uses the user's own clock: 22:20 in Karachi is quiet while Kabul is still at 21:50" do
+    buyer.update!(province: "Sindh")
+    expect(buyer.time_zone).to eq("Asia/Karachi")
+    travel_to(Time.utc(2026, 11, 2, 17, 20))
+    match!
+
+    karachi_morning = Time.utc(2026, 11, 3, 2, 0) # 07:00 in Karachi (UTC+5)
+    expect { described_class.perform_now(search.id) }.to have_enqueued_job(described_class).with(search.id).at(karachi_morning)
+    expect(pushes).to be_empty
   end
 
   it "re-checks at send time: a listing sold since the match is never announced" do
