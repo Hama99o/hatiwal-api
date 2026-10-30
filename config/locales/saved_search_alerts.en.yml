@@ -1,0 +1,10 @@
+# Saved-search alerts (docs/SAVED_SEARCH_ALERTS.md). The label is the search's
+# keyword or its category's own name; the listing title is the seller's text.
+en:
+  push:
+    saved_search:
+      one_title: "New match for «%{label}»"
+      one_body: "%{title}"
+      many_title: "%{count} new items for «%{label}»"
+      many_body: "Tap to see them."
+      your_search: "your search"

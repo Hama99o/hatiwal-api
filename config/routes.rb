@@ -280,6 +280,7 @@ Rails.application.routes.draw do
         get    "/saved_searches",              to: "saved_searches#index",     as: :saved_searches
         post   "/saved_searches",              to: "saved_searches#create"
         delete "/saved_searches/:id",          to: "saved_searches#destroy",   as: :saved_search
+        put    "/saved_searches/:id",          to: "saved_searches#update"
         put    "/saved_searches/:id/mark_seen", to: "saved_searches#mark_seen", as: :mark_seen_saved_search
 
         # The signed-in user's own moderation warnings (also before "/:id").

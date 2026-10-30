@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -478,18 +478,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
     t.index [ "user_id" ], name: "index_saved_listings_on_user_id"
   end
 
+  create_table "saved_search_alert_hits", force: :cascade do |t|
+    t.datetime "alerted_at"
+    t.datetime "created_at", null: false
+    t.bigint "listing_id", null: false
+    t.bigint "saved_search_id", null: false
+    t.datetime "updated_at", null: false
+    t.index [ "listing_id" ], name: "index_saved_search_alert_hits_on_listing_id"
+    t.index [ "saved_search_id", "listing_id" ], name: "idx_on_saved_search_id_listing_id_c4d68fc8bc", unique: true
+    t.index [ "saved_search_id" ], name: "index_saved_search_alert_hits_on_saved_search_id"
+  end
+
   create_table "saved_searches", force: :cascade do |t|
+    t.boolean "alert", default: false, null: false
+    t.datetime "alert_scheduled_at"
     t.bigint "category_id"
     t.datetime "created_at", null: false
+    t.datetime "last_alerted_at"
     t.datetime "last_viewed_at"
     t.float "latitude"
     t.string "location"
     t.float "longitude"
+    t.integer "pending_alert_count", default: 0, null: false
     t.integer "price_max"
     t.integer "price_min"
+    t.string "query"
     t.integer "radius"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.index [ "alert", "category_id" ], name: "index_saved_searches_on_alert_and_category_id"
     t.index [ "category_id" ], name: "index_saved_searches_on_category_id"
     t.index [ "user_id", "created_at" ], name: "index_saved_searches_user_recent"
     t.index [ "user_id" ], name: "index_saved_searches_on_user_id"
@@ -616,6 +633,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
 
   create_table "users", force: :cascade do |t|
     t.bigint "active_shop_id"
+    t.integer "alert_pushes_count", default: 0, null: false
+    t.date "alert_pushes_on"
     t.boolean "allow_password_change", default: false
     t.text "apple_refresh_token"
     t.string "apple_uid"
@@ -670,6 +689,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
     t.integer "review_count", default: 0, null: false
+    t.boolean "saved_search_alerts", default: true, null: false
     t.boolean "seller_mode", default: false, null: false
     t.integer "shop_memberships_count", default: 0, null: false
     t.boolean "show_address_publicly", default: true, null: false
@@ -784,6 +804,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
   add_foreign_key "reviews", "users", column: "reviewer_id"
   add_foreign_key "saved_listings", "listings"
   add_foreign_key "saved_listings", "users"
+  add_foreign_key "saved_search_alert_hits", "listings", on_delete: :cascade
+  add_foreign_key "saved_search_alert_hits", "saved_searches", on_delete: :cascade
   add_foreign_key "saved_searches", "categories"
   add_foreign_key "saved_searches", "users"
   add_foreign_key "shop_audit_events", "shops", on_delete: :cascade

@@ -10,9 +10,8 @@ class Shop < ApplicationRecord
   DAYS = %w[sat sun mon tue wed thu fri].freeze
   # Date#wday (0 = Sunday) → our day keys.
   WDAY_KEYS = %w[sun mon tue wed thu fri sat].freeze
-  # Shops keep local hours: Pakistan's provinces are on Asia/Karachi, the rest
-  # (Afghanistan, and anything we cannot place) on Asia/Kabul.
-  PAKISTAN_PROVINCES = [ "Punjab", "Sindh", "Khyber Pakhtunkhwa", "Balochistan", "Islamabad", "Gilgit-Baltistan", "Azad Kashmir" ].freeze
+  # Shops keep local hours (LocalTimeZone: Asia/Karachi or Asia/Kabul).
+  PAKISTAN_PROVINCES = LocalTimeZone::PAKISTAN_PROVINCES
   TIME_FORMAT = /\A([01]\d|2[0-3]):[0-5]\d\z/
   LOGO_MAX_SIZE = 5.megabytes
   # SHOP-3: the owner plus at most 19 staff.
@@ -282,7 +281,7 @@ class Shop < ApplicationRecord
   def verified? = verified_at.present?
 
   # ── Open now (server-side, in the shop's own time zone) ────────────────────
-  def time_zone = PAKISTAN_PROVINCES.include?(province) ? "Asia/Karachi" : "Asia/Kabul"
+  include LocalTimeZone
 
   # true / false, or nil when the shop states no hours at all.
   def open_now(at: Time.current)

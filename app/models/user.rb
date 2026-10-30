@@ -13,6 +13,8 @@ class User < ApplicationRecord
 
   include DeviseTokenAuth::Concerns::User
   include ClientVersionReporting
+  # Saved-search alert quiet hours run on the user's own clock (from province).
+  include LocalTimeZone
 
   # Sign in with Apple (1.1.7): the refresh token kept only to revoke the
   # account's Apple authorization on deletion — encrypted like VER-1's numbers.
@@ -153,6 +155,15 @@ class User < ApplicationRecord
   end
   validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
   validates :push_token, length: { maximum: 200 }, allow_blank: true
+
+  # The locale a push to this user is written in. A language with no locale
+  # file is not an available locale, and I18n.with_locale RAISES on it — which
+  # is how every non-text push to an Urdu user failed before ur.yml existed —
+  # so fall back instead of dropping the push.
+  def push_locale
+    locale = preferred_language.presence&.to_sym
+    locale && I18n.locale_available?(locale) ? locale : I18n.default_locale
+  end
 
   # The token to push to, or nil. It belongs to the devise client that registered it (push_token_client); once
   # that session is gone — signed out elsewhere, revoked, expired — the token is cleared and nothing is sent, so
