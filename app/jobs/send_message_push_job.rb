@@ -52,7 +52,8 @@ class SendMessagePushJob < ApplicationJob
   end
 
   def deliver(message, conversation, sender, recipient)
-    if recipient.push_token.blank?
+    token = recipient.live_push_token # nil: no token, or its session is gone (cleared)
+    if token.nil?
       # Normally silent: plenty of users have no token. But a Support reply is
       # an admin waiting on someone, and returning quietly made "can never be
       # notified" look identical to "notified". Half of the doubled silence in
@@ -66,7 +67,7 @@ class SendMessagePushJob < ApplicationJob
     return if recipient.blocked?(sender) || sender.blocked?(recipient)
 
     result = Notifications::ExpoPushService.deliver(
-      token: recipient.push_token,
+      token: token,
       title: title_for(sender, recipient, conversation),
       body: preview_for(message, recipient),
       # SHOP-1: `role` and `shopId` let the app switch "Selling as" to the shop
@@ -78,7 +79,7 @@ class SendMessagePushJob < ApplicationJob
     )
 
     # Expo reports the device is gone — drop the stale token so we stop retrying.
-    recipient.update_column(:push_token, nil) if result.error.to_s == "DeviceNotRegistered"
+    recipient.update_columns(push_token: nil, push_token_client: nil) if result.error.to_s == "DeviceNotRegistered"
   end
 
 

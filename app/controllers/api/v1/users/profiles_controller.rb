@@ -21,6 +21,7 @@ class Api::V1::Users::ProfilesController < Api::V1::BaseController
     # The push token belongs to the device that sent it (its devise client): only that client's sign-out clears it.
     attrs["push_token_client"] = (request.headers["client"] if attrs["push_token"].present?) if attrs.key?("push_token")
     if current_user.update(attrs)
+      current_user.claim_push_token! if attrs["push_token"].present?
       return render_profile_conflict(edit.conflicts) if edit.conflicts.any?
 
       render_blue(UserSerializer, current_user, view: :me)

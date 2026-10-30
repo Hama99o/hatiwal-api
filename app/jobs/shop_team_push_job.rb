@@ -25,7 +25,10 @@ class ShopTeamPushJob < ApplicationJob
 
     recipient = User.find_by(id: recipient_id)
     shop = Shop.find_by(id: shop_id)
-    return if recipient.nil? || shop.nil? || recipient.push_token.blank? || recipient.account_blocked?
+    return if recipient.nil? || shop.nil? || recipient.account_blocked?
+
+    token = recipient.live_push_token # nil: no token, or its session is gone (cleared)
+    return if token.nil?
 
     actor = User.find_by(id: actor_id)
     locale = recipient.preferred_language.presence&.to_sym
@@ -34,10 +37,10 @@ class ShopTeamPushJob < ApplicationJob
     body = I18n.with_locale(locale) { I18n.t("push.shop_team.#{key}", shop: shop.name, name: actor&.firstname.presence || actor&.full_name.to_s) }
 
     result = Notifications::ExpoPushService.deliver(
-      token: recipient.push_token, title: shop.name, body: body,
+      token: token, title: shop.name, body: body,
       data: { type: kind, shopId: shop.id, reason: reason, token: invite_token(kind, invite_id, recipient) }.compact
     )
-    recipient.update_column(:push_token, nil) if result.error.to_s == "DeviceNotRegistered"
+    recipient.update_columns(push_token: nil, push_token_client: nil) if result.error.to_s == "DeviceNotRegistered"
   end
 
   private

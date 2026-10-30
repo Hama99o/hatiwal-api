@@ -153,6 +153,29 @@ class User < ApplicationRecord
   end
   validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
   validates :push_token, length: { maximum: 200 }, allow_blank: true
+
+  # The token to push to, or nil. It belongs to the devise client that registered it (push_token_client); once
+  # that session is gone — signed out elsewhere, revoked, expired — the token is cleared and nothing is sent, so
+  # a stolen phone stops getting chat previews when its session is revoked (review 2026-10-30). A token from
+  # before push_token_client existed (NULL) keeps the old rule.
+  def live_push_token
+    return nil if push_token.blank?
+    return push_token if push_token_client.blank?
+
+    session = (tokens || {})[push_token_client]
+    return push_token if session && session["expiry"].to_i > Time.current.to_i
+
+    update_columns(push_token: nil, push_token_client: nil)
+    nil
+  end
+
+  # One device token = one account: a token just registered is taken off every other user (a shared phone
+  # whose last user's session ended without a server sign-out). Review 2026-10-30.
+  def claim_push_token!
+    return if push_token.blank?
+
+    User.where(push_token: push_token).where.not(id: id).update_all(push_token: nil, push_token_client: nil)
+  end
   # A WhatsApp number, which is often NOT the account phone (different SIM).
   #
   # Length only — deliberately no format check. Afghan numbers are written

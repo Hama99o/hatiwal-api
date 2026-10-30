@@ -50,7 +50,8 @@ class ListingExpiryReminderJob < ApplicationJob
   end
 
   def push(user, listing, reminder)
-    return if user.push_token.blank?
+    token = user.live_push_token # nil: no token, or its session is gone (cleared)
+    return if token.nil?
 
     locale = user.preferred_language.presence&.to_sym
     locale = I18n.default_locale unless locale && I18n.locale_available?(locale)
@@ -59,11 +60,11 @@ class ListingExpiryReminderJob < ApplicationJob
     end
 
     result = Notifications::ExpoPushService.deliver(
-      token: user.push_token, title: title, body: body,
+      token: token, title: title, body: body,
       # `shopId` (null = Me): the app switches to Seller mode as that identity
       # before opening the listing, exactly as for a selling chat.
       data: { type: "listing_expiry", listingId: listing.id, shopId: listing.shop_id, reminder: reminder.to_s }
     )
-    user.update_column(:push_token, nil) if result.error.to_s == "DeviceNotRegistered"
+    user.update_columns(push_token: nil, push_token_client: nil) if result.error.to_s == "DeviceNotRegistered"
   end
 end
