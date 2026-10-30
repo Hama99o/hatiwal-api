@@ -83,7 +83,7 @@ RSpec.describe "Reporting a voice message", type: :request do
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("<audio")
-      expect(response.body).to include(seller.full_name)
+      expect(response.body).to include(ERB::Util.html_escape(seller.full_name))
       expect(response.body).to include("Warn sender &amp; resolve")
     end
   end
