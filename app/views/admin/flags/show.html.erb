@@ -15,7 +15,8 @@
       <%= render "status_badge", flag: flag %>
     </h1>
     <p class="hw-page-header__subtitle">
-      <%= flag.source == "term" ? "Matched a prohibited term" : "Reported as a prohibited item" %>
+      <%= { "term" => "Matched a prohibited term", "report" => "Reported as a prohibited item",
+            "reused_photo" => "Same photo as another account's listing" }.fetch(flag.source) %>
       <%= time_ago_in_words(flag.created_at) %> ago
       <% unless flag.open? %> · decided by <%= flag.acted_by&.to_s || "—" %> <%= flag.acted_at && "#{time_ago_in_words(flag.acted_at)} ago" %><% end %>
     </p>
@@ -44,8 +45,10 @@
         <%# SHOP-MEDIA: a flag on the shop covers its photos + video. %>
         <%= render "admin/shared/video", record: target %>
       <% end %>
+      <% unless flag.source_reused_photo? %>
       <br><strong>Matched term:</strong> <span dir="auto" id="flag-matched-term"><%= flag.matched_term.presence || "— (report only)" %></span>
       <br><strong>Category:</strong> <%= flag.category ? flag.category.humanize : "—" %>
+      <% end %>
       <% if person %>
         <br><strong><%= flag.listing? ? "Seller" : "Owner" %>:</strong>
         <%= link_to person.full_name.presence || "User ##{person.id}", admin_user_path(person), dir: "auto" %>
@@ -68,11 +71,14 @@
           form to other actions (formaction), and a per-form token only fits the Dismiss URL. %>
       <%= form_with url: dismiss_admin_flag_path(flag), method: :patch, data: { turbo: false }, id: "flag-decision",
                     authenticity_token: form_authenticity_token do |f| %>
-        <div class="hw-form-row">
-          <label for="flag-category">Category</label>
-          <%= f.select :category, ProhibitedTerm.categories.keys.map { |c| [ c.humanize, c ] },
-                { selected: flag.category || "other" }, class: "hw-select", id: "flag-category" %>
-        </div>
+        <%# A reused photo is not a prohibited item: the seller is told the photos were copied. %>
+        <% unless flag.source_reused_photo? %>
+          <div class="hw-form-row">
+            <label for="flag-category">Category</label>
+            <%= f.select :category, ProhibitedTerm.categories.keys.map { |c| [ c.humanize, c ] },
+                  { selected: flag.category || "other" }, class: "hw-select", id: "flag-category" %>
+          </div>
+        <% end %>
         <%= f.text_area :note, class: "hw-textarea", rows: 2, id: "flag-note",
               placeholder: "Optional note for the #{flag.listing? ? 'seller' : 'owner'}: added, as you write it, to the Support message they receive." %>
         <p class="hw-note">
@@ -91,6 +97,18 @@
       <% end %>
     <% end %>
   </section>
+
+  <% if @photo_matches.present? %>
+    <section class="hw-panel hw-panel--wide" id="flag-photo-matches">
+      <div class="hw-panel__head"><h2 class="hw-panel__title">Same photo as another account (<%= @photo_matches.size %>)</h2></div>
+      <p class="hw-note">
+        Found automatically: nothing was blocked or changed, and buyers see nothing. Dismiss if the photos may be
+        shared (the same family, a shop's supplier): the pair is remembered and never flagged again. The older listing
+        is never changed by a decision here — open it to act on it separately.
+      </p>
+      <%= render partial: "photo_match", collection: @photo_matches, as: :match %>
+    </section>
+  <% end %>
 
   <section class="hw-panel hw-panel--wide" id="flag-reports">
     <div class="hw-panel__head"><h2 class="hw-panel__title">Prohibited-item reports (<%= @reports.size %>)</h2></div>

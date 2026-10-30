@@ -2,7 +2,9 @@
 #
 # Opened on a listing or a shop by
 #   * a prohibited term in its text (source: term), see ProhibitedScannable, or
-#   * a "prohibited item" report (source: report), see Report.
+#   * a "prohibited item" report (source: report), see Report, or
+#   * a photo that is the same photo as another account's live listing
+#     (source: reused_photo, IDEA-5), see ScamPhoto::Matcher and PhotoMatch.
 # Opening a flag NEVER blocks or changes the listing. The one automatic step is
 # Report's: 3 distinct reporters move a live listing to draft (#auto_draft!).
 #
@@ -20,8 +22,9 @@ class Flag < ApplicationRecord
   belongs_to :flaggable, polymorphic: true
   belongs_to :prohibited_term, optional: true
   belongs_to :acted_by, class_name: AdminUser.name, optional: true
+  has_many :photo_matches, class_name: PhotoMatch.name, dependent: :nullify
 
-  enum :source, { term: 0, report: 1 }, prefix: :source
+  enum :source, { term: 0, report: 1, reused_photo: 2 }, prefix: :source
   enum :status, { open: 0, dismissed: 1, actioned: 2 }
   enum :category, ProhibitedTerm::CATEGORIES, prefix: :category
 
@@ -58,6 +61,12 @@ class Flag < ApplicationRecord
     flag = open_for!(listing, source: :report)
     flag.auto_draft! if flag.distinct_reporters >= AUTO_DRAFT_REPORTERS
     flag
+  end
+
+  # The newer listing of a PhotoMatch (ScamPhoto::Matcher). Joins / opens the
+  # flag; never changes the listing.
+  def self.raise_for_reused_photo!(listing)
+    open_for!(listing, source: :reused_photo)
   end
 
   # The open flag of `flaggable`, created with `attrs` when there is none. A

@@ -458,6 +458,9 @@ class Listing < ApplicationRecord
   private_class_method :haversine_binds
 
   before_save :set_published_at, if: -> { active? && published_at.nil? }
+  # IDEA-5 (1.2.1): a listing that goes live is matched against other accounts'
+  # photos (its photos were indexed while it was a draft, when nothing is matched).
+  after_update_commit :enqueue_scam_photo_match, if: :went_live?
   # Feed position starts at creation (an explicit `created_at`, e.g. an import,
   # wins), so the default order is exactly the old `created_at` order.
   before_create { self.bumped_at ||= created_at || Time.current }
@@ -1664,6 +1667,14 @@ class Listing < ApplicationRecord
     return if images.attached?
 
     errors.add(:base, "Add at least one photo before publishing")
+  end
+
+  def went_live?
+    saved_change_to_status? && live? && !%w[active reserved].include?(status_before_last_save)
+  end
+
+  def enqueue_scam_photo_match
+    ScamPhotoMatchJob.perform_later(id) if ScamPhoto.enabled?
   end
 
   def set_published_at

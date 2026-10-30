@@ -25,14 +25,18 @@ class ProhibitedItems::Moderation
   end
 
   # The category the decision is filed under: the admin's pick, else the
-  # flag's own, else "other" (a report-only flag has none).
+  # flag's own, else "other" (a report-only flag has none). A reused-photo flag
+  # (IDEA-5) is not a prohibited item: its seller reads why under
+  # SupportNoticeJob::REUSED_PHOTO, and the flag keeps no category.
   def category
-    @category || flag.category || "other"
+    @category || flag.category || (reused_photo? ? SupportNoticeJob::REUSED_PHOTO : "other")
   end
 
   def dismiss!
     decide!(:dismissed, "dismiss") do
       flag.reports.where(status: %i[pending reviewed]).update_all(status: Report.statuses[:dismissed], updated_at: Time.current)
+      # The pair is remembered: ScamPhoto::Matcher never flags it again.
+      flag.photo_matches.update_all(status: PhotoMatch.statuses[:dismissed], updated_at: Time.current)
     end
   end
 
@@ -40,6 +44,7 @@ class ProhibitedItems::Moderation
     decide!(:actioned, warn ? "take_down_warn" : "take_down") do
       flag.listing? ? take_down_listing!(warn) : take_down_shop!(warn)
       flag.reports.where(status: %i[pending reviewed]).update_all(status: Report.statuses[:resolved], updated_at: Time.current)
+      flag.photo_matches.update_all(status: PhotoMatch.statuses[:actioned], updated_at: Time.current)
     end
   end
 
@@ -51,14 +56,23 @@ class ProhibitedItems::Moderation
       raise Refused, "The flagged #{flag.flaggable_type.downcase} no longer exists." if flag.flaggable.nil?
 
       yield
+      filed = status == :dismissed || !Flag.categories.key?(category) ? flag.category : category
       flag.update!(status: status, action_taken: action, acted_by: admin, acted_at: Time.current,
-                   note: note, category: status == :dismissed ? flag.category : category)
+                   note: note, category: filed)
     end
     flag
   end
 
+  def reused_photo? = flag.source_reused_photo?
+
   def warn_reason
-    "Prohibited item (#{category.humanize.downcase}): #{flag.flaggable_label} (flag ##{flag.id})"
+    what = category == SupportNoticeJob::REUSED_PHOTO ? "Reused photo" : "Prohibited item (#{category.humanize.downcase})"
+    "#{what}: #{flag.flaggable_label} (flag ##{flag.id})"
+  end
+
+  # A reused photo is a fraud strike; everything else a prohibited item.
+  def warning_category
+    category == SupportNoticeJob::REUSED_PHOTO ? :fraud : :prohibited_item
   end
 
   # A listing in a SHOP strikes BOTH the poster (personal account) AND the shop
@@ -75,7 +89,7 @@ class ProhibitedItems::Moderation
     if listing.live?
       listing.move_to_draft_for_moderation!
     elsif !listing.draft?
-      listing.take_down!(reason: "Prohibited item: #{category.humanize.downcase}")
+      listing.take_down!(reason: category == SupportNoticeJob::REUSED_PHOTO ? "Reused photo" : "Prohibited item: #{category.humanize.downcase}")
     end
 
     # The poster hears about their account strike in their OWN Support thread; the
@@ -106,7 +120,7 @@ class ProhibitedItems::Moderation
   # Strike the poster's personal account; returns their active count. User#issue_warning!
   # is left intact (no new args) — the listing link is set on the returned warning.
   def strike_poster!(poster, listing)
-    warning = poster.issue_warning!(admin_user: admin, category: :prohibited_item, reason: warn_reason)
+    warning = poster.issue_warning!(admin_user: admin, category: warning_category, reason: warn_reason)
     warning.update!(listing: listing) if listing
     poster.active_warnings_count
   end
@@ -116,7 +130,7 @@ class ProhibitedItems::Moderation
   def strike_shop!(shop, poster:, listing:)
     return nil if shop.closed?
 
-    shop.issue_warning!(admin_user: admin, category: :prohibited_item, reason: warn_reason,
+    shop.issue_warning!(admin_user: admin, category: warning_category, reason: warn_reason,
                         posted_by: poster, listing: listing)
     shop.active_warnings_count
   end

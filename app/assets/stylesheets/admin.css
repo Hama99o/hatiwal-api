@@ -1010,3 +1010,13 @@ label.channel:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
 .hw-field__error { margin: 0 0 var(--hw-space-3); font-size: 0.85rem; font-weight: 600; color: var(--hw-danger); }
 .hw-reason-preview { margin: 0 0 var(--hw-space-3); padding: 8px 12px; border-radius: 8px; background: var(--hw-subtle); font-size: 0.85rem; color: var(--hw-text-2); }
 .hw-reason-preview__text { font-weight: 600; color: var(--hw-text); }
+
+/* IDEA-5 (1.2.1): a reused-photo flag — the two listings' photos side by side. */
+.hw-photo-match { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--hw-space-4); margin-top: var(--hw-space-4); }
+.hw-photo-match__side { margin: 0; padding: var(--hw-space-3); border: 1px solid var(--hw-border); border-radius: 10px; background: var(--hw-subtle); }
+.hw-photo-match__label { font-weight: 650; font-size: 0.86rem; color: var(--hw-text-2); margin-bottom: var(--hw-space-2); }
+.hw-photo-match__img { display: block; width: 100%; max-height: 320px; object-fit: contain; border-radius: 8px; background: var(--hw-surface); }
+.hw-photo-match__img--gone { height: 160px; display: grid; place-items: center; color: var(--hw-muted); }
+.hw-photo-match__facts { margin-top: var(--hw-space-2); font-size: 0.86rem; line-height: 1.55; color: var(--hw-text-2); }
+.hw-photo-match__title { font-weight: 650; }
+.hw-photo-match__scores { margin: var(--hw-space-3) 0 0; font-size: 0.86rem; color: var(--hw-text-2); }

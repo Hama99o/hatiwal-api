@@ -10,7 +10,7 @@ RSpec.describe Flag, type: :model do
     it { is_expected.to belong_to(:flaggable) }
     it { is_expected.to belong_to(:acted_by).class_name(AdminUser.name).optional }
     it { is_expected.to define_enum_for(:status).with_values(open: 0, dismissed: 1, actioned: 2) }
-    it { is_expected.to define_enum_for(:source).with_values(term: 0, report: 1).with_prefix(:source) }
+    it { is_expected.to define_enum_for(:source).with_values(term: 0, report: 1, reused_photo: 2).with_prefix(:source) }
   end
 
   describe "scanning a listing" do

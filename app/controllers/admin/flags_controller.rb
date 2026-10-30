@@ -36,6 +36,8 @@ module Admin
 
     def show
       @reports = @flag.reports.includes(:reporter).order(:created_at)
+      @photo_matches = @flag.photo_matches.includes(listing: %i[user shop], matched_listing: %i[user shop],
+                                                    attachment: :blob, matched_attachment: :blob).order(:id)
       @audit = AdminAuditLog.where(target: @flag.flaggable).recent.includes(:admin_user).limit(20) if @flag.flaggable
     end
 

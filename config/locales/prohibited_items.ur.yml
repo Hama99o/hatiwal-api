@@ -26,3 +26,5 @@ ur:
         human_trafficking: "selling human organs, or people, is not allowed on Hatiwal"
         medicine: "medicines can't be sold on Hatiwal"
         other: "this item is on Hatiwal's list of prohibited items"
+        # IDEA-5 (1.2.1): not a prohibited item — a photo copied from another account's listing.
+        reused_photo: "its photos are copied from another seller's listing on Hatiwal; please post photos you took of your own item"

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_230000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -295,6 +295,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_230000) do
     t.binary "embedding", null: false
     t.bigint "listing_id", null: false
     t.string "model_version", limit: 64, null: false
+    t.bigint "photo_hashes", array: true
     t.datetime "updated_at", null: false
     t.index [ "attachment_id", "model_version" ], name: "index_listing_image_embeddings_on_attachment_and_model", unique: true
     t.index [ "listing_id" ], name: "index_listing_image_embeddings_on_listing_id"
@@ -400,6 +401,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_230000) do
     t.index [ "user_id", "client_uuid" ], name: "index_messages_on_user_id_and_client_uuid", unique: true, where: "(client_uuid IS NOT NULL)"
     t.index [ "user_id" ], name: "index_messages_on_user_id"
     t.check_constraint "offer_quantity IS NULL OR offer_quantity >= 1", name: "messages_offer_quantity_positive"
+  end
+
+  create_table "photo_matches", force: :cascade do |t|
+    t.bigint "attachment_id"
+    t.float "cosine", null: false
+    t.datetime "created_at", null: false
+    t.bigint "flag_id"
+    t.integer "hash_distance", null: false
+    t.bigint "listing_id", null: false
+    t.bigint "matched_attachment_id"
+    t.bigint "matched_listing_id", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index [ "attachment_id" ], name: "index_photo_matches_on_attachment_id"
+    t.index [ "flag_id" ], name: "index_photo_matches_on_flag_id"
+    t.index [ "listing_id", "matched_listing_id" ], name: "index_photo_matches_on_listing_id_and_matched_listing_id", unique: true
+    t.index [ "matched_attachment_id" ], name: "index_photo_matches_on_matched_attachment_id"
+    t.index [ "matched_listing_id" ], name: "index_photo_matches_on_matched_listing_id"
   end
 
   create_table "prohibited_terms", force: :cascade do |t|
@@ -752,6 +771,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_230000) do
   add_foreign_key "messages", "conversations"
   add_foreign_key "messages", "messages", column: "responds_to_id"
   add_foreign_key "messages", "users"
+  add_foreign_key "photo_matches", "active_storage_attachments", column: "attachment_id", on_delete: :nullify
+  add_foreign_key "photo_matches", "active_storage_attachments", column: "matched_attachment_id", on_delete: :nullify
+  add_foreign_key "photo_matches", "flags", on_delete: :nullify
+  add_foreign_key "photo_matches", "listings", column: "matched_listing_id", on_delete: :cascade
+  add_foreign_key "photo_matches", "listings", on_delete: :cascade
   add_foreign_key "reports", "users", column: "reporter_id"
   add_foreign_key "reviews", "transactions"
   add_foreign_key "reviews", "users", column: "reviewee_id"
