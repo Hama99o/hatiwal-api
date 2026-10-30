@@ -1,0 +1,6 @@
+<%# IDEA-6: a draft meetup spot nobody local has confirmed yet. %>
+<% if field.needed? %>
+  <span id="needs-local-check-<%= field.resource.id %>" class="nav-badge" title="Hidden from the apps until someone local confirms it">Needs local check</span>
+<% else %>
+  Checked
+<% end %>

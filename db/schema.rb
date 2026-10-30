@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_210100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -376,6 +376,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_140000) do
     t.index [ "user_id" ], name: "index_listings_on_user_id"
     t.check_constraint "quantity >= 1", name: "listings_quantity_positive"
     t.check_constraint "sold_units >= 0 AND sold_units <= quantity", name: "listings_sold_units_within_quantity"
+  end
+
+  create_table "meetup_spots", force: :cascade do |t|
+    t.boolean "active", default: false, null: false
+    t.string "city_key", null: false
+    t.datetime "created_at", null: false
+    t.integer "kind", default: 0, null: false
+    t.decimal "latitude", precision: 10, scale: 6, null: false
+    t.decimal "longitude", precision: 10, scale: 6, null: false
+    t.string "name_en", null: false
+    t.string "name_fa"
+    t.string "name_ps"
+    t.string "name_ur"
+    t.boolean "needs_local_check", default: true, null: false
+    t.text "note"
+    t.integer "position", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index [ "active", "city_key", "position" ], name: "index_meetup_spots_on_active_and_city_key_and_position"
+    t.index [ "city_key", "name_en" ], name: "index_meetup_spots_on_city_key_and_name_en", unique: true
   end
 
   create_table "messages", force: :cascade do |t|
