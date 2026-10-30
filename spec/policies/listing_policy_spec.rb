@@ -21,6 +21,16 @@ RSpec.describe ListingPolicy do
     it { expect(policy.unhide?).to be true }
   end
 
+  describe "#category_suggestion?" do
+    it "is for signed-in sellers (Sell with a photo, docs/SELL_WITH_PHOTO.md)" do
+      expect(described_class.new(other, Listing).category_suggestion?).to be true
+    end
+
+    it "is closed to guests: only a seller adds a photo to a new listing" do
+      expect(described_class.new(nil, Listing).category_suggestion?).to be false
+    end
+  end
+
   describe "#image_search?" do
     it "is open to guests, like the feed it searches" do
       expect(described_class.new(nil, Listing).image_search?).to be true
