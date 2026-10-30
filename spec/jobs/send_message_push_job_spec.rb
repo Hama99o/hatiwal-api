@@ -183,4 +183,30 @@ RSpec.describe SendMessagePushJob, type: :job do
       end
     end
   end
+
+  # hatiwal-00's review (2026-10-30): only a live session's device gets the preview.
+  context "the recipient's push session" do
+    let(:msg) { create(:message, conversation: conversation, user: buyer, kind: :text, body: "Salaam") }
+    before { allow(Notifications::ExpoPushService).to receive(:deliver).and_return(result) }
+
+    it "revoked (the client is no longer a session): no push, the token cleared" do
+      seller.update_columns(push_token_client: "gone-client", tokens: {})
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).not_to have_received(:deliver)
+      expect(seller.reload.push_token).to be_nil
+    end
+
+    it "live: pushed" do
+      seller.update_columns(push_token_client: "live-client",
+                            tokens: { "live-client" => { "token" => "d", "expiry" => 1.week.from_now.to_i } })
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver)
+    end
+
+    it "legacy (no client recorded): pushed as today" do
+      seller.update_columns(push_token_client: nil)
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver)
+    end
+  end
 end
