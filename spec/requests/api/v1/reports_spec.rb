@@ -118,7 +118,9 @@ RSpec.describe "Api::V1::Reports", type: :request do
     post "submit a report" do
       idempotency_key_header
       tags "Reports"
-      description "Submits a polymorphic report against a Listing or User."
+      description "Submits a polymorphic report against a Listing, a User, a Shop or (1.2.1) a voice Message. " \
+                  "A Message must be a voice message the reporter received in one of their chats (abuse can come by " \
+                  "voice); a text message, the reporter's own one, a deleted one or a stranger's chat is 422 / 404."
       consumes "application/json"
       produces "application/json"
       security [ { bearer: [] } ]
@@ -132,7 +134,7 @@ RSpec.describe "Api::V1::Reports", type: :request do
           report: {
             type: :object,
             properties: {
-              reportable_type: { type: :string, enum: %w[Listing User] },
+              reportable_type: { type: :string, enum: %w[Listing User Shop Message] },
               reportable_id:   { type: :integer },
               reason:          { type: :string },
               description:     { type: :string }
@@ -178,6 +180,17 @@ RSpec.describe "Api::V1::Reports", type: :request do
               example: JSON.parse(response.body, symbolize_names: true)
             }
           }
+        end
+      end
+
+      response "201", "reports a voice message the reporter received (1.2.1)" do
+        let(:conversation) { create(:conversation, buyer: reporter, listing: listing) }
+        let(:voice) { create(:message, :voice, conversation: conversation, user: listing.user) }
+        let(:report) { { report: { reportable_type: "Message", reportable_id: voice.id, reason: "inappropriate" } } }
+
+        run_test! do |response|
+          expect(response).to have_http_status(:created)
+          expect(Report.last.reportable).to eq(voice)
         end
       end
 

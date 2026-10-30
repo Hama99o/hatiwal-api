@@ -57,6 +57,30 @@ RSpec.describe "Api::V1::Messages — voice messages", type: :request do
       let(:uid) { headers["uid"] }
 
       response(201, "sent, re-encoded and measured") do
+        # The voice fields of a message, as every message list / chat payload carries them.
+        schema type: :object,
+               properties: {
+                 message: {
+                   type: :object,
+                   properties: {
+                     kind: { type: :string, enum: [ "voice_message" ] },
+                     body: { type: :string, description: "\"🎤 m:ss\" — what apps ≤ 1.2.0 show" },
+                     voice: {
+                       type: :object,
+                       nullable: true,
+                       description: "null for any other kind, and once deleted",
+                       properties: {
+                         url: { type: :string, description: "the AAC .m4a" },
+                         duration_ms: { type: :integer },
+                         waveform: { type: :array, items: { type: :integer, minimum: 0, maximum: 100 }, minItems: 64, maxItems: 64 }
+                       },
+                       required: %w[url duration_ms waveform]
+                     }
+                   },
+                   required: %w[kind body voice]
+                 }
+               },
+               required: %w[message]
         let(:attachment) { voice_upload(voice_clip(seconds: 3, format: :webm), type: "audio/webm") }
 
         before do |example|
