@@ -93,6 +93,12 @@ RSpec.describe "QR cards", type: :request do
     end
   end
 
+  it "download=1 sends the card as an attachment, named after what it is" do
+    get "/api/v1/shops/#{shop.id}/qr_card.png", params: { lang: "fa", download: 1 }
+
+    expect(response.headers["Content-Disposition"]).to start_with("attachment").and include("hatiwal-shop-#{shop.id}-fa.png")
+  end
+
   describe "caching" do
     it "answers 304 to the same ETag, and a new card once the shop changes" do
       get "/api/v1/shops/#{shop.id}/qr_card.png", params: { lang: "en" }

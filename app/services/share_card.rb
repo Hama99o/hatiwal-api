@@ -15,26 +15,32 @@ require "rqrcode"
 # A6 portrait at 300 dpi. The QR is always black on white (cheap printers, old phone cameras).
 module ShareCard
   # Bump when the drawing changes: it is part of the HTTP ETag and the cache key.
-  VERSION = 1
+  VERSION = 2
   WIDTH = 1240
   HEIGHT = 1748
   LEVEL = :h
   QUIET = 4
-  # The QR with its quiet zone spans at most this many pixels.
-  QR_SPAN = 880
-  QR_TOP = 520
+  # The QR with its quiet zone spans at most this many pixels: ~ 75 % of the width, so a sticker
+  # reads from 1–2 m (design review 2026-10-30: the scan distance grows with the module size).
+  QR_SPAN = 930
+  QR_TOP = 570
   # The centre square (the mark) covers this share of the QR's side, in modules (< 30 % of
   # the codewords that level H can lose: ~ 8 % of the area).
   LOGO_SIDE = 0.28
-  BAND = 330
+  BAND = 280
   LAPIS = "#12224F".freeze
   GOLD = "#E8B23A".freeze
   INK = "#0F172A".freeze
-  MUTED = "#475569".freeze
+  # The short URL is the manual fallback: dark enough to survive a black-and-white photocopy.
+  URL_INK = "#334155".freeze
   FONTS = %w[Rubik-Bold.ttf NotoSansArabic-Bold.ttf].freeze
   # Latin first (Rubik: names, prices, the URL), Pashto / Dari from Noto Sans Arabic.
   FONT = "Rubik, Noto Sans Arabic Bold".freeze
   BRAND = { "en" => "Hatiwal", "ps" => "هټیوال", "fa" => "هتیوال" }.freeze
+  # The price in the card's language: the locale's digits, and the afghani's own word.
+  DIGITS = { "ps" => "۰۱۲۳۴۵۶۷۸۹", "fa" => "۰۱۲۳۴۵۶۷۸۹" }.freeze
+  SEPARATOR = { "ps" => "٬", "fa" => "٬" }.freeze
+  CURRENCY_WORD = { "ps" => { "AFN" => "افغانۍ" }, "fa" => { "AFN" => "افغانی" } }.freeze
   # A4 at 72 pt/in is 595.28 x 841.89; A6 is a quarter of it.
   PDF_MEDIA_BOX = "0 0 297.64 419.53".freeze
 
@@ -60,10 +66,17 @@ module ShareCard
     {
       brand: BRAND.fetch(lang),
       name: listing ? record.title : record.name,
-      price: listing && record.price.to_d.positive? ? "#{ActiveSupport::NumberHelper.number_to_delimited(record.price.to_i)} #{record.currency}" : nil,
+      price: listing && record.price.to_d.positive? ? price_text(record.price.to_i, record.currency, lang) : nil,
       scan: I18n.t("share_card.scan", locale: lang),
       url: url(record, lang).to_s.sub(%r{\Ahttps?://}, "").sub(/\?.*\z/, "")
     }
+  end
+
+  # "520,000 AFN" (en), "۵۲۰٬۰۰۰ افغانۍ" (ps), "۵۲۰٬۰۰۰ افغانی" (fa); other currencies keep their code.
+  def price_text(amount, currency, lang)
+    number = ActiveSupport::NumberHelper.number_to_delimited(amount, delimiter: SEPARATOR.fetch(lang, ","))
+    number = number.tr("0123456789", DIGITS[lang]) if DIGITS[lang]
+    "#{number} #{CURRENCY_WORD.dig(lang, currency) || currency}"
   end
 
   # Where the QR's modules are on the card: the top-left of module (0, 0) and the module's size.
@@ -95,6 +108,19 @@ module ShareCard
     Vips::Image.text(markup, font: "#{FONT} #{size}", width: width, align: :centre, rgba: true, wrap: :word_char)
   end
 
+  # `text` on at most `lines` lines: whole words dropped from the end, then "…" — never a line cut
+  # through its glyphs.
+  def fitted_text(text, size:, lines:, color: INK)
+    max_height = text_image("Ag", size: size).height * lines * 1.15
+    image = text_image(text, size: size, color: color)
+    words = text.split
+    while image.height > max_height && words.size > 1
+      words.pop
+      image = text_image("#{words.join(' ')}…", size: size, color: color)
+    end
+    image
+  end
+
   def draw(record, lang)
     link = url(record, lang) or raise ArgumentError, "PUBLIC_SHARE_BASE_URL is not set"
     words = texts(record, lang)
@@ -102,14 +128,13 @@ module ShareCard
     card = card.draw_rect(rgb(LAPIS), 0, 0, WIDTH, BAND, fill: true)
     card = card.draw_rect(rgb(GOLD), 0, HEIGHT - 28, WIDTH, 28, fill: true)
 
-    card = paste(card, mark(150), (WIDTH - 150) / 2, 40)
-    card = paste_centred(card, text_image(words[:brand], size: 64, color: "#FFFFFF"), 205)
-    name = text_image(words[:name], size: 56)
-    name = name.crop(0, 0, name.width, [ name.height, 150 ].min) # two lines at most
-    # Without a price (a shop) the name sits lower, half-way to the QR.
-    name_top = words[:price] ? BAND + 40 : BAND + 70
+    card = paste(card, mark(124), (WIDTH - 124) / 2, 28)
+    card = paste_centred(card, text_image(words[:brand], size: 58, color: "#FFFFFF"), 168)
+    name = fitted_text(words[:name], size: 56, lines: 2)
+    # The price is the second hero (a listing); a shop's name alone sits lower, half-way to the QR.
+    name_top = words[:price] ? BAND + 22 : BAND + 70
     card = paste_centred(card, name, name_top)
-    card = paste_centred(card, text_image(words[:price], size: 48, color: LAPIS), name_top + 10 + name.height) if words[:price]
+    card = paste_centred(card, text_image(words[:price], size: 88, color: LAPIS), name_top + name.height + 4) if words[:price]
 
     layout = qr_layout(link)
     card = card.insert(qr_image(link, layout[:module]), layout[:x] - (QUIET * layout[:module]), layout[:y] - (QUIET * layout[:module]))
@@ -117,7 +142,7 @@ module ShareCard
 
     below = layout[:y] + ((layout[:count] + QUIET) * layout[:module]) + 10
     card = paste_centred(card, text_image(words[:scan], size: 46), below)
-    paste_centred(card, text_image(words[:url], size: 38, color: MUTED), below + 90)
+    paste_centred(card, text_image(words[:url], size: 44, color: URL_INK), below + 80)
   end
 
   def qr_image(link, size)

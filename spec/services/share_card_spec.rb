@@ -54,6 +54,12 @@ RSpec.describe ShareCard do
       expect_qr_reads(described_class.png(shop, lang: "xx"), "https://hatiwal.com/s/#{shop.id}?lang=en&src=qr")
     end
 
+    it "the QR spans about three quarters of the card (a sticker read from 1–2 m)" do
+      layout = described_class.qr_layout("https://hatiwal.com/s/#{shop.id}?lang=ps&src=qr")
+      expect(layout[:module] * layout[:count]).to be >= 0.55 * described_class::WIDTH
+      expect(layout[:module] * (layout[:count] + (2 * described_class::QUIET))).to be >= 0.7 * described_class::WIDTH
+    end
+
     it "uses error correction H (30 %: the logo in the centre and a scratched sticker)" do
       expect(described_class::LEVEL).to eq(:h)
       expect(described_class.logo_share(RQRCode::QRCode.new("https://hatiwal.com/s/1?lang=en&src=qr", level: :h).modules.size))
@@ -71,7 +77,18 @@ RSpec.describe ShareCard do
 
     it "a listing card carries the title and the price" do
       expect(described_class.texts(listing, "en")).to include(name: "Toyota Corolla 2010", price: "520,000 AFN")
+      # The price in the card's language (design review 2026-10-30: no Latin "AFN" under a Pashto title).
+      expect(described_class.texts(listing, "ps")[:price]).to eq("۵۲۰٬۰۰۰ افغانۍ")
+      expect(described_class.texts(listing, "fa")[:price]).to eq("۵۲۰٬۰۰۰ افغانی")
     end
+  end
+
+  it "a long name keeps whole words on two lines and ends with …" do
+    long = "Samsung Galaxy S23 Ultra 512GB, unlocked, with original box, charger and two cases"
+    two_lines = described_class.text_image("Ag", size: 56).height * 2 * 1.15
+
+    expect(described_class.fitted_text(long, size: 56, lines: 2).height).to be <= two_lines
+    expect(described_class.fitted_text("Safi Cosmetics", size: 56, lines: 2).height).to eq(described_class.text_image("Safi Cosmetics", size: 56).height)
   end
 
   describe "Pashto and Dari text (no tofu: the fonts travel with the app, vendor/fonts)" do
