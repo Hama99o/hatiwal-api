@@ -38,9 +38,10 @@ RSpec.describe CategorySuggestion, :image_search do
     expect(described_class.call(tie)).to be_nil
   end
 
-  it "only suggests ACTIVE categories" do
+  it "only suggests ACTIVE categories, and a switched-off one does not hand its photos to another" do
     phones.update!(active: false)
 
+    # Not "cars": phones still wins the vote, then is not offered.
     expect(described_class.call(fake_vector(0))).to be_nil
   end
 
@@ -58,12 +59,12 @@ RSpec.describe CategorySuggestion, :image_search do
     expect(ImageSearch::TextEmbedder).to have_received(:embed_all).once
   end
 
-  it "rebuilds the vectors when a category changes (one is switched on)" do
+  it "suggests a category switched on later, without embedding the prompts again" do
     described_class.call(fake_vector(0))
     skincare = create(:category, slug: "skincare")
 
     expect(described_class.call(fake_vector(2))&.category_id).to eq(skincare.id)
-    expect(ImageSearch::TextEmbedder).to have_received(:embed_all).twice
+    expect(ImageSearch::TextEmbedder).to have_received(:embed_all).once
   end
 
   it "suggests nothing when no category can be suggested" do

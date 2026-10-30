@@ -63,7 +63,8 @@ class AppReleaseSetting < ApplicationRecord
       # Server features an app may only offer when this server has them. The
       # 1.2.0 apps show the search-by-image camera button only when true
       # (docs/IMAGE_SEARCH.md), so an API without the model never offers it.
-      features: { image_search: ImageSearch.enabled? }
+      # Sell with a photo (docs/SELL_WITH_PHOTO.md): ask for a category after the first photo.
+      features: { image_search: ImageSearch.enabled?, category_suggestion: CategorySuggestion.enabled? }
     }
   end
 

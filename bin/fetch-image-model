@@ -1,31 +1,43 @@
 #!/usr/bin/env bash
-# Search by image (docs/IMAGE_SEARCH.md): downloads the pinned CLIP image model
-# into IMAGE_SEARCH_MODEL_DIR (default vendor/image_models) and checks its
-# sha256. Run once on a dev machine; the Dockerfile runs it at BUILD time, so a
+# Search by image (docs/IMAGE_SEARCH.md) and sell with a photo
+# (docs/SELL_WITH_PHOTO.md): downloads the pinned CLIP files into
+# IMAGE_SEARCH_MODEL_DIR (default vendor/image_models) and checks each sha256.
+# Run once on a dev machine; the Dockerfile runs it at BUILD time, so a
 # production server never downloads a model. Keep these values in step with
-# ImageSearch::Embedder (MODEL_ID / MODEL_REVISION / MODEL_FILE).
+# ImageSearch::Embedder (MODEL_ID / MODEL_REVISION / MODEL_FILE) and
+# ImageSearch::TextEmbedder (MODEL_FILE / VOCAB_FILE / MERGES_FILE).
 set -euo pipefail
 
 MODEL_ID="Xenova/clip-vit-base-patch32"
 REVISION="6b7c523703ae26e39be4b03774966f8571c7f523"
-FILE="onnx/vision_model_quantized.onnx"
-SHA256="583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"
+# file  sha256 — the image half (search by image), then the text half and its
+# tokenizer (sell with a photo).
+FILES=(
+  "onnx/vision_model_quantized.onnx 583fd1110a514667812fee7d684952aaf82a99b959760c8d7dca7e0ab9839299"
+  "onnx/text_model_quantized.onnx 73baab855d406190da9faa498cfedf65f15cf309f4cc7385b7b032e6d08e5c3a"
+  "vocab.json 5047b556ce86ccaf6aa22b3ffccfc52d391ea4accdab9c2f2407da5b742d4363"
+  "merges.txt 9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a"
+)
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIR="${IMAGE_SEARCH_MODEL_DIR:-$ROOT/vendor/image_models}"
-DEST="$DIR/$MODEL_ID/$REVISION/$FILE"
 
-if [ -f "$DEST" ] && echo "$SHA256  $DEST" | sha256sum -c --status; then
-  echo "image model already present: $DEST"
-  exit 0
-fi
+for entry in "${FILES[@]}"; do
+  read -r FILE SHA256 <<< "$entry"
+  DEST="$DIR/$MODEL_ID/$REVISION/$FILE"
 
-mkdir -p "$(dirname "$DEST")"
-curl -fsSL --retry 3 -o "$DEST.part" "https://huggingface.co/$MODEL_ID/resolve/$REVISION/$FILE"
-if ! echo "$SHA256  $DEST.part" | sha256sum -c --status; then
-  rm -f "$DEST.part"
-  echo "image model checksum mismatch for $FILE" >&2
-  exit 1
-fi
-mv "$DEST.part" "$DEST"
-echo "image model fetched: $DEST"
+  if [ -f "$DEST" ] && echo "$SHA256  $DEST" | sha256sum -c --status; then
+    echo "image model file already present: $DEST"
+    continue
+  fi
+
+  mkdir -p "$(dirname "$DEST")"
+  curl -fsSL --retry 3 -o "$DEST.part" "https://huggingface.co/$MODEL_ID/resolve/$REVISION/$FILE"
+  if ! echo "$SHA256  $DEST.part" | sha256sum -c --status; then
+    rm -f "$DEST.part"
+    echo "image model checksum mismatch for $FILE" >&2
+    exit 1
+  fi
+  mv "$DEST.part" "$DEST"
+  echo "image model file fetched: $DEST"
+done

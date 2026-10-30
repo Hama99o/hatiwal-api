@@ -1,16 +1,13 @@
 class Api::V1::ListingsController < Api::V1::BaseController
+  include LookedAtPhotoParam
+  include NumberParam
+
   # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
   idempotent :save, :unsave, :hide, :unhide
 
   SELLER_ACTIVE_DAYS_RANGE = (1..3650)
 
-  # Search by image: the stable `code` of each refusal (the apps translate it)
-  # and its English text.
-  IMAGE_SEARCH_ERRORS = {
-    image_missing:   "Add one photo to search with.",
-    image_too_large: "This photo is too large (10 MB max).",
-    invalid_image:   "This file is not a photo we can read."
-  }.freeze
+  # Search by image switched off (its photo refusals: LookedAtPhotoParam).
   IMAGE_SEARCH_UNAVAILABLE = "Search by image is not available right now.".freeze
 
   # Guests can browse the feed and view a listing without logging in. Auth is
@@ -226,8 +223,8 @@ class Api::V1::ListingsController < Api::V1::BaseController
     authorize Listing, :image_search?
     return render_image_search_unavailable unless ImageSearch.enabled?
 
-    bytes, error = read_search_photo
-    return render_image_search_error(error) if error
+    bytes, error = read_looked_at_photo
+    return render_looked_at_photo_error(error) if error
 
     ids = image_search_ids(bytes)
     listings = Listing.where(id: ids).in_order_of(:id, ids).includes(
@@ -242,29 +239,12 @@ class Api::V1::ListingsController < Api::V1::BaseController
                saved_ids: ->(page) { saved_listing_ids(page) } }
     )
   rescue ImageSearch::Embedder::InvalidImage
-    render_image_search_error(:invalid_image)
+    render_looked_at_photo_error(:invalid_image)
   rescue ImageSearch::Embedder::Unavailable
     render_image_search_unavailable
   end
 
   private
-
-  # Same size cap and type list as a listing photo; the type comes from the
-  # file's own leading bytes (Marcel), never from its name or declared type.
-  # Returns [bytes, nil] or [nil, error code].
-  def read_search_photo
-    upload = params[:image]
-    return [ nil, :image_missing ] unless upload.respond_to?(:tempfile)
-    return [ nil, :image_too_large ] if upload.size > Listing::MAX_IMAGE_SIZE
-
-    type = Marcel::MimeType.for(upload.tempfile)
-    return [ nil, :invalid_image ] unless AttachedFileValidator::IMAGE_TYPES.include?(type)
-
-    upload.tempfile.rewind
-    [ upload.tempfile.read, nil ]
-  ensure
-    upload.tempfile.close! if upload.respond_to?(:tempfile)
-  end
 
   # The ids of the matching listings, best first. A blank photo (a covered
   # lens) matches nothing rather than "everything on a white background".
@@ -273,10 +253,6 @@ class Api::V1::ListingsController < Api::V1::BaseController
     ImageSearch::Search.call(vector, image_search_scope).map(&:listing_id)
   rescue ImageSearch::Embedder::PlainImage
     []
-  end
-
-  def render_image_search_error(code)
-    render_unprocessable_entity(IMAGE_SEARCH_ERRORS.fetch(code), code: code)
   end
 
   def render_image_search_unavailable
@@ -336,16 +312,6 @@ class Api::V1::ListingsController < Api::V1::BaseController
     lat = number_param(:latitude)
     lng = number_param(:longitude)
     @buyer_point = (lat && lng && lat.abs <= 90 && lng.abs <= 180) ? [ lat, lng ] : nil
-  end
-
-  # A finite number from a query param, or nil when it is missing or unreadable
-  # ("abc", "12abc", NaN, Infinity, "1e999", an array or a hash).
-  def number_param(key, integer: false)
-    raw = params[key]
-    return nil unless raw.is_a?(String) || raw.is_a?(Numeric)
-
-    value = integer ? Integer(raw.to_s.strip, 10, exception: false) : Float(raw.to_s.strip, exception: false)
-    value if value&.finite?
   end
 
   # sort=nearest only makes sense with coordinates — radius is optional (the

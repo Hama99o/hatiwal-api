@@ -34,19 +34,25 @@ the script. The Dockerfile is unchanged: it already runs the script.
     are left out on purpose, because a photo cannot tell them apart.
 - **Tokenizer:** `ImageSearch::ClipTokenizer` is CLIP's byte-level BPE in plain Ruby, from the
   revision's own `vocab.json` + `merges.txt`. It gives the same ids as Hugging Face `tokenizers`
-  on all 126 phrases we use (the spec holds the reference ids). It is not a gem, so there is no
+  on all 141 phrases we use, accents included (the spec holds reference ids). It is not a gem, so there is no
   native extension and no Gemfile change.
-- **Category vectors:** embedded once per process, on the first suggestion, then kept: about
-  57 vectors × 512 floats, a few hundred KB. The text model is loaded only for that warm-up and
-  dropped right after, so it costs no lasting RAM. The vectors are also stored in
-  `Rails.cache` under a key made of the model version, the prompts file's digest and the
-  categories' `updated_at`, so other processes skip the ~6 s warm-up.
+- **Category vectors:** one per slug of the prompts file (57), embedded once per process on
+  the first suggestion, then kept (a few hundred KB).
+  - The text model is loaded only for that warm-up and dropped right after, so it costs no
+    lasting RAM.
+  - The vectors depend only on the model and the prompts file, so they are also stored in
+    `Rails.cache` under the model version + the file's sha256. Other processes skip the ~6 s
+    warm-up.
 - **Scoring:**
   1. Embed the photo (`ImageSearch::Embedder`, identical to search by image).
   2. Take the cosine with every category vector, × 100 (CLIP's logit scale).
-  3. Softmax over the categories.
-  4. The best category is suggested only if its probability is **≥ 0.40**. Otherwise the
-     answer is 204, "no suggestion".
+  3. Softmax over **every slug of the prompts file**, whatever the database holds.
+  4. The best slug is suggested only if its probability is **≥ 0.40** and its category is
+     active. Otherwise the answer is 204, "no suggestion".
+
+  A switched-off category still takes its share. Its photos are then not offered rather than
+  handed to the last categories left: with only one or two candidates, a softmax gives any
+  photo 50–100%. The spec caught this.
 - **Cost:** one photo embed (0.3–0.5 s of CPU, the same as one image search) plus 57 dot
   products. RAM: the image model is shared with search by image (+0.3 GB, already paid in the
   web process). The text model is held only during the warm-up (to be measured with
@@ -97,3 +103,28 @@ held-out set is the honest number, and it moved from 0.94 → 0.94 (no overfit c
 - **Feature flag:** `GET /app_config` gets `features.category_suggestion`. It is true when both
   model halves are on disk, unless `CATEGORY_SUGGESTION_ENABLED=0`. The apps only ever call the
   endpoint when the flag is true.
+
+## 3. Outcome log (for tuning after release)
+
+`POST /api/v1/my/listings/category_suggestion/outcome` takes
+`{outcome: accepted | dismissed | replaced, category_id, confidence}` and answers 204.
+`replaced` means the seller picked another category while the chip was shown. It is limited to
+60 per 10 min per user.
+
+The server writes one log line per answer and per outcome. The lines carry ids and numbers
+only: no photo, no user, nothing the seller wrote.
+
+```
+category_suggestion event=suggested category_id=16 confidence=0.62
+category_suggestion event=none
+category_suggestion event=accepted category_id=16 confidence=0.62
+category_suggestion event=dismissed category_id=16 confidence=0.48
+category_suggestion event=replaced category_id=16 confidence=0.41
+```
+
+How to read them after release:
+- **Real precision:** accepted ÷ (accepted + replaced). Dismissals are ambiguous: the seller
+  may also just prefer to pick the category themselves.
+- **Coverage:** suggested ÷ (suggested + none).
+- **Re-tuning:** split by confidence band to move `MIN_CONFIDENCE`.
+- **Command:** `bin/kms app logs` piped into `grep category_suggestion`, then count by `event`.

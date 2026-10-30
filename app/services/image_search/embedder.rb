@@ -89,6 +89,14 @@ module ImageSearch
         raise InvalidImage, e.message.lines.first.to_s.strip
       end
 
+      # A vector scaled to length 1, so a dot product IS the cosine similarity.
+      def normalize(vector)
+        norm = Math.sqrt(vector.sum { |x| x * x })
+        raise InvalidImage, "empty embedding" unless norm.positive?
+
+        vector.map { |x| x / norm }
+      end
+
       private
 
       def session
@@ -103,13 +111,6 @@ module ImageSearch
           intra_op_num_threads: Integer(ENV.fetch("IMAGE_SEARCH_THREADS", 2)),
           log_severity_level: 3
         )
-      end
-
-      def normalize(vector)
-        norm = Math.sqrt(vector.sum { |x| x * x })
-        raise InvalidImage, "empty embedding" unless norm.positive?
-
-        vector.map { |x| x / norm }
       end
     end
   end
