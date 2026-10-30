@@ -176,5 +176,7 @@ photo). Worst case **≈ +0.75–0.9 GB** on the 8 GB VPS that uses ~0.75 GB tod
    `bin/kamal app exec 'bin/rails image_search:backfill'` (prod: 44 photos ≈ 15 s
    **[inferred]**; it runs in that one-off container, not in Puma). Check with
    `bin/rails image_search:stats`.
+   Then warm sell with a photo's category vectors (docs/SELL_WITH_PHOTO.md §4):
+   `bin/kamal app exec 'bin/rails category_suggestion:warm'`.
 4. Kill switch without a code change: set `IMAGE_SEARCH_ENABLED=0` in the env (and reboot the app) → `/app_config` says false,
    the apps hide 📷, the endpoint answers 503, no new embed jobs.

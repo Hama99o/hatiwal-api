@@ -322,6 +322,10 @@ Rails.application.routes.draw do
             get :status_counts, to: "listing_status_counts#show"
             # "Relaunch all" (item 2): every expired listing of Me / a shop.
             post :relaunch_expired, to: "analytics#relaunch_expired"
+            # Sell with a photo (docs/SELL_WITH_PHOTO.md): a category for the
+            # first photo of a new listing, and what the seller did with it.
+            post :category_suggestion, to: "category_suggestions#create"
+            post "category_suggestion/outcome", to: "category_suggestions#outcome", as: :category_suggestion_outcome
           end
         end
 

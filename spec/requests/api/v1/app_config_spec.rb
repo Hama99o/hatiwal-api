@@ -38,7 +38,9 @@ RSpec.describe "Api::V1::AppConfig", type: :request do
                    description: "Server features an app may only offer when this server has them",
                    properties: {
                      image_search: { type: :boolean, description: "search by image (docs/IMAGE_SEARCH.md): show the camera button" },
-                     voice_messages: { type: :boolean, description: "voice messages in chat (docs/VOICE_MESSAGES.md): show the 🎤" }
+                     voice_messages: { type: :boolean, description: "voice messages in chat (docs/VOICE_MESSAGES.md): show the 🎤" },
+                     category_suggestion: { type: :boolean,
+                                            description: "sell with a photo (docs/SELL_WITH_PHOTO.md): ask for a category after the first photo" }
                    }
                  }
                },
@@ -121,6 +123,20 @@ RSpec.describe "Api::V1::AppConfig", type: :request do
       "video_max_bytes" => HasVideo::MAX_VIDEO_SIZE
     )
     expect(rules["price_max"].to_d).to eq(Listing::MAX_PRICE.to_d)
+  end
+
+  describe "features.category_suggestion" do
+    it "is true when this server has both halves of the model", :image_search do
+      allow(ImageSearch::TextEmbedder).to receive(:available?).and_return(true)
+      get "/api/v1/app_config"
+      expect(response.parsed_body.dig("features", "category_suggestion")).to be true
+    end
+
+    it "is false without the text model, even when search by image is on", :image_search do
+      allow(ImageSearch::TextEmbedder).to receive(:available?).and_return(false)
+      get "/api/v1/app_config"
+      expect(response.parsed_body.dig("features", "category_suggestion")).to be false
+    end
   end
 
   describe "features.image_search" do
