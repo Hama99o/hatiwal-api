@@ -100,7 +100,11 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     "listing.video_duration_s" => "VID length in seconds (null without one)",
     # IDEA-8 (1.2.1, docs/design/SHARE_AND_QR.md): the 1200 x 630 link-preview
     # image the web puts in og:image. A URL v1.0.4 never reads.
-    "listing.image_share_url" => "IDEA-8 link-preview image (null without a photo)"
+    "listing.image_share_url" => "IDEA-8 link-preview image (null without a photo)",
+    # IDEA-9 (1.2.1): the data-saver variants (320 card / 720 gallery, WebP q60). URLs v1.0.4 never reads.
+    "listings[].image_lite_urls" => "IDEA-9 data-saver card variants",
+    "listing.image_lite_urls" => "IDEA-9 data-saver card variants",
+    "listing.image_lite_gallery_urls" => "IDEA-9 data-saver gallery variants"
   }.freeze
 
   # Type changes made on purpose, each with why it is safe for v1.0.4.

@@ -33,6 +33,8 @@ class User < ApplicationRecord
   enum :status, { active: 0, suspended: 1, banned: 2 }
 
   has_many :listings, dependent: :destroy
+  # IDEA-9: chunked video uploads; their parts go with them (ResumableUpload#delete_part).
+  has_many :resumable_uploads, class_name: ResumableUpload.name, dependent: :destroy
   # SHOP-1 (docs/SHOPS.md in hatiwal-mobile). Owned shops go with the account;
   # memberships are the right to sell AS a shop. `active_shop` is who the user
   # sells as ("Selling as"); nil = Me. Always read it through #selling_shop.

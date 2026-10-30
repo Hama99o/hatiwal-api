@@ -215,6 +215,8 @@ Rails.application.routes.draw do
       # Reports
       resources :reports, only: [ :create, :index ]
 
+      # IDEA-9 — a video in chunks (docs/design/DATA_SAVER_AND_RESUMABLE_UPLOAD.md); HEAD = where to resume.
+      resources :uploads, only: %i[create show update], controller: "resumable_uploads"
       # IDEA-8 — the printable QR card of a shop / a listing (public, PNG or PDF).
       get "shops/:id/qr_card", to: "qr_cards#shop", as: :shop_qr_card, constraints: { format: /png|pdf/ }
       get "listings/:id/qr_card", to: "qr_cards#listing", as: :listing_qr_card, constraints: { format: /png|pdf/ }
