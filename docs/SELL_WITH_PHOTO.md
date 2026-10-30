@@ -1,0 +1,99 @@
+# Sell with a photo — category suggestion (1.2.1)
+
+Board card 377 (IDEA-3). Design and acceptance criteria: hatiwal-mobile
+`docs/design/SELL_WITH_PHOTO.md`. Measurements: hatiwal-mobile
+`docs/qa-1.2.1/sell-photo/measure/`.
+
+When a seller adds the **first photo of a new listing**, the apps ask the API which category the
+photo shows. The answer is a category **id** and a confidence, or nothing. The apps show it as a
+chip the seller can accept or dismiss. They never pick a category on their own, and never
+replace one the seller already chose.
+
+**Out of scope for 1.2.1:** title suggestion (owner, 2026-10-30: too hard to do well in ps/fa).
+
+## 1. Model
+
+Zero-shot CLIP: the same model as search by image (`Xenova/clip-vit-base-patch32`, revision
+`6b7c523`), with its **text** half added.
+
+| File (revision 6b7c523) | Size | sha256 |
+|---|---|---|
+| `onnx/vision_model_quantized.onnx` (already used by search by image) | 89 MB | `583fd111…` |
+| `onnx/text_model_quantized.onnx` | 64.5 MB | `73baab85…` |
+| `vocab.json` | 0.9 MB | `5047b556…` |
+| `merges.txt` | 0.5 MB | `9fd691f7…` |
+
+`bin/fetch-image-model` downloads and checks all four at Docker build time. The full hashes are in
+the script. The Dockerfile is unchanged: it already runs the script.
+
+- **Prompts:** `config/sell_photo/prompts.yml` holds English phrases per category slug
+  ("a photo of a mobile phone", …). These are only ever compared with photos. They are never
+  shown to anyone: the apps show the category's own `name_ps` / `name_fa` / `name_en`.
+  - The phrases of one category are averaged (prompt ensembling).
+  - Only slugs listed in the file can be suggested. Property, Stays, Jobs, Services and Other
+    are left out on purpose, because a photo cannot tell them apart.
+- **Tokenizer:** `ImageSearch::ClipTokenizer` is CLIP's byte-level BPE in plain Ruby, from the
+  revision's own `vocab.json` + `merges.txt`. It gives the same ids as Hugging Face `tokenizers`
+  on all 126 phrases we use (the spec holds the reference ids). It is not a gem, so there is no
+  native extension and no Gemfile change.
+- **Category vectors:** embedded once per process, on the first suggestion, then kept: about
+  57 vectors × 512 floats, a few hundred KB. The text model is loaded only for that warm-up and
+  dropped right after, so it costs no lasting RAM. The vectors are also stored in
+  `Rails.cache` under a key made of the model version, the prompts file's digest and the
+  categories' `updated_at`, so other processes skip the ~6 s warm-up.
+- **Scoring:**
+  1. Embed the photo (`ImageSearch::Embedder`, identical to search by image).
+  2. Take the cosine with every category vector, × 100 (CLIP's logit scale).
+  3. Softmax over the categories.
+  4. The best category is suggested only if its probability is **≥ 0.40**. Otherwise the
+     answer is 204, "no suggestion".
+- **Cost:** one photo embed (0.3–0.5 s of CPU, the same as one image search) plus 57 dot
+  products. RAM: the image model is shared with search by image (+0.3 GB, already paid in the
+  web process). The text model is held only during the warm-up (to be measured with
+  `bin/rails runner`).
+
+### Zero-shot vs a vote of similar listings [measured 2026-10-30]
+
+Precision at threshold 0.40 = the share of shown suggestions that are the right subcategory.
+
+| Test set | Zero-shot (v2 prompts) | kNN vote over existing listings |
+|---|---|---|
+| 170 held-out Commons photos, 42 categories, labels checked by eye | **0.94** (98/170 get a chip); top-level category right 0.99 | n/a (none of them are listings) |
+| 25 CC0 seed photos | 1.00 (19/25) | n/a |
+| 44 public production photos, seller's own labels | 0.64 (25/44), see below | 0.29 (28/44), best 0.40 |
+| …first photo of each of the 18 production listings | 0.78 (9/18) | — |
+
+**Zero-shot is chosen.** The kNN vote cannot work yet: production has 18 live listings, and most
+categories have one listing or none, so a photo's "nearest" listings are mostly from other
+categories. Re-measure the combination (agreement → boost) when production has a few hundred
+listings. `ImageSearch::RubyCosineIndex` already gives the neighbours.
+
+The 9 production misses at ≥ 0.40, looked at photo by photo:
+- **7 are one listing:** an air-freshener spray the seller filed under "Other", suggested as
+  Fragrances (6) and Haircare (1). "Other" can never be suggested.
+- **1 is label noise:** a "Jacket" listing whose photo is a phone → Phones.
+- **1 is a real mistake:** a feather duster → Haircare.
+
+The v2 prompts added generic packaging, tool and phone-screen phrases. They were written
+**after** looking at the production misses, so production is a tuning set, not a test. The
+held-out set is the honest number, and it moved from 0.94 → 0.94 (no overfit cost).
+
+## 2. Endpoint
+
+`POST /api/v1/my/listings/category_suggestion`, multipart, one `image`.
+
+- **Signed in only.** Throttled at 30 / 10 min per user and 120 / 10 min per IP, the same as
+  image search.
+- **The photo is never stored, logged or attached.** It gets the same size cap and the same
+  file-type check as a listing photo (Marcel on the leading bytes).
+- **Responses:**
+  - `200 {"category_id": 16, "parent_id": 1, "confidence": 0.62}`
+  - `204` when unsure, when the photo is plain or blank, or when no suggestible category is
+    active.
+  - `422` for `image_missing` / `invalid_image` / `image_too_large`.
+  - `503` for `category_suggestion_unavailable` (no model, or the kill switch is on).
+- **No title**, and no text in any language: the apps render the category name in the seller's
+  language from the categories they already have.
+- **Feature flag:** `GET /app_config` gets `features.category_suggestion`. It is true when both
+  model halves are on disk, unless `CATEGORY_SUGGESTION_ENABLED=0`. The apps only ever call the
+  endpoint when the flag is true.
