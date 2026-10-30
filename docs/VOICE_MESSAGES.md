@@ -27,6 +27,7 @@ optional `client_uuid` (+ `Idempotency-Key`), exactly like a chat photo.
 | > 122 s (2 min + slack) | 422 | `voice_too_long` |
 | not MP4/WebM/Ogg, no audio stream, undecodable, > 10 s of work | 422 | `voice_invalid` |
 | ffmpeg missing or `VOICE_MESSAGES_ENABLED=0` | 503 | `voice_messages_unavailable` |
+| another clip held the transcoder for 5 s | 503 + `Retry-After: 5` | `voice_busy` (retryable: the outbox sends it again) |
 | > 60 voice messages / hour / user (inside the chat's 120 / hour) | 429 | `rate_limited` |
 
 ## ffmpeg hardening
@@ -38,7 +39,10 @@ The upload is untrusted input to ffmpeg:
 - ffmpeg is given the demuxer (`-f mov|matroska|ogg`), so it never probes; `-protocol_whitelist
   file` (no network, no pipes); the mov demuxer's external references stay off (its default);
 - `-nostdin`, `timeout -s KILL 10`, at most 125 s decoded, `-threads 1`, a private temp dir
-  removed in `ensure`.
+  removed in `ensure`;
+- **one transcode at a time per process** (`Transcoder::SLOTS = 1`): production Puma has 3
+  threads with Solid Queue inside it, so three 2-minute clips at once would otherwise hold every
+  thread for seconds. A second clip waits up to 5 s for the slot, then gets 503 `voice_busy`.
 
 Specs: `spec/services/voice_messages/transcoder_spec.rb`, `spec/requests/api/v1/voice_messages_spec.rb`.
 
@@ -68,3 +72,12 @@ download the file only on first play.
   minutes. It runs in the request (a Puma thread is busy that long); the 60/hour/user limit and
   the 2-minute cap bound it.
 - New migration `20261030100000_add_voice_to_messages`: two nullable columns, additive.
+
+### 1.2.1 deploy notes
+
+- **Raise `RAILS_MAX_THREADS` to 5** (supervisor's call at deploy time; RAM is fine): with one
+  thread possibly busy transcoding for ~4 s, 5 threads keep the rest of the API responsive.
+- The image is +389 MB (ffmpeg); the VPS has room (55 GB free, 2026-10-30).
+- Later optimisation (not 1.2.1): a static ffmpeg built with only the mov/matroska/ogg demuxers
+  and the aac/opus/vorbis codecs would be a fraction of that size, at the cost of a custom build
+  to maintain and patch.

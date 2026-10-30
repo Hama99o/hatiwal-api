@@ -21,6 +21,9 @@ class Api::V1::MessagesController < Api::V1::BaseController
     voice_invalid:   "This file is not a voice recording we can play."
   }.freeze
   VOICE_UNAVAILABLE = "Voice messages are not available right now.".freeze
+  VOICE_BUSY = "Busy, sending again in a moment.".freeze
+  # Seconds; about one 2-minute clip's transcode on the production VPS.
+  VOICE_BUSY_RETRY_AFTER = 5
 
   def index
     authorize @conversation, :read_messages?
@@ -64,9 +67,13 @@ class Api::V1::MessagesController < Api::V1::BaseController
     @message.user = current_user
     if @message.voice_message?
       return render_coded_error(VOICE_UNAVAILABLE, code: :voice_messages_unavailable, status: :service_unavailable) unless VoiceMessages.enabled?
-      if (code = @message.assign_voice(params[:attachment]))
-        return render_unprocessable_entity(VOICE_REFUSALS.fetch(code), code: code)
+      begin
+        code = @message.assign_voice(params[:attachment])
+      rescue VoiceMessages::Transcoder::Busy
+        response.headers["Retry-After"] = VOICE_BUSY_RETRY_AFTER.to_s
+        return render_coded_error(VOICE_BUSY, code: :voice_busy, status: :service_unavailable)
       end
+      return render_unprocessable_entity(VOICE_REFUSALS.fetch(code), code: code) if code
     elsif params[:attachment].present?
       @message.attachment = params[:attachment]
     end

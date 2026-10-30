@@ -125,6 +125,48 @@ RSpec.describe VoiceMessages::Transcoder, :ffmpeg do
     end
   end
 
+  # Production Puma has 3 threads: one ffmpeg at a time per process, so voice
+  # can never hold every thread (supervisor, 2026-10-30).
+  describe "one transcode at a time" do
+    before { stub_const("#{described_class}::WAIT_SECONDS", 0.3) }
+
+    it "a second clip waits for the slot, then is told busy (voice_busy), never queued forever" do
+      holder = Thread.new { described_class.with_slot { sleep 1.0 } }
+      sleep 0.1
+
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      expect { described_class.call(voice_clip) }.to raise_error(described_class::Busy)
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be_between(0.25, 0.9)
+    ensure
+      holder&.join
+    end
+
+    it "gets the slot once the first one is done" do
+      holder = Thread.new { described_class.with_slot { sleep 0.1 } }
+      sleep 0.05
+
+      expect(described_class.call(voice_clip).duration_ms).to be_within(150).of(3000)
+    ensure
+      holder&.join
+    end
+
+    it "gives the slot back when ffmpeg refuses a clip" do
+      bad = voice_file_with("\x00\x00\x00\x18ftypM4A ".b + SecureRandom.random_bytes(512))
+      expect { described_class.call(bad) }.to raise_error(described_class::Refused)
+
+      expect(described_class.call(voice_clip).duration_ms).to be_within(150).of(3000)
+    end
+
+    it "checks size and container without waiting for the slot" do
+      holder = Thread.new { described_class.with_slot { sleep 0.6 } }
+      sleep 0.05
+
+      expect(refused_with(voice_file_with("#EXTM3U\n"))).to eq(:voice_invalid)
+    ensure
+      holder&.join
+    end
+  end
+
   describe ".container_of" do
     it "knows the three containers by their leading bytes" do
       expect(described_class.container_of(voice_clip(format: :m4a))).to eq(:mp4)

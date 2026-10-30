@@ -37,7 +37,8 @@ RSpec.describe "Api::V1::Messages — voice messages", type: :request do
         `voice: { url, duration_ms, waveform }` (64 bars, 0–100).
         Refusals (422 `code`): voice_missing, voice_too_large, voice_too_short,
         voice_too_long, voice_invalid. 503 `voice_messages_unavailable` when the
-        server cannot take voice messages (`GET /app_config` features.voice_messages).
+        server cannot take voice messages (`GET /app_config` features.voice_messages);
+        503 `voice_busy` + `Retry-After` when another clip holds the transcoder (retry).
         60 voice messages an hour per user, inside the chat's 120 messages an hour.
       DESC
       consumes "multipart/form-data"
@@ -155,6 +156,17 @@ RSpec.describe "Api::V1::Messages — voice messages", type: :request do
 
       expect(response).to have_http_status(:service_unavailable)
       expect(response.parsed_body["code"]).to eq("voice_messages_unavailable")
+    end
+
+    it "answers 503 voice_busy with Retry-After when another clip holds the transcoder" do
+      allow(VoiceMessages::Transcoder).to receive(:available?).and_return(true)
+      allow(VoiceMessages::Transcoder).to receive(:call).and_raise(VoiceMessages::Transcoder::Busy)
+      send_voice(voice_upload(voice_file_with("x")))
+
+      expect(response).to have_http_status(:service_unavailable)
+      expect(response.parsed_body["code"]).to eq("voice_busy")
+      expect(response.headers["Retry-After"]).to eq("5")
+      expect(Message.count).to eq(0)
     end
 
     it "the body is the server's, whatever the client sent" do

@@ -17,7 +17,8 @@ module VoiceMessages
   #   concat or image2 demuxer can be picked by a crafted file), and may open
   #   only plain files (`-protocol_whitelist file`): no network, no pipes;
   # - `-nostdin`, a hard 10 s kill (`timeout -s KILL`), a 125 s cap on what it
-  #   decodes, and a private temp dir removed in `ensure`.
+  #   decodes, and a private temp dir removed in `ensure`;
+  # - one ffmpeg at a time per process (see SLOTS).
   class Transcoder
     MAX_BYTES = 2.megabytes
     MIN_DURATION_MS = 1_000
@@ -29,6 +30,13 @@ module VoiceMessages
     WAVEFORM_BARS = 64
     PCM_RATE = 8_000
 
+    # One ffmpeg at a time per process. Production Puma has few threads (3 by
+    # default, Solid Queue inside it): three 2-minute clips at once would hold
+    # every one of them for seconds. A second clip waits this long for the slot,
+    # then is answered 503 voice_busy (+ Retry-After); the apps' outbox retries.
+    SLOTS = 1
+    WAIT_SECONDS = 5
+
     # leading bytes → the ffmpeg demuxer that reads them
     CONTAINERS = {
       mp4: "mov",
@@ -37,6 +45,9 @@ module VoiceMessages
     }.freeze
 
     Clip = Data.define(:data, :duration_ms, :waveform)
+
+    # The slot stayed taken for WAIT_SECONDS: try again shortly (503 voice_busy).
+    class Busy < StandardError; end
 
     # A clip we refuse; `code` is the wire code the apps translate.
     class Refused < StandardError
@@ -57,6 +68,23 @@ module VoiceMessages
     def self.call(path)
       new(path).call
     end
+
+    # Runs the block holding the process's transcode slot, or raises Busy.
+    def self.with_slot
+      token = slot_queue.pop(timeout: self::WAIT_SECONDS)
+      raise Busy unless token
+
+      begin
+        yield
+      ensure
+        slot_queue.push(token)
+      end
+    end
+
+    def self.slot_queue
+      @slot_queue ||= Thread::Queue.new(Array.new(SLOTS, :slot))
+    end
+    private_class_method :slot_queue
 
     def self.container_of(path)
       head = File.binread(path, 12).to_s
@@ -81,7 +109,7 @@ module VoiceMessages
       Dir.mktmpdir("voice") do |dir|
         out = File.join(dir, "voice.m4a")
         pcm = File.join(dir, "voice.pcm")
-        run_ffmpeg(CONTAINERS.fetch(container), out, pcm)
+        self.class.with_slot { run_ffmpeg(CONTAINERS.fetch(container), out, pcm) }
         clip_from(out, pcm)
       end
     end

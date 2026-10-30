@@ -161,7 +161,8 @@ class Message < ApplicationRecord
   # Re-encodes and measures an uploaded recording, then sets everything a voice
   # message carries: the m4a, its duration and waveform, and the "🎤 m:ss" body
   # older apps show. Returns nil, or the refusal's wire code (voice_missing,
-  # voice_too_large, voice_too_short, voice_too_long, voice_invalid).
+  # voice_too_large, voice_too_short, voice_too_long, voice_invalid). Raises
+  # VoiceMessages::Transcoder::Busy when another clip holds the transcoder.
   def assign_voice(upload)
     return :voice_missing unless upload.respond_to?(:path)
 
