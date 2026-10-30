@@ -69,6 +69,8 @@ Rails.application.routes.draw do
       end
     end
     resources :prohibited_terms
+    # IDEA-6: suggested meetup spots (draft rows need a local check first).
+    resources :meetup_spots
     # VER-1: the verification queue. `document` streams one ID photo for a
     # token that expires in 5 minutes; every view is audit-logged.
     # SHOP-1 — shops: moderate, not edit.
@@ -206,6 +208,8 @@ Rails.application.routes.draw do
 
       # Categories
       resources :categories, only: [ :index ]
+      # IDEA-6: busy public places suggested for a meetup (public).
+      resources :meetup_spots, only: [ :index ]
 
       # UPD-1 — force update / update reminder (public)
       get "app_config", to: "app_configs#show", as: :app_config
