@@ -50,6 +50,7 @@ en:
       offer: "Sent an offer"
       meetup: "Proposed a meetup"
       image: "Sent a photo"
+      voice: "🎤 Voice message"
       document: "Sent a document"
       offer_counter: "Sent a counter-offer"
       offer_accepted: "Accepted your offer"

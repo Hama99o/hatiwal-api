@@ -12,7 +12,7 @@ class Message < ApplicationRecord
   enum :kind, {
     text: 0, meetup_proposal: 1, system: 2, offer: 3, document: 4, image_message: 5,
     meetup_accepted: 6, meetup_declined: 7, offer_accepted: 8, offer_declined: 9,
-    offer_counter: 10
+    offer_counter: 10, voice_message: 11
   }
 
   # Kinds that a client (request param) is allowed to set.
@@ -22,6 +22,7 @@ class Message < ApplicationRecord
   USER_SENDABLE_KINDS = %w[
     text meetup_proposal meetup_accepted meetup_declined
     offer offer_accepted offer_declined document image_message offer_counter
+    voice_message
   ].freeze
 
   BODY_MAX = 1000
@@ -36,7 +37,18 @@ class Message < ApplicationRecord
             attached_file: {
               types:    AttachedFileValidator::IMAGE_TYPES + AttachedFileValidator::DOCUMENT_TYPES,
               max_size: MAX_ATTACHMENT_SIZE
-            }
+            },
+            unless: :voice_message?
+
+  # Voice messages (1.2.1, docs/VOICE_MESSAGES.md): the file is always the
+  # server's own m4a (VoiceMessages::Transcoder re-encodes every upload, see
+  # #assign_voice), with the duration and waveform it measured. A client never
+  # attaches audio to any other kind.
+  VOICE_CONTENT_TYPE = "audio/mp4".freeze
+  validates :attachment,
+            attached_file: { types: [ VOICE_CONTENT_TYPE ], max_size: VoiceMessages::Transcoder::MAX_BYTES },
+            if: :voice_message?
+  validate :voice_has_its_audio, on: :create, if: :voice_message?
   validate :kind_must_not_be_system_when_user_authored
 
   # OFFLINE §10.1: the phone's own id for a message it queued. Unique per sender
@@ -139,8 +151,29 @@ class Message < ApplicationRecord
     update_column(:read_at, Time.current) if read_at.nil?
   end
 
+  # A deleted voice message keeps nothing to play: its audio is purged (a
+  # photo's file stays, as before; its URL is hidden either way).
   def soft_delete!
     update_column(:deleted_at, Time.current)
+    attachment.purge_later if voice_message? && attachment.attached?
+  end
+
+  # Re-encodes and measures an uploaded recording, then sets everything a voice
+  # message carries: the m4a, its duration and waveform, and the "🎤 m:ss" body
+  # older apps show. Returns nil, or the refusal's wire code (voice_missing,
+  # voice_too_large, voice_too_short, voice_too_long, voice_invalid).
+  def assign_voice(upload)
+    return :voice_missing unless upload.respond_to?(:path)
+
+    clip = VoiceMessages::Transcoder.call(upload.path)
+    self.voice_duration_ms = clip.duration_ms
+    self.voice_waveform = clip.waveform
+    self.body = VoiceMessages.body_for(clip.duration_ms)
+    attachment.attach(io: StringIO.new(clip.data), filename: "voice.m4a",
+                      content_type: VOICE_CONTENT_TYPE, identify: false)
+    nil
+  rescue VoiceMessages::Transcoder::Refused => e
+    e.code
   end
 
   def deleted?
@@ -192,6 +225,11 @@ class Message < ApplicationRecord
   end
 
   private
+
+  def voice_has_its_audio
+    errors.add(:attachment, :blank) unless attachment.attached?
+    errors.add(:voice_duration_ms, :blank) if voice_duration_ms.blank?
+  end
 
   def offer_body_readable
     return if body.blank? || self.class.readable_offer_body?(body)
@@ -342,7 +380,8 @@ class Message < ApplicationRecord
   end
 
   def kind_allowed_in_support_thread
-    return if Conversation::SUPPORT_MESSAGE_KINDS.include?(kind.to_s)
+    allowed = conversation.kind_support? ? Conversation::SUPPORT_MESSAGE_KINDS : Conversation::SHOP_CHAT_MESSAGE_KINDS
+    return if allowed.include?(kind.to_s)
 
     errors.add(:kind, conversation.shop_chat? ? "is not allowed in a chat without a product" : "is not allowed in a support conversation")
   end

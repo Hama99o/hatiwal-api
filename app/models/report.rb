@@ -16,7 +16,11 @@ class Report < ApplicationRecord
   # privacy-b: a shop is reported by ITS id (a buyer's app never has the
   # owner's). Only these can be reported; anything else is refused rather than
   # constantized.
-  REPORTABLE_TYPES = [ Listing.name, User.name, Shop.name ].freeze
+  # Voice messages (1.2.1, docs/VOICE_MESSAGES.md §8.2): a voice message is
+  # reported on its own, so a moderator can hear exactly what was said; a report
+  # on the person never could. Only a voice message, and only the other side of
+  # the chat (ReportPolicy keeps everyone else out).
+  REPORTABLE_TYPES = [ Listing.name, User.name, Shop.name, Message.name ].freeze
 
   validates :reportable_type, inclusion: { in: REPORTABLE_TYPES }
   validates :reason, presence: true
@@ -26,6 +30,7 @@ class Report < ApplicationRecord
     message: :already_reported
   }
   validate :not_reporting_own_content
+  validate :message_is_a_voice_message, if: -> { reportable.is_a?(Message) }
 
   # Prohibited items (owner, 2026-10-13): a "prohibited item" report on a
   # listing opens / joins its Flag for the admins; 3 distinct reporters move a
@@ -51,5 +56,20 @@ class Report < ApplicationRecord
     if reportable.is_a?(Shop) && reportable.member?(reporter)
       errors.add(:base, "cannot report your own shop")
     end
+    if reportable.is_a?(Message) && own_side_of_the_chat?
+      errors.add(:base, "cannot report your own message")
+    end
+  end
+
+  # A shop's team is one side: a member cannot report a teammate's message.
+  def own_side_of_the_chat?
+    conversation = reportable.conversation
+    conversation.side_for(reporter) == conversation.side_for(reportable.user)
+  end
+
+  def message_is_a_voice_message
+    return if reportable.voice_message? && !reportable.deleted?
+
+    errors.add(:reportable, "only a voice message can be reported (report the person for anything else)")
   end
 end

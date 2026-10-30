@@ -348,7 +348,9 @@ RSpec.describe "Api::V1::Messages", type: :request do
         expect(JSON.parse(response.body)["message"]["kind"]).to eq("text")
       end
 
-      Message::USER_SENDABLE_KINDS.each do |allowed_kind|
+      # A voice message needs its recording (multipart): accepted with one in
+      # spec/requests/api/v1/voice_messages_spec.rb, refused (voice_missing) without.
+      (Message::USER_SENDABLE_KINDS - %w[voice_message]).each do |allowed_kind|
         it "accepts kind:'#{allowed_kind}'" do
           # A reply kind answers the seller's message of the right kind.
           target = if (kinds = Message::REPLY_TARGETS[allowed_kind])

@@ -1,0 +1,6 @@
+<%# A reported voice message as text; anything else as Administrate's polymorphic link. %>
+<% if field.voice_message? %>
+  <%= field.voice_label %>
+<% else %>
+  <%= render "fields/polymorphic/show", field: field %>
+<% end %>

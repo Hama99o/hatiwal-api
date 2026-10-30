@@ -31,6 +31,9 @@ class Conversation < ApplicationRecord
   # Support threads accept plain messages only; offers, meetups and the other
   # deal kinds belong to a listing.
   SUPPORT_MESSAGE_KINDS = %w[text image_message document].freeze
+  # A shop chat (no product) takes the same, plus voice messages. Support does
+  # not take voice (1.2.1): the admins' Support screen has no player.
+  SHOP_CHAT_MESSAGE_KINDS = (SUPPORT_MESSAGE_KINDS + %w[voice_message]).freeze
 
   # Pins the support thread above every listing thread in the inbox.
   #

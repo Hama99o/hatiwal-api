@@ -68,6 +68,9 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # (image_urls / avatar_url), which an old app keeps using.
     "listings[].bumped_at" => "OFFLINE §4.8: the feed's newest order, so the app sorts its cached listings like the server",
     "messages[].client_uuid" => "OFFLINE §10.1: the phone's own id for a message it queued; null from every 1.1.x app",
+    # Voice messages (1.2.1). Null on every message an old app can meet except a
+    # voice message, whose `body` "🎤 0:12" is what an old app shows instead.
+    "messages[].voice" => "1.2.1 voice messages: {url, duration_ms, waveform}, null on every other kind",
     "listings[].image_thumb_urls" => "photo variants: 480 px WebP, one per image_urls entry",
     "listings[].image_medium_urls" => "photo variants: 1200 px WebP, one per image_urls entry",
     "listings[].seller.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",

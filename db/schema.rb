@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_230000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -391,6 +391,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_230000) do
     t.bigint "responds_to_id"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.integer "voice_duration_ms"
+    t.integer "voice_waveform", array: true
     t.index [ "admin_user_id" ], name: "index_messages_on_admin_user_id"
     t.index [ "conversation_id" ], name: "index_messages_on_conversation_id"
     t.index [ "created_at" ], name: "index_messages_on_created_at"

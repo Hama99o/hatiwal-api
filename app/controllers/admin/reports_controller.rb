@@ -67,12 +67,14 @@ module Admin
 
     private
 
-    # The user a report points at: the reported user, or the listing's seller.
+    # The user a report points at: the reported user, the listing's seller, the
+    # shop's owner, or the sender of a reported voice message.
     def user_to_warn(report)
       case report.reportable
       when User then report.reportable
       when Listing then report.reportable.user
       when Shop then report.reportable.owner
+      when Message then report.reportable.user # a voice message: its sender
       end
     end
 

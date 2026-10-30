@@ -11,6 +11,8 @@ class SendMessagePushJob < ApplicationJob
     "offer" => "push.message.offer",
     "meetup_proposal" => "push.message.meetup",
     "image_message" => "push.message.image",
+    # Never the audio, never the "🎤 0:12" body: a label in the recipient's language.
+    "voice_message" => "push.message.voice",
     "document" => "push.message.document",
     # Replies: their body is the answered offer / proposal (or a sender-language
     # label from web) — never shown raw (d0 hunt 2026-10-09).
