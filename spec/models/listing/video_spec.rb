@@ -50,12 +50,18 @@ RSpec.describe Listing, "video" do
   end
 
   describe "#off_market_since" do
+    include ActiveSupport::Testing::TimeHelpers
+
+    # Frozen: each line computes "N days ago" twice, and a second boundary between the two
+    # made it fail now and then (seen 2026-10-30 in a full run).
     it "is the deletion, sale or expiry time, and nil while live or a draft" do
-      expect(build(:listing, :active).off_market_since).to be_nil
-      expect(build(:listing, :draft).off_market_since).to be_nil
-      expect(build(:listing, :sold, sold_at: 3.days.ago.round).off_market_since).to eq(3.days.ago.round)
-      expect(build(:listing, :expired, expires_at: 2.days.ago.round).off_market_since).to eq(2.days.ago.round)
-      expect(build(:listing, :active, removed_at: 1.day.ago.round).off_market_since).to eq(1.day.ago.round)
+      freeze_time do
+        expect(build(:listing, :active).off_market_since).to be_nil
+        expect(build(:listing, :draft).off_market_since).to be_nil
+        expect(build(:listing, :sold, sold_at: 3.days.ago.round).off_market_since).to eq(3.days.ago.round)
+        expect(build(:listing, :expired, expires_at: 2.days.ago.round).off_market_since).to eq(2.days.ago.round)
+        expect(build(:listing, :active, removed_at: 1.day.ago.round).off_market_since).to eq(1.day.ago.round)
+      end
     end
   end
 
