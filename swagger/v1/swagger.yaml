@@ -535,7 +535,7 @@ paths:
                 listings:
                 - address:
                   available_units: 1
-                  bumped_at: '2026-10-30T18:01:00.281Z'
+                  bumped_at: '2026-10-30T20:10:02.052Z'
                   category:
                     icon: "\U0001F4E6"
                     id: 498
@@ -549,7 +549,7 @@ paths:
                     slug: category-859
                   category_id: 498
                   condition:
-                  created_at: '2026-10-30T18:01:00.281Z'
+                  created_at: '2026-10-30T20:10:02.052Z'
                   currency: AFN
                   details: {}
                   expired: false
@@ -569,13 +569,13 @@ paths:
                   price_drop_amount:
                   price_drop_percent: 20
                   price_dropped: false
-                  price_dropped_at: '2026-10-30T18:01:00Z'
+                  price_dropped_at: '2026-10-30T20:10:02Z'
                   price_unit:
                   quantity: 1
                   sales_count: 0
                   seller:
                     id: 664
-                    name: Margene Keebler
+                    name: Cristen Rippin
                     city: Kabul
                     verified: false
                     avatar_url:
@@ -583,7 +583,7 @@ paths:
                   shop:
                   status: active
                   thumbnail_url:
-                  title: Incredible Linen Lamp
+                  title: Gorgeous Linen Knife
                   views_count: 0
                 meta:
                   pagination:
@@ -647,9 +647,9 @@ paths:
                   category_id: 525
                   condition:
                   conversations_count: 0
-                  created_at: '2026-10-30T18:01:03.185Z'
+                  created_at: '2026-10-30T20:10:05.781Z'
                   currency: AFN
-                  description: Quos earum saepe. Et iste rerum. Voluptas cum dolor.
+                  description: Sed fuga magni. Sed magnam possimus. Dolorum vel ea.
                   details: {}
                   expired: false
                   expires_at:
@@ -658,6 +658,7 @@ paths:
                   id: 533
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -669,18 +670,18 @@ paths:
                   longitude:
                   multi_unit: false
                   negotiable: true
-                  price: 81915.06
+                  price: 94843.13
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:01:03.185Z'
+                  published_at: '2026-10-30T20:10:05.780Z'
                   quantity: 1
                   reserved_at:
                   sales_count: 0
                   saves_count: 4
                   seller:
                     id: 707
-                    name: Willie Johnston
+                    name: Adrien Hintz
                     city: Kabul
                     phone:
                     whatsapp_number:
@@ -699,8 +700,8 @@ paths:
                   sold_at:
                   status: active
                   thumbnail_url:
-                  title: Gorgeous Copper Shoes
-                  updated_at: '2026-10-30T18:01:03.185Z'
+                  title: Sleek Iron Wallet
+                  updated_at: '2026-10-30T20:10:05.781Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -829,7 +830,7 @@ paths:
                 listings:
                 - address:
                   available_units: 1
-                  bumped_at: '2026-10-30T18:01:04.148Z'
+                  bumped_at: '2026-10-30T20:10:06.997Z'
                   category:
                     icon: "\U0001F4E6"
                     id: 534
@@ -843,7 +844,7 @@ paths:
                     slug: category-895
                   category_id: 534
                   condition:
-                  created_at: '2026-10-30T18:01:04.148Z'
+                  created_at: '2026-10-30T20:10:06.997Z'
                   currency: AFN
                   details: {}
                   expired: false
@@ -858,7 +859,7 @@ paths:
                   location: Kabul, Afghanistan
                   multi_unit: false
                   negotiable: true
-                  price: 82643.08
+                  price: 55757.94
                   price_at_save:
                   price_drop_amount:
                   price_drop_percent:
@@ -869,7 +870,7 @@ paths:
                   sales_count: 0
                   seller:
                     id: 729
-                    name: Dale Bogisich
+                    name: Tamra Waters
                     city: Kabul
                     verified: false
                     avatar_url:
@@ -877,11 +878,11 @@ paths:
                   shop:
                   status: active
                   thumbnail_url:
-                  title: Sleek Silk Car
+                  title: Practical Silk Shoes
                   views_count: 0
                 - address:
                   available_units: 1
-                  bumped_at: '2026-10-30T18:01:04.123Z'
+                  bumped_at: '2026-10-30T20:10:06.965Z'
                   category:
                     icon: "\U0001F4E6"
                     id: 534
@@ -895,7 +896,7 @@ paths:
                     slug: category-895
                   category_id: 534
                   condition:
-                  created_at: '2026-10-30T18:01:04.123Z'
+                  created_at: '2026-10-30T20:10:06.965Z'
                   currency: AFN
                   details: {}
                   expired: false
@@ -910,7 +911,7 @@ paths:
                   location: Kabul, Afghanistan
                   multi_unit: false
                   negotiable: true
-                  price: 85638.47
+                  price: 21908.27
                   price_at_save:
                   price_drop_amount:
                   price_drop_percent:
@@ -921,7 +922,7 @@ paths:
                   sales_count: 0
                   seller:
                     id: 728
-                    name: Sarai Glover
+                    name: Bernetta Borer
                     city: Kabul
                     verified: false
                     avatar_url:
@@ -929,11 +930,11 @@ paths:
                   shop:
                   status: active
                   thumbnail_url:
-                  title: Heavy Duty Wool Wallet
+                  title: Heavy Duty Rubber Car
                   views_count: 0
                 - address:
                   available_units: 1
-                  bumped_at: '2026-10-30T18:01:04.095Z'
+                  bumped_at: '2026-10-30T20:10:06.927Z'
                   category:
                     icon: "\U0001F4E6"
                     id: 534
@@ -947,7 +948,7 @@ paths:
                     slug: category-895
                   category_id: 534
                   condition:
-                  created_at: '2026-10-30T18:01:04.095Z'
+                  created_at: '2026-10-30T20:10:06.927Z'
                   currency: AFN
                   details: {}
                   expired: false
@@ -962,7 +963,7 @@ paths:
                   location: Kabul, Afghanistan
                   multi_unit: false
                   negotiable: true
-                  price: 60613.85
+                  price: 29325.91
                   price_at_save:
                   price_drop_amount:
                   price_drop_percent:
@@ -973,7 +974,7 @@ paths:
                   sales_count: 0
                   seller:
                     id: 727
-                    name: Carlo Lueilwitz
+                    name: Shirley Haley
                     city: Kabul
                     verified: false
                     avatar_url:
@@ -981,7 +982,7 @@ paths:
                   shop:
                   status: active
                   thumbnail_url:
-                  title: Synergistic Marble Keyboard
+                  title: Rustic Copper Computer
                   views_count: 0
         '404':
           description: not found for non-existent listing
@@ -1325,10 +1326,10 @@ paths:
                   category_id: 817
                   condition:
                   conversations_count: 0
-                  created_at: '2026-10-30T18:01:29.786Z'
+                  created_at: '2026-10-30T20:10:43.857Z'
                   currency: AFN
-                  description: Enim facere atque. Voluptatem aliquid debitis. Ipsum
-                    et officiis.
+                  description: Itaque quis aut. Dolorem accusamus explicabo. Explicabo
+                    laboriosam sit.
                   details: {}
                   expired: false
                   expires_at:
@@ -1340,6 +1341,7 @@ paths:
                     url: http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6Mjg1LCJwdXIiOiJibG9iX2lkIn19--f329c622804ac93f666bc5c2e654f0ffab95798f/test_image.jpg
                   image_medium_urls:
                   - http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6Mjg1LCJwdXIiOiJibG9iX2lkIn19--f329c622804ac93f666bc5c2e654f0ffab95798f/test_image.jpg
+                  image_share_url: http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6Mjg1LCJwdXIiOiJibG9iX2lkIn19--f329c622804ac93f666bc5c2e654f0ffab95798f/test_image.jpg
                   image_thumb_urls:
                   - http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6Mjg1LCJwdXIiOiJibG9iX2lkIn19--f329c622804ac93f666bc5c2e654f0ffab95798f/test_image.jpg
                   images:
@@ -1353,11 +1355,11 @@ paths:
                   longitude:
                   multi_unit: false
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:01:29.786Z'
+                  next_bump_at: '2026-11-06T20:10:43.857Z'
                   posted_by:
                     id: 1219
-                    name: Sima Ziemann
-                  price: 38626.23
+                    name: Ricky Collier
+                  price: 82981.59
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
@@ -1397,8 +1399,8 @@ paths:
                   sold_at:
                   status: draft
                   thumbnail_url: http://www.example.com/rails/active_storage/representations/redirect/eyJfcmFpbHMiOnsiZGF0YSI6Mjg1LCJwdXIiOiJibG9iX2lkIn19--f329c622804ac93f666bc5c2e654f0ffab95798f/eyJfcmFpbHMiOnsiZGF0YSI6eyJmb3JtYXQiOiJqcGciLCJyZXNpemVfdG9fbGltaXQiOls2MDAsNjAwXSwic2F2ZXIiOnsic3RyaXAiOnRydWV9fSwicHVyIjoidmFyaWF0aW9uIn19--bb32f7b7b7a8e4a6ed2e50ddcc0961ef4643fd37/test_image.jpg
-                  title: Practical Copper Table
-                  updated_at: '2026-10-30T18:01:29.806Z'
+                  title: Heavy Duty Wooden Bench
+                  updated_at: '2026-10-30T20:10:43.894Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -1641,18 +1643,19 @@ paths:
                   category_id: 968
                   condition:
                   conversations_count: 0
-                  created_at: '2026-10-30T18:01:50.093Z'
+                  created_at: '2026-10-30T20:11:13.794Z'
                   currency: AFN
-                  description: Excepturi voluptas possimus. Voluptas adipisci similique.
-                    Expedita aut debitis.
+                  description: Nostrum deserunt aut. Rerum molestiae impedit. Ut delectus
+                    voluptatibus.
                   details: {}
                   expired: false
-                  expires_at: '2027-01-28T18:01:50.136Z'
+                  expires_at: '2027-01-28T20:11:13.864Z'
                   has_video: false
                   held_units: 0
                   id: 984
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -1664,13 +1667,13 @@ paths:
                   longitude:
                   multi_unit: false
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:01:50.093Z'
+                  next_bump_at: '2026-11-06T20:11:13.794Z'
                   posted_by:
-                  price: 75358.01
+                  price: 39362.05
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:01:50.093Z'
+                  published_at: '2026-10-30T20:11:13.794Z'
                   quantity: 1
                   reserved_at:
                   sale:
@@ -1678,7 +1681,7 @@ paths:
                   saves_count: 0
                   seller:
                     id: 1483
-                    name: Ivory Schamberger
+                    name: Bud Durgan
                     city: Kabul
                     phone:
                     whatsapp_number:
@@ -1697,8 +1700,8 @@ paths:
                   sold_at:
                   status: active
                   thumbnail_url:
-                  title: Ergonomic Paper Coat
-                  updated_at: '2026-10-30T18:01:50.147Z'
+                  title: Lightweight Plastic Computer
+                  updated_at: '2026-10-30T20:11:13.883Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -1778,18 +1781,18 @@ paths:
                   category_id: 971
                   condition:
                   conversations_count: 0
-                  created_at: '2026-10-30T18:01:50.349Z'
+                  created_at: '2026-10-30T20:11:14.213Z'
                   currency: AFN
-                  description: Repellendus error est. Dolorem libero repudiandae.
-                    Cumque voluptates et.
+                  description: Ut autem in. Quibusdam quos rerum. Animi ab enim.
                   details: {}
                   expired: false
-                  expires_at: '2026-10-28T18:01:50.339Z'
+                  expires_at: '2026-10-28T20:11:14.197Z'
                   has_video: false
                   held_units: 0
                   id: 987
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -1801,13 +1804,13 @@ paths:
                   longitude:
                   multi_unit: false
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:01:50.349Z'
+                  next_bump_at: '2026-11-06T20:11:14.213Z'
                   posted_by:
-                  price: 95326.19
+                  price: 55394.53
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:01:50.349Z'
+                  published_at: '2026-10-30T20:11:14.213Z'
                   quantity: 1
                   reserved_at:
                   sale:
@@ -1815,7 +1818,7 @@ paths:
                   saves_count: 0
                   seller:
                     id: 1486
-                    name: Angela Gusikowski
+                    name: Antione Waelchi
                     city: Kabul
                     phone:
                     whatsapp_number:
@@ -1834,8 +1837,8 @@ paths:
                   sold_at:
                   status: draft
                   thumbnail_url:
-                  title: Aerodynamic Silk Shoes
-                  updated_at: '2026-10-30T18:01:50.408Z'
+                  title: Durable Granite Bag
+                  updated_at: '2026-10-30T20:11:14.305Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -1915,18 +1918,19 @@ paths:
                   category_id: 974
                   condition:
                   conversations_count: 0
-                  created_at: '2026-10-30T18:01:50.611Z'
+                  created_at: '2026-10-30T20:11:14.578Z'
                   currency: AFN
-                  description: Voluptas occaecati pariatur. Consequatur autem consequuntur.
-                    Sunt commodi odit.
+                  description: Dolorem asperiores omnis. Id vero repellat. Nemo sunt
+                    est.
                   details: {}
                   expired: true
-                  expires_at: '2026-10-28T18:01:50.601Z'
+                  expires_at: '2026-10-28T20:11:14.565Z'
                   has_video: false
                   held_units: 0
                   id: 990
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -1938,13 +1942,13 @@ paths:
                   longitude:
                   multi_unit: false
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:01:50.611Z'
+                  next_bump_at: '2026-11-06T20:11:14.578Z'
                   posted_by:
-                  price: 55629.34
+                  price: 82995.81
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:01:50.668Z'
+                  published_at: '2026-10-30T20:11:14.663Z'
                   quantity: 1
                   reserved_at:
                   sale:
@@ -1952,7 +1956,7 @@ paths:
                   saves_count: 0
                   seller:
                     id: 1489
-                    name: Terry Corwin
+                    name: Angel Thiel
                     city: Kabul
                     phone:
                     whatsapp_number:
@@ -1971,8 +1975,8 @@ paths:
                   sold_at:
                   status: active
                   thumbnail_url:
-                  title: Heavy Duty Aluminum Lamp
-                  updated_at: '2026-10-30T18:01:50.669Z'
+                  title: Sleek Steel Keyboard
+                  updated_at: '2026-10-30T20:11:14.664Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -2051,9 +2055,10 @@ paths:
                   category_id: 989
                   condition:
                   conversations_count: 0
-                  created_at: '2026-10-30T18:01:51.748Z'
+                  created_at: '2026-10-30T20:11:16.515Z'
                   currency: AFN
-                  description: Facere aut autem. Ullam voluptas vel. Et vel ratione.
+                  description: Non quaerat nisi. Rem perspiciatis fugiat. Consequatur
+                    fugit perferendis.
                   details: {}
                   expired: false
                   expires_at:
@@ -2062,6 +2067,7 @@ paths:
                   id: 1002
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -2073,15 +2079,15 @@ paths:
                   longitude:
                   multi_unit: false
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:01:51.748Z'
+                  next_bump_at: '2026-11-06T20:11:16.515Z'
                   posted_by:
                     id: 1502
-                    name: Isaiah Kassulke
-                  price: 42556.46
+                    name: Jacquelin Mohr
+                  price: 12645.42
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:01:51.748Z'
+                  published_at: '2026-10-30T20:11:16.514Z'
                   quantity: 1
                   reserved_at:
                   sale:
@@ -2117,8 +2123,8 @@ paths:
                   sold_at:
                   status: active
                   thumbnail_url:
-                  title: Sleek Cotton Coat
-                  updated_at: '2026-10-30T18:01:51.843Z'
+                  title: Intelligent Copper Hat
+                  updated_at: '2026-10-30T20:11:16.644Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -2235,17 +2241,19 @@ paths:
                   category_id: 1054
                   condition:
                   conversations_count: 0
-                  created_at: '2026-10-30T18:02:01.131Z'
+                  created_at: '2026-10-30T20:11:29.552Z'
                   currency: AFN
-                  description: Repellat dicta hic. Dolorem ex eveniet. Fugiat id rem.
+                  description: Animi commodi eos. Quod consequatur ullam. Eius at
+                    nihil.
                   details: {}
                   expired: false
-                  expires_at: '2027-01-28T18:02:01.202Z'
+                  expires_at: '2027-01-28T20:11:29.644Z'
                   has_video: false
                   held_units: 0
                   id: 1062
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -2257,13 +2265,13 @@ paths:
                   longitude:
                   multi_unit: true
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:02:01.131Z'
+                  next_bump_at: '2026-11-06T20:11:29.552Z'
                   posted_by:
-                  price: 37109.02
+                  price: 63446.7
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:02:01.206Z'
+                  published_at: '2026-10-30T20:11:29.651Z'
                   quantity: 20
                   reserved_at:
                   sale:
@@ -2271,7 +2279,7 @@ paths:
                   saves_count: 0
                   seller:
                     id: 1569
-                    name: Sibyl Weissnat
+                    name: Jodee Labadie
                     city: Kabul
                     phone:
                     whatsapp_number:
@@ -2290,8 +2298,8 @@ paths:
                   sold_at:
                   status: active
                   thumbnail_url:
-                  title: Aerodynamic Marble Plate
-                  updated_at: '2026-10-30T18:02:01.206Z'
+                  title: Awesome Granite Pants
+                  updated_at: '2026-10-30T20:11:29.651Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -2451,18 +2459,19 @@ paths:
                   category_id: 1079
                   condition:
                   conversations_count: 0
-                  created_at: '2026-07-22T18:02:05.477Z'
+                  created_at: '2026-07-22T20:11:35.731Z'
                   currency: AFN
-                  description: Dolores provident laudantium. Eum dolore sunt. Dignissimos
-                    est et.
+                  description: Quasi repudiandae maiores. Quasi nemo eos. Aut harum
+                    ut.
                   details: {}
                   expired: false
-                  expires_at: '2027-01-28T18:02:05.532Z'
+                  expires_at: '2027-01-28T20:11:35.804Z'
                   has_video: false
                   held_units: 0
                   id: 1087
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -2474,13 +2483,13 @@ paths:
                   longitude:
                   multi_unit: false
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:02:05.532Z'
+                  next_bump_at: '2026-11-06T20:11:35.804Z'
                   posted_by:
-                  price: 49896.53
+                  price: 73333.53
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:02:05.486Z'
+                  published_at: '2026-10-30T20:11:35.744Z'
                   quantity: 1
                   reserved_at:
                   sale:
@@ -2488,7 +2497,7 @@ paths:
                   saves_count: 0
                   seller:
                     id: 1620
-                    name: Alexis Emard
+                    name: Philip Williamson
                     city: Kabul
                     phone:
                     whatsapp_number:
@@ -2507,8 +2516,8 @@ paths:
                   sold_at:
                   status: active
                   thumbnail_url:
-                  title: Awesome Copper Shoes
-                  updated_at: '2026-10-30T18:02:05.542Z'
+                  title: Heavy Duty Bronze Lamp
+                  updated_at: '2026-10-30T20:11:35.819Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -2626,19 +2635,19 @@ paths:
                 transactions:
                 - buyer:
                     id: 1849
-                    name: Windy DuBuque
+                    name: Efren Purdy
                     avatar_url:
                     avatar_thumb_url:
-                  completed_at: '2026-10-30T18:02:27.787Z'
-                  created_at: '2026-10-30T18:02:27.792Z'
+                  completed_at: '2026-10-30T20:12:06.995Z'
+                  created_at: '2026-10-30T20:12:07.001Z'
                   currency: AFN
-                  final_price: 36493.72
+                  final_price: 81352.27
                   id: 193
                   listing:
                     id: 1323
-                    title: Fantastic Cotton Clock
+                    title: Incredible Plastic Keyboard
                     thumbnail_url:
-                    price: 36493.72
+                    price: 81352.27
                     currency: AFN
                     status: active
                     multi_unit: false
@@ -2647,7 +2656,7 @@ paths:
                   role: seller
                   seller:
                     id: 1848
-                    name: Steven Lockman
+                    name: Carol Gerhold
                     avatar_url:
                     avatar_thumb_url:
                   status: sold
@@ -2712,19 +2721,19 @@ paths:
                 transactions:
                 - buyer:
                     id: 2075
-                    name: Vanesa McClure
+                    name: Robby Friesen
                     avatar_url:
                     avatar_thumb_url:
                   completed_at:
-                  created_at: '2026-10-30T18:02:44.702Z'
+                  created_at: '2026-10-30T20:12:26.016Z'
                   currency: AFN
-                  final_price: 51381.97
+                  final_price: 81913.06
                   id: 226
                   listing:
                     id: 1472
-                    title: Heavy Duty Granite Bench
+                    title: Ergonomic Silk Knife
                     thumbnail_url:
-                    price: 51381.97
+                    price: 81913.06
                     currency: AFN
                     status: active
                     multi_unit: false
@@ -2733,25 +2742,25 @@ paths:
                   role: buyer
                   seller:
                     id: 2077
-                    name: Dominick Schulist
+                    name: Socorro Dibbert
                     avatar_url:
                     avatar_thumb_url:
                   status: reserved
                 - buyer:
                     id: 2076
-                    name: Riva Klein
+                    name: Christopher Heller
                     avatar_url:
                     avatar_thumb_url:
                   completed_at:
-                  created_at: '2026-10-30T18:02:44.638Z'
+                  created_at: '2026-10-30T20:12:25.961Z'
                   currency: AFN
-                  final_price: 56438.41
+                  final_price: 95008.9
                   id: 225
                   listing:
                     id: 1471
-                    title: Small Aluminum Table
+                    title: Fantastic Steel Bench
                     thumbnail_url:
-                    price: 56438.41
+                    price: 95008.9
                     currency: AFN
                     status: active
                     multi_unit: false
@@ -2760,7 +2769,7 @@ paths:
                   role: seller
                   seller:
                     id: 2075
-                    name: Vanesa McClure
+                    name: Robby Friesen
                     avatar_url:
                     avatar_thumb_url:
                   status: reserved
@@ -2850,10 +2859,10 @@ paths:
                   category_id: 1332
                   condition:
                   conversations_count: 1
-                  created_at: '2026-10-30T18:02:45.585Z'
+                  created_at: '2026-10-30T20:12:27.009Z'
                   currency: AFN
-                  description: Consectetur aut dignissimos. Ipsum quibusdam eius.
-                    Perspiciatis at et.
+                  description: Corporis earum fuga. Aut rerum qui. Pariatur omnis
+                    eum.
                   details: {}
                   expired: false
                   expires_at:
@@ -2862,6 +2871,7 @@ paths:
                   id: 1479
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -2873,13 +2883,13 @@ paths:
                   longitude:
                   multi_unit: true
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:02:45.585Z'
+                  next_bump_at: '2026-11-06T20:12:27.009Z'
                   posted_by:
                   price: 1000.0
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:02:45.585Z'
+                  published_at: '2026-10-30T20:12:27.009Z'
                   quantity: 5
                   reserved_at:
                   sale:
@@ -2888,10 +2898,10 @@ paths:
                     final_price: 1000.0
                     currency: AFN
                     quantity: 1
-                    completed_at: '2026-10-30T18:02:45.632Z'
+                    completed_at: '2026-10-30T20:12:27.043Z'
                     buyer:
                       id: 2088
-                      name: Clair Mayer
+                      name: Aja Littel
                       avatar_url:
                       avatar_thumb_url:
                       verified: false
@@ -2900,7 +2910,7 @@ paths:
                   saves_count: 0
                   seller:
                     id: 2087
-                    name: Tamika Murray
+                    name: Lyle Luettgen
                     city: Kabul
                     phone:
                     whatsapp_number:
@@ -2919,8 +2929,8 @@ paths:
                   sold_at:
                   status: active
                   thumbnail_url:
-                  title: Mediocre Wool Plate
-                  updated_at: '2026-10-30T18:02:45.803Z'
+                  title: Awesome Linen Keyboard
+                  updated_at: '2026-10-30T20:12:27.180Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -2928,17 +2938,17 @@ paths:
                 transaction:
                   buyer:
                     id: 2088
-                    name: Clair Mayer
+                    name: Aja Littel
                     avatar_url:
                     avatar_thumb_url:
-                  completed_at: '2026-10-30T18:02:45.632Z'
-                  created_at: '2026-10-30T18:02:45.641Z'
+                  completed_at: '2026-10-30T20:12:27.043Z'
+                  created_at: '2026-10-30T20:12:27.049Z'
                   currency: AFN
                   final_price: 1000.0
                   id: 233
                   listing:
                     id: 1479
-                    title: Mediocre Wool Plate
+                    title: Awesome Linen Keyboard
                     thumbnail_url:
                     price: 1000.0
                     currency: AFN
@@ -2949,7 +2959,7 @@ paths:
                   role: seller
                   seller:
                     id: 2087
-                    name: Tamika Murray
+                    name: Lyle Luettgen
                     avatar_url:
                     avatar_thumb_url:
                   status: sold
@@ -3047,10 +3057,10 @@ paths:
                   category_id: 1338
                   condition:
                   conversations_count: 1
-                  created_at: '2026-10-30T18:02:46.990Z'
+                  created_at: '2026-10-30T20:12:28.428Z'
                   currency: AFN
-                  description: Ut ullam tempore. Sapiente possimus quisquam. Dolorum
-                    nulla culpa.
+                  description: Itaque rerum nam. At rerum voluptatem. Esse voluptates
+                    tempora.
                   details: {}
                   expired: false
                   expires_at:
@@ -3059,6 +3069,7 @@ paths:
                   id: 1484
                   image_attachments: []
                   image_medium_urls: []
+                  image_share_url:
                   image_thumb_urls: []
                   images: []
                   is_saved: false
@@ -3070,13 +3081,13 @@ paths:
                   longitude:
                   multi_unit: true
                   negotiable: true
-                  next_bump_at: '2026-11-06T18:02:46.990Z'
+                  next_bump_at: '2026-11-06T20:12:28.428Z'
                   posted_by:
                   price: 1000.0
                   price_drop_percent:
                   price_dropped_at:
                   price_unit:
-                  published_at: '2026-10-30T18:02:46.990Z'
+                  published_at: '2026-10-30T20:12:28.428Z'
                   quantity: 5
                   reserved_at:
                   sale:
@@ -3084,7 +3095,7 @@ paths:
                   saves_count: 0
                   seller:
                     id: 2098
-                    name: Rubin Kozey
+                    name: Joey McKenzie
                     city: Kabul
                     phone:
                     whatsapp_number:
@@ -3103,8 +3114,8 @@ paths:
                   sold_at:
                   status: active
                   thumbnail_url:
-                  title: Small Paper Wallet
-                  updated_at: '2026-10-30T18:02:47.177Z'
+                  title: Lightweight Plastic Shoes
+                  updated_at: '2026-10-30T20:12:28.624Z'
                   video_duration_s:
                   video_poster_url:
                   video_url:
@@ -3788,6 +3799,71 @@ paths:
                       type: object
                       additionalProperties: true
                       description: the values the client saw
+  "/api/v1/shops/{id}/qr_card.{format}":
+    get:
+      summary: a shop's printable QR card (PNG or PDF, A6)
+      tags:
+      - Share
+      description: 'Public. lang: en | ps | fa (anything else: en). The QR opens https://hatiwal.com/s/<id>?lang=<lang>&src=qr
+        (the app when installed, the web otherwise). 404 when the shop is closed,
+        suspended or pending.'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: format
+        in: path
+        enum:
+        - png
+        - pdf
+        required: true
+        schema:
+          type: string
+        description: ":\n * `png` \n * `pdf` \n "
+      - name: lang
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the PDF card
+        '404':
+          description: a suspended shop
+  "/api/v1/listings/{id}/qr_card.{format}":
+    get:
+      summary: a listing's printable QR card (PNG or PDF, A6)
+      tags:
+      - Share
+      description: Public. The QR opens https://hatiwal.com/l/<id>?lang=<lang>&src=qr.
+        404 unless the listing is live and public.
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: format
+        in: path
+        enum:
+        - png
+        - pdf
+        required: true
+        schema:
+          type: string
+        description: ":\n * `png` \n * `pdf` \n "
+      - name: lang
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the PNG card
+        '404':
+          description: a listing an admin removed
   "/api/v1/reports":
     get:
       summary: list the current user's reports
@@ -3822,20 +3898,20 @@ paths:
             application/json:
               example:
                 reports:
-                - created_at: '2026-10-30T18:03:40.504Z'
+                - created_at: '2026-10-30T20:13:30.625Z'
                   description: Detailed description
                   id: 22
                   reason: fraud
-                  reportable_id: 1778
-                  reportable_label: Awesome Granite Shirt
+                  reportable_id: 1784
+                  reportable_label: Enormous Aluminum Wallet
                   reportable_type: Listing
                   status: resolved
-                - created_at: '2026-10-30T18:03:40.457Z'
+                - created_at: '2026-10-30T20:13:30.582Z'
                   description: This listing looks suspicious.
                   id: 21
                   reason: spam
-                  reportable_id: 1777
-                  reportable_label: Heavy Duty Leather Gloves
+                  reportable_id: 1783
+                  reportable_label: Enormous Concrete Hat
                   reportable_type: Listing
                   status: pending
                 meta:
@@ -3972,14 +4048,14 @@ paths:
               example:
                 review:
                   comment: Smooth deal
-                  created_at: '2026-10-30T18:03:44.663Z'
+                  created_at: '2026-10-30T20:13:34.002Z'
                   id: 10
                   rating: 5
                   revealed_at:
-                  reviewee_id: 2539
+                  reviewee_id: 2554
                   reviewer:
-                    id: 2538
-                    name: Lewis Wuckert
+                    id: 2553
+                    name: Danna Schmeler
                     avatar_url:
                     avatar_thumb_url:
                   role: of_buyer
@@ -4047,14 +4123,14 @@ paths:
               example:
                 reviews:
                 - comment: Great to deal with.
-                  created_at: '2026-10-30T18:03:45.011Z'
+                  created_at: '2026-10-30T20:13:34.292Z'
                   id: 11
                   rating: 4
-                  revealed_at: '2026-10-30T18:03:45.004Z'
-                  reviewee_id: 2543
+                  revealed_at: '2026-10-30T20:13:34.288Z'
+                  reviewee_id: 2558
                   reviewer:
-                    id: 2544
-                    name: Walton White
+                    id: 2559
+                    name: Ressie Lubowitz
                     avatar_url:
                     avatar_thumb_url:
                   role: of_seller
@@ -4976,27 +5052,27 @@ paths:
                 listings:
                 - address:
                   available_units: 1
-                  bumped_at: '2026-10-30T18:05:42.068Z'
+                  bumped_at: '2026-10-30T20:15:10.397Z'
                   category:
                     icon: "\U0001F4E6"
-                    id: 2070
+                    id: 2085
                     kind: item
-                    name_en: Category 2440
-                    name_fa: دسته 2440
-                    name_ps: کټاګورۍ 2440
-                    name_ur: Category 2440
+                    name_en: Category 2455
+                    name_fa: دسته 2455
+                    name_ps: کټاګورۍ 2455
+                    name_ur: Category 2455
                     parent_id:
                     position: 1
-                    slug: category-2384
-                  category_id: 2070
+                    slug: category-2399
+                  category_id: 2085
                   condition:
-                  created_at: '2026-10-30T18:05:42.068Z'
+                  created_at: '2026-10-30T20:15:10.397Z'
                   currency: AFN
                   details: {}
                   expired: false
                   has_video: false
                   held_units: 0
-                  id: 2102
+                  id: 2108
                   image_medium_urls: []
                   image_thumb_urls: []
                   image_urls: []
@@ -5005,7 +5081,7 @@ paths:
                   location: Kabul, Afghanistan
                   multi_unit: false
                   negotiable: true
-                  price: 94809.98
+                  price: 265.71
                   price_at_save:
                   price_drop_amount:
                   price_drop_percent:
@@ -5015,7 +5091,7 @@ paths:
                   quantity: 1
                   sales_count: 0
                   seller:
-                    id: 3344
+                    id: 3359
                     name: Ahmad Shah
                     city: Kabul
                     verified: false
@@ -5024,7 +5100,7 @@ paths:
                   shop:
                   status: sold
                   thumbnail_url:
-                  title: Awesome Bronze Plate
+                  title: Gorgeous Silk Wallet
                   views_count: 0
                 meta:
                   pagination:
