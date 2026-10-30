@@ -73,6 +73,15 @@ class MessageSerializer < ApplicationSerializer
   # Attachment URL: suppressed when deleted
   field(:attachment_url) { |m| m.deleted? ? nil : (m.attachment.attached? ? m.attachment.url : nil) }
 
+  # Voice messages (1.2.1): the server's m4a, the duration and the 64-bar
+  # waveform it measured, so a bubble draws without downloading the file.
+  # Null on every other kind, and once deleted (the audio is purged then).
+  field(:voice) do |m|
+    next nil unless m.voice_message? && !m.deleted? && m.attachment.attached?
+
+    { url: m.attachment.url, duration_ms: m.voice_duration_ms, waveform: m.voice_waveform }
+  end
+
   # For offer and offer_counter kinds the body encodes "amount|currency|listedPrice".
   # We expose the parsed fields so the mobile client never has to split the body string.
   # All three are suppressed when deleted.

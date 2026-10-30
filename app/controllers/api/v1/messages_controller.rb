@@ -9,6 +9,21 @@ class Api::V1::MessagesController < Api::V1::BaseController
   # short messages. It exists only to stop a script from using the thread as a
   # firehose (every message also enqueues a broadcast AND a push job).
   throttle to: 120, within: 1.hour, by: :user, only: :create
+  # Voice messages (1.2.1) also count here: each one runs ffmpeg in the request.
+  throttle to: 60, within: 1.hour, by: :user, only: :create, if: -> { params[:kind].to_s == "voice_message" }
+
+  # English fallbacks; the apps show their own en/ps/fa/ur text for each code.
+  VOICE_REFUSALS = {
+    voice_missing:   "Record a voice message to send.",
+    voice_too_large: "This voice message is too large (2 MB max).",
+    voice_too_short: "Voice messages need at least 1 second.",
+    voice_too_long:  "Voice messages are up to 2 minutes.",
+    voice_invalid:   "This file is not a voice recording we can play."
+  }.freeze
+  VOICE_UNAVAILABLE = "Voice messages are not available right now.".freeze
+  VOICE_BUSY = "Busy, sending again in a moment.".freeze
+  # Seconds; about one 2-minute clip's transcode on the production VPS.
+  VOICE_BUSY_RETRY_AFTER = 5
 
   def index
     authorize @conversation, :read_messages?
@@ -50,7 +65,18 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
     @message = @conversation.messages.new(safe_message_params)
     @message.user = current_user
-    @message.attachment = params[:attachment] if params[:attachment].present?
+    if @message.voice_message?
+      return render_coded_error(VOICE_UNAVAILABLE, code: :voice_messages_unavailable, status: :service_unavailable) unless VoiceMessages.enabled?
+      begin
+        code = @message.assign_voice(params[:attachment])
+      rescue VoiceMessages::Transcoder::Busy
+        response.headers["Retry-After"] = VOICE_BUSY_RETRY_AFTER.to_s
+        return render_coded_error(VOICE_BUSY, code: :voice_busy, status: :service_unavailable)
+      end
+      return render_unprocessable_entity(VOICE_REFUSALS.fetch(code), code: code) if code
+    elsif params[:attachment].present?
+      @message.attachment = params[:attachment]
+    end
 
     if @message.save
       BroadcastMessageJob.perform_later(@message.id)   # in-app real-time (open app)

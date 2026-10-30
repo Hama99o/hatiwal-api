@@ -37,7 +37,8 @@ RSpec.describe "Api::V1::AppConfig", type: :request do
                    type: :object,
                    description: "Server features an app may only offer when this server has them",
                    properties: {
-                     image_search: { type: :boolean, description: "search by image (docs/IMAGE_SEARCH.md): show the camera button" }
+                     image_search: { type: :boolean, description: "search by image (docs/IMAGE_SEARCH.md): show the camera button" },
+                     voice_messages: { type: :boolean, description: "voice messages in chat (docs/VOICE_MESSAGES.md): show the 🎤" }
                    }
                  }
                },
@@ -139,6 +140,29 @@ RSpec.describe "Api::V1::AppConfig", type: :request do
       allow(ENV).to receive(:[]).with("IMAGE_SEARCH_ENABLED").and_return("0")
       get "/api/v1/app_config"
       expect(response.parsed_body.dig("features", "image_search")).to be false
+    end
+  end
+
+  # Voice messages (1.2.1): the apps show the 🎤 only when this is true.
+  describe "features.voice_messages" do
+    it "is true when this server has ffmpeg" do
+      allow(VoiceMessages::Transcoder).to receive(:available?).and_return(true)
+      get "/api/v1/app_config"
+      expect(response.parsed_body.dig("features", "voice_messages")).to be true
+    end
+
+    it "is false without ffmpeg" do
+      allow(VoiceMessages::Transcoder).to receive(:available?).and_return(false)
+      get "/api/v1/app_config"
+      expect(response.parsed_body.dig("features", "voice_messages")).to be false
+    end
+
+    it "is false with the kill switch VOICE_MESSAGES_ENABLED=0" do
+      allow(VoiceMessages::Transcoder).to receive(:available?).and_return(true)
+      allow(ENV).to receive(:[]).and_call_original
+      allow(ENV).to receive(:[]).with("VOICE_MESSAGES_ENABLED").and_return("0")
+      get "/api/v1/app_config"
+      expect(response.parsed_body.dig("features", "voice_messages")).to be false
     end
   end
 end

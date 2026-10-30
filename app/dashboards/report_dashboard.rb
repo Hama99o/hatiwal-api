@@ -11,7 +11,7 @@ class ReportDashboard < Administrate::BaseDashboard
     id: Field::Number,
     description: Field::Text,
     reason: Field::Select.with_options(searchable: false, collection: ->(field) { field.resource.class.send(field.attribute.to_s.pluralize).keys }),
-    reportable: Field::Polymorphic,
+    reportable: ReportTargetField,
     reporter: Field::BelongsTo,
     status: Field::Select.with_options(searchable: false, collection: ->(field) { field.resource.class.send(field.attribute.to_s.pluralize).keys }),
     created_at: Field::DateTime,

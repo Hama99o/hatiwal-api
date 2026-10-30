@@ -12,6 +12,8 @@ class ReportSerializer < ApplicationSerializer
         reportable.title.presence || "[deleted]"
       elsif reportable.is_a?(User)
         reportable.full_name.presence || "[deleted]"
+      elsif reportable.is_a?(Message)
+        reportable.deleted? ? "[deleted]" : reportable.body # "🎤 0:12"
       else
         "[deleted]"
       end

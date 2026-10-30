@@ -68,7 +68,7 @@ RSpec.describe Message, type: :model do
       should define_enum_for(:kind).with_values(
         text: 0, meetup_proposal: 1, system: 2, offer: 3, document: 4, image_message: 5,
         meetup_accepted: 6, meetup_declined: 7, offer_accepted: 8, offer_declined: 9,
-        offer_counter: 10
+        offer_counter: 10, voice_message: 11
       )
     }
   end
@@ -85,7 +85,8 @@ RSpec.describe Message, type: :model do
 
     it "includes all expected user-sendable kinds" do
       expected = %w[text meetup_proposal meetup_accepted meetup_declined
-                    offer offer_accepted offer_declined document image_message offer_counter]
+                    offer offer_accepted offer_declined document image_message offer_counter
+                    voice_message]
       expect(Message::USER_SENDABLE_KINDS).to match_array(expected)
     end
 
@@ -120,7 +121,9 @@ RSpec.describe Message, type: :model do
       expect(msg.errors[:kind]).to be_present
     end
 
-    Message::USER_SENDABLE_KINDS.each do |allowed_kind|
+    # A voice message is valid only with its audio and measured duration: the
+    # :voice trait, spec/models/message_voice_spec.rb.
+    (Message::USER_SENDABLE_KINDS - %w[voice_message]).each do |allowed_kind|
       it "is valid when kind is :#{allowed_kind}" do
         # An offer's body must read as one (Message#offer_body_readable).
         body = Message::OFFER_KINDS.include?(allowed_kind.to_sym) ? "5000|AFN|5500" : "body"

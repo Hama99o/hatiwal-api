@@ -9,6 +9,7 @@
   is_listing = target.is_a?(Listing)
   is_user = target.is_a?(User)
   is_shop = target.is_a?(Shop) # privacy-b: a buyer reports a shop by its id
+  is_voice = target.is_a?(Message) # 1.2.1: a reported voice message, played here
   status_tone = { "pending" => "hw-badge--warning", "resolved" => "hw-badge--success" }.fetch(report.status.to_s, "")
 %>
 
@@ -35,6 +36,14 @@
       <% elsif is_shop %>
         Shop — <%= link_to(target.name.presence || "Shop ##{target.id}", [ namespace, target ], dir: "auto") %>
         (owner: <span dir="auto"><%= target.owner.full_name %></span>)<%= " — #{target.status}" unless target.active? %>
+      <% elsif is_voice %>
+        Voice message (<%= target.body %>) from <%= link_to(target.user.full_name.presence || "User ##{target.user_id}", [ namespace, target.user ], dir: "auto") %>,
+        <%= l(target.created_at, format: :short) %>, conversation #<%= target.conversation_id %>
+        <% if target.deleted? %>
+          — deleted by its sender; the audio is gone.
+        <% elsif target.attachment.attached? %>
+          <br><audio controls preload="none" src="<%= url_for(target.attachment) %>" id="report-voice-player"></audio>
+        <% end %>
       <% else %>
         <%= target&.class&.name %> ##<%= target&.id %>
       <% end %>
@@ -47,8 +56,8 @@
               class: "button button--danger" %>
       <% end %>
 
-      <% if (is_listing || is_user || is_shop) && !report.resolved? %>
-        <%= button_to(is_listing ? "Warn seller & resolve" : (is_shop ? "Warn shop owner & resolve" : "Warn user & resolve"),
+      <% if (is_listing || is_user || is_shop || is_voice) && !report.resolved? %>
+        <%= button_to(is_listing ? "Warn seller & resolve" : (is_shop ? "Warn shop owner & resolve" : (is_voice ? "Warn sender & resolve" : "Warn user & resolve")),
               warn_target_admin_report_path(report),
               method: :patch, data: { turbo: false, confirm: "Give one warning (strike) and resolve this report? #{User::WARNING_BLOCK_THRESHOLD} active warnings suspend the account." }, class: "button") %>
       <% end %>
