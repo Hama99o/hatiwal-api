@@ -12,6 +12,13 @@ FactoryBot.define do
       matched_term { nil }
     end
 
+    # IDEA-5: opened by ScamPhoto::Matcher (the pair is a PhotoMatch).
+    trait :reused_photo do
+      source { :reused_photo }
+      category { nil }
+      matched_term { nil }
+    end
+
     trait :on_shop do
       association :flaggable, factory: :shop
     end

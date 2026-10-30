@@ -143,4 +143,35 @@ RSpec.describe ProhibitedItems::Moderation do
       end
     end
   end
+
+  # IDEA-5 (1.2.1): a flag opened by ScamPhoto::Matcher. The seller is told the photos were copied
+  # from another listing, not that the item is prohibited; a warning is a fraud strike.
+  describe "a reused-photo flag" do
+    let(:older) { create(:listing, :active) }
+    let(:copy) { create(:listing, :active, user: seller, title: "Corolla 2010") }
+    let!(:photo_flag) { create(:flag, :reused_photo, flaggable: copy) }
+    let!(:match) { PhotoMatch.create!(listing: copy, matched_listing: older, flag: photo_flag, cosine: 0.97, hash_distance: 2) }
+
+    it "take down: the seller reads the reused-photo reason in their language, and the flag keeps no category" do
+      expect { described_class.new(photo_flag, admin: admin).take_down!(warn: true) }
+        .to have_enqueued_job(SupportNoticeJob).with(seller.id, "listing_prohibited_removed", nil, hash_including("category" => "reused_photo"))
+
+      expect(copy.reload).to be_draft
+      expect(photo_flag.reload).to have_attributes(status: "actioned", action_taken: "take_down_warn", category: nil)
+      expect(match.reload).to be_actioned
+      expect(seller.warnings.sole).to have_attributes(category: "fraud", reason: include("Reused photo"))
+      text = SupportNoticeJob.new.send(:prohibited_text, seller, :listing_prohibited_removed, copy, { "category" => "reused_photo" })
+      expect(text).to include(I18n.t("support.prohibited.reasons.reused_photo", locale: :fa))
+      expect(text).not_to include(I18n.t("support.prohibited.reasons.other", locale: :fa))
+      expect(older.reload).to be_active
+    end
+
+    it "dismiss: the pair is remembered, the older listing untouched" do
+      described_class.new(photo_flag, admin: admin).dismiss!
+
+      expect(match.reload).to be_dismissed
+      expect(older.reload).to be_active
+      expect(Flag.where(flaggable: older)).to be_empty
+    end
+  end
 end

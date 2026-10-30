@@ -173,4 +173,47 @@ RSpec.describe "Admin flagged listings", type: :request do
         .to include("1 active warning of #{Shop::SHOP_WARNING_BLOCK_THRESHOLD}")
     end
   end
+
+  # IDEA-5 (1.2.1): a flag opened by ScamPhoto::Matcher — the newer listing, with the older one it
+  # copied side by side (photo, seller, account age, dates, scores) and linked.
+  describe "a reused-photo flag" do
+    let(:owner_of_original) { create(:user, firstname: "Wahid", created_at: 400.days.ago) }
+    let(:original) { create(:listing, :active, :with_image, user: owner_of_original, title: "Corolla 2010 original", created_at: 5.days.ago) }
+    let(:copier) { create(:user, firstname: "Copier", created_at: 2.days.ago) }
+    let(:copy) { create(:listing, :active, :with_image, user: copier, title: "Corolla 2010 cheap") }
+    let!(:photo_flag) { create(:flag, :reused_photo, flaggable: copy) }
+    let!(:match) do
+      create(:photo_match, listing: copy, matched_listing: original, flag: photo_flag, cosine: 0.973, hash_distance: 3,
+                           attachment: copy.images.attachments.first, matched_attachment: original.images.attachments.first)
+    end
+
+    before { sign_in admin, scope: :admin_user }
+
+    it "the queue says where it came from" do
+      get admin_flags_path
+
+      expect(response.body).to include("Corolla 2010 cheap", "Reused photo")
+    end
+
+    it "shows both listings side by side, links the older one, the scores, and no prohibited-item category" do
+      get admin_flag_path(photo_flag)
+
+      expect(response).to have_http_status(:ok)
+      body = response.body
+      expect(body).to include("id=\"photo-match-#{match.id}\"", "Same photo as another account", "0.973", "3 / 64")
+      expect(body).to include(admin_listing_path(original), admin_listing_path(copy), "Corolla 2010 original", "Wahid", "Copier")
+      expect(body).to include("photo-match-older", "photo-match-newer")
+      expect(body).to include(rails_blob_path(original.images.attachments.first, only_path: true).split("/").last(2).first)
+      expect(body).not_to include("flag-category")
+      expect(body).to include("flag-dismiss", "flag-take-down")
+    end
+
+    it "dismisses: the pair is remembered, the older listing untouched" do
+      patch dismiss_admin_flag_path(photo_flag)
+
+      expect(match.reload).to be_dismissed
+      expect(original.reload).to be_active
+      expect(Flag.where(flaggable: original)).to be_empty
+    end
+  end
 end

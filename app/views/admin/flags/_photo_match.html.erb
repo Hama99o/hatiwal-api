@@ -1,0 +1,34 @@
+<%# IDEA-5 (1.2.1): one PhotoMatch — the flagged (newer) listing's photo beside the photo of
+    the older listing it is the same photo as. Older first: the likely original. %>
+<% sides = [
+  [ "photo-match-older", "Older listing — the likely original", match.matched_listing, match.matched_attachment ],
+  [ "photo-match-newer", "This listing (flagged, newer)", match.listing, match.attachment ]
+] %>
+<div class="hw-photo-match" id="photo-match-<%= match.id %>">
+  <% sides.each do |id, label, listing, photo| %>
+    <figure class="hw-photo-match__side" id="<%= id %>">
+      <figcaption class="hw-photo-match__label"><%= label %></figcaption>
+      <% if photo %>
+        <a href="<%= main_app.rails_blob_path(photo, disposition: "inline") %>" target="_blank" rel="noopener">
+          <img src="<%= main_app.rails_representation_path(photo.variant(resize_to_limit: [ 480, 480 ])) %>" alt="Photo of listing #<%= listing.id %>" class="hw-photo-match__img">
+        </a>
+      <% else %>
+        <div class="hw-photo-match__img hw-photo-match__img--gone">Photo removed since</div>
+      <% end %>
+      <div class="hw-photo-match__facts">
+        <%= link_to listing.title.presence || "Listing ##{listing.id}", admin_listing_path(listing), dir: "auto", class: "hw-photo-match__title" %>
+        <br>#<%= listing.id %> · <%= listing.status %><%= " · removed" if listing.removed_at %> · posted <%= l(listing.created_at.to_date, format: :long) %>
+        <% seller = listing.user %>
+        <br>Seller: <%= link_to seller.full_name.presence || "User ##{seller.id}", admin_user_path(seller), dir: "auto" %>
+        · account <%= time_ago_in_words(seller.created_at) %> old
+        <%= " · shop #{listing.shop.name}" if listing.shop %>
+      </div>
+    </figure>
+  <% end %>
+</div>
+<p class="hw-photo-match__scores">
+  Same photo as another account: hash distance <strong><%= match.hash_distance %> / 64</strong>
+  (≤ <%= ScamPhoto::Hasher::MATCH_DISTANCE %> = the same photo, also mirrored, rotated or cropped)
+  · image similarity <strong><%= format("%.3f", match.cosine) %></strong>
+  · found <%= time_ago_in_words(match.created_at) %> ago · <%= match.status %>
+</p>

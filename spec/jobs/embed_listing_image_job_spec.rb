@@ -17,6 +17,23 @@ RSpec.describe EmbedListingImageJob, :image_search, type: :job do
     expect(row.vector).to eq(fake_vector(0))
   end
 
+  # IDEA-5 (1.2.1): the same read of the photo also stores its 9 perceptual hashes, then the
+  # listing is matched against other accounts' photos (ScamPhotoMatchJob).
+  it "stores the photo's perceptual hashes and queues the scam-photo matcher for the listing" do
+    expect { described_class.perform_now(photo.id) }.to have_enqueued_job(ScamPhotoMatchJob).with(listing.id)
+
+    expect(ListingImageEmbedding.last.photo_hashes)
+      .to eq(ScamPhoto::Hasher.hashes(File.binread(Rails.root.join("spec/fixtures/files/test_image.jpg"))))
+  end
+
+  it "hashes a photo embedded before 1.2.1 (row without hashes) without embedding it again" do
+    embed_photo!(listing, fake_vector(0), attachment: photo)
+
+    expect { described_class.perform_now(photo.id) }.to have_enqueued_job(ScamPhotoMatchJob).with(listing.id)
+    expect(ListingImageEmbedding.sole.photo_hashes.size).to eq(9)
+    expect(ImageSearch::Embedder).not_to have_received(:embed)
+  end
+
   it "does nothing the second time" do
     described_class.perform_now(photo.id)
 

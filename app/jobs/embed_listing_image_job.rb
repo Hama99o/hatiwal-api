@@ -20,6 +20,7 @@ class EmbedListingImageJob < ApplicationJob
     attachment = ActiveStorage::Attachment.find_by(id: attachment_id)
     return if attachment.nil?
 
-    ImageSearch::Indexer.call(attachment)
+    # IDEA-5: a photo with new hashes is matched against other accounts' photos.
+    ScamPhotoMatchJob.perform_later(attachment.record_id) if ImageSearch::Indexer.call(attachment)
   end
 end

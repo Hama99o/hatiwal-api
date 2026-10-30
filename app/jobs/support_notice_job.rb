@@ -42,6 +42,11 @@ class SupportNoticeJob < ApplicationJob
   # with the reason for its category and the link to the public list. A shop's
   # listing is told in the shop's own thread. Sent whatever the listing's state
   # is by then: it is a record of what Hatiwal did.
+  # IDEA-5 (1.2.1): the reason of a take-down for a photo copied from another
+  # account's listing — sent through the prohibited-item notices, but it is not a
+  # ProhibitedTerm category.
+  REUSED_PHOTO = "reused_photo".freeze
+  PROHIBITED_REASONS = (ProhibitedTerm::CATEGORIES.keys.map(&:to_s) + [ REUSED_PHOTO ]).freeze
   PROHIBITED_NOTICES = %i[listing_prohibited_removed listing_prohibited_auto_drafted listing_prohibited_shop_owner].freeze
   PROHIBITED_LOCALES = %w[en ps fa].freeze
   PROHIBITED_PAGE = "https://hatiwal.com/%<locale>s/prohibited-items".freeze
@@ -234,7 +239,7 @@ class SupportNoticeJob < ApplicationJob
   def prohibited_text(user, key, listing, data)
     locale = self.class.prohibited_locale(user)
     I18n.with_locale(locale) do
-      category = data["category"].presence_in(ProhibitedTerm::CATEGORIES.keys.map(&:to_s)) || "other"
+      category = data["category"].presence_in(PROHIBITED_REASONS) || "other"
       shop_owner = key.to_s == "listing_prohibited_shop_owner"
       warning = warning_line(data["warnings"], shop: shop_owner)
       note = data["note"].present? ? I18n.t("support.prohibited.note", note: data["note"]) : ""
