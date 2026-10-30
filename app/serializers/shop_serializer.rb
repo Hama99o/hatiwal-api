@@ -26,6 +26,8 @@ class ShopSerializer < ApplicationSerializer
     include_view :card
     fields :description, :category_id, :latitude, :longitude, :address_line, :hours, :created_at
     field(:cover_url) { |s| s.cover_url }
+    # IDEA-8: the cover as the link preview (1200 x 630 JPEG), nil without a cover.
+    field(:share_image_url) { |s| s.share_image_url }
     field(:cover_medium_url) { |s| s.cover_medium_url }
     field(:phone) { |s| s.phone_public ? s.phone : nil }
     # SHOP-2: the apps gate "Message shop" on it. A non-member only ever gets an

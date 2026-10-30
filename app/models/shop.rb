@@ -571,6 +571,8 @@ class Shop < ApplicationRecord
 
   def cover_url = PublicImageUrl.for(cover)
   def cover_medium_url = PublicImageUrl.variant(cover, :medium)
+  # IDEA-8: the cover as the link preview (og:image); nil without a cover (the web uses the logo).
+  def share_image_url = PublicImageUrl.share(cover)
 
   def live_listings_count = listings.live.not_expired.not_removed.count
 

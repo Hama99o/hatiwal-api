@@ -8,6 +8,8 @@ gem "bootsnap", require: false
 gem "kamal", require: false
 gem "thruster", require: false
 gem "image_processing", "~> 1.2"
+# IDEA-8: QR codes for the shop / listing cards, made on our server (pure Ruby, no network).
+gem "rqrcode", "~> 3.1"
 
 # Search by image (docs/IMAGE_SEARCH.md): runs the CLIP image model on the CPU.
 # The model files are baked into the Docker image (bin/fetch-image-model).

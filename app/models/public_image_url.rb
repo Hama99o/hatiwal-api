@@ -27,6 +27,10 @@ module PublicImageUrl
   # coordinates (d0 hunt round 2, 2026-10-11).
   FULL_LIMIT = [ 4096, 4096 ].freeze
   FULL_SAVER = { quality: 90, strip: true }.freeze
+  # IDEA-8: the link-preview image (og:image). WhatsApp drops large images; the full photo is up
+  # to 1.1 MB in production. A 1200 x 630 cover crop, JPEG (every crawler reads it) q80: 44
+  # production photos measured <= 177 KB.
+  SHARE = { resize_to_fill: [ 1200, 630 ], format: :jpg, saver: { quality: 80, strip: true } }.freeze
 
   module_function
 
@@ -42,6 +46,18 @@ module PublicImageUrl
     Rails.application.routes.url_helpers.rails_representation_url(
       attachment.variant(resize_to_limit: box(attachment.blob, size), format: :webp, saver: SAVER),
       **(ActiveStorage::Current.url_options || {})
+    )
+  rescue StandardError
+    nil
+  end
+
+  # The link-preview image (SHARE), stable like the others; the original when it cannot be processed.
+  def share(attachment)
+    return nil unless attachment.respond_to?(:attached?) ? attachment.attached? : attachment.present?
+    return original(attachment) unless processable?(attachment.blob)
+
+    Rails.application.routes.url_helpers.rails_representation_url(
+      attachment.variant(SHARE), **(ActiveStorage::Current.url_options || {})
     )
   rescue StandardError
     nil

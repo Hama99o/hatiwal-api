@@ -1266,6 +1266,9 @@ class Listing < ApplicationRecord
     ordered_images.map { |a| PublicImageUrl.for(a) }.compact
   end
 
+  # IDEA-8: the first photo as the link preview (og:image), PublicImageUrl::SHARE.
+  def image_share_url = images.attached? ? PublicImageUrl.share(ordered_images.first) : nil
+
   # Light variants, one per photo in image_urls' order (PublicImageUrl::SIZES).
   def image_thumb_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :thumb) }.compact : []
   def image_medium_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :medium) }.compact : []

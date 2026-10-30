@@ -97,7 +97,10 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     "listing.has_video" => "VID (boolean)",
     "listing.video_url" => "VID video (null without one)",
     "listing.video_poster_url" => "VID poster frame (null without one)",
-    "listing.video_duration_s" => "VID length in seconds (null without one)"
+    "listing.video_duration_s" => "VID length in seconds (null without one)",
+    # IDEA-8 (1.2.1, docs/design/SHARE_AND_QR.md): the 1200 x 630 link-preview
+    # image the web puts in og:image. A URL v1.0.4 never reads.
+    "listing.image_share_url" => "IDEA-8 link-preview image (null without a photo)"
   }.freeze
 
   # Type changes made on purpose, each with why it is safe for v1.0.4.

@@ -50,4 +50,12 @@ RSpec.describe ShopPolicy do
       expect(described_class.new(shop.owner, shop).update_media?).to be false
     end
   end
+
+  # IDEA-8: the printable QR card is public data, like the page it opens — never for a hidden shop,
+  # not even for its own members (the QR would open a page nobody can see).
+  it "qr_card: a shop buyers can see, for anyone; never a suspended one" do
+    expect(policy(nil).qr_card?).to be(true)
+    shop.suspended!
+    expect(policy(owner).qr_card?).to be(false)
+  end
 end

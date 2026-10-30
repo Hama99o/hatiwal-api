@@ -152,6 +152,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
     return render_not_found if blocked_seller_for_viewer?
 
     @listing.register_view!(current_user)
+    ShareLink.log_visit(:listing, @listing.id, src: params[:src], lang: params[:lang])
     viewed = current_user ? ListingView.exists?(user_id: current_user.id, listing_id: @listing.id) : false
     render_blue(
       ListingSerializer, @listing,
