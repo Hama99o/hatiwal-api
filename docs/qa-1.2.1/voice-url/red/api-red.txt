@@ -1,0 +1,16 @@
+11 examples, 6 failures
+rspec ./spec/requests/api/v1/message_attachment_spec.rb:44 # Message attachments a voice clip plays when tapped long after the thread loaded (the URL in the JSON does not expire)
+rspec ./spec/requests/api/v1/message_attachment_spec.rb:57 # Message attachments a voice clip is the stable route, never a signed storage URL
+rspec ./spec/requests/api/v1/message_attachment_spec.rb:66 # Message attachments a photo attachment_url (1.2.0 apps, no auth headers) still loads 30 minutes later
+rspec ./spec/requests/api/v1/message_attachment_spec.rb:74 # Message attachments a photo attachment_stable_url loads days later
+rspec ./spec/requests/api/v1/message_attachment_spec.rb:109 # Message attachments /api/v1/conversations/{conversation_id}/messages/{id}/attachment get a participant: redirected to the file returns a 302 response
+rspec ./spec/requests/api/v1/message_attachment_spec.rb:113 # Message attachments /api/v1/conversations/{conversation_id}/messages/{id}/attachment get signed out returns a 401 response
+     Failure/Error: expect(fetch(url)).to have_http_status(:ok)
+       expected the response to have status code :ok (200) but it was :not_found (404)
+     Failure/Error: expect(url).to end_with("/api/v1/conversations/#{conversation.id}/messages/#{voice.id}/attachment")
+     Failure/Error: expect(fetch(url)).to have_http_status(:ok)
+       expected the response to have status code :ok (200) but it was :not_found (404)
+     Failure/Error: path = URI(url).request_uri
+       bad argument (expected URI object or URI string)
+     Failure/Error:
+     Failure/Error:
