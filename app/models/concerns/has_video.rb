@@ -54,9 +54,18 @@ module HasVideo
       return false
     end
 
+    # Typed by its BYTES (security, 2026-10-30): Active Storage's identify falls back to the file name, so a
+    # text file sent as "video.mp4" became video/mp4 and passed the type check. Every genuine clip tried —
+    # iPhone .mov H.264/HEVC, Android .mp4 H.264/HEVC, .3gp, fragmented mp4 — sniffs as mp4 / quicktime.
+    type = sniffed_type(file)
+    unless VIDEO_TYPES.include?(type)
+      errors.add(:video, :invalid_file_type, content_type: type)
+      return false
+    end
+
     video_blob = ActiveStorage::Blob.create_and_upload!(
       io: file, filename: file.original_filename.presence || "video.mp4",
-      content_type: file.content_type, metadata: duration ? { "duration" => duration } : {}
+      content_type: type, identify: false, metadata: duration ? { "duration" => duration } : {}
     )
     self.video = video_blob
     self.video_poster = poster.presence
@@ -74,6 +83,13 @@ module HasVideo
 
   # Make the poster's medium variant now, at upload, so the first viewer gets it
   # at once instead of waiting for it to be generated. Best effort.
+  # The type the file's bytes say (never its name nor the client's Content-Type).
+  def sniffed_type(file)
+    io = file.respond_to?(:tempfile) ? file.tempfile : file
+    io.rewind
+    Marcel::MimeType.for(io).tap { io.rewind }
+  end
+
   def warm_video_poster
     return unless video_poster.attached? && video_poster.blob.variable?
 
