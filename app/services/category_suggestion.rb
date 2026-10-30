@@ -56,6 +56,13 @@ module CategorySuggestion
       @prompts ||= YAML.safe_load_file(PROMPTS_PATH).transform_values { |phrases| Array(phrases).map(&:to_s) }
     end
 
+    # Builds the slug vectors now (bin/rails category_suggestion:warm, after a
+    # deploy), into Rails.cache: solid_cache in production, shared by every
+    # process, so no seller pays the ~6 s. Returns how many slugs are ready.
+    def warm!
+      slug_vectors.size
+    end
+
     # For specs: forget the per-process vectors.
     def reset!
       LOCK.synchronize { @slug_vectors = @prompts = nil }

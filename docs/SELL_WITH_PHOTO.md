@@ -128,3 +128,21 @@ How to read them after release:
 - **Coverage:** suggested ÷ (suggested + none).
 - **Re-tuning:** split by confidence band to move `MIN_CONFIDENCE`.
 - **Command:** `bin/kms app logs` piped into `grep category_suggestion`, then count by `event`.
+
+## 4. Deploying (for the release session)
+
+1. The image grows by the text model (64.5 MB) and its tokenizer files (1.4 MB):
+   `bin/fetch-image-model` fetches them at build time, beside the image model.
+2. After the deploy, build the category vectors once into the shared cache:
+   `bin/kamal app exec 'bin/rails category_suggestion:warm'` (~6 s in that one-off container).
+   - Production's cache is `solid_cache_store` (the `cache` database), which every Puma
+     worker and every job container shares. So this rake task is the right place, and no boot
+     hook is needed: a boot hook would add the ~6 s to every process, job workers included.
+   - Without the task, the first suggestion after a deploy takes ~6 s once (measured 5.8 s on
+     the dev box), then ~0.4 s.
+   - The cache key carries the model version and the prompts file's sha256, so an edited
+     prompts file needs the task again.
+   - The entry is ~250 KB under a 256 MB cap. An eviction only means one more slow request.
+3. Kill switch without a code change: `CATEGORY_SUGGESTION_ENABLED=0` (and reboot the app).
+   `/app_config` then says false, the apps never ask, and the endpoint answers 503. Search by
+   image's own switch (`IMAGE_SEARCH_ENABLED=0`) turns this off too.
