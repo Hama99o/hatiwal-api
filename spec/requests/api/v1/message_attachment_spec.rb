@@ -102,9 +102,10 @@ RSpec.describe "Message attachments", type: :request do
       let(:conversation_id) { conversation.id }
       let(:id) { voice.id }
       let(:as) { buyer }
-      let(:"access-token") { auth_headers_for(as)["access-token"] }
-      let(:client) { auth_headers_for(as)["client"] }
-      let(:uid) { auth_headers_for(as)["uid"] }
+      let(:auth) { auth_headers_for(as) }
+      let(:"access-token") { auth["access-token"] }
+      let(:client) { auth["client"] }
+      let(:uid) { auth["uid"] }
 
       response "302", "a participant: redirected to the file" do
         run_test! { expect(response.location).to include("/rails/active_storage/") }

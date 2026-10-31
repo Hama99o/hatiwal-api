@@ -225,6 +225,26 @@ class Message < ApplicationRecord
     nil
   end
 
+  # How long the signed `attachment_url` lives: 1.2.0 apps load it without auth headers, long after the JSON
+  # came (a thread opened from the offline cache). New clients use #attachment_route_url, which never expires.
+  ATTACHMENT_URL_TTL = 1.hour
+
+  # The stable, participant-only URL of this message's file (MessagesController#attachment), or nil.
+  def attachment_route_url
+    return nil if deleted? || !attachment.attached?
+
+    Rails.application.routes.url_helpers.attachment_api_v1_conversation_message_url(
+      conversation_id, id, **(ActiveStorage::Current.url_options || {})
+    )
+  end
+
+  # The signed storage URL (1.2.0 apps), valid ATTACHMENT_URL_TTL.
+  def attachment_signed_url
+    return nil if deleted? || !attachment.attached?
+
+    attachment.url(expires_in: ATTACHMENT_URL_TTL)
+  end
+
   private
 
   def voice_has_its_audio

@@ -71,6 +71,7 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # Voice messages (1.2.1). Null on every message an old app can meet except a
     # voice message, whose `body` "🎤 0:12" is what an old app shows instead.
     "messages[].voice" => "1.2.1 voice messages: {url, duration_ms, waveform}, null on every other kind",
+    "messages[].attachment_stable_url" => "1.2.1: the file through a URL that never expires (participant-only redirect)",
     "listings[].image_thumb_urls" => "photo variants: 480 px WebP, one per image_urls entry",
     "listings[].image_medium_urls" => "photo variants: 1200 px WebP, one per image_urls entry",
     "listings[].seller.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",

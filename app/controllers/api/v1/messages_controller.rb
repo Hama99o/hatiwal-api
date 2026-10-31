@@ -3,7 +3,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
   idempotent :create, :destroy
 
   before_action :set_conversation
-  before_action :set_message, only: [ :destroy ]
+  before_action :set_message, only: %i[destroy attachment]
 
   # Deliberately high: this is a chat, and haggling over a price is a burst of
   # short messages. It exists only to stop a script from using the thread as a
@@ -110,6 +110,17 @@ class Api::V1::MessagesController < Api::V1::BaseController
                  .where(read_at: nil)
                  .update_all(read_at: Time.current)
     head :no_content
+  end
+
+  # GET /api/v1/conversations/:conversation_id/messages/:id/attachment
+  # The message's file (voice clip, photo, document) for a participant: a redirect to a FRESH short-lived signed
+  # URL, so the URL in the JSON (and in an app's offline cache) never expires. A non-participant never gets here
+  # (set_conversation's policy scope → 404, no existence leak); a deleted message or one without a file → 404.
+  def attachment
+    authorize @conversation, :read_messages?
+    return render_not_found if @message.deleted? || !@message.attachment.attached?
+
+    redirect_to @message.attachment.url, allow_other_host: true
   end
 
   private
