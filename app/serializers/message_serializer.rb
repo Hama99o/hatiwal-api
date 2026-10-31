@@ -70,8 +70,12 @@ class MessageSerializer < ApplicationSerializer
     opts[:team] == true || (opts[:current_user].present? && message.conversation&.seller_side?(opts[:current_user]))
   end
 
-  # Attachment URL: suppressed when deleted
-  field(:attachment_url) { |m| m.deleted? ? nil : (m.attachment.attached? ? m.attachment.url : nil) }
+  # Attachment URL: suppressed when deleted. A signed URL that 1.2.0 apps load without auth headers — valid an
+  # hour (Message::ATTACHMENT_URL_TTL), not Active Storage's 5 minutes.
+  field(:attachment_url, &:attachment_signed_url)
+  # 1.2.1: the same file through a URL that never expires (a participant-only redirect, sent with the auth
+  # headers). New clients prefer it.
+  field(:attachment_stable_url, &:attachment_route_url)
 
   # Voice messages (1.2.1): the server's m4a, the duration and the 64-bar
   # waveform it measured, so a bubble draws without downloading the file.
@@ -79,7 +83,8 @@ class MessageSerializer < ApplicationSerializer
   field(:voice) do |m|
     next nil unless m.voice_message? && !m.deleted? && m.attachment.attached?
 
-    { url: m.attachment.url, duration_ms: m.voice_duration_ms, waveform: m.voice_waveform }
+    # The stable route, not a 5-minute signed URL: the app downloads on the first ▶︎ only, maybe hours later.
+    { url: m.attachment_route_url, duration_ms: m.voice_duration_ms, waveform: m.voice_waveform }
   end
 
   # For offer and offer_counter kinds the body encodes "amount|currency|listedPrice".

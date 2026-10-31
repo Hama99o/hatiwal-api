@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_230000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -378,6 +378,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_200000) do
     t.check_constraint "sold_units >= 0 AND sold_units <= quantity", name: "listings_sold_units_within_quantity"
   end
 
+  create_table "meetup_spots", force: :cascade do |t|
+    t.boolean "active", default: false, null: false
+    t.string "city_key", null: false
+    t.datetime "created_at", null: false
+    t.integer "kind", default: 0, null: false
+    t.decimal "latitude", precision: 10, scale: 6, null: false
+    t.decimal "longitude", precision: 10, scale: 6, null: false
+    t.string "name_en", null: false
+    t.string "name_fa"
+    t.string "name_ps"
+    t.string "name_ur"
+    t.boolean "needs_local_check", default: true, null: false
+    t.text "note"
+    t.integer "position", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index [ "active", "city_key", "position" ], name: "index_meetup_spots_on_active_and_city_key_and_position"
+    t.index [ "city_key", "name_en" ], name: "index_meetup_spots_on_city_key_and_name_en", unique: true
+  end
+
   create_table "messages", force: :cascade do |t|
     t.bigint "admin_user_id"
     t.text "body", null: false
@@ -421,6 +440,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_200000) do
     t.index [ "listing_id", "matched_listing_id" ], name: "index_photo_matches_on_listing_id_and_matched_listing_id", unique: true
     t.index [ "matched_attachment_id" ], name: "index_photo_matches_on_matched_attachment_id"
     t.index [ "matched_listing_id" ], name: "index_photo_matches_on_matched_listing_id"
+  end
+
+  create_table "price_guides", force: :cascade do |t|
+    t.boolean "available", default: false, null: false
+    t.bigint "category_id", null: false
+    t.datetime "created_at", null: false
+    t.string "currency", null: false
+    t.decimal "high", precision: 12, scale: 2
+    t.decimal "low", precision: 12, scale: 2
+    t.datetime "refreshed_at", null: false
+    t.integer "sales_count", default: 0, null: false
+    t.integer "sellers_count", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index [ "category_id", "currency" ], name: "index_price_guides_on_category_id_and_currency", unique: true
+    t.index [ "category_id" ], name: "index_price_guides_on_category_id"
   end
 
   create_table "prohibited_terms", force: :cascade do |t|
@@ -496,18 +530,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_200000) do
     t.index [ "user_id" ], name: "index_saved_listings_on_user_id"
   end
 
+  create_table "saved_search_alert_hits", force: :cascade do |t|
+    t.datetime "alerted_at"
+    t.datetime "created_at", null: false
+    t.bigint "listing_id", null: false
+    t.bigint "saved_search_id", null: false
+    t.datetime "updated_at", null: false
+    t.index [ "listing_id" ], name: "index_saved_search_alert_hits_on_listing_id"
+    t.index [ "saved_search_id", "listing_id" ], name: "idx_on_saved_search_id_listing_id_c4d68fc8bc", unique: true
+    t.index [ "saved_search_id" ], name: "index_saved_search_alert_hits_on_saved_search_id"
+  end
+
   create_table "saved_searches", force: :cascade do |t|
+    t.boolean "alert", default: false, null: false
+    t.datetime "alert_scheduled_at"
     t.bigint "category_id"
     t.datetime "created_at", null: false
+    t.datetime "last_alerted_at"
     t.datetime "last_viewed_at"
     t.float "latitude"
     t.string "location"
     t.float "longitude"
+    t.integer "pending_alert_count", default: 0, null: false
     t.integer "price_max"
     t.integer "price_min"
+    t.string "query"
     t.integer "radius"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.index [ "alert", "category_id" ], name: "index_saved_searches_on_alert_and_category_id"
     t.index [ "category_id" ], name: "index_saved_searches_on_category_id"
     t.index [ "user_id", "created_at" ], name: "index_saved_searches_user_recent"
     t.index [ "user_id" ], name: "index_saved_searches_on_user_id"
@@ -634,6 +685,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_200000) do
 
   create_table "users", force: :cascade do |t|
     t.bigint "active_shop_id"
+    t.integer "alert_pushes_count", default: 0, null: false
+    t.date "alert_pushes_on"
     t.boolean "allow_password_change", default: false
     t.text "apple_refresh_token"
     t.string "apple_uid"
@@ -688,6 +741,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_200000) do
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
     t.integer "review_count", default: 0, null: false
+    t.boolean "saved_search_alerts", default: true, null: false
     t.boolean "seller_mode", default: false, null: false
     t.integer "shop_memberships_count", default: 0, null: false
     t.boolean "show_address_publicly", default: true, null: false
@@ -796,6 +850,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_200000) do
   add_foreign_key "photo_matches", "flags", on_delete: :nullify
   add_foreign_key "photo_matches", "listings", column: "matched_listing_id", on_delete: :cascade
   add_foreign_key "photo_matches", "listings", on_delete: :cascade
+  add_foreign_key "price_guides", "categories", on_delete: :cascade
   add_foreign_key "reports", "users", column: "reporter_id"
   add_foreign_key "resumable_uploads", "users", on_delete: :cascade
   add_foreign_key "reviews", "transactions"
@@ -803,6 +858,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_200000) do
   add_foreign_key "reviews", "users", column: "reviewer_id"
   add_foreign_key "saved_listings", "listings"
   add_foreign_key "saved_listings", "users"
+  add_foreign_key "saved_search_alert_hits", "listings", on_delete: :cascade
+  add_foreign_key "saved_search_alert_hits", "saved_searches", on_delete: :cascade
   add_foreign_key "saved_searches", "categories"
   add_foreign_key "saved_searches", "users"
   add_foreign_key "shop_audit_events", "shops", on_delete: :cascade

@@ -71,6 +71,7 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # Voice messages (1.2.1). Null on every message an old app can meet except a
     # voice message, whose `body` "🎤 0:12" is what an old app shows instead.
     "messages[].voice" => "1.2.1 voice messages: {url, duration_ms, waveform}, null on every other kind",
+    "messages[].attachment_stable_url" => "1.2.1: the file through a URL that never expires (participant-only redirect)",
     "listings[].image_thumb_urls" => "photo variants: 480 px WebP, one per image_urls entry",
     "listings[].image_medium_urls" => "photo variants: 1200 px WebP, one per image_urls entry",
     "listings[].seller.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
@@ -104,7 +105,11 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     # IDEA-9 (1.2.1): the data-saver variants (320 card / 720 gallery, WebP q60). URLs v1.0.4 never reads.
     "listings[].image_lite_urls" => "IDEA-9 data-saver card variants",
     "listing.image_lite_urls" => "IDEA-9 data-saver card variants",
-    "listing.image_lite_gallery_urls" => "IDEA-9 data-saver gallery variants"
+    "listing.image_lite_gallery_urls" => "IDEA-9 data-saver gallery variants",
+    # IDEA-6 (1.2.1, docs/SAFE_MEETUP_SPOTS.md): the thread's listing point the
+    # meetup spots are picked near — the SAFETY-1 grid value, never exact.
+    "conversation.listing.latitude" => "IDEA-6 approximate listing point (null without one)",
+    "conversation.listing.longitude" => "IDEA-6 approximate listing point (null without one)"
   }.freeze
 
   # Type changes made on purpose, each with why it is safe for v1.0.4.

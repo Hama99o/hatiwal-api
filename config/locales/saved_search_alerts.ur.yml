@@ -1,0 +1,9 @@
+# Saved-search alerts — see saved_search_alerts.en.yml (Urdu is hidden in the app).
+ur:
+  push:
+    saved_search:
+      one_title: "آپ کی تلاش «%{label}» کے لیے نیا آئٹم"
+      one_body: "%{title}"
+      many_title: "«%{label}» کے لیے %{count} نئے آئٹم"
+      many_body: "دیکھنے کے لیے ٹیپ کریں۔"
+      your_search: "آپ کی تلاش"

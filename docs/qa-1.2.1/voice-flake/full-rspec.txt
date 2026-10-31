@@ -1,0 +1,41 @@
+TEST DB: hatiwal_test_voiceflake
+...../usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+.........../usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+........./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+...................................................................../usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+/usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+........................./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+................................................................................................/usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+/usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+/usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+/usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+../usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+/usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+.../usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+./usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+....../usr/local/bundle/ruby/3.4.0/gems/rspec-rails-8.0.4/lib/rspec/rails/matchers/have_http_status.rb:219: warning: Status code :unprocessable_entity is deprecated and will be removed in a future version of Rack. Please use :unprocessable_content instead.
+....................................................................................................................................................................................................................................................................................................................................
+(process:9): VIPS-WARNING **: 23:11:50.187: error in tile 0 x 0
+
+(process:9): VIPS-WARNING **: 23:11:50.188: error in tile 0 x 10
+.................................................................................................................................................................................................................Reconciled reserved_at on 0 listing(s).
+.Reconciled reserved_at on 1 listing(s).
+...scam photo detection is off (SCAM_PHOTO_ENABLED=0, or search by image off)
+..Recomputed sold_count/bought_count for 2 users.
+.Recomputed sold_count/bought_count for 1 users.
+.
+
+Pending: (Failures listed here are expected and do not affect your suite's status)
+
+  1) Light image variants (thumb / medium) processing (libvips) a HEIC photo gets a WebP thumb (when this vips can write HEIC to make one)
+
+Finished in 14 minutes 40 seconds (files took 12 seconds to load)
+4177 examples, 0 failures, 1 pending
+

@@ -15,6 +15,11 @@ class SavedSearchPolicy < ApplicationPolicy
     owner?
   end
 
+  # Follow / unfollow (saved-search alerts).
+  def update?
+    owner?
+  end
+
   private
 
   def owner?

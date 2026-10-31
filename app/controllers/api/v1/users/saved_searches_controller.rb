@@ -1,12 +1,15 @@
 class Api::V1::Users::SavedSearchesController < Api::V1::BaseController
   # OFFLINE §10.1: delete / mark seen queued offline and retried run once.
-  idempotent :destroy, :mark_seen
+  idempotent :destroy, :mark_seen, :update
 
   before_action :authenticate_user!
 
+  # The quick-filter history (the MAX_PER_USER most recent) plus every
+  # followed search, however old (saved-search alerts never fall off the list).
   def index
     authorize SavedSearch
-    saved_searches = current_user.saved_searches.recent.limit(SavedSearch::MAX_PER_USER)
+    recent_ids = current_user.saved_searches.recent.limit(SavedSearch::MAX_PER_USER).pluck(:id)
+    saved_searches = current_user.saved_searches.where(id: recent_ids).or(current_user.saved_searches.alerted).recent
     render_blue_collection(SavedSearchSerializer, saved_searches)
   end
 
@@ -19,7 +22,20 @@ class Api::V1::Users::SavedSearchesController < Api::V1::BaseController
       SavedSearch.prune_for(current_user)
       render_blue(SavedSearchSerializer, saved_search, status: :created)
     else
-      render_unprocessable_entity(saved_search)
+      render_saved_search_errors(saved_search)
+    end
+  end
+
+  # PUT /api/v1/users/saved_searches/:id — follow or unfollow (saved-search
+  # alerts, docs/SAVED_SEARCH_ALERTS.md). A 6th followed search: 422 alerts_limit.
+  def update
+    saved_search = SavedSearch.find(params[:id])
+    authorize saved_search
+
+    if saved_search.update(params.permit(:alert))
+      render_blue(SavedSearchSerializer, saved_search)
+    else
+      render_saved_search_errors(saved_search)
     end
   end
 
@@ -47,6 +63,11 @@ class Api::V1::Users::SavedSearchesController < Api::V1::BaseController
   private
 
   def saved_search_params
-    params.permit(:location, :category_id, :price_min, :price_max, :latitude, :longitude, :radius)
+    params.permit(:location, :category_id, :price_min, :price_max, :latitude, :longitude, :radius, :query, :alert)
+  end
+
+  def render_saved_search_errors(saved_search)
+    code = saved_search.errors.of_kind?(:alert, :alerts_limit) ? :alerts_limit : nil
+    render_unprocessable_entity(saved_search, code: code)
   end
 end

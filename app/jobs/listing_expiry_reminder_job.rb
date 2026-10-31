@@ -53,9 +53,7 @@ class ListingExpiryReminderJob < ApplicationJob
     token = user.live_push_token # nil: no token, or its session is gone (cleared)
     return if token.nil?
 
-    locale = user.preferred_language.presence&.to_sym
-    locale = I18n.default_locale unless locale && I18n.locale_available?(locale)
-    title, body = I18n.with_locale(locale) do
+    title, body = I18n.with_locale(user.push_locale) do
       [ I18n.t("push.listing_expiry.#{reminder}_title"), I18n.t("push.listing_expiry.body", title: listing.title) ]
     end
 

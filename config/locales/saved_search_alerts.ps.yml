@@ -1,0 +1,9 @@
+# Saved-search alerts — see saved_search_alerts.en.yml.
+ps:
+  push:
+    saved_search:
+      one_title: "نوی شی ستاسو د «%{label}» لټون لپاره"
+      one_body: "%{title}"
+      many_title: "%{count} نوي شیان د «%{label}» لپاره"
+      many_body: "د لیدو لپاره ټک وکړئ."
+      your_search: "ستاسو لټون"

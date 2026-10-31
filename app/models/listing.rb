@@ -461,6 +461,8 @@ class Listing < ApplicationRecord
   # IDEA-5 (1.2.1): a listing that goes live is matched against other accounts'
   # photos (its photos were indexed while it was a draft, when nothing is matched).
   after_update_commit :enqueue_scam_photo_match, if: :went_live?
+  # Saved-search alerts (docs/SAVED_SEARCH_ALERTS.md): which followed searches it matches.
+  after_update_commit :enqueue_saved_search_match, if: :went_live?
   # Feed position starts at creation (an explicit `created_at`, e.g. an import,
   # wins), so the default order is exactly the old `created_at` order.
   before_create { self.bumped_at ||= created_at || Time.current }
@@ -1677,6 +1679,10 @@ class Listing < ApplicationRecord
 
   def went_live?
     saved_change_to_status? && live? && !%w[active reserved].include?(status_before_last_save)
+  end
+
+  def enqueue_saved_search_match
+    SavedSearchMatchJob.perform_later(id)
   end
 
   def enqueue_scam_photo_match

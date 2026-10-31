@@ -1,0 +1,30 @@
+# IDEA-6 draft list (docs/SAFE_MEETUP_SPOTS.md §4), 2026-10-30.
+# Source: OpenStreetMap via Overpass, © OpenStreetMap contributors (ODbL).
+# Malls (main entrance) and big bazaars ONLY — no police / checkpoints, no
+# shrines / mosques, no bank fronts (owner + supervisor, 2026-10-30).
+# Seeded switched OFF with needs_local_check: an admin approves each row once
+# someone local confirmed it is still busy. Names marked (proposed) in the doc
+# were not in OSM and need a native check. Never edited by the seed once present.
+kabul:
+  - { name_en: "Kabul City Centre", name_fa: "کابل سیتی سنتر", name_ps: "کابل سیټي سنټر", kind: mall, latitude: 34.53244, longitude: 69.16566 }
+  - { name_en: "Gulbahar Center", name_fa: "گلبهار سنتر", name_ps: "ګلبهار سنټر", kind: mall, latitude: 34.52345, longitude: 69.17364 }
+  - { name_en: "Majid Mall", name_fa: "مجید مال", name_ps: "مجید مال", kind: mall, latitude: 34.53399, longitude: 69.17285 }
+  - { name_en: "Macroyan Bazaar", name_fa: "بازار مکروریان", name_ps: "د مکروریانو بازار", kind: bazaar, latitude: 34.54335, longitude: 69.20292 }
+  - { name_en: "Madina Bazaar", name_fa: "مدینه بازار", name_ps: "مدینه بازار", kind: bazaar, latitude: 34.54242, longitude: 69.16787 }
+  - { name_en: "Dehbori Center", name_fa: "دهبوری سنتر", name_ps: "دهبوري سنټر", kind: mall, latitude: 34.51149, longitude: 69.12563 }
+herat:
+  - { name_en: "Kasra Trade Center", name_fa: "مرکز تجاری کسرا", name_ps: "د کسرا سوداګریز مرکز", kind: mall, latitude: 34.34883, longitude: 62.19490 }
+  - { name_en: "Gulbahar Trade Center", name_fa: "مرکز تجارتی گلبهار", name_ps: "د ګلبهار سوداګریز مرکز", kind: mall, latitude: 34.35507, longitude: 62.19111 }
+  - { name_en: "Milli Center", name_fa: "ملی سنتر", name_ps: "ملي سنټر", kind: mall, latitude: 34.34902, longitude: 62.19657 }
+  - { name_en: "Nazari Center", name_fa: "نظری سنتر", name_ps: "نظري سنټر", kind: mall, latitude: 34.34900, longitude: 62.19989 }
+kandahar:
+  - { name_en: "Ahmadi Market", name_fa: "احمدی مارکت", name_ps: "احمدي مارکېټ", kind: mall, latitude: 31.61305, longitude: 65.70350 }
+  - { name_en: "Khairi Bazaar", name_fa: "خیری بازار", name_ps: "خیري بازار", kind: bazaar, latitude: 31.61247, longitude: 65.70400 }
+mazar:
+  - { name_en: "Aria Market", name_fa: "مارکیت آریا", name_ps: "د آریا مارکېټ", kind: mall, latitude: 36.70878, longitude: 67.10370 }
+  - { name_en: "Jawzjan Market", name_fa: "جوزجان مارکیت", name_ps: "د جوزجان مارکېټ", kind: mall, latitude: 36.70969, longitude: 67.11747 }
+  - { name_en: "Garan Market", name_fa: "مارکیت گران", name_ps: "ګران مارکېټ", kind: mall, latitude: 36.70979, longitude: 67.11788 }
+jalalabad:
+  - { name_en: "Shamshad Market", name_fa: "مارکیت شمشاد", name_ps: "شمشاد مارکېټ", kind: bazaar, latitude: 34.42418, longitude: 70.43171 }
+  - { name_en: "Sultan Zai Plaza", name_fa: "سلطان زی پلازا", name_ps: "سلطانزي پلازه", kind: mall, latitude: 34.43030, longitude: 70.46125 }
+  - { name_en: "Mia Aslam Plaza", name_fa: "میا اسلم پلازا", name_ps: "میا اسلم پلازه", kind: mall, latitude: 34.43100, longitude: 70.46302 }

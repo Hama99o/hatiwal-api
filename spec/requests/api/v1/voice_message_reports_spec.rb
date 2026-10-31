@@ -74,13 +74,16 @@ RSpec.describe "Reporting a voice message", type: :request do
     let(:admin) { create(:admin_user) }
 
     it "plays the clip, names its sender and can warn them" do
+      # Card 389: a Faker name with an apostrophe ("D'Amore") is HTML-escaped on the page (D&#39;Amore) and the
+      # raw-body match flaked once in a full run. Pinned so it is checked every time.
+      seller.update!(lastname: "D'Amore")
       report(voice, as: buyer)
       sign_in admin, scope: :admin_user
       get "/admin/reports/#{Report.last.id}"
 
       expect(response).to have_http_status(:ok)
       expect(response.body).to include("<audio")
-      expect(response.body).to include(seller.full_name)
+      expect(response.body).to include(ERB::Util.html_escape(seller.full_name))
       expect(response.body).to include("Warn sender &amp; resolve")
     end
   end

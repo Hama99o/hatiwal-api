@@ -190,6 +190,9 @@ class ConversationSerializer < ApplicationSerializer
         price_unit: c.listing.price_unit,
         thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location,
         negotiable: c.listing.negotiable,
+        # IDEA-6: where the meetup spots are suggested from. The grid-snapped
+        # point (SAFETY-1), the same the public listing views carry — never exact.
+        latitude: c.listing.approximate_latitude&.to_f, longitude: c.listing.approximate_longitude&.to_f,
         # Same reason as :list above, and it matters more here: the thread header
         # is where the buyer asks "how much for 5?", so a bare per-unit figure is
         # read as the batch price at exactly the moment the deal is struck.
