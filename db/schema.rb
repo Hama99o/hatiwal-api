@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_210100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_230000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pg_trgm"
@@ -442,6 +442,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_210100) do
     t.index [ "matched_listing_id" ], name: "index_photo_matches_on_matched_listing_id"
   end
 
+  create_table "price_guides", force: :cascade do |t|
+    t.boolean "available", default: false, null: false
+    t.bigint "category_id", null: false
+    t.datetime "created_at", null: false
+    t.string "currency", null: false
+    t.decimal "high", precision: 12, scale: 2
+    t.decimal "low", precision: 12, scale: 2
+    t.datetime "refreshed_at", null: false
+    t.integer "sales_count", default: 0, null: false
+    t.integer "sellers_count", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index [ "category_id", "currency" ], name: "index_price_guides_on_category_id_and_currency", unique: true
+    t.index [ "category_id" ], name: "index_price_guides_on_category_id"
+  end
+
   create_table "prohibited_terms", force: :cascade do |t|
     t.integer "category", null: false
     t.datetime "created_at", null: false
@@ -817,6 +832,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_210100) do
   add_foreign_key "photo_matches", "flags", on_delete: :nullify
   add_foreign_key "photo_matches", "listings", column: "matched_listing_id", on_delete: :cascade
   add_foreign_key "photo_matches", "listings", on_delete: :cascade
+  add_foreign_key "price_guides", "categories", on_delete: :cascade
   add_foreign_key "reports", "users", column: "reporter_id"
   add_foreign_key "reviews", "transactions"
   add_foreign_key "reviews", "users", column: "reviewee_id"

@@ -71,6 +71,8 @@ Rails.application.routes.draw do
     resources :prohibited_terms
     # IDEA-6: suggested meetup spots (draft rows need a local check first).
     resources :meetup_spots
+    # IDEA-4: the price-guide buckets against the threshold (read-only).
+    resources :price_guides, only: %i[index show]
     # VER-1: the verification queue. `document` streams one ID photo for a
     # token that expires in 5 minutes; every view is audit-logged.
     # SHOP-1 — shops: moderate, not edit.
@@ -214,6 +216,8 @@ Rails.application.routes.draw do
       resources :categories, only: [ :index ]
       # IDEA-6: busy public places suggested for a meetup (public).
       resources :meetup_spots, only: [ :index ]
+      # IDEA-4: price range of similar sold items (public, aggregates only).
+      resource :price_guide, only: [ :show ]
 
       # UPD-1 — force update / update reminder (public)
       get "app_config", to: "app_configs#show", as: :app_config
