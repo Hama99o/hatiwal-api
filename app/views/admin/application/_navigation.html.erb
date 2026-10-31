@@ -50,6 +50,9 @@ signed-in admin, and a logout button.
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/user_warnings') ? 'active' : 'inactive'}" %>
   <%= link_to "Prohibited terms", admin_prohibited_terms_path, id: "nav-prohibited-terms",
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/prohibited_terms') ? 'active' : 'inactive'}" %>
+  <%# IDEA-4 %>
+  <%= link_to "Price guide", admin_price_guides_path, id: "nav-price-guides",
+        class: "navigation__link navigation__link--#{request.path.start_with?('/admin/price_guides') ? 'active' : 'inactive'}" %>
   <%# IDEA-6 %>
   <%= link_to "Meetup spots", admin_meetup_spots_path, id: "nav-meetup-spots",
         class: "navigation__link navigation__link--#{request.path.start_with?('/admin/meetup_spots') ? 'active' : 'inactive'}" %>
