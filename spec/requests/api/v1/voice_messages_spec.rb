@@ -65,19 +65,28 @@ RSpec.describe "Api::V1::Messages — voice messages", type: :request do
                    properties: {
                      kind: { type: :string, enum: [ "voice_message" ] },
                      body: { type: :string, description: "\"🎤 m:ss\" — what apps ≤ 1.2.0 show" },
+                     attachment_url: {
+                       type: :string, nullable: true,
+                       description: "The file as a signed storage URL, valid 1 hour (1.2.0 apps load it without auth headers)"
+                     },
+                     attachment_stable_url: {
+                       type: :string, nullable: true,
+                       description: "1.2.1: the same file through GET …/messages/{id}/attachment — never expires; " \
+                                    "participants only (send the session); 302 to a fresh signed file"
+                     },
                      voice: {
                        type: :object,
                        nullable: true,
                        description: "null for any other kind, and once deleted",
                        properties: {
-                         url: { type: :string, description: "the AAC .m4a" },
+                         url: { type: :string, description: "the AAC .m4a, through the never-expiring participant-only route (= attachment_stable_url)" },
                          duration_ms: { type: :integer },
                          waveform: { type: :array, items: { type: :integer, minimum: 0, maximum: 100 }, minItems: 64, maxItems: 64 }
                        },
                        required: %w[url duration_ms waveform]
                      }
                    },
-                   required: %w[kind body voice]
+                   required: %w[kind body attachment_url attachment_stable_url voice]
                  }
                },
                required: %w[message]
