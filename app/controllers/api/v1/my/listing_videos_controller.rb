@@ -19,6 +19,8 @@ class Api::V1::My::ListingVideosController < Api::V1::BaseController
   end
 
   def video_record = @listing
+  # IDEA-9: which chunked uploads may become this record's video.
+  def upload_purpose = :listing_video
 
   def authorize_video!(action)
     authorize @listing, action == :update ? :update_video? : :destroy_video?

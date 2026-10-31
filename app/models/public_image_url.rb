@@ -19,8 +19,13 @@ module PublicImageUrl
   #     ≤ 1440.
   # resize_to_limit never upscales and never crops (a 300 px original stays
   # 300 px). WebP: the production image's libvips (Debian 13, 8.16) has it.
-  SIZES = { thumb: [ 640, 1600 ], avatar: [ 256, 512 ], medium: [ 1440, 1440 ] }.freeze
+  # IDEA-9 data saver (docs/design/DATA_SAVER_AND_RESUMABLE_UPLOAD.md §2): lite = the card (short side 320),
+  # lite_gallery = the gallery until a zoom; WebP q60 (LITE_SAVER). On the production photos a Bazaar page of
+  # 20 cards goes 978 KB -> 227 KB.
+  SIZES = { thumb: [ 640, 1600 ], avatar: [ 256, 512 ], medium: [ 1440, 1440 ], lite: [ 320, 800 ], lite_gallery: [ 720, 720 ] }.freeze
   SAVER = { quality: 80, strip: true }.freeze
+  LITE_SAVER = { quality: 60, strip: true }.freeze
+  LITE_SIZES = %i[lite lite_gallery].freeze
   # What `for` serves: the photo at full size (zoom), its own format (PNG keeps
   # its alpha), WITHOUT its metadata. A phone JPEG carries EXIF with GPS, and the
   # web uploads the raw file: serving the original published the seller's home
@@ -44,7 +49,7 @@ module PublicImageUrl
     return original(attachment) unless processable?(attachment.blob)
 
     Rails.application.routes.url_helpers.rails_representation_url(
-      attachment.variant(resize_to_limit: box(attachment.blob, size), format: :webp, saver: SAVER),
+      attachment.variant(resize_to_limit: box(attachment.blob, size), format: :webp, saver: LITE_SIZES.include?(size) ? LITE_SAVER : SAVER),
       **(ActiveStorage::Current.url_options || {})
     )
   rescue StandardError

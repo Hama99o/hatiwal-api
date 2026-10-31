@@ -13,6 +13,8 @@ class Api::V1::ShopVideosController < Api::V1::BaseController
   end
 
   def video_record = @shop
+  # IDEA-9: which chunked uploads may become this record's video.
+  def upload_purpose = :shop_video
 
   def authorize_video!(_action)
     authorize @shop, :update_media?

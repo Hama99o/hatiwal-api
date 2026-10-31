@@ -68,7 +68,9 @@ class AppReleaseSetting < ApplicationRecord
       features: {
         image_search: ImageSearch.enabled?,
         voice_messages: VoiceMessages.enabled?,
-        category_suggestion: CategorySuggestion.enabled?
+        category_suggestion: CategorySuggestion.enabled?,
+        # IDEA-9: videos in resumable chunks (off: the apps send today's single PUT).
+        resumable_uploads: ResumableUploads.enabled?
       }
     }
   end

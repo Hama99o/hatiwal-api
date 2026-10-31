@@ -137,6 +137,8 @@ class ListingSerializer < ApplicationSerializer
     field(:image_urls) { |l| l.image_urls }
     field(:image_thumb_urls) { |l| l.image_thumb_urls }
     field(:image_medium_urls) { |l| l.image_medium_urls }
+    # IDEA-9 data saver: the lite card variant (an older app ignores it).
+    field(:image_lite_urls) { |l| l.image_lite_urls }
     # VID: the small ▶ on the card. A key old clients simply ignore.
     field(:has_video) { |l| l.has_video? }
     field(:is_viewed) { |l, opts| opts[:viewed_ids]&.include?(l.id) || false }
@@ -214,6 +216,8 @@ class ListingSerializer < ApplicationSerializer
     field(:image_urls) { |l| l.image_urls }
     field(:image_thumb_urls) { |l| l.image_thumb_urls }
     field(:image_medium_urls) { |l| l.image_medium_urls }
+    # IDEA-9 data saver: the lite card variant (an older app ignores it).
+    field(:image_lite_urls) { |l| l.image_lite_urls }
     # VID: the small ▶ on the card. A key old clients simply ignore.
     field(:has_video) { |l| l.has_video? }
     # Use .size (not .count) so that when conversations are eager-loaded via
@@ -258,6 +262,9 @@ class ListingSerializer < ApplicationSerializer
     field(:images) { |l| l.image_urls }
     field(:image_thumb_urls) { |l| l.image_thumb_urls }
     field(:image_medium_urls) { |l| l.image_medium_urls }
+    # IDEA-9 data saver: the lite card variant (an older app ignores it).
+    field(:image_lite_urls) { |l| l.image_lite_urls }
+    field(:image_lite_gallery_urls) { |l| l.image_lite_gallery_urls }
     # VID: one optional video, shown as the gallery's last slide (poster + ▶,
     # loads on tap). All nil without a video; old clients ignore the keys.
     field(:has_video) { |l| l.has_video? }

@@ -483,6 +483,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_230000) do
     t.index [ "status" ], name: "index_reports_on_status"
   end
 
+  create_table "resumable_uploads", force: :cascade do |t|
+    t.bigint "blob_id"
+    t.datetime "created_at", null: false
+    t.string "key", limit: 64, null: false
+    t.bigint "offset", default: 0, null: false
+    t.integer "purpose", null: false
+    t.string "sha256", limit: 64, null: false
+    t.bigint "size", null: false
+    t.integer "status", default: 0, null: false
+    t.string "token", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index [ "status", "updated_at" ], name: "index_resumable_uploads_on_status_and_updated_at"
+    t.index [ "token" ], name: "index_resumable_uploads_on_token", unique: true
+    t.index [ "user_id", "key" ], name: "index_resumable_uploads_on_user_id_and_key", unique: true
+    t.index [ "user_id" ], name: "index_resumable_uploads_on_user_id"
+  end
+
   create_table "reviews", force: :cascade do |t|
     t.text "comment"
     t.datetime "created_at", null: false
@@ -834,6 +852,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_230000) do
   add_foreign_key "photo_matches", "listings", on_delete: :cascade
   add_foreign_key "price_guides", "categories", on_delete: :cascade
   add_foreign_key "reports", "users", column: "reporter_id"
+  add_foreign_key "resumable_uploads", "users", on_delete: :cascade
   add_foreign_key "reviews", "transactions"
   add_foreign_key "reviews", "users", column: "reviewee_id"
   add_foreign_key "reviews", "users", column: "reviewer_id"

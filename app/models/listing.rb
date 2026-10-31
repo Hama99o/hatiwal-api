@@ -1274,6 +1274,9 @@ class Listing < ApplicationRecord
   # Light variants, one per photo in image_urls' order (PublicImageUrl::SIZES).
   def image_thumb_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :thumb) }.compact : []
   def image_medium_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :medium) }.compact : []
+  # IDEA-9 data saver: the lite card and the lite gallery, one per photo in the same order.
+  def image_lite_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :lite) }.compact : []
+  def image_lite_gallery_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :lite_gallery) }.compact : []
 
   # ── Photo order (OFFLINE phase 0, docs/OFFLINE_MODE.md §2.5) ─────────────────
   # The photos in the seller's order: each blob's metadata "position" (the
