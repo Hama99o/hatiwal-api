@@ -201,6 +201,10 @@ Rails.application.routes.draw do
           collection do
             put :mark_read
           end
+          # 1.2.1: the message's file through a URL that never expires (302 to a fresh signed URL).
+          member do
+            get :attachment
+          end
         end
       end
 
