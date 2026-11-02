@@ -1,4 +1,6 @@
-# IDEA-6 draft list (docs/SAFE_MEETUP_SPOTS.md §4), 2026-10-30.
+# IDEA-6 list (docs/SAFE_MEETUP_SPOTS.md §4), 2026-10-30. Owner validated these 16 on
+# 2026-11-02 (dropped two near-duplicates: Khairi Bazaar ~60 m from Ahmadi Market,
+# Garan Market ~40 m from Jawzjan Market). Activate them after the 1.2.1 deploy.
 # Source: OpenStreetMap via Overpass, © OpenStreetMap contributors (ODbL).
 # Malls (main entrance) and big bazaars ONLY — no police / checkpoints, no
 # shrines / mosques, no bank fronts (owner + supervisor, 2026-10-30).
@@ -19,11 +21,9 @@ herat:
   - { name_en: "Nazari Center", name_fa: "نظری سنتر", name_ps: "نظري سنټر", kind: mall, latitude: 34.34900, longitude: 62.19989 }
 kandahar:
   - { name_en: "Ahmadi Market", name_fa: "احمدی مارکت", name_ps: "احمدي مارکېټ", kind: mall, latitude: 31.61305, longitude: 65.70350 }
-  - { name_en: "Khairi Bazaar", name_fa: "خیری بازار", name_ps: "خیري بازار", kind: bazaar, latitude: 31.61247, longitude: 65.70400 }
 mazar:
   - { name_en: "Aria Market", name_fa: "مارکیت آریا", name_ps: "د آریا مارکېټ", kind: mall, latitude: 36.70878, longitude: 67.10370 }
   - { name_en: "Jawzjan Market", name_fa: "جوزجان مارکیت", name_ps: "د جوزجان مارکېټ", kind: mall, latitude: 36.70969, longitude: 67.11747 }
-  - { name_en: "Garan Market", name_fa: "مارکیت گران", name_ps: "ګران مارکېټ", kind: mall, latitude: 36.70979, longitude: 67.11788 }
 jalalabad:
   - { name_en: "Shamshad Market", name_fa: "مارکیت شمشاد", name_ps: "شمشاد مارکېټ", kind: bazaar, latitude: 34.42418, longitude: 70.43171 }
   - { name_en: "Sultan Zai Plaza", name_fa: "سلطان زی پلازا", name_ps: "سلطانزي پلازه", kind: mall, latitude: 34.43030, longitude: 70.46125 }
