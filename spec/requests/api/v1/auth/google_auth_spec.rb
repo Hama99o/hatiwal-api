@@ -38,6 +38,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
       it "returns 422" do
         post "/api/v1/auth/google", params: {}, as: :json
         expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body["code"]).to eq("google_token_missing")
       end
     end
 
@@ -46,6 +47,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
         stub_google(id_token: "bad_token", status: 400, body: '{"error":"invalid_token"}')
         post "/api/v1/auth/google", params: { id_token: "bad_token" }, as: :json
         expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body["code"]).to eq("google_token_invalid")
       end
     end
 
@@ -64,6 +66,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
         stub_google(id_token: "unverified_token", body: unverified)
         post "/api/v1/auth/google", params: { id_token: "unverified_token" }, as: :json
         expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body["code"]).to eq("google_email_unverified")
       end
     end
 
@@ -73,6 +76,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
         stub_google(id_token: "no_email_token", body: no_email)
         post "/api/v1/auth/google", params: { id_token: "no_email_token" }, as: :json
         expect(response).to have_http_status(:unprocessable_entity)
+        expect(response.parsed_body["code"]).to eq("google_email_missing")
       end
     end
 
@@ -170,6 +174,51 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
       it "does NOT change the existing user's provider (preserves email login)" do
         post "/api/v1/auth/google", params: { id_token: "existing_user_token" }, as: :json
         expect(existing_user.reload.provider).to eq("email")
+      end
+    end
+
+    # PRE-HIJACKING (2026-10-11, same rule as Apple 4b883af): anyone can register
+    # someone else's address by email + password and simply never confirm it.
+    # When the real owner then signed in with Google (Google verified that
+    # address), they were signed into the squatter's account, and the squatter's
+    # password and sessions kept working on it. Signing in with Google to an
+    # UNCONFIRMED account now confirms it, replaces the password and ends every
+    # other session; a confirmed account is signed in as before.
+    context "with a valid token matching an UNCONFIRMED account (possibly a squatter's)" do
+      let!(:squatter) do
+        create(:user, email: google_email, password: "squatter-pass-1",
+                      password_confirmation: "squatter-pass-1", confirmed_at: nil)
+      end
+
+      before { stub_google(id_token: "squatted_token") }
+
+      it "signs in, but the squatter's password and sessions stop working" do
+        old_headers = auth_headers_for(squatter)
+        post "/api/v1/auth/google", params: { id_token: "squatted_token" }, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(squatter.reload.confirmed_at).to be_present
+
+        get "/api/v1/users/me", headers: old_headers
+        expect(response).to have_http_status(:unauthorized)
+
+        post "/api/v1/auth/sign_in", params: { email: google_email, password: "squatter-pass-1" }, as: :json
+        expect(response).to have_http_status(:unauthorized)
+      end
+    end
+
+    context "with a valid token matching a CONFIRMED email account" do
+      let!(:owner) { create(:user, :confirmed, email: google_email) }
+
+      before { stub_google(id_token: "confirmed_token") }
+
+      it "signs in and leaves the password and other sessions alone" do
+        old_headers = auth_headers_for(owner)
+        post "/api/v1/auth/google", params: { id_token: "confirmed_token" }, as: :json
+        expect(response).to have_http_status(:ok)
+
+        get "/api/v1/users/me", headers: old_headers
+        expect(response).to have_http_status(:ok)
+        expect(owner.reload.valid_password?("password123")).to be(true)
       end
     end
 
@@ -272,6 +321,7 @@ RSpec.describe "Api::V1::Auth::GoogleAuthController", type: :request do
       it "returns 401" do
         post "/api/v1/auth/google", params: { id_token: "wrong_aud_token" }, as: :json
         expect(response).to have_http_status(:unauthorized)
+        expect(response.parsed_body["code"]).to eq("google_token_invalid")
       end
     end
 

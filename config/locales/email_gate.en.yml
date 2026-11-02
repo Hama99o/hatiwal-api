@@ -1,0 +1,4 @@
+# Owner rule (1.1.6): a confirmed email before opening a shop or applying for Verified.
+en:
+  accounts:
+    email_unconfirmed: 'Confirm your email first: we sent you a link. You can send it again.'

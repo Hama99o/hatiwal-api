@@ -11,7 +11,14 @@ class SendMessagePushJob < ApplicationJob
     "offer" => "push.message.offer",
     "meetup_proposal" => "push.message.meetup",
     "image_message" => "push.message.image",
-    "document" => "push.message.document"
+    "document" => "push.message.document",
+    # Replies: their body is the answered offer / proposal (or a sender-language
+    # label from web) — never shown raw (d0 hunt 2026-10-09).
+    "offer_counter" => "push.message.offer_counter",
+    "offer_accepted" => "push.message.offer_accepted",
+    "offer_declined" => "push.message.offer_declined",
+    "meetup_accepted" => "push.message.meetup_accepted",
+    "meetup_declined" => "push.message.meetup_declined"
   }.freeze
 
   BODY_MAX = 120
@@ -24,12 +31,29 @@ class SendMessagePushJob < ApplicationJob
     sender = message.user
 
     # Only real participant-authored messages notify. Server :system messages
-    # (authored by a system user) are skipped.
-    return unless sender && [ conversation.buyer_id, conversation.seller_id ].include?(sender.id)
+    # (authored by a system user) are skipped. SHOP-3: a shop's team are
+    # participants too.
+    return unless sender && conversation.participant?(sender)
 
-    recipient = conversation.other_participant(sender)
-    return if recipient.nil?
-    if recipient.push_token.blank?
+    recipients(conversation, sender).each { |recipient| deliver(message, conversation, sender, recipient) }
+  end
+
+  private
+
+  # The buyer's message goes to the whole seller side (the seller and, SHOP-3,
+  # every member of the chat's shop); a seller-side message goes to the buyer.
+  def recipients(conversation, sender)
+    if conversation.buyer_id == sender.id
+      ids = conversation.seller_side_user_ids - [ sender.id ]
+      ids.size == 1 ? [ conversation.seller ] : User.where(id: ids).to_a
+    else
+      [ conversation.buyer ].compact
+    end
+  end
+
+  def deliver(message, conversation, sender, recipient)
+    token = recipient.live_push_token # nil: no token, or its session is gone (cleared)
+    if token.nil?
       # Normally silent: plenty of users have no token. But a Support reply is
       # an admin waiting on someone, and returning quietly made "can never be
       # notified" look identical to "notified". Half of the doubled silence in
@@ -43,17 +67,21 @@ class SendMessagePushJob < ApplicationJob
     return if recipient.blocked?(sender) || sender.blocked?(recipient)
 
     result = Notifications::ExpoPushService.deliver(
-      token: recipient.push_token,
-      title: title_for(sender, recipient),
+      token: token,
+      title: title_for(sender, recipient, conversation),
       body: preview_for(message, recipient),
-      data: { type: "message", conversationId: conversation.id, messageId: message.id }
+      # SHOP-1: `role` and `shopId` let the app switch "Selling as" to the shop
+      # the chat belongs to when the push is tapped. Additive — old apps ignore them.
+      data: { type: "message", conversationId: conversation.id, messageId: message.id,
+              role: recipient.id == conversation.buyer_id ? "buying" : "selling",
+              shopId: conversation.shop_id },
+      channel_id: recipient.chat_push_channel
     )
 
     # Expo reports the device is gone — drop the stale token so we stop retrying.
-    recipient.update_column(:push_token, nil) if result.error.to_s == "DeviceNotRegistered"
+    recipient.update_columns(push_token: nil, push_token_client: nil) if result.error.to_s == "DeviceNotRegistered"
   end
 
-  private
 
   # Localized to the RECIPIENT's language since the device renders this text
   # verbatim. Text messages show their actual content (already in the sender's
@@ -69,7 +97,11 @@ class SendMessagePushJob < ApplicationJob
   # stored name is English, though, and a push title is composed HERE and shown
   # by the OS verbatim — a client can't relabel it — so Support's title is
   # localized to the recipient like the body.
-  def title_for(sender, recipient)
+  def title_for(sender, recipient, conversation)
+    # SHOP-1/2: the shop side writes AS the shop — the buyer sees the shop's
+    # name, never the owner's personal one.
+    shop = conversation.shop_face
+    return shop.name if shop && conversation.written_as_shop?(sender.id)
     return sender.full_name unless sender.support_account?
 
     I18n.with_locale(recipient_locale(recipient)) { I18n.t("push.support.title") }

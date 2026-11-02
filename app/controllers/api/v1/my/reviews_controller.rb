@@ -12,7 +12,10 @@ class Api::V1::My::ReviewsController < Api::V1::BaseController
     authorize :review, :pending?
 
     already_reviewed = Review.where(reviewer_id: current_user.id).select(:transaction_id)
-    sales = policy_scope(Transaction).sold
+    # Only sales the caller is a PARTY to: the transactions scope also holds
+    # sales a shop member recorded (SHOP-3), but only the buyer and the seller
+    # may review (ReviewPolicy#create?) — staff were prompted and 403'd forever.
+    sales = policy_scope(Transaction).for_user(current_user).sold
                                      .with_counterparty
                                      .where.not(id: already_reviewed)
                                      .ordered

@@ -20,16 +20,100 @@ require "rails_helper"
 # Re-record ONLY when that app version is no longer in use:
 #   RECORD_API_CONTRACT=1 bundle exec rspec spec/requests/api/v1/api_contract_v1_0_4_spec.rb
 RSpec.describe "API contract served to app v1.0.4", type: :request do
+  include ActiveJob::TestHelper
+
   include ActiveSupport::Testing::TimeHelpers
 
   FIXTURE = Rails.root.join("spec/fixtures/api_contract/v1_0_4.json")
 
   # Additive keys since the recording, each with the reason it is safe.
   ALLOWED_ADDITIONS = {
+    # Stays (docs/STAYS_DESIGN.md §2.9). v1.0.4 ignores unknown keys: a stay
+    # shows as a plain listing with its price. For every item these are
+    # "item" / null / {} — nothing an old client can misread.
+    "listings[].category.kind" => "stays: category kind (\"item\" for every pre-stays category)",
+    "listing.category.kind" => "stays: category kind",
+    "conversation.listing.category.kind" => "stays: category kind",
+    "listings[].price_unit" => "stays: price unit (null = a total price, every item)",
+    "listing.price_unit" => "stays: price unit",
+    "conversations[].listing.price_unit" => "stays: price unit in the inbox row",
+    "conversation.listing.price_unit" => "stays: price unit in the thread header",
+    "listings[].details" => "stays: a room's facts ({} for every item)",
+    "listing.details" => "stays: a room's facts",
     # Support messaging. Always "listing" for every pre-existing conversation.
     "conversations[].kind" => "support messaging",
-    "conversation.kind" => "support messaging"
+    "conversation.kind" => "support messaging",
+    # SHOP-1. Always null for a listing that is not in a shop — i.e. every row
+    # an old client can meet until someone opens a shop; it ignores the key.
+    "conversations[].shop" => "SHOP-1 shop block (null = personal)",
+    "conversation.shop" => "SHOP-1 shop block (null = personal)",
+    "conversations[].closed_shop" => "closed-shop-face: {name, closed_at} once a product chat's shop has closed (null otherwise)",
+    "conversation.closed_shop" => "closed-shop-face: {name, closed_at} once a product chat's shop has closed (null otherwise)",
+    "listings[].shop" => "SHOP-1 shop block (null = personal)",
+    "listing.shop" => "SHOP-1 shop block (null = personal)",
+    # SHOP-2. false on every chat an old client can meet unless a shop
+    # messaged it; listing_deleted stays true on a shop chat for exactly them.
+    "conversations[].shop_chat" => "SHOP-2 Message-shop chat flag",
+    "conversation.shop_chat" => "SHOP-2 Message-shop chat flag",
+    # Item 5 (Move to shop). Null on every message except the server's
+    # "listing moved" :system notice. An old app ignores it: every build since
+    # 2026-06-12 (before v1.0.4) renders a :system message as its centered
+    # `body`, and that body is a full sentence in the BUYER's language — see
+    # "an old app reads the listing-moved notice from its body" below.
+    "messages[].notice" => "item 5 system notice (null on every other message)",
+    # The same notice on the inbox row (1.1.6): null on every row whose last
+    # message is not a server notice. An old app shows `last_message_body`.
+    "conversations[].last_message_notice" => "item 5 notice on the inbox row (null otherwise)",
+    # Light image variants (owner, 2026-10-09). Beside the unchanged originals
+    # (image_urls / avatar_url), which an old app keeps using.
+    "listings[].bumped_at" => "OFFLINE §4.8: the feed's newest order, so the app sorts its cached listings like the server",
+    "messages[].client_uuid" => "OFFLINE §10.1: the phone's own id for a message it queued; null from every 1.1.x app",
+    "listings[].image_thumb_urls" => "photo variants: 480 px WebP, one per image_urls entry",
+    "listings[].image_medium_urls" => "photo variants: 1200 px WebP, one per image_urls entry",
+    "listings[].seller.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    "conversations[].other_participant.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    "messages[].sender.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    "listing.image_thumb_urls" => "photo variants: 480 px WebP, one per image_urls entry",
+    "listing.image_medium_urls" => "photo variants: 1200 px WebP, one per image_urls entry",
+    "listing.seller.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    "conversation.buyer.avatar_thumb_url" => "photo variants: 256 px avatar",
+    "conversation.seller.avatar_thumb_url" => "photo variants: 256 px avatar",
+    "conversation.other_participant.avatar_thumb_url" => "photo variants: 256 px avatar / shop logo",
+    # Owner, 2026-10-12: a Support notice's button. Null on every other message;
+    # the notice itself stays a plain :text message whose body is the whole
+    # sentence, so an old app shows exactly what it showed before (see "an old
+    # app reads a tappable Support notice from its body" below).
+    "messages[].action" => "Support notice button (null on every other message)",
+    # e5 run-312 (1.1.7): the public "off the market" flag on :list, so Saved
+    # can label an expired listing. A boolean an old app ignores; no date.
+    "listings[].expired" => "Saved expired label (boolean; buyers never get the date)",
+    # VID (1.1.9, docs/LISTING_VIDEO.md): one optional video per listing. Cards
+    # get a boolean, the detail its URLs + length; all false/nil without a
+    # video. v1.0.4 ignores them and shows the photos exactly as before.
+    "listings[].has_video" => "VID card ▶ (boolean)",
+    "listing.has_video" => "VID (boolean)",
+    "listing.video_url" => "VID video (null without one)",
+    "listing.video_poster_url" => "VID poster frame (null without one)",
+    "listing.video_duration_s" => "VID length in seconds (null without one)"
   }.freeze
+
+  # Type changes made on purpose, each with why it is safe for v1.0.4.
+  # Money was a BigDecimal STRING ("560000.0"); it is a JSON number now
+  # (hotfix-price-number, 2026-10-27): mobile 1.1.7+ shows no price for a
+  # string (P0). Every client formats a number fine — v1.0.4 passes it to
+  # Intl.NumberFormat, which takes a number; the web uses Number(...).
+  MONEY_TO_NUMBER = { from: %w[string], to: %w[float], reason: "money as a JSON number (P0 price fix)" }.freeze
+  ALLOWED_TYPE_CHANGES = {
+    "conversations[].listing.price" => MONEY_TO_NUMBER,
+    "conversation.listing.price" => MONEY_TO_NUMBER,
+    "listings[].price" => MONEY_TO_NUMBER,
+    "listing.price" => MONEY_TO_NUMBER
+  }.freeze
+
+  def allowed_type_change?(path, before, after)
+    rule = ALLOWED_TYPE_CHANGES[path]
+    rule && before == rule[:from] && after == rule[:to]
+  end
 
   # Values are irrelevant; their JSON TYPE is the contract.
   def json_type(value)
@@ -164,7 +248,9 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
         a = after["shape"][path]
         next problems << "#{name}: #{path} REMOVED" unless a
 
-        problems << "#{name}: #{path} type #{b['types']} -> #{a['types']}" if b["types"] != a["types"]
+        if b["types"] != a["types"] && !allowed_type_change?(path, b["types"], a["types"])
+          problems << "#{name}: #{path} type #{b['types']} -> #{a['types']}"
+        end
         problems << "#{name}: #{path} count #{b['count']} -> #{a['count']}" if b["count"] != a["count"]
         if b["keys"] && (a["keys"] & b["keys"]) != b["keys"]
           problems << "#{name}: #{path} key order #{b['keys']} -> #{a['keys'] & b['keys']}"
@@ -177,5 +263,48 @@ RSpec.describe "API contract served to app v1.0.4", type: :request do
     end
 
     expect(problems).to be_empty, "v1.0.4 contract broken:\n  #{problems.join("\n  ")}"
+  end
+
+  # Item 5: a moved listing's old chat gets a :system message. v1.0.4 ignores
+  # `notice` and shows `body`, so the body must be the whole, localized sentence
+  # — never empty, never a token.
+  it "an old app reads the listing-moved notice from its body" do
+    seller = create(:user)
+    buyer = create(:user, preferred_language: "fa")
+    shop = create(:shop, owner: seller, name: "Safi Mobile")
+    listing = create(:listing, :active, user: seller)
+    chat = create(:conversation, listing: listing, buyer: buyer)
+    Listings::MoveService.new(listing: listing, actor: seller, shop_id: shop.id).call
+
+    get "/api/v1/conversations/#{chat.id}/messages", headers: auth_headers_for(buyer)
+    notice = JSON.parse(response.body)["messages"].find { |m| m["kind"] == "system" }
+
+    expect(notice["body"]).to eq(I18n.t("listing_move.notice", locale: :fa, name: "Safi Mobile"))
+    expect(notice["body"]).to include("Safi Mobile")
+    expect(notice["deleted"]).to be(false)
+    expect(notice["notice"]).to include("notice" => "listing_moved")
+  end
+
+  # Owner, 2026-10-12: tappable Support notices. v1.0.4 ignores `action`; the
+  # notice is still a :text message from Support whose body is the whole
+  # sentence in the person's language, never a token or a bare label.
+  it "an old app reads a tappable Support notice from its body" do
+    allow(ENV).to receive(:fetch).and_call_original
+    allow(ENV).to receive(:fetch).with("SUPPORT_ADMIN_INITIATE", "false").and_return("true")
+    owner = create(:user, :confirmed, firstname: "Tamana", lastname: "Owner")
+    shop = create(:shop, owner: owner, name: "Kabul Cosmetics")
+    invitee = create(:user, :confirmed, firstname: "Gul", email: "gul@hatiwal.test", preferred_language: "ps")
+    shop.invite!(by: owner, email: "gul@hatiwal.test")
+    perform_enqueued_jobs(only: SupportNoticeJob)
+
+    thread = Conversation.person_support.find_by!(buyer_id: invitee.id)
+    get "/api/v1/conversations/#{thread.id}/messages", headers: auth_headers_for(invitee)
+    notice = JSON.parse(response.body)["messages"].sole
+
+    expect(notice["kind"]).to eq("text")
+    expect(notice["body"]).to eq(I18n.t("support.notices.shop_invite_received", locale: :ps, name: "Gul",
+                                        inviter: "Tamana Owner", shop: "Kabul Cosmetics",
+                                        role: I18n.t("support.team_roles.staff", locale: :ps)))
+    expect(notice["action"]).to include("type" => "open_invite")
   end
 end

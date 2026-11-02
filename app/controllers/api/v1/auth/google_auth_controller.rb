@@ -24,19 +24,26 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
   throttle to: 20, within: 1.hour, by: :ip, only: :create
 
   def create
+    # Every refusal carries a `code` the apps translate (1.1.7, like /auth/apple):
+    # google_token_missing 422, google_token_invalid 401,
+    # google_email_unverified 401, google_email_missing 422.
     id_token = params[:id_token].presence
-    return render json: { error: "id_token is required" }, status: :unprocessable_entity if id_token.nil?
+    return render_coded_error("id_token is required", code: :google_token_missing, status: :unprocessable_entity) if id_token.nil?
 
     google_payload = verify_google_id_token(id_token)
-    return render json: { error: "Invalid or expired Google token" }, status: :unauthorized unless google_payload
+    return render_coded_error("Invalid or expired Google token", code: :google_token_invalid, status: :unauthorized) unless google_payload
 
     # Google should provide a verified email address
     unless google_payload[:email_verified].to_s == "true"
-      return render json: { error: "Google account email is not verified" }, status: :unauthorized
+      return render_coded_error("Google account email is not verified", code: :google_email_unverified, status: :unauthorized)
+    end
+
+    if google_payload[:email].blank?
+      return render_coded_error("Google did not share an email address", code: :google_email_missing, status: :unprocessable_entity)
     end
 
     user = find_or_create_user(google_payload)
-    return render json: { errors: user.errors.full_messages }, status: :unprocessable_entity unless user.persisted?
+    return render_unprocessable_entity(user) unless user.persisted?
 
     # Block suspended/banned/deleted accounts — same guard as email login
     unless user.active_for_authentication?
@@ -54,6 +61,13 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
       data: UserSerializer.render_as_hash(user, view: :me),
       **tokens
     }, status: :ok
+  end
+
+  # Every Google client id whose tokens this API accepts (see valid_audience?).
+  def self.allowed_audiences
+    creds = Rails.application.credentials
+    listed = Array(creds[:google_client_ids]) + ENV["GOOGLE_CLIENT_IDS"].to_s.split(",")
+    ([ creds[:google_client_id], creds[:google_ios_client_id] ] + listed).map { |id| id.to_s.strip }.compact_blank.uniq
   end
 
   private
@@ -79,10 +93,13 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
   # attacker could otherwise mint a token from their own OAuth app and sign in
   # as (or auto-create) any account matching the token's email. The permissive
   # branch survives only for development/test convenience.
+  #
+  # The accepted ids are a LIST (the switch to the dedicated hatiwal-ece6b project, 2026-10-29): the old single ids
+  # (google_client_id — also the admin server-side flow's client — and google_ios_client_id) plus
+  # `google_client_ids` in credentials and/or ENV GOOGLE_CLIENT_IDS (comma-separated). Android tokens carry the
+  # web client as their audience. Remove an old id only once nothing signs in with it any more.
   def valid_audience?(aud)
-    web = Rails.application.credentials[:google_client_id]
-    ios = Rails.application.credentials[:google_ios_client_id]
-    allowed = [ web, ios ].compact_blank
+    allowed = self.class.allowed_audiences
 
     if allowed.empty?
       Rails.logger.error("Google auth: google_client_id missing from credentials — rejecting token") if Rails.env.production?
@@ -93,12 +110,25 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
   end
 
   def find_or_create_user(payload)
-    email = payload[:email]&.strip&.downcase
-    return User.new.tap { |u| u.errors.add(:email, "not provided by Google") } if email.blank?
-
+    email = payload[:email].strip.downcase
     # If the user already has an account (any provider), sign them in directly
     # without changing their provider — they keep their email+password login too.
-    User.find_by(email: email) || create_user_from_google(payload, email)
+    user = User.find_by(email: email)
+    return create_user_from_google(payload, email) if user.nil?
+
+    claim_unconfirmed_account!(user) unless user.confirmed?
+    user
+  end
+
+  # PRE-HIJACKING (2026-10-11, same rule as Sign in with Apple): an UNCONFIRMED
+  # account with this address may be a squatter's — anyone can register an
+  # address they don't own and never confirm it. Google has just proven the
+  # address belongs to THIS person, so the account becomes theirs: confirmed, a
+  # new random password (the squatter's stops working), every other session ended.
+  def claim_unconfirmed_account!(user)
+    new_password = SecureRandom.hex(24)
+    user.update!(confirmed_at: Time.current, password: new_password,
+                 password_confirmation: new_password, tokens: {})
   end
 
   def create_user_from_google(payload, email)
@@ -114,10 +144,14 @@ class Api::V1::Auth::GoogleAuthController < ApplicationController
       # above), so the address is already proven — asking the user to confirm an
       # email they never typed would be noise, and would leave every Google
       # account permanently "unconfirmed" in the admin view.
-      confirmed_at: Time.current
+      confirmed_at: Time.current,
+      # The app's language, else the column default ("ps" put English users in Pashto, 2026-10-29).
+      **User.signup_language_attrs(params[:preferred_language])
     )
     # Only a NEW account: a returning Google user is found above and never gets here.
     WelcomeSupportMessageJob.enqueue_for(user)
+    # Its Google photo as the avatar, in the background (owner, 2026-10-29).
+    GoogleAvatarImportJob.enqueue_for(user, payload[:picture])
     user
   end
 

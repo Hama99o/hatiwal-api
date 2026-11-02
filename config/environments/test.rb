@@ -39,6 +39,9 @@ Rails.application.configure do
   # Set host to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "example.com" }
 
+  # Prohibited-item flag emails to admins: off in tests (specs switch it on).
+  config.x.flag_emails_enabled = false
+
   # Print deprecation notices to the stderr.
   config.active_support.deprecation = :stderr
 
@@ -58,4 +61,9 @@ Rails.application.configure do
   # In api_only mode sessions are stripped, so we add it back for tests.
   config.session_store :cookie_store, key: "_hatiwal_test_session"
   config.middleware.use ActionDispatch::Session::CookieStore, key: "_hatiwal_test_session"
+
+  # Search by image is off for the suite (no embed job for every photo a
+  # factory attaches); its own specs switch it on with the :image_search tag
+  # (spec/support/image_search.rb).
+  config.x.image_search_enabled = false
 end

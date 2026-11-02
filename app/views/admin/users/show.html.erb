@@ -10,7 +10,7 @@
   active_count = user.active_warnings_count
   threshold = User::WARNING_BLOCK_THRESHOLD
   outreaches = user.admin_outreaches.includes(:admin_email, :admin_user).recent.limit(10)
-  support_thread = Conversation.kind_support.find_by(buyer_id: user.id)
+  support_thread = Conversation.person_support.find_by(buyer_id: user.id)
   reports = user.reports_against
   blocked = user.blocked_users
   blocked_by = user.blocking_users
@@ -20,6 +20,11 @@
   <span class="hw-badges">
     <span class="hw-badge <%= user.account_blocked? ? 'hw-badge--danger' : 'hw-badge--success' %>"><%= user.status.to_s.humanize %></span>
     <% if user.verified? %><span class="hw-badge hw-badge--brand">Verified</span><% end %>
+    <% if user.email_confirmed? %>
+      <span class="hw-badge hw-badge--success" id="email-confirmed-badge" title="Email confirmed <%= l(user.confirmed_at, format: :short) %>">Email confirmed</span>
+    <% else %>
+      <span class="hw-badge hw-badge--warning" id="email-confirmed-badge">Email not confirmed</span>
+    <% end %>
     <% if user.verification_requests.requested.exists? %><span class="hw-badge hw-badge--warning">Verification waiting</span><% end %>
     <% if user.seller_mode? %><span class="hw-badge hw-badge--gold">Seller</span><% end %>
     <% if active_count.positive? %><span class="hw-badge hw-badge--warning"><%= active_count %>/<%= threshold %> warnings</span><% end %>
@@ -38,6 +43,18 @@
         <%= link_to "Open support conversation", admin_support_conversation_path(support_thread), class: "button button--alt" %>
       <% end %>
     </div>
+    <%# Owner, 2026-10-08: confirm the email by hand (unlocks shops + verification at once). %>
+    <p class="hw-kv" id="email-confirmation">
+      <span>Email confirmed: <%= user.email_confirmed? ? l(user.confirmed_at, format: :short) : "no" %></span>
+      <% if user.unconfirmed_email.present? %><span dir="auto">Pending change to <%= user.unconfirmed_email %> (dropped if you confirm now)</span><% end %>
+    </p>
+    <% unless user.email_confirmed? && user.unconfirmed_email.blank? %>
+      <div class="hw-actions">
+        <%= button_to "Confirm email now", confirm_email_admin_user_path(user),
+              method: :patch, id: "confirm-email-now", class: "button",
+              data: { turbo: false }, form: { data: { confirm: "Mark #{user.email} as confirmed?" } } %>
+      </div>
+    <% end %>
     <p class="hw-kv">
       <span>Email: <%= user.emailable? ? "available" : "not available (#{user.email_refusal_reason})" %></span>
       <span>In-app: <%= Conversation.admin_can_message?(user) ? "available" : "not available (#{Conversation.admin_message_refusal(user)})" %></span>
@@ -83,7 +100,7 @@
       <p class="hw-panel__text hw-panel__text--muted">Remove the badge, with a reason sent to them in their language.</p>
       <%= render "admin/verification_requests/reason_form", url: revoke_badge_admin_verification_requests_path(user_id: user.id),
                  reasons: VerificationRequest::REVOKE_REASONS, submit: "Revoke badge", form_id: "revoke-badge",
-                 confirm: "Remove the Verified badge from #{user.full_name}?", method: :post %>
+                 confirm: "Remove the Verified badge from #{user.full_name}?", method: :post, recipient: user, prefix: "revoke-badge" %>
     <% end %>
   </section>
 
@@ -106,27 +123,7 @@
     <% end %>
 
     <% if warnings.any? %>
-      <div class="hw-table-wrap">
-        <table class="hw-table">
-          <thead><tr><th>Category</th><th>Reason</th><th>Issued</th><th>Status</th></tr></thead>
-          <tbody>
-            <% warnings.each do |w| %>
-              <tr>
-                <td class="hw-nowrap"><%= w.category.to_s.humanize %></td>
-                <td dir="auto"><%= w.reason %></td>
-                <td class="hw-nowrap"><%= w.created_at.strftime("%Y-%m-%d") %></td>
-                <td>
-                  <% if w.active? %>
-                    <span class="hw-badge hw-badge--warning">active → expires <%= w.expires_at.strftime("%Y-%m-%d") %></span>
-                  <% else %>
-                    <span class="hw-badge hw-badge--plain">expired</span>
-                  <% end %>
-                </td>
-              </tr>
-            <% end %>
-          </tbody>
-        </table>
-      </div>
+      <%= render "admin/user_warnings/table", warnings: warnings %>
     <% else %>
       <p class="hw-empty">No warnings yet.</p>
     <% end %>
@@ -168,6 +165,21 @@
         <% end %>
       </div>
     </div>
+  </section>
+
+  <%# SHOP-1 — the shops this user owns or works in. %>
+  <% memberships = user.shop_members.includes(:shop) %>
+  <section id="user-shops" class="hw-panel">
+    <div class="hw-panel__head"><h2 class="hw-panel__title">Shops (<%= memberships.size %>)</h2></div>
+    <% if memberships.any? %>
+      <ul class="hw-list">
+        <% memberships.each do |m| %>
+          <li dir="auto"><%= link_to m.shop.name, admin_shop_path(m.shop) %> <span class="hw-text-muted">· <%= m.role %> · <%= m.shop.status %><%= " · verified" if m.shop.verified? %></span></li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="hw-empty">No shop.</p>
+    <% end %>
   </section>
 
   <section class="hw-panel">

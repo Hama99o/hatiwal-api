@@ -1,7 +1,7 @@
 FactoryBot.define do
   factory :report do
     association :reporter,   factory: :user
-    association :reportable, factory: :listing
+    association :reportable, factory: %i[listing active]
     reason      { :spam }
     status      { :pending }
     description { "This listing looks suspicious." }

@@ -1,0 +1,387 @@
+require "swagger_helper"
+
+# SHOP-1 × VER-1 — a shop applies for "Verified shop" through the same
+# verification requests as a person (hatiwal-mobile/docs/SHOPS.md, "Verified shops").
+RSpec.describe "Shop verification", type: :request do
+  let(:shop)    { create(:shop, :verification_eligible) }
+  let(:owner)   { shop.owner }
+  let(:headers) { auth_headers_for(owner) }
+  let(:image)   { Rack::Test::UploadedFile.new(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg") }
+  let(:apply_params) do
+    { subject: "shop:#{shop.id}",
+      verification_request: { document_type: "e_tazkira", name_on_document: owner.full_name, document_number: "1234564821",
+                              front: image, back: image, selfie: image, proof: image } }
+  end
+
+  path "/api/v1/verification_requests" do
+    post "apply for Verified shop (subject=shop:<id>)" do
+      tags "Shops"
+      description "A shop owner or manager applies with EXACTLY the person's form, filled for the owner (e-Tazkira " \
+                  "front + back, a selfie holding it, the name and number on it) plus ONE required proof of business " \
+                  "(proof: licence, rental contract, tax paper…). No phone, no shop-front photo."
+      consumes "multipart/form-data"
+      produces "application/json"
+      security [ { bearer: [] } ]
+      parameter name: :"access-token", in: :header, type: :string, required: true
+      parameter name: :client,         in: :header, type: :string, required: true
+      parameter name: :uid,            in: :header, type: :string, required: true
+      parameter name: :subject, in: :formData, type: :string, example: "shop:12"
+      parameter name: :verification_request, in: :formData, schema: {
+        type: :object,
+        properties: {
+          document_type: { type: :string, enum: VerificationRequest::SHOP_DOCUMENT_TYPES },
+          name_on_document: { type: :string, description: "the owner's name as on the e-Tazkira" },
+          document_number: { type: :string, description: "the owner's e-Tazkira number" },
+          front: { type: :string, format: :binary, description: "the owner's e-Tazkira, front" },
+          back: { type: :string, format: :binary, description: "the owner's e-Tazkira, back" },
+          selfie: { type: :string, format: :binary, description: "the owner holding the e-Tazkira" },
+          proof: { type: :string, format: :binary, description: "proof of business: licence, rental contract, tax paper…" }
+        },
+        required: %w[document_type name_on_document document_number front back selfie proof]
+      }
+      let(:"access-token") { headers["access-token"] }
+      let(:client)         { headers["client"] }
+      let(:uid)            { headers["uid"] }
+
+      response "201", "sent; the status card is the shop's" do
+        let(:subject) { "shop:#{shop.id}" }
+        let(:verification_request) { apply_params[:verification_request] }
+
+        run_test! do
+          expect(shop.verification_requests.requested.count).to eq(1)
+          expect(JSON.parse(response.body)["verification_status"]["status"]).to eq("requested")
+        end
+      end
+    end
+  end
+
+  def apply(as: headers, params: apply_params)
+    post "/api/v1/verification_requests", params: params, headers: as
+  end
+
+  it "refuses someone who does not manage the shop" do
+    apply(as: auth_headers_for(create(:user)))
+    expect(response).to have_http_status(:forbidden)
+  end
+
+  it "says what is missing for a shop without a logo or products" do
+    bare = create(:shop, owner: create(:user, :confirmed))
+    apply(as: auth_headers_for(bare.owner), params: apply_params.merge(subject: "shop:#{bare.id}"))
+    expect(response).to have_http_status(:unprocessable_entity)
+    expect(response.body).to include("logo").and include("live_product")
+  end
+
+  it "needs the whole person's form AND the proof; no phone is asked" do
+    apply(params: apply_params.merge(verification_request: { document_type: "passport" }))
+    expect(response).to have_http_status(:unprocessable_entity)
+    %i[selfie proof name_on_document].each do |missing|
+      apply(params: apply_params.merge(verification_request: apply_params[:verification_request].except(missing)))
+      expect(response).to have_http_status(:unprocessable_entity), missing.to_s
+    end
+    apply
+    expect(response).to have_http_status(:created)
+    expect(shop.verification_requests.last).to have_attributes(phone: nil)
+  end
+
+  it "reads the shop's status card" do
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: headers
+    expect(JSON.parse(response.body)["verification_status"]).to include("status" => "none", "missing" => [])
+  end
+
+  it "rejects an unknown subject" do
+    get "/api/v1/verification_requests/current", params: { subject: "shop:0" }, headers: headers
+    expect(response).to have_http_status(:unprocessable_entity)
+  end
+
+  it "never puts a document in the response" do
+    apply
+    expect(response.body).not_to match(/front|back|blob|rails\/active_storage/i)
+  end
+end
+
+RSpec.describe VerificationRequest, "for a shop", type: :model do
+  include ActiveJob::TestHelper
+
+  let(:admin) { create(:admin_user) }
+  let(:request) { create(:shop_verification_request) }
+  let(:shop) { request.subject }
+
+  it "approving verifies the shop (not the owner) and tells the owner" do
+    expect { request.approve!(admin: admin, checklist: { "proof_valid" => "1" }) }
+      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_verified", shop.id)
+    expect(shop.reload).to have_attributes(verified_by_id: admin.id)
+    expect(shop.verified?).to be(true)
+    expect(shop.owner.reload.verified).to be(false)
+    expect(request.reload.checklist).to include("proof_valid" => true, "selfie_matches" => false)
+    expect(request.checklist.keys).not_to include("phone_works", "shop_real")
+  end
+
+  it "rejecting and revoking tell the owner too" do
+    expect { request.reject!(admin: admin, reason_code: "proof_not_accepted") }
+      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_verification_rejected", shop.id)
+    again = create(:shop_verification_request, shop: shop)
+    again.approve!(admin: admin)
+    expect { again.revoke!(admin: admin, reason_code: "policy_violation") }
+      .to have_enqueued_job(SupportNoticeJob).with(shop.owner_id, "shop_badge_removed", shop.id)
+    expect(shop.reload.verified?).to be(false)
+  end
+
+  # Owner decision, 2026-10-08: once verified, a shop stays verified; editing
+  # never drops the badge and never rewrites the decision.
+  it "a name, address or any other change keeps the badge and the decided request" do
+    request.approve!(admin: admin)
+    decided_at = request.reload.decided_at
+    shop.reload.update!(name: "Another name", address_line: "Shahr-e Naw, Street 5", latitude: 34.53, longitude: 69.17,
+                        description: "New description")
+    expect(shop.reload.verified?).to be(true)
+    expect(request.reload).to have_attributes(status: "approved", decided_at: decided_at, decided_by_id: admin.id)
+    expect(VerificationStatus.new(shop.reload)).to have_attributes(state: "verified", name_changed?: false)
+  end
+
+  # Owner, 2026-10-08: once verified, editing never drops the badge, so the old
+  # "you changed the name or address, verify again" notice no longer exists.
+  it "there is no 'verify again after an edit' notice any more" do
+    expect { SupportNoticeJob.enqueue(shop.owner, :shop_reverify_needed, shop: shop) }.to raise_error(ArgumentError, /unknown support notice/)
+    expect(I18n.exists?("support.notices.shop_reverify_needed", :en)).to be(false)
+  end
+
+  it "sends the shop notices in the owner's language, all four locales" do
+    request.approve!(admin: admin)
+    User::SUPPORTED_LANGUAGES.each do |locale|
+      %w[shop_verified shop_verification_rejected shop_badge_removed shop_badge_applicant_left].each do |key|
+        text = I18n.t("support.notices.#{key}", locale: locale, shop: "Safi", reason: "x", name: "A", member: "M", raise: true)
+        expect(text).to include("Safi")
+      end
+    end
+  end
+end
+
+RSpec.describe "Admin — shop verification queue", type: :request do
+  include Devise::Test::IntegrationHelpers
+
+  let(:admin) { create(:admin_user) }
+  let!(:request_record) { create(:shop_verification_request) }
+
+  before { sign_in admin, scope: :admin_user }
+
+  it "lists shop requests under Shops and opens the shop card" do
+    get admin_verification_requests_path(kind: "shops")
+    expect(response.body).to include(request_record.subject.name)
+    get admin_verification_requests_path(kind: "users")
+    expect(response.body).not_to include(request_record.subject.name)
+
+    get admin_verification_request_path(request_record)
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include("verify-shop-facts", "Selfie with document", "Proof of business", "Pin is at the shop")
+    expect(response.body).not_to include("Shop front", "Called: they answered")
+  end
+
+  it "approves a shop from the card" do
+    patch approve_admin_verification_request_path(request_record), params: { checklist: { proof_valid: "1" } }
+    expect(request_record.subject.reload.verified?).to be(true)
+  end
+end
+
+RSpec.describe VerificationRequest, "shop document numbers", type: :model do
+  it "keeps the owner's e-Tazkira number normalized, so it matches the same ID on a person's request" do
+    shop_request = create(:shop_verification_request, document_number: "۱۲۳۴-۵۶۷۸۹")
+    expect(shop_request.document_number).to eq("123456789")
+    expect(shop_request.document_number_digest).to eq(described_class.digest_for("123456789"))
+  end
+
+  it "requires the owner's e-Tazkira number and a proof of business (owner, 2026-10-05)" do
+    shop = create(:shop, :verification_eligible)
+    expect(build(:shop_verification_request, shop: shop, document_number: nil)).not_to be_valid
+    no_proof = build(:shop_verification_request, shop: shop)
+    no_proof.proof.detach
+    expect(no_proof).not_to be_valid
+    expect(build(:shop_verification_request, shop: shop, document_type: :licence)).not_to be_valid
+    no_selfie = build(:shop_verification_request, shop: shop)
+    no_selfie.selfie.detach
+    expect(no_selfie).not_to be_valid
+  end
+
+  it "keeps a legacy shop_sign_not_visible decision valid, but no longer offers it" do
+    expect(VerificationRequest::REJECT_REASONS).not_to include("shop_sign_not_visible")
+    old = create(:shop_verification_request)
+    old.update_columns(status: VerificationRequest.statuses[:rejected], reason_code: "shop_sign_not_visible")
+    expect(old.reload).to be_valid
+    expect(old.reason_for(:en)).to eq("The shop sign is not visible")
+  end
+
+  it "has the proof_not_accepted reason in all four locales" do
+    User::SUPPORTED_LANGUAGES.each do |l|
+      expect(I18n.t("verification.reasons.proof_not_accepted", locale: l, raise: true)).to be_present
+    end
+  end
+end
+
+RSpec.describe "Shop edit after verification", type: :request do
+  include ActiveJob::TestHelper
+
+  let(:admin) { create(:admin_user) }
+  let(:verification) { create(:shop_verification_request) }
+  let(:shop) { verification.subject }
+  let(:headers) { auth_headers_for(shop.owner).merge("Content-Type" => "application/json") }
+
+  before { verification.approve!(admin: admin) }
+
+  it "a shop's card says when the photos of a decided request were deleted (request.files_purged)" do
+    rejected = create(:shop, :verification_eligible, owner: shop.owner)
+    request = create(:shop_verification_request, shop: rejected)
+    request.reject!(admin: admin, reason_code: "photo_not_clear")
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{rejected.id}" }, headers: headers
+    expect(JSON.parse(response.body).dig("verification_status", "request")).to include("files_purged" => false)
+
+    request.purge_files!
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{rejected.id}" }, headers: headers
+    expect(JSON.parse(response.body).dig("verification_status", "request")).to include("files_purged" => true, "files_count" => 0)
+  end
+
+  # Owner decision, 2026-10-08: renaming a verified shop applies at once and
+  # keeps the badge; nothing is queued (no notice, no request).
+  it "the owner renaming a verified shop keeps the badge; nothing is queued" do
+    expect do
+      patch "/api/v1/shops/#{shop.id}", params: { shop: { name: "Renamed", address_line: "Karte Seh, Street 3" } }.to_json,
+                                        headers: headers
+    end.not_to have_enqueued_job(SupportNoticeJob)
+    expect(response).to have_http_status(:ok)
+    expect(shop.reload).to have_attributes(name: "Renamed", address_line: "Karte Seh, Street 3")
+    expect(shop.verified?).to be(true)
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: headers
+    expect(JSON.parse(response.body)["verification_status"]).to include("status" => "verified", "name_changed" => false)
+  end
+end
+
+# Review 2026-10-08 (MEDIUM, privacy): every member got the OWNER's document
+# details on the shop's card. Only the one who may apply (the owner) gets the
+# name on the document, its last 4 digits and the rejection reason; the rest
+# of the team sees the state.
+RSpec.describe "Shop verification card: the owner's document stays the owner's", type: :request do
+  let(:admin) { create(:admin_user) }
+  let(:shop) { create(:shop, :verification_eligible) }
+  let(:staff) { create(:user) }
+  let(:manager) { create(:user) }
+
+  before do
+    shop.shop_members.create!(user: staff, role: :staff)
+    shop.shop_members.create!(user: manager, role: :manager)
+    create(:shop_verification_request, shop: shop).reject!(admin: admin, reason_code: "photo_not_clear")
+  end
+
+  def card_for(user)
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: auth_headers_for(user)
+    JSON.parse(response.body)["verification_status"]
+  end
+
+  it "the owner sees the name on the document, its last 4 digits and the reason" do
+    card = card_for(shop.owner)
+    expect(card["status"]).to eq("rejected")
+    expect(card["request"]["name_on_document"]).to be_present
+    expect(card["request"]["document_last4"]).to be_present
+    expect(card["reason"]).to be_present
+    expect(card["request"]["reason_code"]).to eq("photo_not_clear")
+  end
+
+  it "staff and managers see the state only: no name, no digits, no reason" do
+    [ staff, manager ].each do |member|
+      card = card_for(member)
+      expect(response).to have_http_status(:ok)
+      expect(card["status"]).to eq("rejected")
+      expect(card["request"].values_at("name_on_document", "document_last4", "reason_code")).to eq([ nil, nil, nil ])
+      expect(card["reason"]).to be_nil
+    end
+  end
+end
+
+# Owner, 2026-10-08: the owner OR a manager applies, with their own e-Tazkira;
+# staff get a coded reason in their language (a backstop: the apps don't show
+# them the card). The document details go to the APPLICANT only. The badge
+# vouches for the applicant: if they stop being the owner or a manager, it
+# comes off and the shop's Support thread says so.
+RSpec.describe "Who applies for a shop's badge, and who it vouches for", type: :request do
+  include ActiveJob::TestHelper
+
+  let(:admin) { create(:admin_user) }
+  let(:shop) { create(:shop, :verification_eligible) }
+  let(:owner) { shop.owner }
+  let(:manager) { create(:user, :confirmed, firstname: "Mina", lastname: "Manager") }
+  let(:staff) { create(:user, :confirmed, preferred_language: "ps") }
+  let(:image) { Rack::Test::UploadedFile.new(Rails.root.join("spec/fixtures/files/test_image.jpg"), "image/jpeg") }
+
+  before do
+    shop.shop_members.create!(user: manager, role: :manager)
+    shop.shop_members.create!(user: staff, role: :staff)
+  end
+
+  def apply_as(user)
+    post "/api/v1/verification_requests", headers: auth_headers_for(user), params: {
+      subject: "shop:#{shop.id}",
+      verification_request: { document_type: "e_tazkira", name_on_document: user.full_name, document_number: "1234564821",
+                              front: image, back: image, selfie: image, proof: image }
+    }
+  end
+
+  def card_for(user)
+    get "/api/v1/verification_requests/current", params: { subject: "shop:#{shop.id}" }, headers: auth_headers_for(user)
+    JSON.parse(response.body)["verification_status"]
+  end
+
+  it "a manager applies (201), recorded as the applicant; the owner too" do
+    apply_as(manager)
+    expect(response).to have_http_status(:created)
+    expect(shop.verification_requests.last.requested_by).to eq(manager)
+  end
+
+  it "staff: a coded 403 in their language; can_apply false for staff, true for owner and manager" do
+    apply_as(staff)
+    expect(response).to have_http_status(:forbidden)
+    body = JSON.parse(response.body)
+    expect(body["code"]).to eq("verification_owner_only")
+    expect(body["error"]).to eq(I18n.t("verification.errors.owner_only", locale: :ps))
+    expect(card_for(staff)["can_apply"]).to be(false)
+    expect(card_for(manager)["can_apply"]).to be(true)
+    expect(card_for(owner)["can_apply"]).to be(true)
+  end
+
+  it "the document details go to the applicant only — not the owner, not staff" do
+    apply_as(manager)
+    shop.verification_requests.last.reject!(admin: admin, reason_code: "photo_not_clear")
+    expect(card_for(manager)["request"]["name_on_document"]).to eq("Mina Manager")
+    expect(card_for(manager)["reason"]).to be_present
+    [ owner, staff ].each do |other|
+      card = card_for(other)
+      expect(card["request"].values_at("name_on_document", "document_last4", "reason_code")).to eq([ nil, nil, nil ])
+      expect(card["reason"]).to be_nil
+    end
+  end
+
+  describe "the badge vouches for its applicant" do
+    before do
+      allow(ENV).to receive(:fetch).and_call_original
+      allow(ENV).to receive(:fetch).with("SUPPORT_ADMIN_INITIATE", "false").and_return("true")
+      apply_as(manager)
+      shop.verification_requests.last.approve!(admin: admin)
+      expect(shop.reload.verified?).to be(true)
+    end
+
+    it "the applicant made Staff: the badge comes off; the owner is told in the shop thread" do
+      perform_enqueued_jobs(only: SupportNoticeJob) { shop.change_role!(manager, role: :staff, by: owner) }
+      expect(shop.reload.verified?).to be(false)
+      thread = Conversation.shop_support.find_by(shop_id: shop.id)
+      notice = thread.messages.order(:id).to_a.find { |m| m.body.include?("Mina Manager") }
+      expect(notice).to be_present, thread.messages.pluck(:body).inspect
+      expect(notice.context).to include("action" => include("type" => "open_verification"))
+    end
+
+    it "the applicant leaves, or is removed: the badge comes off" do
+      shop.leave!(manager)
+      expect(shop.reload.verified?).to be(false)
+    end
+
+    it "someone else leaving keeps it" do
+      shop.leave!(staff)
+      expect(shop.reload.verified?).to be(true)
+    end
+  end
+end

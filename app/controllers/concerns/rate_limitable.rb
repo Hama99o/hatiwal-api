@@ -16,6 +16,8 @@
 # Choosing `by:`
 #   :user keys on the authenticated user, and is right for anything behind
 #   authentication — one abusive account cannot spend anyone else's quota.
+#   :email (hunt-2, 1.1.7) keys on the `email` param, for an endpoint that mails
+#   whoever it names (password reset): no IP limit protects the recipient.
 #   :ip is only for the endpoints that hand out the session in the first place,
 #   where there is no user yet. Keep IP limits GENEROUS: mobile users in
 #   Afghanistan sit behind carrier-grade NAT, so a whole city can share one
@@ -36,7 +38,7 @@ module RateLimitable
 
   class_methods do
     def throttle(to:, within:, by: :ip, **options)
-      raise ArgumentError, "throttle by: must be :ip or :user" unless [ :ip, :user ].include?(by)
+      raise ArgumentError, "throttle by: must be :ip, :user or :email" unless [ :ip, :user, :email ].include?(by)
 
       rate_limit(
         to:     to,
@@ -47,7 +49,10 @@ module RateLimitable
         # a counter.
         name:   "#{by}-#{to}-per-#{within.to_i}",
         by:     -> { rate_limit_key(by) },
-        with:   -> { render_too_many_requests },
+        # OFFLINE §8.3: the app's outbox waits this long before trying again.
+        # The window's full length — an upper bound (the counter is a fixed
+        # window that started at the first request, so it is over by then).
+        with:   -> { render_too_many_requests(retry_after: within) },
         **options
       )
     end
@@ -77,10 +82,16 @@ module RateLimitable
   def rate_limit_key(by)
     return "ip:#{request.remote_ip}" if by == :ip
 
+    if by == :email
+      email = params[:email].to_s.strip.downcase
+      return email.present? ? "email:#{email}" : "ip:#{request.remote_ip}"
+    end
+
     current_user ? "user:#{current_user.id}" : "ip:#{request.remote_ip}"
   end
 
-  def render_too_many_requests
+  def render_too_many_requests(retry_after:)
+    response.set_header("Retry-After", retry_after.to_i.to_s)
     render json: {
       error:   "rate_limited",
       message: "Too many requests. Please wait a moment and try again."

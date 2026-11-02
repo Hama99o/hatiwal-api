@@ -16,6 +16,32 @@ RSpec.describe User, type: :model do
     it { should have_many(:blocking_users).through(:blocks_as_blocked).source(:blocker) }
   end
 
+  # SHOP-3: a hard destroy (the QA seed's sign-up reset) of someone who accepted
+  # or sent a team invite must not trip the shop_invites / shop_members FKs.
+  describe "destroying a user with team history" do
+    let(:shop) { create(:shop) }
+
+    it "keeps an invite they accepted (accepted_by cleared) and the membership they invited (invited_by cleared)" do
+      newbie = create(:user)
+      accepted = create(:shop_invite, shop: shop)
+      accepted.accept!(newbie)
+      manager = create(:user).tap { |u| shop.shop_members.create!(user: u, role: :manager) }
+      invited = shop.shop_members.create!(user: create(:user), role: :staff, invited_by: manager)
+
+      expect { newbie.destroy! }.not_to raise_error
+      expect(accepted.reload.accepted_by_id).to be_nil
+      expect { manager.destroy! }.not_to raise_error
+      expect(invited.reload.invited_by_id).to be_nil
+    end
+
+    it "removes the invites they sent" do
+      manager = create(:user).tap { |u| shop.shop_members.create!(user: u, role: :manager) }
+      sent = create(:shop_invite, shop: shop, invited_by: manager)
+      manager.destroy!
+      expect(ShopInvite.exists?(sent.id)).to be(false)
+    end
+  end
+
   describe "validations" do
     it { should validate_presence_of(:firstname) }
     it { should validate_presence_of(:lastname) }

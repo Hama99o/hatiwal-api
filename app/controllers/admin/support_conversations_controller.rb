@@ -1,4 +1,5 @@
-# Support inbox: every user ⇄ Hatiwal Support thread, and a reply box.
+# Support inbox: every Hatiwal Support thread, a person's or (owner,
+# 2026-10-12) a shop's, and a reply box.
 #
 # Hand-built like DashboardController rather than an Administrate dashboard:
 # a support thread is a Conversation scoped to kind :support, and the screen
@@ -29,7 +30,7 @@ module Admin
       @total = threads.count
       # Waiting on us first, then most recent activity. In SQL, not Ruby, so the
       # order holds across pages rather than only within one.
-      @conversations = threads.order(awaiting_reply_first).ordered.includes(:buyer, :latest_message)
+      @conversations = threads.order(awaiting_reply_first).ordered.includes(:buyer, :latest_message, shop: :owner)
                               .page(params[:page]).per(PER_PAGE)
       @unread_counts = unread_counts_for(@conversations.map(&:id))
     end
@@ -37,15 +38,17 @@ module Admin
     def show
       # Opening the thread is reading it: the user's messages are now read by
       # Support (the same read_at the app shows as read receipts).
-      @conversation.messages.where(read_at: nil, user_id: @conversation.buyer_id)
+      @conversation.messages.where(read_at: nil).where(Conversation::NOT_FROM_SUPPORT_SQL)
                    .update_all(read_at: Time.current)
-      @messages = @conversation.messages.includes(:admin_user, attachment_attachment: :blob)
+      @messages = @conversation.messages.includes(:admin_user, :user, attachment_attachment: :blob)
                                .order(:created_at)
     end
 
     # Through Admin::SendMessage like every admin send, so thread replies land
     # in the same Messages history (source: support_inbox).
     def reply
+      return reply_to_shop if @conversation.shop_support?
+
       sender = Admin::SendMessage.reply(admin: current_admin_user, user: @conversation.buyer, body: params[:body])
       if sender.call
         log_admin_action("support_reply", target: @conversation)
@@ -72,8 +75,26 @@ module Admin
 
     def admin_initiate_enabled? = self.class.admin_initiate_enabled?
 
+    # A shop's own thread (owner, 2026-10-12): the reply goes to the whole team,
+    # written by the Support account and signed by the admin, with the usual
+    # broadcast + push. Admin::SendMessage is one person's history (AdminOutreach),
+    # so a shop's reply is audited here instead.
+    def reply_to_shop
+      body = params[:body].to_s.strip
+      message = @conversation.messages.new(user: @conversation.support_user, admin_user: current_admin_user, kind: :text, body: body)
+      if @conversation.open? && message.save
+        BroadcastMessageJob.perform_later(message.id)
+        SendMessagePushJob.perform_later(message.id)
+        log_admin_action("support_reply", target: @conversation)
+        redirect_to admin_support_conversation_path(@conversation), notice: "Reply sent to the shop's team."
+      else
+        reason = @conversation.open? ? message.errors.full_messages.to_sentence : "the conversation is closed"
+        redirect_to admin_support_conversation_path(@conversation), alert: "Reply not sent: #{reason}"
+      end
+    end
+
     def set_conversation
-      @conversation = Conversation.kind_support.includes(:buyer).find(params[:id])
+      @conversation = Conversation.kind_support.includes(:buyer, shop: :owner).find(params[:id])
     end
 
     # Same condition as Conversation.awaiting_support_reply (one definition, not
@@ -85,7 +106,7 @@ module Admin
     # One GROUP BY for the page.
     def unread_counts_for(ids)
       Message.joins(:conversation).where(conversation_id: ids, read_at: nil)
-             .where("messages.user_id = conversations.buyer_id")
+             .where(Conversation::NOT_FROM_SUPPORT_SQL)
              .group(:conversation_id).count
     end
   end

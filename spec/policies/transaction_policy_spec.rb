@@ -77,4 +77,30 @@ RSpec.describe TransactionPolicy do
       expect(resolved).to be_empty
     end
   end
+
+  # Review 2026-10-08: the sale belongs to the shop it was MADE in (the pinned
+  # transactions.shop_id), not to wherever its listing lives now.
+  describe "a shop sale after its listing moved" do
+    let(:owner) { create(:user) }
+    let(:shop_a) { create(:shop, owner: owner) }
+    let(:shop_b) { create(:shop, owner: owner) }
+    let(:member_a) { create(:user) }
+    let(:member_b) { create(:user) }
+    let(:listing) { create(:listing, :active, user: owner, shop: shop_a, quantity: 3) }
+    let(:sale) { create(:transaction, :outside_buyer, seller: owner, listing: listing) }
+
+    before do
+      shop_a.shop_members.create!(user: member_a, role: :staff)
+      shop_b.shop_members.create!(user: member_b, role: :staff)
+      sale
+      listing.update_columns(shop_id: shop_b.id)
+    end
+
+    it "the sale's own shop team still manages it; the new shop's team does not" do
+      expect(sale.reload.shop_id).to eq(shop_a.id)
+      expect(described_class.new(member_a, sale).update?).to be true
+      expect(described_class.new(member_b, sale).update?).to be false
+      expect(described_class.new(member_b, sale).show?).to be false
+    end
+  end
 end

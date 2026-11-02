@@ -3,6 +3,12 @@
 #   POST  /api/v1/transactions/:transaction_id/reviews — leave a review
 #   PATCH /api/v1/reviews/:id              — edit your own review while hidden
 class Api::V1::ReviewsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create, :update
+
+  # Hunt-2 (1.1.7).
+  throttle to: 60, within: 1.day, by: :user, only: %i[create update]
+
   # A seller's rating is a public trust signal — guests browsing a shared
   # profile must see it without logging in. Only :index is opened up; leaving
   # a review (create) / editing one (update) still require authentication.
@@ -12,7 +18,7 @@ class Api::V1::ReviewsController < Api::V1::BaseController
 
   def index
     user = User.find(params[:user_id])
-    reviews = policy_scope(Review).visible.for_reviewee(user).ordered
+    reviews = policy_scope(Review).visible.for_reviewee(user).about_person.ordered
     reviews = reviews.where(role: params[:role]) if Review.roles.key?(params[:role])
 
     paginate_blue(ReviewSerializer, reviews.includes(reviewer: { avatar_attachment: :blob }))
@@ -26,16 +32,24 @@ class Api::V1::ReviewsController < Api::V1::BaseController
     review.submit!
     render_blue(ReviewSerializer, review, status: :created)
   rescue ActiveRecord::RecordInvalid => e
-    render_unprocessable_entity(e.record)
+    # OFFLINE §5 row 23: a stable code, so a review queued offline that another
+    # device already left is DONE for the app, not a refusal.
+    code = e.record.errors.of_kind?(:reviewer_id, :taken) ? :already_reviewed : nil
+    render_unprocessable_entity(e.record, code: code)
   rescue ActiveRecord::RecordNotUnique
-    render_unprocessable_entity("You have already reviewed this sale")
+    render_unprocessable_entity("You have already reviewed this sale", code: :already_reviewed)
   end
 
   def update
     review = Review.find(params[:id])
     authorize review
 
-    if review.update(review_params)
+    # OFFLINE §10.2: with `base` (what the phone saw), a field changed on the
+    # author's other device meanwhile is not overwritten; the rest applies; 409.
+    edit = Edits::WithBase.split(review, review_params, review_base)
+    if review.update(edit.attrs)
+      return render_review_conflict(review, edit.conflicts) if edit.conflicts.any?
+
       render_blue(ReviewSerializer, review)
     else
       render_unprocessable_entity(review)
@@ -60,5 +74,14 @@ class Api::V1::ReviewsController < Api::V1::BaseController
 
   def review_params
     params.require(:review).permit(:rating, :comment)
+  end
+
+  def review_base
+    base = params.dig(:review, :base)
+    base.respond_to?(:permit) ? base.permit(:rating, :comment).to_h : {}
+  end
+
+  def render_review_conflict(review, conflicts)
+    render_ok({ review: ReviewSerializer.render_as_hash(review), code: "edit_conflict", fields: conflicts }, status: :conflict)
   end
 end

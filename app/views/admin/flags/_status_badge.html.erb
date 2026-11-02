@@ -1,0 +1,2 @@
+<% tone = { "open" => "hw-badge--danger", "dismissed" => "", "actioned" => "hw-badge--success" }.fetch(flag.status, "") %>
+<span class="hw-badge <%= tone %>" id="flag-status-<%= flag.id %>"><%= flag.status.humanize %><% if flag.action_taken.present? && !flag.open? %> · <%= flag.action_taken.humanize.downcase %><% end %></span>

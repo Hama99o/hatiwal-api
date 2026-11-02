@@ -10,6 +10,9 @@
 # is that a sale with a review already attached cannot be voided or reassigned
 # (Transaction::REVIEWED_SALE_ERROR), not a clock.
 class Api::V1::My::TransactionsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :update, :destroy
+
   before_action :set_transaction, only: [ :update, :destroy ]
 
   def index
@@ -41,10 +44,17 @@ class Api::V1::My::TransactionsController < Api::V1::BaseController
   def update
     authorize @transaction, :update?
 
+    # OFFLINE §10.2: with `base`, a field a teammate changed meanwhile is not
+    # overwritten (the rest applies) and the answer is a 409 naming it.
+    changes = correction_params
+    edit = Edits::WithBase.split(@transaction, changes.slice(:quantity, :buyer_id, :final_price).compact, transaction_base)
+    changes = changes.merge(edit.attrs.symbolize_keys)
+    edit.conflicts.each_key { |field| changes[field.to_sym] = nil }
+
     @transaction.listing.correct_sold_transaction!(
-      transaction: @transaction, **correction_params
+      transaction: @transaction, **changes
     )
-    render_correction_response(@transaction.destroyed? ? nil : @transaction.reload)
+    render_correction_response(@transaction.destroyed? ? nil : @transaction.reload, conflicts: edit.conflicts)
   rescue Listing::CorrectionBlocked => e
     render_reviewed_sale_refusal(e)
   rescue ActiveRecord::RecordInvalid => e
@@ -72,7 +82,14 @@ class Api::V1::My::TransactionsController < Api::V1::BaseController
     # the policy then narrows write access to the seller of a SOLD row.
     @transaction = policy_scope(Transaction).find(params[:id])
   rescue ActiveRecord::RecordNotFound
-    render_not_found
+    # A sale the caller recorded, sold or bought but may not touch any more
+    # (removed from the shop): 403 with a code, so a queued void is told, not
+    # taken as done (QA audit 2026-10-27 A5). Anyone else's sale: a plain 404.
+    if Transaction.where(id: params[:id]).merge(Transaction.for_user(current_user).or(Transaction.where(recorded_by_id: current_user.id))).exists?
+      render_forbidden("You no longer manage this sale", code: "sale_not_managed")
+    else
+      render_not_found
+    end
   end
 
   # Flat params, matching the lifecycle-command convention
@@ -94,12 +111,19 @@ class Api::V1::My::TransactionsController < Api::V1::BaseController
   # repaint stock, status and the `sale` block from one response instead of
   # refetching. `transaction` is absent when the sale was voided — there is
   # nothing left to render.
-  def render_correction_response(txn)
+  def render_correction_response(txn, conflicts: {})
     payload = {
       listing: ListingSerializer.render_as_hash(@transaction.listing.reload, view: :owner_detailed)
     }
     payload[:transaction] = TransactionSerializer.render_as_hash(txn, current_user: current_user) if txn
+    return render_ok(payload.merge(code: "edit_conflict", fields: conflicts), status: :conflict) if conflicts.any?
+
     render_ok(payload)
+  end
+
+  def transaction_base
+    base = params[:base]
+    base.respond_to?(:permit) ? base.permit(:quantity, :buyer_id, :final_price).to_h : {}
   end
 
   # The one deliberate refusal (Transaction::REVIEWED_SALE_ERROR). Carries a

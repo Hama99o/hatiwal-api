@@ -2,18 +2,21 @@
 # waiting. Spec: hatiwal-mobile/docs/VERIFICATION.md.
 #
 # Every response is the status card (VerificationStatusSerializer) — never a
-# document. Only `subject=me` exists today; `shop:<id>` arrives with SHOP-1.
+# document. `subject=me` (default) or, SHOP-1, `subject=shop:<id>` for a shop the
+# caller manages.
 class Api::V1::VerificationRequestsController < Api::V1::BaseController
+  # Owner rule (1.1.6): a confirmed email before applying, for a person or a shop.
+  before_action :require_confirmed_email!, only: :create
   # Spec: 3 requests per day per user. Counted on requests actually SENT
   # (VerificationRequest::DAILY_LIMIT), so blurry uploads that fail validation
   # don't lock anyone out. This throttle is only the anti-script backstop.
   throttle to: 30, within: 1.day, by: :user, only: :create
 
-  before_action :require_subject_me
+  before_action :resolve_subject
 
-  # GET /api/v1/verification_requests/current?subject=me
+  # GET /api/v1/verification_requests/current?subject=me|shop:<id>
   def current
-    authorize VerificationRequest.new(subject: current_user, requested_by: current_user), :show?
+    authorize VerificationRequest.new(subject: @subject, requested_by: current_user), :show?
     render_status
   end
 
@@ -21,7 +24,15 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
   def create
     return render_daily_limit_reached if VerificationRequest.daily_limit_reached?(current_user)
 
-    request = VerificationRequest.new(request_params.merge(subject: current_user, requested_by: current_user))
+    # A shop's Verified badge is applied for by its owner or a manager (their
+    # own e-Tazkira). Staff get that reason, coded and in their language — a
+    # backstop: the apps don't show staff the card or the flow at all (owner,
+    # 2026-10-08). Not a bare 403 the app could only call a "connection" problem.
+    if @subject.is_a?(Shop) && @subject.member?(current_user) && !ShopPolicy.new(current_user, @subject).apply_verification?
+      return render_coded_error(error_text(:owner_only), code: :verification_owner_only, status: :forbidden)
+    end
+
+    request = VerificationRequest.new(request_params.merge(subject: @subject, requested_by: current_user))
     authorize request
 
     if request.save
@@ -38,18 +49,45 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
     request = policy_scope(VerificationRequest).find(params[:id])
     authorize request
     request.cancel!
+    @subject = request.subject
     render_status
   end
 
   private
 
   def render_status(status: :ok)
-    render_blue(VerificationStatusSerializer, VerificationStatus.new(current_user.reload), status: status)
+    card = VerificationStatus.new(@subject.reload)
+    render_blue(VerificationStatusSerializer, card, status: status,
+                                                    options: { private_details: private_details?(card), can_apply: can_apply? })
   end
 
-  def require_subject_me
-    subject = params[:subject].presence || "me"
-    render_unprocessable_entity(error_text(:unknown_subject), code: "verification_unknown_subject") unless subject == "me"
+  # The document details (name on it, last 4 digits, the rejection reason) are
+  # the APPLICANT's alone: the person themself, or for a shop the member who
+  # sent the request shown — not the owner, not the rest of the team (owner,
+  # 2026-10-08; review 2026-10-08).
+  def private_details?(card)
+    return @subject == current_user if @subject.is_a?(User)
+
+    card.shown_request.nil? || card.shown_request.requested_by_id == current_user.id
+  end
+
+  # May this viewer apply? Me: yes. A shop: its owner or a manager.
+  def can_apply?
+    return true if @subject.is_a?(User)
+
+    ShopPolicy.new(current_user, @subject).apply_verification?
+  end
+
+  # "me" → the caller. SHOP-1: "shop:<id>" → that shop; whether the caller may
+  # apply for it is the policy's call (owner or manager). Anything else → 422.
+  def resolve_subject
+    raw = params[:subject].presence || "me"
+    @subject = if raw == "me"
+                 current_user
+    elsif (id = raw[/\Ashop:(\d+)\z/, 1])
+                 Shop.find_by(id: id)
+    end
+    render_unprocessable_entity(error_text(:unknown_subject), code: "verification_unknown_subject") if @subject.nil?
   end
 
   def render_daily_limit_reached
@@ -65,6 +103,6 @@ class Api::V1::VerificationRequestsController < Api::V1::BaseController
   end
 
   def request_params
-    params.require(:verification_request).permit(:document_type, :name_on_document, :document_number, :front, :back, :selfie)
+    params.require(:verification_request).permit(:document_type, :name_on_document, :document_number, :front, :back, :selfie, :proof)
   end
 end

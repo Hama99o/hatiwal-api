@@ -1,0 +1,43 @@
+# SHOP-1 messages (hatiwal-mobile/docs/SHOPS.md). Own file so it never
+# collides with edits to fa.yml.
+fa:
+  support:
+    notices:
+      shop_verified: "تبریک! ✅ %{shop} اکنون یک دوکان تایید شده در هتیوال است. خریداران این نشان را روی دوکان و اجناس شما می‌بینند."
+      shop_verification_rejected: "هنوز نتوانستیم %{shop} را تایید کنیم: %{reason}. می‌توانید از «دوکان من ← تایید بگیرید» درخواست تازه بفرستید."
+      shop_badge_removed: "نشان تایید %{shop} برداشته شد: %{reason}. اگر سوالی دارید، همین‌جا پاسخ دهید."
+  verification:
+    reasons:
+      proof_not_accepted: "مدرک کسب‌وکار پذیرفته نشد"
+  shops:
+    errors:
+      cannot_sell_as: "شما نمی‌توانید به نام این دوکان بفروشید"
+      not_open: "این دوکان باز نیست"
+  activerecord:
+    models:
+      shop: "دوکان"
+    attributes:
+      shop:
+        name: "نام دوکان"
+        description: "توضیحات"
+        category: "کتگوری"
+        address_line: "آدرس"
+        latitude: "موقعیت"
+        longitude: "موقعیت"
+        logo: "لوگو"
+        cover: "عکس پوش"
+        phone: "تلیفون"
+        hours: "ساعات کاری"
+    errors:
+      models:
+        shop:
+          attributes:
+            base:
+              outside_service_area: "باید در مناطقی باشد که هتیوال در آن خدمت می‌کند"
+              duplicate_shop: "این دوکان را از قبل دارید: همین نام در نزدیکی یا همین آدرس"
+            hours:
+              malformed: "ساعات کاری معتبر نیستند"
+        listing:
+          attributes:
+            shop:
+              not_a_member: "دوکانی نیست که برای آن می‌فروشید"

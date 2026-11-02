@@ -17,6 +17,22 @@ RSpec.describe Conversations::StartService do
     expect { service.call }.to change(Message, :count).by(1)
   end
 
+  # The buyer's first message must reach the seller like every later one
+  # (MessagesController#create): live in an open app, and as a push.
+  it "broadcasts and pushes the first message" do
+    expect { service.call }
+      .to have_enqueued_job(BroadcastMessageJob).with { |id| expect(id).to eq(Message.last.id) }
+      .and have_enqueued_job(SendMessagePushJob).with { |id| expect(id).to eq(Message.last.id) }
+  end
+
+  # Owner decision 2026-10-12: Contact seller again lands in the existing chat
+  # and sends nothing (the typed text is not added).
+  it "sends nothing again when the conversation already exists" do
+    existing = create(:conversation, listing: listing, buyer: buyer, seller: seller)
+    expect { service.call }.not_to have_enqueued_job
+    expect(existing.messages.count).to eq(0)
+  end
+
   it "sets buyer and seller correctly" do
     conv = service.call
     expect(conv.buyer).to eq(buyer)

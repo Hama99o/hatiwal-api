@@ -10,9 +10,10 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_230000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+  enable_extension "pg_trgm"
 
   create_table "active_storage_attachments", force: :cascade do |t|
     t.bigint "blob_id", null: false
@@ -20,8 +21,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.string "name", null: false
     t.bigint "record_id", null: false
     t.string "record_type", null: false
-    t.index ["blob_id"], name: "index_active_storage_attachments_on_blob_id"
-    t.index ["record_type", "record_id", "name", "blob_id"], name: "index_active_storage_attachments_uniqueness", unique: true
+    t.index [ "blob_id" ], name: "index_active_storage_attachments_on_blob_id"
+    t.index [ "record_type", "record_id", "name", "blob_id" ], name: "index_active_storage_attachments_uniqueness", unique: true
   end
 
   create_table "active_storage_blobs", force: :cascade do |t|
@@ -33,13 +34,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.string "key", null: false
     t.text "metadata"
     t.string "service_name", null: false
-    t.index ["key"], name: "index_active_storage_blobs_on_key", unique: true
+    t.index [ "key" ], name: "index_active_storage_blobs_on_key", unique: true
   end
 
   create_table "active_storage_variant_records", force: :cascade do |t|
     t.bigint "blob_id", null: false
     t.string "variation_digest", null: false
-    t.index ["blob_id", "variation_digest"], name: "index_active_storage_variant_records_uniqueness", unique: true
+    t.index [ "blob_id", "variation_digest" ], name: "index_active_storage_variant_records_uniqueness", unique: true
   end
 
   create_table "admin_audit_logs", force: :cascade do |t|
@@ -49,9 +50,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.string "details"
     t.bigint "target_id"
     t.string "target_type"
-    t.index ["admin_user_id"], name: "index_admin_audit_logs_on_admin_user_id"
-    t.index ["created_at"], name: "index_admin_audit_logs_on_created_at"
-    t.index ["target_type", "target_id"], name: "index_admin_audit_logs_on_target_type_and_target_id"
+    t.index [ "admin_user_id" ], name: "index_admin_audit_logs_on_admin_user_id"
+    t.index [ "created_at" ], name: "index_admin_audit_logs_on_created_at"
+    t.index [ "target_type", "target_id" ], name: "index_admin_audit_logs_on_target_type_and_target_id"
   end
 
   create_table "admin_bulk_emails", force: :cascade do |t|
@@ -68,7 +69,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.datetime "updated_at", null: false
     t.boolean "via_email", default: true, null: false
     t.boolean "via_in_app", default: false, null: false
-    t.index ["admin_user_id"], name: "index_admin_bulk_emails_on_admin_user_id"
+    t.index [ "admin_user_id" ], name: "index_admin_bulk_emails_on_admin_user_id"
   end
 
   create_table "admin_bulk_in_app_deliveries", force: :cascade do |t|
@@ -83,10 +84,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
-    t.index ["admin_bulk_email_id"], name: "index_admin_bulk_in_app_deliveries_on_admin_bulk_email_id"
-    t.index ["message_id"], name: "index_admin_bulk_in_app_deliveries_on_message_id"
-    t.index ["user_id", "sent_at"], name: "index_admin_bulk_in_app_deliveries_on_user_id_and_sent_at"
-    t.index ["user_id"], name: "index_admin_bulk_in_app_deliveries_on_user_id"
+    t.index [ "admin_bulk_email_id" ], name: "index_admin_bulk_in_app_deliveries_on_admin_bulk_email_id"
+    t.index [ "message_id" ], name: "index_admin_bulk_in_app_deliveries_on_message_id"
+    t.index [ "user_id", "sent_at" ], name: "index_admin_bulk_in_app_deliveries_on_user_id_and_sent_at"
+    t.index [ "user_id" ], name: "index_admin_bulk_in_app_deliveries_on_user_id"
   end
 
   create_table "admin_emails", force: :cascade do |t|
@@ -101,9 +102,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.string "subject", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
-    t.index ["admin_bulk_email_id"], name: "index_admin_emails_on_admin_bulk_email_id"
-    t.index ["admin_user_id"], name: "index_admin_emails_on_admin_user_id"
-    t.index ["user_id"], name: "index_admin_emails_on_user_id"
+    t.index [ "admin_bulk_email_id" ], name: "index_admin_emails_on_admin_bulk_email_id"
+    t.index [ "admin_user_id" ], name: "index_admin_emails_on_admin_user_id"
+    t.index [ "user_id" ], name: "index_admin_emails_on_user_id"
   end
 
   create_table "admin_outreaches", force: :cascade do |t|
@@ -121,11 +122,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.bigint "user_id", null: false
     t.boolean "via_email", default: false, null: false
     t.boolean "via_in_app", default: false, null: false
-    t.index ["admin_email_id"], name: "index_admin_outreaches_on_admin_email_id"
-    t.index ["admin_user_id"], name: "index_admin_outreaches_on_admin_user_id"
-    t.index ["created_at"], name: "index_admin_outreaches_on_created_at"
-    t.index ["message_id"], name: "index_admin_outreaches_on_message_id"
-    t.index ["user_id"], name: "index_admin_outreaches_on_user_id"
+    t.index [ "admin_email_id" ], name: "index_admin_outreaches_on_admin_email_id"
+    t.index [ "admin_user_id" ], name: "index_admin_outreaches_on_admin_user_id"
+    t.index [ "created_at" ], name: "index_admin_outreaches_on_created_at"
+    t.index [ "message_id" ], name: "index_admin_outreaches_on_message_id"
+    t.index [ "user_id" ], name: "index_admin_outreaches_on_user_id"
   end
 
   create_table "admin_users", force: :cascade do |t|
@@ -145,25 +146,63 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.integer "sign_in_count", default: 0, null: false
     t.string "unlock_token"
     t.datetime "updated_at", null: false
-    t.index ["email"], name: "index_admin_users_on_email", unique: true
-    t.index ["reset_password_token"], name: "index_admin_users_on_reset_password_token", unique: true
-    t.index ["unlock_token"], name: "index_admin_users_on_unlock_token", unique: true
+    t.index [ "email" ], name: "index_admin_users_on_email", unique: true
+    t.index [ "reset_password_token" ], name: "index_admin_users_on_reset_password_token", unique: true
+    t.index [ "unlock_token" ], name: "index_admin_users_on_unlock_token", unique: true
+  end
+
+  create_table "app_release_settings", force: :cascade do |t|
+    t.string "android_latest_version"
+    t.string "android_min_version"
+    t.string "android_released_version"
+    t.string "android_store_url"
+    t.datetime "created_at", null: false
+    t.string "ios_latest_version"
+    t.string "ios_min_version"
+    t.string "ios_released_version"
+    t.string "ios_store_url"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id"
+    t.index [ "updated_by_id" ], name: "index_app_release_settings_on_updated_by_id"
+  end
+
+  create_table "app_update_notices", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "platform", null: false
+    t.string "target_version", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index [ "user_id", "target_version" ], name: "index_app_update_notices_on_user_id_and_target_version", unique: true
+    t.index [ "user_id" ], name: "index_app_update_notices_on_user_id"
   end
 
   create_table "blocks", force: :cascade do |t|
     t.bigint "blocked_id", null: false
     t.bigint "blocker_id", null: false
     t.datetime "created_at", null: false
+    t.bigint "shop_id"
     t.datetime "updated_at", null: false
-    t.index ["blocked_id"], name: "index_blocks_on_blocked_id"
-    t.index ["blocker_id", "blocked_id"], name: "index_blocks_on_blocker_id_and_blocked_id", unique: true
-    t.index ["blocker_id"], name: "index_blocks_on_blocker_id"
+    t.index [ "blocked_id" ], name: "index_blocks_on_blocked_id"
+    t.index [ "blocker_id", "blocked_id" ], name: "index_blocks_on_blocker_id_and_blocked_id", unique: true
+    t.index [ "blocker_id" ], name: "index_blocks_on_blocker_id"
+    t.index [ "shop_id" ], name: "index_blocks_on_shop_id"
+  end
+
+  create_table "cable_tickets", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "digest", limit: 64, null: false
+    t.datetime "expires_at", null: false
+    t.bigint "user_id", null: false
+    t.index [ "digest" ], name: "index_cable_tickets_on_digest", unique: true
+    t.index [ "expires_at" ], name: "index_cable_tickets_on_expires_at"
+    t.index [ "user_id" ], name: "index_cable_tickets_on_user_id"
   end
 
   create_table "categories", force: :cascade do |t|
     t.boolean "active", default: true, null: false
     t.datetime "created_at", null: false
     t.string "icon"
+    t.string "kind", default: "item", null: false
     t.string "name_en", null: false
     t.string "name_fa", null: false
     t.string "name_ps", null: false
@@ -172,10 +211,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.integer "position", default: 0
     t.string "slug", null: false
     t.datetime "updated_at", null: false
-    t.index ["active"], name: "index_categories_on_active"
-    t.index ["parent_id"], name: "index_categories_on_parent_id"
-    t.index ["position"], name: "index_categories_on_position"
-    t.index ["slug"], name: "index_categories_on_slug", unique: true
+    t.index [ "active" ], name: "index_categories_on_active"
+    t.index [ "parent_id" ], name: "index_categories_on_parent_id"
+    t.index [ "position" ], name: "index_categories_on_position"
+    t.index [ "slug" ], name: "index_categories_on_slug", unique: true
   end
 
   create_table "conversations", force: :cascade do |t|
@@ -189,17 +228,42 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.datetime "seller_archived_at"
     t.datetime "seller_deleted_at"
     t.bigint "seller_id", null: false
+    t.bigint "shop_id"
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
-    t.index ["buyer_deleted_at"], name: "index_conversations_on_buyer_deleted_at"
-    t.index ["buyer_id"], name: "index_conversations_on_buyer_id"
-    t.index ["buyer_id"], name: "index_conversations_one_support_thread_per_user", unique: true, where: "(kind = 1)"
-    t.index ["last_message_at"], name: "index_conversations_on_last_message_at"
-    t.index ["listing_id", "buyer_id"], name: "index_conversations_on_listing_id_and_buyer_id", unique: true
-    t.index ["listing_id"], name: "index_conversations_on_listing_id"
-    t.index ["seller_deleted_at"], name: "index_conversations_on_seller_deleted_at"
-    t.index ["seller_id"], name: "index_conversations_on_seller_id"
-    t.index ["status"], name: "index_conversations_on_status"
+    t.index "listing_id, buyer_id, COALESCE(shop_id, (0)::bigint), (\nCASE\n    WHEN (shop_id IS NULL) THEN seller_id\n    ELSE (0)::bigint\nEND)", name: "index_conversations_one_listing_chat_per_identity_and_seller", unique: true, where: "(listing_id IS NOT NULL)"
+    t.index [ "buyer_deleted_at" ], name: "index_conversations_on_buyer_deleted_at"
+    t.index [ "buyer_id", "shop_id" ], name: "index_conversations_one_shop_chat_per_buyer", unique: true, where: "((listing_id IS NULL) AND (shop_id IS NOT NULL))"
+    t.index [ "buyer_id" ], name: "index_conversations_on_buyer_id"
+    t.index [ "buyer_id" ], name: "index_conversations_one_support_thread_per_person", unique: true, where: "((kind = 1) AND (shop_id IS NULL))"
+    t.index [ "last_message_at" ], name: "index_conversations_on_last_message_at"
+    t.index [ "listing_id" ], name: "index_conversations_on_listing_id"
+    t.index [ "seller_deleted_at" ], name: "index_conversations_on_seller_deleted_at"
+    t.index [ "seller_id" ], name: "index_conversations_on_seller_id"
+    t.index [ "shop_id" ], name: "index_conversations_on_shop_id"
+    t.index [ "shop_id" ], name: "index_conversations_one_support_thread_per_shop", unique: true, where: "((kind = 1) AND (shop_id IS NOT NULL))"
+    t.index [ "status" ], name: "index_conversations_on_status"
+  end
+
+  create_table "flags", force: :cascade do |t|
+    t.datetime "acted_at"
+    t.bigint "acted_by_id"
+    t.string "action_taken"
+    t.integer "category"
+    t.datetime "created_at", null: false
+    t.bigint "flaggable_id", null: false
+    t.string "flaggable_type", null: false
+    t.string "matched_term"
+    t.text "note"
+    t.bigint "prohibited_term_id"
+    t.integer "source", default: 0, null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index [ "acted_by_id" ], name: "index_flags_on_acted_by_id"
+    t.index [ "flaggable_type", "flaggable_id" ], name: "index_flags_on_flaggable"
+    t.index [ "flaggable_type", "flaggable_id" ], name: "index_flags_one_open_per_flaggable", unique: true, where: "(status = 0)"
+    t.index [ "prohibited_term_id" ], name: "index_flags_on_prohibited_term_id"
+    t.index [ "status", "created_at" ], name: "index_flags_on_status_and_created_at"
   end
 
   create_table "hidden_listings", force: :cascade do |t|
@@ -207,9 +271,33 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.bigint "listing_id", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
-    t.index ["listing_id"], name: "index_hidden_listings_on_listing_id"
-    t.index ["user_id", "listing_id"], name: "index_hidden_listings_on_user_id_and_listing_id", unique: true
-    t.index ["user_id"], name: "index_hidden_listings_on_user_id"
+    t.index [ "listing_id" ], name: "index_hidden_listings_on_listing_id"
+    t.index [ "user_id", "listing_id" ], name: "index_hidden_listings_on_user_id_and_listing_id", unique: true
+    t.index [ "user_id" ], name: "index_hidden_listings_on_user_id"
+  end
+
+  create_table "idempotency_keys", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "key", limit: 64, null: false
+    t.string "request_fingerprint", limit: 64, null: false
+    t.jsonb "response_body"
+    t.integer "response_code"
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index [ "created_at" ], name: "index_idempotency_keys_on_created_at"
+    t.index [ "user_id", "key" ], name: "index_idempotency_keys_on_user_id_and_key", unique: true
+  end
+
+  create_table "listing_image_embeddings", force: :cascade do |t|
+    t.bigint "attachment_id", null: false
+    t.datetime "created_at", null: false
+    t.binary "embedding", null: false
+    t.bigint "listing_id", null: false
+    t.string "model_version", limit: 64, null: false
+    t.datetime "updated_at", null: false
+    t.index [ "attachment_id", "model_version" ], name: "index_listing_image_embeddings_on_attachment_and_model", unique: true
+    t.index [ "listing_id" ], name: "index_listing_image_embeddings_on_listing_id"
   end
 
   create_table "listing_price_histories", force: :cascade do |t|
@@ -220,8 +308,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.decimal "new_price", precision: 12, scale: 2, null: false
     t.decimal "old_price", precision: 12, scale: 2, null: false
     t.datetime "updated_at", null: false
-    t.index ["changed_at"], name: "index_listing_price_histories_on_changed_at"
-    t.index ["listing_id"], name: "index_listing_price_histories_on_listing_id"
+    t.index [ "changed_at" ], name: "index_listing_price_histories_on_changed_at"
+    t.index [ "listing_id" ], name: "index_listing_price_histories_on_listing_id"
   end
 
   create_table "listing_views", force: :cascade do |t|
@@ -230,29 +318,36 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.bigint "listing_id", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
-    t.index ["listing_id"], name: "index_listing_views_on_listing_id"
-    t.index ["user_id", "listing_id"], name: "index_listing_views_on_user_id_and_listing_id", unique: true
-    t.index ["user_id"], name: "index_listing_views_on_user_id"
+    t.index [ "listing_id" ], name: "index_listing_views_on_listing_id"
+    t.index [ "user_id", "listing_id" ], name: "index_listing_views_on_user_id_and_listing_id", unique: true
+    t.index [ "user_id" ], name: "index_listing_views_on_user_id"
   end
 
   create_table "listings", force: :cascade do |t|
     t.string "address"
+    t.datetime "bumped_at", default: -> { "CURRENT_TIMESTAMP" }, null: false
     t.bigint "category_id", null: false
     t.integer "condition"
     t.datetime "created_at", null: false
     t.string "currency", default: "AFN", null: false
     t.text "description"
+    t.jsonb "details", default: {}, null: false
     t.datetime "expires_at"
+    t.datetime "expiry_reminder_day_for"
+    t.datetime "expiry_reminder_week_for"
+    t.jsonb "field_edits", default: {}, null: false
     t.decimal "latitude", precision: 10, scale: 6
     t.string "location"
     t.decimal "longitude", precision: 10, scale: 6
     t.boolean "negotiable", default: true, null: false
     t.decimal "price", precision: 12, scale: 2, null: false
+    t.string "price_unit"
     t.datetime "published_at"
     t.integer "quantity", default: 1, null: false
     t.datetime "removed_at"
     t.string "removed_reason"
     t.datetime "reserved_at"
+    t.bigint "shop_id"
     t.datetime "sold_at"
     t.integer "sold_units", default: 0, null: false
     t.integer "status", default: 0, null: false
@@ -260,17 +355,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.integer "views_count", default: 0, null: false
-    t.index ["category_id"], name: "index_listings_on_category_id"
-    t.index ["condition"], name: "index_listings_on_condition"
-    t.index ["created_at"], name: "index_listings_on_created_at"
-    t.index ["expires_at"], name: "index_listings_on_expires_at"
-    t.index ["latitude", "longitude"], name: "index_listings_on_point_browsable", where: "((latitude IS NOT NULL) AND (longitude IS NOT NULL) AND (removed_at IS NULL))"
-    t.index ["price"], name: "index_listings_on_price"
-    t.index ["removed_at"], name: "index_listings_on_removed_at"
-    t.index ["status", "created_at"], name: "index_listings_on_status_and_created_at"
-    t.index ["status", "views_count"], name: "index_listings_on_status_and_views_count"
-    t.index ["status"], name: "index_listings_on_status"
-    t.index ["user_id"], name: "index_listings_on_user_id"
+    t.index "lower((title)::text) gin_trgm_ops", name: "index_listings_on_lower_title_trgm", using: :gin
+    t.index "lower(description) gin_trgm_ops", name: "index_listings_on_lower_description_trgm", using: :gin
+    t.index [ "bumped_at" ], name: "index_listings_browsable_feed", order: :desc, where: "((status = ANY (ARRAY[1, 2])) AND (removed_at IS NULL))", include: [ "user_id", "shop_id", "expires_at", "category_id", "price" ]
+    t.index [ "bumped_at" ], name: "index_listings_on_bumped_at"
+    t.index [ "category_id" ], name: "index_listings_on_category_id"
+    t.index [ "condition" ], name: "index_listings_on_condition"
+    t.index [ "created_at" ], name: "index_listings_on_created_at"
+    t.index [ "details" ], name: "index_listings_on_details", using: :gin
+    t.index [ "expires_at" ], name: "index_listings_on_expires_at"
+    t.index [ "latitude", "longitude" ], name: "index_listings_on_point_browsable", where: "((latitude IS NOT NULL) AND (longitude IS NOT NULL) AND (removed_at IS NULL))"
+    t.index [ "price" ], name: "index_listings_on_price"
+    t.index [ "removed_at" ], name: "index_listings_on_removed_at"
+    t.index [ "shop_id", "status", "published_at" ], name: "index_listings_on_shop_id_and_status_and_published_at"
+    t.index [ "shop_id" ], name: "index_listings_on_shop_id"
+    t.index [ "status", "created_at" ], name: "index_listings_on_status_and_created_at"
+    t.index [ "status", "views_count" ], name: "index_listings_on_status_and_views_count"
+    t.index [ "status" ], name: "index_listings_on_status"
+    t.index [ "user_id" ], name: "index_listings_on_user_id"
     t.check_constraint "quantity >= 1", name: "listings_quantity_positive"
     t.check_constraint "sold_units >= 0 AND sold_units <= quantity", name: "listings_sold_units_within_quantity"
   end
@@ -278,6 +380,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
   create_table "messages", force: :cascade do |t|
     t.bigint "admin_user_id"
     t.text "body", null: false
+    t.string "client_uuid", limit: 64
+    t.jsonb "context"
     t.bigint "conversation_id", null: false
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
@@ -287,14 +391,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.bigint "responds_to_id"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
-    t.index ["admin_user_id"], name: "index_messages_on_admin_user_id"
-    t.index ["conversation_id"], name: "index_messages_on_conversation_id"
-    t.index ["created_at"], name: "index_messages_on_created_at"
-    t.index ["deleted_at"], name: "index_messages_on_deleted_at"
-    t.index ["read_at"], name: "index_messages_on_read_at"
-    t.index ["responds_to_id"], name: "index_messages_on_responds_to_id"
-    t.index ["user_id"], name: "index_messages_on_user_id"
+    t.index [ "admin_user_id" ], name: "index_messages_on_admin_user_id"
+    t.index [ "conversation_id" ], name: "index_messages_on_conversation_id"
+    t.index [ "created_at" ], name: "index_messages_on_created_at"
+    t.index [ "deleted_at" ], name: "index_messages_on_deleted_at"
+    t.index [ "read_at" ], name: "index_messages_on_read_at"
+    t.index [ "responds_to_id" ], name: "index_messages_on_responds_to_id"
+    t.index [ "user_id", "client_uuid" ], name: "index_messages_on_user_id_and_client_uuid", unique: true, where: "(client_uuid IS NOT NULL)"
+    t.index [ "user_id" ], name: "index_messages_on_user_id"
     t.check_constraint "offer_quantity IS NULL OR offer_quantity >= 1", name: "messages_offer_quantity_positive"
+  end
+
+  create_table "prohibited_terms", force: :cascade do |t|
+    t.integer "category", null: false
+    t.datetime "created_at", null: false
+    t.integer "locale", default: 3, null: false
+    t.text "note"
+    t.string "term", null: false
+    t.datetime "updated_at", null: false
+    t.index [ "category" ], name: "index_prohibited_terms_on_category"
+    t.index [ "term", "locale" ], name: "index_prohibited_terms_on_term_and_locale", unique: true
   end
 
   create_table "reports", force: :cascade do |t|
@@ -306,10 +422,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.bigint "reporter_id", null: false
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
-    t.index ["reportable_type", "reportable_id"], name: "index_reports_on_reportable"
-    t.index ["reporter_id", "reportable_type", "reportable_id"], name: "idx_reports_unique_per_reporter", unique: true
-    t.index ["reporter_id"], name: "index_reports_on_reporter_id"
-    t.index ["status"], name: "index_reports_on_status"
+    t.index [ "reportable_type", "reportable_id" ], name: "index_reports_on_reportable"
+    t.index [ "reporter_id", "reportable_type", "reportable_id" ], name: "idx_reports_unique_per_reporter", unique: true
+    t.index [ "reporter_id" ], name: "index_reports_on_reporter_id"
+    t.index [ "status" ], name: "index_reports_on_status"
   end
 
   create_table "reviews", force: :cascade do |t|
@@ -323,11 +439,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.bigint "transaction_id", null: false
     t.datetime "updated_at", null: false
     t.boolean "visible", default: false, null: false
-    t.index ["reviewee_id", "visible"], name: "index_reviews_on_reviewee_id_and_visible"
-    t.index ["reviewee_id"], name: "index_reviews_on_reviewee_id"
-    t.index ["reviewer_id"], name: "index_reviews_on_reviewer_id"
-    t.index ["transaction_id", "reviewer_id"], name: "index_reviews_unique_per_reviewer_per_txn", unique: true
-    t.index ["transaction_id"], name: "index_reviews_on_transaction_id"
+    t.index [ "reviewee_id", "visible" ], name: "index_reviews_on_reviewee_id_and_visible"
+    t.index [ "reviewee_id" ], name: "index_reviews_on_reviewee_id"
+    t.index [ "reviewer_id" ], name: "index_reviews_on_reviewer_id"
+    t.index [ "transaction_id", "reviewer_id" ], name: "index_reviews_unique_per_reviewer_per_txn", unique: true
+    t.index [ "transaction_id" ], name: "index_reviews_on_transaction_id"
   end
 
   create_table "saved_listings", force: :cascade do |t|
@@ -336,9 +452,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.decimal "price_at_save", precision: 12, scale: 2, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
-    t.index ["listing_id"], name: "index_saved_listings_on_listing_id"
-    t.index ["user_id", "listing_id"], name: "index_saved_listings_on_user_id_and_listing_id", unique: true
-    t.index ["user_id"], name: "index_saved_listings_on_user_id"
+    t.index [ "listing_id" ], name: "index_saved_listings_on_listing_id"
+    t.index [ "user_id", "listing_id" ], name: "index_saved_listings_on_user_id_and_listing_id", unique: true
+    t.index [ "user_id" ], name: "index_saved_listings_on_user_id"
   end
 
   create_table "saved_searches", force: :cascade do |t|
@@ -353,9 +469,81 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.integer "radius"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
-    t.index ["category_id"], name: "index_saved_searches_on_category_id"
-    t.index ["user_id", "created_at"], name: "index_saved_searches_user_recent"
-    t.index ["user_id"], name: "index_saved_searches_on_user_id"
+    t.index [ "category_id" ], name: "index_saved_searches_on_category_id"
+    t.index [ "user_id", "created_at" ], name: "index_saved_searches_user_recent"
+    t.index [ "user_id" ], name: "index_saved_searches_on_user_id"
+  end
+
+  create_table "shop_audit_events", force: :cascade do |t|
+    t.string "action", null: false
+    t.bigint "actor_id"
+    t.datetime "created_at", null: false
+    t.jsonb "data", default: {}, null: false
+    t.bigint "shop_id", null: false
+    t.bigint "target_user_id"
+    t.index [ "actor_id" ], name: "index_shop_audit_events_on_actor_id"
+    t.index [ "shop_id", "created_at" ], name: "index_shop_audit_events_on_shop_id_and_created_at"
+    t.index [ "shop_id" ], name: "index_shop_audit_events_on_shop_id"
+    t.index [ "target_user_id" ], name: "index_shop_audit_events_on_target_user_id"
+  end
+
+  create_table "shop_invites", force: :cascade do |t|
+    t.bigint "accepted_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "decided_at"
+    t.string "email"
+    t.datetime "expires_at", null: false
+    t.bigint "invited_by_id", null: false
+    t.integer "role", default: 2, null: false
+    t.bigint "shop_id", null: false
+    t.integer "status", default: 0, null: false
+    t.string "token", null: false
+    t.datetime "updated_at", null: false
+    t.index [ "accepted_by_id" ], name: "index_shop_invites_on_accepted_by_id"
+    t.index [ "email" ], name: "index_shop_invites_on_email"
+    t.index [ "invited_by_id" ], name: "index_shop_invites_on_invited_by_id"
+    t.index [ "shop_id", "status" ], name: "index_shop_invites_on_shop_id_and_status"
+    t.index [ "shop_id" ], name: "index_shop_invites_on_shop_id"
+    t.index [ "token" ], name: "index_shop_invites_on_token", unique: true
+  end
+
+  create_table "shop_members", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "invited_by_id"
+    t.integer "role", default: 0, null: false
+    t.bigint "shop_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index [ "invited_by_id" ], name: "index_shop_members_on_invited_by_id"
+    t.index [ "shop_id", "user_id" ], name: "index_shop_members_on_shop_id_and_user_id", unique: true
+    t.index [ "shop_id" ], name: "index_shop_members_on_shop_id"
+    t.index [ "user_id" ], name: "index_shop_members_on_user_id"
+  end
+
+  create_table "shops", force: :cascade do |t|
+    t.string "address_line"
+    t.bigint "category_id", null: false
+    t.string "city"
+    t.datetime "closed_at"
+    t.datetime "created_at", null: false
+    t.string "description"
+    t.jsonb "hours", default: {}, null: false
+    t.decimal "latitude", precision: 10, scale: 6
+    t.decimal "longitude", precision: 10, scale: 6
+    t.string "name", null: false
+    t.bigint "owner_id", null: false
+    t.string "phone"
+    t.boolean "phone_public", default: false, null: false
+    t.string "province"
+    t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.datetime "verified_at"
+    t.bigint "verified_by_id"
+    t.index [ "category_id" ], name: "index_shops_on_category_id"
+    t.index [ "owner_id" ], name: "index_shops_on_owner_id"
+    t.index [ "province" ], name: "index_shops_on_province"
+    t.index [ "status", "verified_at" ], name: "index_shops_on_status_and_verified_at"
+    t.index [ "verified_by_id" ], name: "index_shops_on_verified_by_id"
   end
 
   create_table "transactions", force: :cascade do |t|
@@ -366,14 +554,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.decimal "final_price", precision: 12, scale: 2, null: false
     t.bigint "listing_id", null: false
     t.integer "quantity", default: 1, null: false
+    t.bigint "recorded_by_id"
     t.bigint "seller_id", null: false
+    t.bigint "shop_id"
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
-    t.index ["buyer_id"], name: "index_transactions_on_buyer_id"
-    t.index ["listing_id"], name: "index_transactions_on_listing_id"
-    t.index ["listing_id"], name: "index_transactions_on_listing_id_while_open", unique: true, where: "(status = 0)"
-    t.index ["seller_id"], name: "index_transactions_on_seller_id"
-    t.index ["status"], name: "index_transactions_on_status"
+    t.index [ "buyer_id" ], name: "index_transactions_on_buyer_id"
+    t.index [ "listing_id" ], name: "index_transactions_on_listing_id"
+    t.index [ "listing_id" ], name: "index_transactions_on_listing_id_while_open", unique: true, where: "(status = 0)"
+    t.index [ "recorded_by_id" ], name: "index_transactions_on_recorded_by_id"
+    t.index [ "seller_id" ], name: "index_transactions_on_seller_id"
+    t.index [ "shop_id" ], name: "index_transactions_on_shop_id"
+    t.index [ "status" ], name: "index_transactions_on_status"
     t.check_constraint "quantity >= 1", name: "transactions_quantity_positive"
   end
 
@@ -383,16 +575,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.integer "category", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "expires_at", null: false
+    t.bigint "listing_id"
+    t.bigint "posted_by_id"
     t.string "reason", null: false
+    t.string "revoke_reason"
+    t.datetime "revoked_at"
+    t.bigint "revoked_by_id"
+    t.bigint "shop_id"
     t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
-    t.index ["admin_user_id"], name: "index_user_warnings_on_admin_user_id"
-    t.index ["user_id", "expires_at"], name: "index_user_warnings_on_user_id_and_expires_at"
-    t.index ["user_id"], name: "index_user_warnings_on_user_id"
+    t.bigint "user_id"
+    t.index [ "admin_user_id" ], name: "index_user_warnings_on_admin_user_id"
+    t.index [ "listing_id" ], name: "index_user_warnings_on_listing_id"
+    t.index [ "posted_by_id" ], name: "index_user_warnings_on_posted_by_id"
+    t.index [ "shop_id", "expires_at" ], name: "index_user_warnings_on_shop_id_and_expires_at"
+    t.index [ "shop_id" ], name: "index_user_warnings_on_shop_id"
+    t.index [ "user_id", "expires_at" ], name: "index_user_warnings_on_user_id_and_expires_at"
+    t.index [ "user_id" ], name: "index_user_warnings_on_user_id"
   end
 
   create_table "users", force: :cascade do |t|
+    t.bigint "active_shop_id"
     t.boolean "allow_password_change", default: false
+    t.text "apple_refresh_token"
+    t.string "apple_uid"
     t.boolean "auto_blocked", default: false, null: false
     t.decimal "avg_rating", precision: 3, scale: 2
     t.datetime "away_until"
@@ -439,11 +644,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.string "push_registration_error", limit: 300
     t.datetime "push_registration_error_at"
     t.string "push_token"
+    t.string "push_token_client"
     t.datetime "remember_created_at"
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
     t.integer "review_count", default: 0, null: false
     t.boolean "seller_mode", default: false, null: false
+    t.integer "shop_memberships_count", default: 0, null: false
     t.boolean "show_address_publicly", default: true, null: false
     t.boolean "show_phone_publicly", default: true, null: false
     t.integer "sign_in_count", default: 0, null: false
@@ -457,20 +664,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.datetime "updated_at", null: false
     t.boolean "verified", default: false, null: false
     t.string "whatsapp_number"
-    t.index ["avg_rating"], name: "index_users_on_avg_rating"
-    t.index ["city"], name: "index_users_on_city"
-    t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
-    t.index ["deleted_at"], name: "index_users_on_deleted_at"
-    t.index ["deletion_scheduled_at"], name: "index_users_on_deletion_scheduled_at"
-    t.index ["email"], name: "index_users_on_email", unique: true
-    t.index ["last_app_version_at"], name: "index_users_on_last_app_version_at"
-    t.index ["last_sign_in_at"], name: "index_users_on_last_sign_in_at"
-    t.index ["legacy_client_seen_at"], name: "index_users_on_legacy_client_seen_at"
-    t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
-    t.index ["status"], name: "index_users_on_status"
-    t.index ["support_account"], name: "index_users_single_support_account", unique: true, where: "support_account"
-    t.index ["uid", "provider"], name: "index_users_on_uid_and_provider", unique: true
-    t.index ["unlock_token"], name: "index_users_on_unlock_token", unique: true
+    t.index [ "active_shop_id" ], name: "index_users_on_active_shop_id"
+    t.index [ "apple_uid" ], name: "index_users_on_apple_uid", unique: true
+    t.index [ "avg_rating" ], name: "index_users_on_avg_rating"
+    t.index [ "city" ], name: "index_users_on_city"
+    t.index [ "confirmation_token" ], name: "index_users_on_confirmation_token", unique: true
+    t.index [ "deleted_at" ], name: "index_users_on_deleted_at"
+    t.index [ "deletion_scheduled_at" ], name: "index_users_on_deletion_scheduled_at"
+    t.index [ "email" ], name: "index_users_on_email", unique: true
+    t.index [ "id" ], name: "index_users_on_id_not_active", where: "(status <> 0)"
+    t.index [ "last_app_version_at" ], name: "index_users_on_last_app_version_at"
+    t.index [ "last_sign_in_at" ], name: "index_users_on_last_sign_in_at"
+    t.index [ "legacy_client_seen_at" ], name: "index_users_on_legacy_client_seen_at"
+    t.index [ "reset_password_token" ], name: "index_users_on_reset_password_token", unique: true
+    t.index [ "status" ], name: "index_users_on_status"
+    t.index [ "support_account" ], name: "index_users_single_support_account", unique: true, where: "support_account"
+    t.index [ "uid", "provider" ], name: "index_users_on_uid_and_provider", unique: true
+    t.index [ "unlock_token" ], name: "index_users_on_unlock_token", unique: true
   end
 
   create_table "verification_requests", force: :cascade do |t|
@@ -492,13 +702,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
     t.bigint "subject_id", null: false
     t.string "subject_type", null: false
     t.datetime "updated_at", null: false
-    t.index ["decided_at"], name: "index_verification_requests_purgeable", where: "((files_purged_at IS NULL) AND (decided_at IS NOT NULL))"
-    t.index ["decided_by_id"], name: "index_verification_requests_on_decided_by_id"
-    t.index ["document_number_digest"], name: "index_verification_requests_on_document_number_digest"
-    t.index ["requested_by_id"], name: "index_verification_requests_on_requested_by_id"
-    t.index ["status", "created_at"], name: "index_verification_requests_on_status_and_created_at"
-    t.index ["subject_type", "subject_id"], name: "index_verification_requests_on_subject"
-    t.index ["subject_type", "subject_id"], name: "index_verification_requests_one_open_per_subject", unique: true, where: "(status = 0)"
+    t.index [ "decided_at" ], name: "index_verification_requests_purgeable", where: "((files_purged_at IS NULL) AND (decided_at IS NOT NULL))"
+    t.index [ "decided_by_id" ], name: "index_verification_requests_on_decided_by_id"
+    t.index [ "document_number_digest" ], name: "index_verification_requests_on_document_number_digest"
+    t.index [ "requested_by_id" ], name: "index_verification_requests_on_requested_by_id"
+    t.index [ "status", "created_at" ], name: "index_verification_requests_on_status_and_created_at"
+    t.index [ "subject_type", "subject_id" ], name: "index_verification_requests_on_subject"
+    t.index [ "subject_type", "subject_id" ], name: "index_verification_requests_one_open_per_subject", unique: true, where: "(status = 0)"
   end
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
@@ -515,18 +725,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
   add_foreign_key "admin_outreaches", "admin_users"
   add_foreign_key "admin_outreaches", "messages"
   add_foreign_key "admin_outreaches", "users"
+  add_foreign_key "app_release_settings", "admin_users", column: "updated_by_id"
+  add_foreign_key "app_update_notices", "users"
   add_foreign_key "blocks", "users", column: "blocked_id"
   add_foreign_key "blocks", "users", column: "blocker_id"
+  add_foreign_key "cable_tickets", "users", on_delete: :cascade
   add_foreign_key "categories", "categories", column: "parent_id", on_delete: :restrict
   add_foreign_key "conversations", "listings"
+  add_foreign_key "conversations", "shops", on_delete: :nullify
   add_foreign_key "conversations", "users", column: "buyer_id"
   add_foreign_key "conversations", "users", column: "seller_id"
+  add_foreign_key "flags", "admin_users", column: "acted_by_id", on_delete: :nullify
+  add_foreign_key "flags", "prohibited_terms", on_delete: :nullify
   add_foreign_key "hidden_listings", "listings"
   add_foreign_key "hidden_listings", "users"
+  add_foreign_key "idempotency_keys", "users", on_delete: :cascade
+  add_foreign_key "listing_image_embeddings", "active_storage_attachments", column: "attachment_id", on_delete: :cascade
+  add_foreign_key "listing_image_embeddings", "listings", on_delete: :cascade
   add_foreign_key "listing_price_histories", "listings"
   add_foreign_key "listing_views", "listings"
   add_foreign_key "listing_views", "users"
   add_foreign_key "listings", "categories"
+  add_foreign_key "listings", "shops"
   add_foreign_key "listings", "users"
   add_foreign_key "messages", "admin_users"
   add_foreign_key "messages", "conversations"
@@ -540,11 +760,30 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_180000) do
   add_foreign_key "saved_listings", "users"
   add_foreign_key "saved_searches", "categories"
   add_foreign_key "saved_searches", "users"
+  add_foreign_key "shop_audit_events", "shops", on_delete: :cascade
+  add_foreign_key "shop_audit_events", "users", column: "actor_id", on_delete: :nullify
+  add_foreign_key "shop_audit_events", "users", column: "target_user_id", on_delete: :nullify
+  add_foreign_key "shop_invites", "shops", on_delete: :cascade
+  add_foreign_key "shop_invites", "users", column: "accepted_by_id"
+  add_foreign_key "shop_invites", "users", column: "invited_by_id"
+  add_foreign_key "shop_members", "shops"
+  add_foreign_key "shop_members", "users"
+  add_foreign_key "shop_members", "users", column: "invited_by_id"
+  add_foreign_key "shops", "admin_users", column: "verified_by_id"
+  add_foreign_key "shops", "categories"
+  add_foreign_key "shops", "users", column: "owner_id"
   add_foreign_key "transactions", "listings"
+  add_foreign_key "transactions", "shops", on_delete: :nullify
   add_foreign_key "transactions", "users", column: "buyer_id"
+  add_foreign_key "transactions", "users", column: "recorded_by_id", on_delete: :nullify
   add_foreign_key "transactions", "users", column: "seller_id"
   add_foreign_key "user_warnings", "admin_users"
+  add_foreign_key "user_warnings", "admin_users", column: "revoked_by_id"
+  add_foreign_key "user_warnings", "listings"
+  add_foreign_key "user_warnings", "shops"
   add_foreign_key "user_warnings", "users"
+  add_foreign_key "user_warnings", "users", column: "posted_by_id"
+  add_foreign_key "users", "shops", column: "active_shop_id", on_delete: :nullify
   add_foreign_key "verification_requests", "admin_users", column: "decided_by_id"
   add_foreign_key "verification_requests", "users", column: "requested_by_id"
 end

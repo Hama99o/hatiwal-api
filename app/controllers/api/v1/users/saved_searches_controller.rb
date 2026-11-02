@@ -1,4 +1,7 @@
 class Api::V1::Users::SavedSearchesController < Api::V1::BaseController
+  # OFFLINE §10.1: delete / mark seen queued offline and retried run once.
+  idempotent :destroy, :mark_seen
+
   before_action :authenticate_user!
 
   def index

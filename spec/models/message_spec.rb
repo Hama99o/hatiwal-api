@@ -15,8 +15,8 @@ RSpec.describe Message, type: :model do
       let(:other_conversation) { create(:conversation) }
 
       it "is valid when responds_to belongs to the same conversation" do
-        proposal = create(:message, conversation: conversation, kind: :meetup_proposal)
-        reply    = build(:message, conversation: conversation, kind: :meetup_accepted,
+        proposal = create(:message, conversation: conversation, user: conversation.seller, kind: :meetup_proposal)
+        reply    = build(:message, conversation: conversation, user: conversation.buyer, kind: :meetup_accepted,
                                    responds_to: proposal)
         expect(reply).to be_valid
       end
@@ -40,6 +40,26 @@ RSpec.describe Message, type: :model do
         msg = build(:message, conversation: conversation, responds_to_id: nil)
         expect(msg).to be_valid
       end
+    end
+  end
+
+  # OFFLINE §10.1
+  describe "client_uuid" do
+    it "is optional" do
+      expect(build(:message, client_uuid: nil)).to be_valid
+    end
+
+    it "must look like a key (8-64 letters, digits, - or _)" do
+      expect(build(:message, client_uuid: "short")).not_to be_valid
+      expect(build(:message, client_uuid: SecureRandom.uuid)).to be_valid
+    end
+
+    it "is unique per sender, with a stable code" do
+      first = create(:message, client_uuid: "abcdefgh-1")
+      again = build(:message, user: first.user, client_uuid: "abcdefgh-1")
+      expect(again).not_to be_valid
+      expect(again.error_code).to eq(Message::CLIENT_UUID_TAKEN_CODE)
+      expect(build(:message, client_uuid: "abcdefgh-1")).to be_valid # another sender
     end
   end
 
@@ -78,13 +98,16 @@ RSpec.describe Message, type: :model do
     let(:conversation) { create(:conversation) }
 
     it "is valid with kind :offer_counter and a pipe-encoded body" do
-      msg = build(:message, conversation: conversation, kind: :offer_counter, body: "8500|AFN|10000")
+      # A counter answers the other side's offer (responds_to_id is required).
+      offer = create(:message, conversation: conversation, user: conversation.buyer, kind: :offer, body: "8000|AFN|10000")
+      msg = build(:message, conversation: conversation, user: conversation.seller, kind: :offer_counter,
+                            body: "8500|AFN|10000", responds_to: offer)
       expect(msg).to be_valid
     end
 
     it "can link back to the original offer via responds_to" do
-      original_offer = create(:message, conversation: conversation, kind: :offer, body: "8000|AFN|10000")
-      counter = build(:message, conversation: conversation, kind: :offer_counter,
+      original_offer = create(:message, conversation: conversation, user: conversation.buyer, kind: :offer, body: "8000|AFN|10000")
+      counter = build(:message, conversation: conversation, user: conversation.seller, kind: :offer_counter,
                                 body: "9000|AFN|10000", responds_to: original_offer)
       expect(counter).to be_valid
     end
@@ -99,7 +122,16 @@ RSpec.describe Message, type: :model do
 
     Message::USER_SENDABLE_KINDS.each do |allowed_kind|
       it "is valid when kind is :#{allowed_kind}" do
-        expect(build(:message, kind: allowed_kind.to_sym)).to be_valid
+        # An offer's body must read as one (Message#offer_body_readable).
+        body = Message::OFFER_KINDS.include?(allowed_kind.to_sym) ? "5000|AFN|5500" : "body"
+        # A reply kind answers the other side's message of the right kind.
+        conversation = create(:conversation)
+        target = if (kinds = Message::REPLY_TARGETS[allowed_kind])
+                   create(:message, conversation: conversation, user: conversation.seller, kind: kinds.first,
+                                    body: Message::OFFER_KINDS.include?(kinds.first.to_sym) ? "5000|AFN|5500" : "Cafe | 3pm")
+        end
+        expect(build(:message, conversation: conversation, user: conversation.buyer, kind: allowed_kind.to_sym,
+                               body: body, responds_to: target)).to be_valid
       end
     end
   end

@@ -14,7 +14,14 @@ class User < ApplicationRecord
   include DeviseTokenAuth::Concerns::User
   include ClientVersionReporting
 
+  # Sign in with Apple (1.1.7): the refresh token kept only to revoke the
+  # account's Apple authorization on deletion — encrypted like VER-1's numbers.
+  encrypts :apple_refresh_token
+
   has_one_attached :avatar
+  # Public: a permanent URL so apps cache it (PublicImageUrl).
+  def avatar_url = PublicImageUrl.for(avatar)
+  def avatar_thumb_url = PublicImageUrl.variant(avatar, :avatar)
 
   # The avatar was unvalidated: `user[avatar]` accepted any file of any size.
   # Smaller cap than a listing photo — this is one small square, and the mobile
@@ -26,6 +33,22 @@ class User < ApplicationRecord
   enum :status, { active: 0, suspended: 1, banned: 2 }
 
   has_many :listings, dependent: :destroy
+  # SHOP-1 (docs/SHOPS.md in hatiwal-mobile). Owned shops go with the account;
+  # memberships are the right to sell AS a shop. `active_shop` is who the user
+  # sells as ("Selling as"); nil = Me. Always read it through #selling_shop.
+  has_many :owned_shops, class_name: Shop.name, foreign_key: :owner_id, dependent: :destroy, inverse_of: :owner
+  has_many :shop_members, dependent: :destroy
+  has_many :shops, through: :shop_members
+  # SHOP-3 team rows that point at the user without being theirs. Accounts are
+  # anonymized, not destroyed, but a hard destroy (the QA seed) must not hit the
+  # foreign keys: an accepted invite stays as history, the invites they sent go.
+  has_many :accepted_shop_invites, class_name: ShopInvite.name, foreign_key: :accepted_by_id,
+                                   dependent: :nullify, inverse_of: :accepted_by
+  has_many :sent_shop_invites, class_name: ShopInvite.name, foreign_key: :invited_by_id,
+                               dependent: :destroy, inverse_of: :invited_by
+  has_many :invited_shop_members, class_name: ShopMember.name, foreign_key: :invited_by_id,
+                                  dependent: :nullify, inverse_of: :invited_by
+  belongs_to :active_shop, class_name: Shop.name, optional: true
   has_many :saved_listings, dependent: :destroy
   has_many :saved_listing_items, through: :saved_listings, source: :listing
   has_many :hidden_listings, dependent: :destroy
@@ -57,6 +80,33 @@ class User < ApplicationRecord
 
   # What stops this person applying, as stable keys the clients translate.
   # Empty = may apply.
+  # Owner rule (1.1.6): opening a shop and applying for Verified need a
+  # CONFIRMED email, or the address may be wrong. Google sign-in sets
+  # confirmed_at (the address is proven by Google).
+  def email_confirmed? = confirmed_at.present?
+
+  # Admin "Confirm email now" (owner, 2026-10-08): the CURRENT address counts as
+  # proven from now on. A pending change of address (Devise reconfirmable keeps
+  # it in unconfirmed_email until its link is clicked) is dropped with its
+  # token: the admin vouched for the address they can see, not for one the user
+  # typed and never proved. update_columns: no Devise callback may re-send a
+  # confirmation mail or postpone anything. The email gate
+  # (ApplicationController#require_confirmed_email!) reads confirmed_at on every
+  # request, so shops and verification unlock at once.
+  def admin_confirm_email!
+    update_columns(confirmed_at: Time.current, unconfirmed_email: nil, confirmation_token: nil, updated_at: Time.current)
+  end
+
+  # devise_token_auth's own payloads (sign_in, validate_token, sign-up) render
+  # this, not UserSerializer — and without `email_confirmed` the apps read an
+  # unconfirmed account as confirmed (undefined = "an older API") until
+  # something fetched /users/me: right after sign-in or a reload, "Open your
+  # shop" and Verify skipped their email gate and only the API's 403 said no
+  # (device check 2026-10-07, d_email_gate). Same boolean as UserSerializer :me.
+  def token_validation_response
+    super.merge("email_confirmed" => email_confirmed?)
+  end
+
   def verification_missing
     missing = []
     missing << "email_confirmed" if confirmed_at.blank?
@@ -65,23 +115,14 @@ class User < ApplicationRecord
     missing
   end
 
-  # A verified person who changes their name loses the badge: it vouched for
-  # the OLD name. They re-apply (the status card says "Your name changed —
-  # verify again", VerificationStatus#name_changed?). Decided rows are history
-  # and stay exactly as they were. Called from the user's own profile edit,
-  # not on admin edits.
-  def drop_badge_after_name_change!
-    return unless verified? && (saved_change_to_firstname? || saved_change_to_lastname?)
-
-    update!(verified: false)
-  end
-
   # Account deletion: nothing of an ID document may outlive the account. Open
   # requests are cancelled (so none sits in the admin queue forever), every
   # photo is deleted, and the name on the document + the number are blanked.
   # Decisions and the number's digest stay (ban evasion), nothing readable.
+  # Shop requests they sent as owner or manager hold THEIR e-Tazkira too.
   def forget_verification_documents!
-    verification_requests.find_each do |request|
+    VerificationRequest.where(id: verification_requests.select(:id))
+                       .or(VerificationRequest.where(requested_by_id: id)).find_each do |request|
       request.purge_files!
       # The number goes; its digest stays (with the decision), so a banned
       # person cannot verify a new account with the same ID.
@@ -90,6 +131,11 @@ class User < ApplicationRecord
       request.update_columns(attrs)
     end
   end
+  # ── SHOP-1: the subject hooks VerificationRequest calls (a Shop has the same) ──
+  def verification_granted!(_admin) = update!(verified: true)
+  def verification_withdrawn! = update!(verified: false)
+  def verification_notice_recipient = self
+  def verification_notice_key(decision) = { verified: :user_verified, rejected: :user_verification_rejected, revoked: :user_badge_revoked }.fetch(decision)
   # ── end VER-1 ──
 
   validates :firstname, presence: true
@@ -99,8 +145,37 @@ class User < ApplicationRecord
   SUPPORTED_LANGUAGES = %w[en ps fa ur].freeze
 
   validates :preferred_language, inclusion: { in: SUPPORTED_LANGUAGES }, allow_blank: true
+
+  # The language a NEW Google/Apple account starts in: the app's, when it is one we
+  # ship; anything else keeps the column default. Never used on a returning account.
+  def self.signup_language_attrs(language)
+    SUPPORTED_LANGUAGES.include?(language.to_s) ? { preferred_language: language.to_s } : {}
+  end
   validates :preferred_theme, inclusion: { in: %w[light dark system] }, allow_blank: true
   validates :push_token, length: { maximum: 200 }, allow_blank: true
+
+  # The token to push to, or nil. It belongs to the devise client that registered it (push_token_client); once
+  # that session is gone — signed out elsewhere, revoked, expired — the token is cleared and nothing is sent, so
+  # a stolen phone stops getting chat previews when its session is revoked (review 2026-10-30). A token from
+  # before push_token_client existed (NULL) keeps the old rule.
+  def live_push_token
+    return nil if push_token.blank?
+    return push_token if push_token_client.blank?
+
+    session = (tokens || {})[push_token_client]
+    return push_token if session && session["expiry"].to_i > Time.current.to_i
+
+    update_columns(push_token: nil, push_token_client: nil)
+    nil
+  end
+
+  # One device token = one account: a token just registered is taken off every other user (a shared phone
+  # whose last user's session ended without a server sign-out). Review 2026-10-30.
+  def claim_push_token!
+    return if push_token.blank?
+
+    User.where(push_token: push_token).where.not(id: id).update_all(push_token: nil, push_token_client: nil)
+  end
   # A WhatsApp number, which is often NOT the account phone (different SIM).
   #
   # Length only — deliberately no format check. Afghan numbers are written
@@ -115,7 +190,9 @@ class User < ApplicationRecord
   scope :not_deleted, -> { where(deleted_at: nil) }
   # Hidden from public surfaces (profile, search) both while pending deletion
   # and after final anonymization.
-  scope :publicly_active, -> { where(deleted_at: nil, deletion_scheduled_at: nil) }
+  # …and while banned or suspended (d0 hunt 2026-10-09): a ban hides the public
+  # profile and the account from people search, like a deletion does.
+  scope :publicly_active, -> { where(deleted_at: nil, deletion_scheduled_at: nil, status: :active) }
 
   def full_name
     "#{firstname} #{lastname}".strip
@@ -185,7 +262,9 @@ class User < ApplicationRecord
   # (as reviewee). Called only when a review is revealed, so feeds never sum
   # reviews per row. update_columns skips validations/callbacks by design.
   def recompute_review_stats!
-    visible = Review.visible.for_reviewee(self)
+    # A buyer's review of a SHOP sale rates the shop (Shop#reviews), not the
+    # owner as a person (owner, 2026-10-07).
+    visible = Review.visible.for_reviewee(self).about_person
     update_columns(
       review_count: visible.count,
       avg_rating: visible.average(:rating)&.round(2)
@@ -225,8 +304,9 @@ class User < ApplicationRecord
   # there is no live decrement path — so this recompute is a genuine repair
   # lever, not a no-op.
   def recompute_transaction_counters!
-    sold_from_transactions = Transaction.as_seller(self).sold.distinct.count(:listing_id)
-    sold_from_legacy_listings = listings.sold.count
+    # Personal only (owner, 2026-10-07): shop sales count on the shop.
+    sold_from_transactions = Transaction.as_seller(self).personal.sold.distinct.count(:listing_id)
+    sold_from_legacy_listings = listings.personal.sold.count
     update_columns(
       sold_count: [ sold_from_transactions, sold_from_legacy_listings ].max,
       bought_count: Transaction.as_buyer(self).sold.distinct.count(:listing_id)
@@ -285,6 +365,8 @@ class User < ApplicationRecord
     self.tokens = tokens.slice(password_change_client)
   end
 
+  prepend DeviceTokenCap
+
   # Devise sends its notifications with deliver_now, which would put an SMTP
   # round-trip inside the signup request and — worse — turn a mail failure into a
   # 500 on an account that was actually created. Queue them instead.
@@ -301,13 +383,31 @@ class User < ApplicationRecord
   # Human-readable "you are blocked" message. Always states they are blocked;
   # when the admin gave a reason, it is appended ("… Reason: <reason>"). The bare
   # reason is also returned separately for clients that want it structured.
+  # In the user's OWN language: the API does not switch locale per request
+  # (edge pass 1.1.6, 2026-10-08 — it was always English).
   def account_block_message
     return unless account_blocked?
 
-    base = I18n.t("accounts.blocked.#{status}", default: I18n.t("accounts.blocked.default"))
-    return base if block_reason.blank?
+    locale = reader_locale
+    base = I18n.t("accounts.blocked.#{status}", locale: locale, default: I18n.t("accounts.blocked.default", locale: locale))
+    reason = display_block_reason
+    return base if reason.blank?
 
-    "#{base} #{I18n.t('accounts.blocked.reason', reason: block_reason)}"
+    "#{base} #{I18n.t('accounts.blocked.reason', reason: reason, locale: locale)}"
+  end
+
+  # The reason as the user should read it: an admin's words as written; the
+  # automatic one (3 warnings) — stored in whatever locale was current when it
+  # happened — in the user's own language.
+  def display_block_reason
+    return block_reason unless auto_blocked? && suspended?
+
+    I18n.t("accounts.auto_suspended_reason", count: WARNING_BLOCK_THRESHOLD, locale: reader_locale)
+  end
+
+  def reader_locale
+    locale = preferred_language.presence&.to_sym
+    locale && I18n.locale_available?(locale) ? locale : I18n.default_locale
   end
 
   # ── Self-deletion (anonymize, keep history) ──────────────────────────────────
@@ -326,7 +426,12 @@ class User < ApplicationRecord
   # data is left intact so logging back in within the grace period can restore it.
   def schedule_deletion!
     transaction do
+      # Their personal listings and their OWN shops' products. Not what they
+      # posted for someone else's shop: that is the shop's, which keeps selling
+      # it, and it passes to the owner when the deletion is final (Shop#leave!
+      # from anonymize_account!; edge pass 2026-10-08).
       listings.where(removed_at: nil)
+              .where("listings.shop_id IS NULL OR listings.shop_id IN (SELECT shops.id FROM shops WHERE shops.owner_id = ?)", id)
               .update_all(removed_at: Time.current, removed_reason: "pending_deletion", updated_at: Time.current)
       update!(deletion_scheduled_at: Time.current, tokens: {})
     end
@@ -350,7 +455,13 @@ class User < ApplicationRecord
   # all PII and block login permanently, while RETAINING messages as "Deleted
   # user" so the other participant keeps their conversation history.
   def anonymize_account!
+    apple_token = apple_refresh_token
     transaction do
+      # SHOP-3: deleting the account is leaving every shop they are a member of,
+      # with the same rules as Shop#leave! — first, so the products they posted
+      # for a shop pass to its owner instead of being hidden below, and a badge
+      # they applied for comes off (edge pass 2026-10-08).
+      shop_members.where.not(role: :owner).includes(:shop).find_each { |m| m.shop.leave!(self) }
       # Hide active listings from the public feed but keep them for chat history.
       listings.where(removed_at: nil)
               .update_all(removed_at: Time.current, removed_reason: "account_deleted", updated_at: Time.current)
@@ -374,13 +485,23 @@ class User < ApplicationRecord
         push_token: nil,
         password: SecureRandom.hex(32), # unusable; old credentials no longer work
         deleted_at: Time.current,
-        tokens: {}                       # invalidate all existing sessions
+        tokens: {},                      # invalidate all existing sessions
+        apple_uid: nil,                  # Sign in with Apple: forget the Apple id…
+        apple_refresh_token: nil         # …and revoke its authorization (after commit)
       )
       avatar.purge_later if avatar.attached?
       forget_verification_documents! # VER-1
+      # SHOP-1: their shops leave with them; memberships elsewhere end.
+      owned_shops.where.not(status: :closed).find_each(&:close!)
+      shop_members.destroy_all
+      assign_attributes(active_shop_id: nil)
       assign_attributes(verified: false)
       save!(validate: false)
     end
+    # App Store guideline 5.1.1(v): a deleted account's Sign in with Apple
+    # authorization is revoked too. After the transaction, so a rollback never
+    # revokes; the token travels encrypted (AppleRevokeJob).
+    AppleRevokeJob.enqueue_for(apple_token)
   end
 
   # ── Warning / strike system ──────────────────────────────────────────────────
@@ -498,6 +619,13 @@ class User < ApplicationRecord
     seller_response_stats.time_label
   end
 
+  # What GET /listings?user_id= returns (`browsable` = live + not expired).
+  def live_listings_count
+    # A person's profile is personal (owner, 2026-10-07): products posted as one
+    # of their shops belong to the shop's page, never to the owner's profile.
+    @live_listings_count ||= listings.personal.live.not_expired.count
+  end
+
   # ── Shareable deep-link URL ──────────────────────────────────────────────────
   # Returns an https profile share URL when PUBLIC_SHARE_BASE_URL env var is
   # configured, otherwise nil (the mobile app falls back to hatiwal://seller/<id>).
@@ -605,6 +733,78 @@ class User < ApplicationRecord
     true
   end
 
+  # ── SHOP-1: "Selling as" ────────────────────────────────────────────────────
+  # The shop this user is selling as, or nil for Me. Checked against the
+  # membership AND the shop's status on every call, so a stored choice can never
+  # act for a shop the user has left, or one that was suspended or deleted; a
+  # stale choice is cleared and the user falls back to Me.
+  def selling_shop
+    return nil if active_shop_id.nil?
+
+    shop = active_shop
+    return shop if shop&.active? && shop.member?(self)
+
+    update_column(:active_shop_id, nil)
+    nil
+  end
+
+  # Switch who the user sells as. nil = Me. Returns false (and changes nothing)
+  # for a shop they are not a member of, or one that is not active.
+  def sell_as!(shop)
+    return false if shop && !shop.may_sell?(self)
+
+    update!(active_shop: shop)
+  end
+
+  # Unread messages per identity, in ONE grouped query, for the "Selling as"
+  # pill and sheet: { buying:, selling_me:, support:, shops: { shop_id => n } }.
+  # Same rules as unread_message_count (archived chats are silent; your own
+  # messages never count). Owner, 2026-10-12 (Support per identity):
+  # - support: the person's OWN Support thread. Buyer mode and Seller as Me
+  #   both show it, so it is counted in `buying` too: the Buyer badge is
+  #   `buying`, the Seller-as-Me badge is `selling_me + support`;
+  # - a shop's own Support thread counts in that shop's entry.
+  def unread_counts
+    identity = Arel.sql(
+      "CASE WHEN conversations.kind = #{Conversation.kinds[:support]} AND conversations.shop_id IS NULL THEN 'support' " \
+      "WHEN conversations.buyer_id = #{id.to_i} THEN 'buying' " \
+      "WHEN #{Conversation::OWNERS_OWN_SQL} THEN 'selling_me' ELSE conversations.shop_id::text END"
+    )
+    raw = Message.joins(:conversation)
+                 .where(conversation_id: Conversation.for_user(self).not_archived_for(self).select(:id), read_at: nil)
+                 .where(Conversation.inbound_message_sql_for(self), u: id)
+                 .group(identity).count
+    support = raw.fetch("support", 0)
+    shops = raw.except("buying", "selling_me", "support").transform_keys(&:to_s)
+    { buying: raw.fetch("buying", 0) + support, selling_me: raw.fetch("selling_me", 0), support: support, shops: shops }
+  end
+
+  # The seller-side listings for whoever the user is selling as: the shop's
+  # products, or their personal (shop-less) listings as Me.
+  # Listings this user may manage: their own, plus (SHOP-3) every product of a
+  # shop they're a member of.
+  # Own personal listings + every product of a shop the user is on NOW (not
+  # shop products they posted on a team they have left; review 2026-10-08).
+  def manageable_listings
+    Listing.where(user_id: id, shop_id: nil).or(Listing.where(shop_id: shop_members.select(:shop_id)))
+  end
+
+  def listings_for_selling_identity(shop = selling_shop)
+    # SHOP-3: a shop's products are every member's to manage, whoever posted them.
+    shop ? shop.listings : listings.where(shop_id: nil)
+  end
+
+  # OFFLINE §10.6: the identity a write names itself — `shop_id` nil / blank is
+  # Me — instead of whatever the user is selling as on the server right now (a
+  # write queued offline as the shop must land in the shop). [:ok, shop_or_nil],
+  # or [:unavailable] for a shop they may not post as (left it, closed, never theirs).
+  def identity_for(shop_id)
+    return [ :ok, nil ] if shop_id.blank?
+
+    shop = Shop.find_by(id: shop_id)
+    shop&.may_sell?(self) ? [ :ok, shop ] : [ :unavailable ]
+  end
+
   private
 
   def away_until_must_be_future
@@ -634,11 +834,28 @@ class User < ApplicationRecord
     @seller_response_stats ||= compute_seller_response_stats
   end
 
-  def compute_seller_response_stats
-    window_convos = seller_conversations
-                    .where(created_at: 90.days.ago..)
-                    .includes(:messages)
-                    .to_a   # materialise once; all further work is in-memory
+  # A LIST of public profiles (GET /blocks) in a fixed number of queries: the
+  # response stats from one window query for all of them, and the live listing
+  # counts from one grouped count. Each user then reads its own memo, so the
+  # serializer stays the same for one profile and for many.
+  def self.preload_public_stats(users)
+    users = Array(users)
+    return users if users.empty?
+
+    ids = users.map(&:id)
+    convos = Conversation.where(seller_id: ids, created_at: 90.days.ago..).includes(:messages).group_by(&:seller_id)
+    counts = Listing.where(user_id: ids).personal.live.not_expired.group(:user_id).count
+    users.each do |u|
+      u.instance_variable_set(:@seller_response_stats, u.send(:compute_seller_response_stats, convos.fetch(u.id, [])))
+      u.instance_variable_set(:@live_listings_count, counts.fetch(u.id, 0))
+    end
+  end
+
+  def compute_seller_response_stats(preloaded = nil)
+    window_convos = preloaded || seller_conversations
+                                 .where(created_at: 90.days.ago..)
+                                 .includes(:messages)
+                                 .to_a # materialise once; all further work is in-memory
 
     if window_convos.size < 5
       return ResponseStats.new(rate_percent: nil, time_label: nil)

@@ -48,6 +48,7 @@ RSpec.describe "Api::V1::My::Listings lifecycle errors (SF-B7)", type: :request 
       parameter name: :id, in: :path, type: :integer, required: true
 
       put("#{action} one of the caller's own listings") do
+        idempotency_key_header
         tags "Listings"
         description <<~DESC
           Seller lifecycle command. SF-B7 — a listing that fails validation

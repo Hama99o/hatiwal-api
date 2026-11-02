@@ -62,7 +62,7 @@ RSpec.describe Listing, ".nearest_window_km" do
     create_list(:listing, 3, :active, latitude: 34.36, longitude: 62.21)
     create_list(:listing, 3, :active, latitude: 34.5553, longitude: 69.2075)
     scope = described_class.browsable.where.not(latitude: nil)
-    expect(described_class.nearest_window_km(scope, 34.3529, 62.204, 3)).to eq(50)
+    expect(described_class.nearest_window_km(scope, 34.3529, 62.204, 3)).to eq(2)
     expect(described_class.nearest_window_km(scope, 34.3529, 62.204, 6)).to eq(1000)
     expect(described_class.nearest_window_km(scope, 34.3529, 62.204, 7)).to be_nil
   end

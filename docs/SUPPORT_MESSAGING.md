@@ -45,6 +45,37 @@ break during development: the inbox pin as a `CASE` expression made every
 `?search=` a 500 (`SELECT DISTINCT` rejects it). See that spec before touching
 these serializers.
 
+## Support per identity (owner, 2026-10-12)
+
+Reverses the 2026-10-07 "one mixed thread + a `context` per message". Hatiwal Support is
+**separated per identity** (`hatiwal-mobile/docs/OWNER_ITEMS_2026-10-12.md`, item 4):
+
+| Thread | Shape | Shown in | Carries |
+|---|---|---|---|
+| The person's own | `kind: support`, `shop_id: null`, buyer = the person, seller = the Support account | Buyer mode and Seller as Me | the person's notices: verification, invites to them, joined / removed / role / ownership about them, app update, a personal listing's expiry |
+| A shop's own (one per shop) | `kind: support`, `shop_id` = the shop, **buyer = the Support account, seller = the shop's owner** | only while that shop is selected | the shop's notices: shop verification and re-verify, "X joined the shop", a shop listing's expiry |
+
+- A shop's thread is the shop team's, exactly like the shop's chats (`Conversation::SELLER_SIDE_SQL`): every member reads and replies, a teammate's message is never "unread" for the others, the team sees who replied (`sent_by`), and a transfer moves it to the new owner.
+- `POST /api/v1/support_conversation`: no params gives the caller's own thread; `shop_id=<id>` gives that shop's (members only, else 403). Idempotent.
+- `GET /api/v1/conversations` pins each identity's thread first, and only that one:
+  - `role=buying`: the person's thread;
+  - `role=selling&shop_id=none`: the person's thread (Seller as Me);
+  - `role=selling&shop_id=<id>`: that shop's thread.
+- Badges (`me.unread_counts`):
+  - `support` = the person's thread, also counted in `buying`;
+  - the Seller-as-Me badge is `selling_me + support`;
+  - `shops[id]` includes the shop's own thread.
+- Push: a Support message in a shop's thread reaches the whole team with `role: "selling"` and `shopId`.
+- `messages.context`:
+  - a person's thread takes `{mode: buyer|seller}` and refuses a `shop_id` (422 `invalid_message_context`): a shop writes in its own thread;
+  - a shop's thread stamps `{mode: seller, shop_id, role}` itself, so the admin sees the member's role.
+- Admin: the Support list shows shop threads under the shop's name ("Shop" badge). A shop thread shows which member wrote each message and their role, and a reply goes to the whole team.
+- Migration `20261007120000_support_thread_per_shop`:
+  - the unique indexes become one thread per person and one per shop;
+  - messages written from a shop in the interim mixed thread (`context.shop_id`) move to that shop's thread;
+  - it's idempotent, and a no-op in production (no shops yet).
+- `shop_chat` is `false` on a shop's Support thread: it is a Support thread, not a "Message shop" chat.
+
 ## Why this cannot break v1.0.4
 
 v1.0.4 is live, can only talk to production, and sends no version header, so
@@ -190,8 +221,21 @@ else the default locale) with the usual broadcast + push. Added 2026-10-05.
 
 | Key | Sent when | Enqueued by |
 |---|---|---|
-| `user_verified` | An admin switches a user's **verified** badge from off to on | `Admin::UsersController#update` |
-| `shop_verified`, `shop_verification_rejected`, `shop_badge_removed` | planned, see `hatiwal-mobile/docs/SHOPS.md` | Admin shops (not built) |
+| `user_verified` | An admin switches a user's **verified** badge from off to on | `Admin::UsersController#update`; VER-1 approve (`VerificationRequest#approve!`) |
+| `user_verification_rejected`, `user_badge_revoked` | VER-1: an admin rejects a request / removes the badge (with the reason) | `VerificationRequest#reject!` / `#revoke!` (admin queue) |
+| `shop_verified`, `shop_verification_rejected`, `shop_badge_removed`, `shop_reverify_needed` | The same for a shop, to its owner (SHOP-1/2) | `VerificationRequest` decisions; `ShopsController#update` (name/address edit) |
+| `app_update_available` | UPD-1: a build too old to block is told to update | `AppUpdateNotice` (once per user per version) |
+| `shop_invite_received` | SHOP-3: an existing, confirmed account is invited by email (also on resend) | `Shop#invite!`, `ShopInvitesController#resend` |
+| `shop_member_joined` → owner, `shop_joined` → the new member | Someone accepts an invite | `ShopInvite#accept!` |
+| `shop_role_changed` | The owner changes a member's role | `Shop#change_role!` |
+| `shop_member_removed` | A member is removed (leaving on your own sends nothing) | `Shop#remove_team_member!` |
+| `shop_ownership_received` → new owner, `shop_ownership_handed_over` → old owner | Ownership is transferred | `Shop#transfer_ownership!` |
+
+The SHOP-3 team notices (owner, 2026-10-07) sit beside the team pushes. Each one
+re-checks the state when it runs (`SupportNoticeJob::TEAM_NOTICES`): a cancelled
+invite, a member already gone or a role changed back sends nothing stale. Roles
+are named in the reader's language (`support.team_roles.*`), with the app's own
+words. Texts: `config/locales/shop_team_notices.*.yml`.
 
 Rules:
 - Enqueued by the action, never by a model callback (same reason as the welcome).
@@ -199,3 +243,26 @@ Rules:
 - It goes through `Conversation.admin_support_thread_for`, so nothing is sent while `SUPPORT_ADMIN_INITIATE` is off.
 - A retried job does not post the same text twice within an hour.
 - Text lives under `support.notices.<key>` in en/ps/fa/ur. `%{name}` is the first name.
+
+### Tappable notices (owner, 2026-10-12)
+
+A notice with a natural target carries a button: `messages[].action`
+`{type, label_key, params}`, kept in the message's `context["action"]` (only
+Support's own messages may carry one: `Message#support_notice_context`). The
+body is unchanged, so older apps show the same sentence and no button.
+
+| Notice | `type` | `params` | Label (`label_key`, translated by the apps) |
+|---|---|---|---|
+| `user_verification_rejected`, `user_badge_revoked` | `open_verification` | `{subject: "me"}` | `chat.noticeAction.tryVerificationAgain` |
+| `shop_verification_rejected`, `shop_badge_removed` | `open_verification` | `{subject: "shop", shop_id}` | `chat.noticeAction.tryVerificationAgain` |
+| `shop_reverify_needed` | `open_verification` | `{subject: "shop", shop_id}` | `chat.noticeAction.verifyAgain` |
+| `shop_verified`, `shop_joined`, `shop_role_changed`, `shop_ownership_handed_over` | `open_shop` | `{shop_id}` | `chat.noticeAction.viewShop` |
+| `shop_member_joined`, `shop_ownership_received` | `open_team` | `{shop_id}` | `chat.noticeAction.viewTeam` |
+| `shop_invite_received` | `open_invite` | `{token}` | `chat.noticeAction.openInvite` |
+| `listing_expires_week`, `listing_expires_day` | `open_listing` | `{listing_id, shop_id}` | `chat.noticeAction.renewListing` |
+
+No button: `user_verified`, `app_update_available`, `shop_member_removed`
+(nothing left to open). The apps switch to Seller mode and the right shop for a
+shop or listing target, and say so in a toast when the target is gone (an
+expired invite, a shop you left, a listing no longer yours). Table:
+`SupportNoticeJob::ACTIONS`; spec: `spec/jobs/support_notice_actions_spec.rb`.

@@ -47,6 +47,11 @@ RUN bundle install && \
 # Copy application code
 COPY . .
 
+# Bake the search-by-image model (89 MB, pinned revision, sha256-checked) into
+# the image, so the server never downloads a model at runtime
+# (docs/IMAGE_SEARCH.md). A failed download or checksum fails the build.
+RUN bin/fetch-image-model
+
 # Precompile bootsnap code for faster boot times.
 # -j 1 disable parallel compilation to avoid a QEMU bug: https://github.com/rails/bootsnap/issues/495
 RUN bundle exec bootsnap precompile -j 1 app/ lib/

@@ -22,7 +22,7 @@ RSpec.describe PurgeVerificationFilesJob, type: :job do
     expect(old.checklist).to include("photo_clear" => false)
     blob_keys.each { |key| expect(ActiveStorage::Blob.service.exist?(key)).to be(false) }
 
-    expect(recent.reload.files_count).to eq(2)
-    expect(waiting.reload.files_count).to eq(2)
+    expect(recent.reload.files_count).to eq(3) # e-Tazkira front + back + selfie
+    expect(waiting.reload.files_count).to eq(3)
   end
 end

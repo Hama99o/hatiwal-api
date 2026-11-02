@@ -119,15 +119,17 @@ RSpec.describe "Api::V1::Messages", type: :request do
     end
 
     it "creates a meetup accepted response" do
+      proposal = conversation.messages.create!(user: seller, kind: :meetup_proposal, body: "Cafe Aria | Tomorrow 3pm")
       post "/api/v1/conversations/#{conversation.id}/messages",
-           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_accepted" }, headers: headers, as: :json
+           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_accepted", responds_to_id: proposal.id }, headers: headers, as: :json
 
       expect(response).to have_http_status(:created)
       expect(JSON.parse(response.body)["message"]["kind"]).to eq("meetup_accepted")
     end
 
     it "links an accept/decline response to the specific proposal" do
-      proposal = conversation.messages.create!(user: buyer, kind: :meetup_proposal, body: "Cafe Aria | 3pm")
+      # The SELLER proposed; the buyer answers (a reply answers the other side).
+      proposal = conversation.messages.create!(user: seller, kind: :meetup_proposal, body: "Cafe Aria | 3pm")
 
       post "/api/v1/conversations/#{conversation.id}/messages",
            params: { body: "Cafe Aria | 3pm", kind: "meetup_declined", responds_to_id: proposal.id },
@@ -138,11 +140,13 @@ RSpec.describe "Api::V1::Messages", type: :request do
     end
 
     it "accepts an offer (linked to the offer message)" do
+      # The SELLER answers the buyer's offer (it used to be the buyer answering
+      # their own offer, which the server allowed — d0 hunt 2026-10-09).
       offer = conversation.messages.create!(user: buyer, kind: :offer, body: "7|AFN|11")
 
       post "/api/v1/conversations/#{conversation.id}/messages",
            params: { body: "7|AFN|11", kind: "offer_accepted", responds_to_id: offer.id },
-           headers: headers, as: :json
+           headers: auth_headers_for(seller), as: :json
 
       expect(response).to have_http_status(:created)
       body = JSON.parse(response.body)["message"]
@@ -151,11 +155,13 @@ RSpec.describe "Api::V1::Messages", type: :request do
     end
 
     it "declines an offer" do
+      # The SELLER answers the buyer's offer (it used to be the buyer answering
+      # their own offer, which the server allowed — d0 hunt 2026-10-09).
       offer = conversation.messages.create!(user: buyer, kind: :offer, body: "7|AFN|11")
 
       post "/api/v1/conversations/#{conversation.id}/messages",
            params: { body: "7|AFN|11", kind: "offer_declined", responds_to_id: offer.id },
-           headers: headers, as: :json
+           headers: auth_headers_for(seller), as: :json
 
       expect(response).to have_http_status(:created)
       expect(JSON.parse(response.body)["message"]["kind"]).to eq("offer_declined")
@@ -241,8 +247,9 @@ RSpec.describe "Api::V1::Messages", type: :request do
     # ── end TASK-O829 ─────────────────────────────────────────────────────────
 
     it "creates a meetup declined response" do
+      proposal = conversation.messages.create!(user: seller, kind: :meetup_proposal, body: "Cafe Aria | Tomorrow 3pm")
       post "/api/v1/conversations/#{conversation.id}/messages",
-           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_declined" }, headers: headers, as: :json
+           params: { body: "Cafe Aria | Tomorrow 3pm", kind: "meetup_declined", responds_to_id: proposal.id }, headers: headers, as: :json
 
       expect(response).to have_http_status(:created)
       expect(JSON.parse(response.body)["message"]["kind"]).to eq("meetup_declined")
@@ -288,7 +295,7 @@ RSpec.describe "Api::V1::Messages", type: :request do
       end
 
       it "succeeds when responds_to_id points at a message in the SAME conversation" do
-        proposal = create(:message, conversation: conversation, user: buyer,
+        proposal = create(:message, conversation: conversation, user: seller,
                                     kind: :meetup_proposal, body: "Cafe | 3pm")
 
         post "/api/v1/conversations/#{conversation.id}/messages",
@@ -343,8 +350,15 @@ RSpec.describe "Api::V1::Messages", type: :request do
 
       Message::USER_SENDABLE_KINDS.each do |allowed_kind|
         it "accepts kind:'#{allowed_kind}'" do
+          # A reply kind answers the seller's message of the right kind.
+          target = if (kinds = Message::REPLY_TARGETS[allowed_kind])
+                     conversation.messages.create!(user: seller, kind: kinds.first,
+                                                   body: Message::OFFER_KINDS.include?(kinds.first.to_sym) ? "5000|AFN|5500" : "Cafe | 3pm")
+          end
           post "/api/v1/conversations/#{conversation.id}/messages",
-               params: { body: "body for #{allowed_kind}", kind: allowed_kind },
+               # An offer's body must read as one (Message#offer_body_readable).
+               params: { body: Message::OFFER_KINDS.include?(allowed_kind.to_sym) ? "5000|AFN|5500" : "body for #{allowed_kind}",
+                         kind: allowed_kind, responds_to_id: target&.id },
                headers: headers, as: :json
 
           expect(response).to have_http_status(:created)
@@ -605,4 +619,57 @@ RSpec.describe "Api::V1::Messages", type: :request do
     end
   end
   # ── end TASK-M913 ─────────────────────────────────────────────────────────────
+
+  # d0 hunt 2026-10-09: the server checked only "same conversation", so the buyer
+  # could accept their own low offer (201), and the seller then saw "Ahmad
+  # accepted your offer · Reserve now" at the buyer's price; a meetup could be
+  # "accepted" by the person who proposed it; a meetup reply could point at an
+  # offer. A reply must answer the OTHER side's message of the right kind.
+  describe "a reply answers the other side's offer or meetup" do
+    let(:seller_h) { auth_headers_for(seller) }
+    def reply(kind, to, h) = post("/api/v1/conversations/#{conversation.id}/messages",
+                                  params: { body: to.body, kind: kind, responds_to_id: to.id }, headers: h, as: :json)
+
+    it "nobody can accept, decline or counter their OWN offer" do
+      offer = conversation.messages.create!(user: buyer, kind: :offer, body: "7000|AFN|11000")
+      %w[offer_accepted offer_declined offer_counter].each do |kind|
+        reply(kind, offer, headers)
+        expect(response).to have_http_status(:unprocessable_content), "#{kind} on own offer"
+      end
+    end
+
+    it "nobody can accept or decline their OWN meetup proposal" do
+      proposal = conversation.messages.create!(user: seller, kind: :meetup_proposal, body: "Cafe | 3pm")
+      %w[meetup_accepted meetup_declined].each do |kind|
+        reply(kind, proposal, seller_h)
+        expect(response).to have_http_status(:unprocessable_content), "#{kind} on own proposal"
+      end
+      reply("meetup_accepted", proposal, headers)
+      expect(response).to have_http_status(:created)
+    end
+
+    it "a reply must target the right kind (no meetup reply to an offer, no offer reply to a proposal)" do
+      offer = conversation.messages.create!(user: buyer, kind: :offer, body: "7000|AFN|11000")
+      proposal = conversation.messages.create!(user: buyer, kind: :meetup_proposal, body: "Cafe | 3pm")
+      reply("meetup_accepted", offer, seller_h)
+      expect(response).to have_http_status(:unprocessable_content)
+      reply("offer_accepted", proposal, seller_h)
+      expect(response).to have_http_status(:unprocessable_content)
+    end
+
+    it "a shop's team is ONE side: a member can't accept the shop's own counter" do
+      shop = create(:shop, owner: seller)
+      staff = create(:user).tap { |u| shop.shop_members.create!(user: u, role: :staff) }
+      product = create(:listing, :active, user: seller, shop: shop)
+      chat = Conversations::StartService.new(buyer: buyer, listing: product, message_body: "Hi").call
+      offer = chat.messages.create!(user: buyer, kind: :offer, body: "7000|AFN|11000")
+      counter = chat.messages.create!(user: seller, kind: :offer_counter, body: "9000|AFN|11000", responds_to: offer)
+      post "/api/v1/conversations/#{chat.id}/messages",
+           params: { body: counter.body, kind: "offer_accepted", responds_to_id: counter.id }, headers: auth_headers_for(staff), as: :json
+      expect(response).to have_http_status(:unprocessable_content)
+      post "/api/v1/conversations/#{chat.id}/messages",
+           params: { body: offer.body, kind: "offer_accepted", responds_to_id: offer.id }, headers: auth_headers_for(staff), as: :json
+      expect(response).to have_http_status(:created)
+    end
+  end
 end

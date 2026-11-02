@@ -13,9 +13,25 @@ module Api
         # notifications for the departing user. Without this, a second account
         # logging in on the same device shares the token and receives
         # notifications intended for the logged-out account.
+        #
+        # P0 login race (2026-10-06): DTA deletes this client from the user it
+        # loaded at the START of the request and saves the whole `tokens` hash.
+        # A sign-in of the same user committing in between (the app signing out
+        # and straight back in) was wiped by that stale save, so the sign-in
+        # answered 200 with no auth headers and a dead session. Re-read the row
+        # under a lock first: the delete then runs on the current tokens, and
+        # DTA's sign-in (create_and_assign_token, also with_lock) waits for it.
         def destroy
-          current_user&.update_column(:push_token, nil)
-          super
+          # Only the device that registered the token (its devise client) clears it: a sign-out on the web or on
+          # another phone used to wipe the phone's token and its chat pushes stopped (QA B11 E, 2026-10-29). A
+          # token from before push_token_client existed keeps the old rule.
+          if current_user && (current_user.push_token_client.nil? || current_user.push_token_client == request.headers["client"])
+            current_user.update_columns(push_token: nil, push_token_client: nil)
+          end
+          ActiveRecord::Base.transaction do
+            @resource&.lock!
+            super
+          end
         end
 
         private
@@ -30,7 +46,7 @@ module Api
               403,
               @resource.account_block_message,
               status: @resource.status,
-              reason: @resource.block_reason
+              reason: @resource.display_block_reason
             )
           else
             super

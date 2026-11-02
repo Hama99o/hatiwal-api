@@ -8,14 +8,23 @@ class Listing < ApplicationRecord
   class CorrectionBlocked < StandardError; end
 
   belongs_to :user
+  # SHOP-1 — set when posted while "selling as" a shop; nil = a personal listing.
+  belongs_to :shop, optional: true
+  # `GET /listings?seller_type=shop` — the Bazaar's "Shops" filter.
+  SELLER_TYPE_SHOP = "shop"
   belongs_to :category
   has_many_attached :images
   has_many :saved_listings, dependent: :destroy
   has_many :listing_views, dependent: :destroy
   has_many :conversations, dependent: :nullify
   has_many :reports, as: :reportable, dependent: :destroy
+  # Prohibited items: a listing is scanned when it goes live and when its text
+  # changes while live (#prohibited_scan_due?); a match only opens a Flag.
+  include ProhibitedScannable
   has_many :price_histories, class_name: ListingPriceHistory.name, dependent: :destroy
   has_many :hidden_listings, dependent: :destroy
+  # Search by image: one CLIP vector per photo. The DB cascades the delete.
+  has_many :image_embeddings, class_name: ListingImageEmbedding.name, dependent: nil
   # Named `sale_transactions` (not `transactions`) to avoid colliding with
   # ActiveRecord::Base#transaction (the DB-transaction method every model
   # inherits) — see TASK-TX01.
@@ -24,9 +33,11 @@ class Listing < ApplicationRecord
   enum :status, { draft: 0, active: 1, reserved: 2, sold: 3 }
   # Optional item condition. Keys avoid the reserved word `new` (would clash
   # with Listing.new); the mobile app maps them to "New / Like new / Good / Fair".
-  enum :condition, { brand_new: 0, like_new: 1, good: 2, fair: 3 }, prefix: :condition
+  # validate: an unknown value is a 422, not an ArgumentError 500 (night QA 2026-10-12).
+  enum :condition, { brand_new: 0, like_new: 1, good: 2, fair: 3 }, prefix: :condition, validate: { allow_nil: true }
 
-  validates :title, presence: true, length: { maximum: 150 }
+  MAX_TITLE_LENGTH = 150
+  validates :title, presence: true, length: { maximum: MAX_TITLE_LENGTH }
   # The `price` column is decimal(12, 2), so any value above 9_999_999_999.99
   # overflows in Postgres and raises ActiveRecord::RangeError *after* validation
   # has already passed. That surfaces to the mobile app as a 500 with no field
@@ -39,7 +50,21 @@ class Listing < ApplicationRecord
   # Multi-quantity listings (docs/SPIKE_LISTING_QUANTITY.md, Tier 1). Defaults to
   # 1 so nothing existing changes; the 999 ceiling is a sanity bound, not a
   # business rule — this is a local marketplace, not a warehouse.
-  validates :quantity, numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: 999 }
+  MAX_QUANTITY = 999
+  validates :quantity, numericality: { only_integer: true, greater_than: 0, less_than_or_equal_to: MAX_QUANTITY }
+
+  # Stays (docs/STAYS_DESIGN.md §2.2–2.4). `price_unit` nil = a total price (every
+  # item); a stay is priced per night (default) or per month; Property rent may be
+  # per month. `details` are a stay's typed facts (Listing::StayDetails) and stay
+  # empty for everything else.
+  PRICE_UNIT_NIGHT = "night".freeze
+  PRICE_UNIT_MONTH = "month".freeze
+  PRICE_UNITS = [ PRICE_UNIT_NIGHT, PRICE_UNIT_MONTH ].freeze
+  MONTHLY_RENT_SLUGS = %w[apartments-rent shops-offices].freeze
+
+  before_validation :prepare_stay_fields
+  validate :price_unit_fits_category
+  validate :details_fit_category
   validates :sold_units, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
   # SF-B6 — a seller editing `quantity` DOWN below what they have ALREADY sold
   # used to reach the DB CHECK constraint `listings_sold_units_within_quantity`
@@ -101,6 +126,7 @@ class Listing < ApplicationRecord
   CURRENCIES = %w[AFN PKR USD EUR].freeze
   validates :currency, presence: true, inclusion: { in: CURRENCIES }
   validates :category, presence: true
+  validate :shop_must_be_sellers
 
   # Photo limits. Both clients cap their picker at 8 photos (mobile
   # PhotosSection MAX_DEFAULT, web listing-form MAX_PHOTOS); this enforces the
@@ -120,7 +146,34 @@ class Listing < ApplicationRecord
   # POST a megabyte of prose per listing. 3 000 characters is far longer than any
   # real item description needs (the title cap is 150, a chat message 1 000).
   MAX_DESCRIPTION_LENGTH = 3_000
+
+  # OFFLINE §8.6 / §10.4 — the rules the app checks on the phone (also offline)
+  # before a listing enters its queue, read from the SAME constants the
+  # validations use, so the two never drift. Served in GET /app_config.
+  def self.client_rules
+    {
+      title_max: MAX_TITLE_LENGTH,
+      description_max: MAX_DESCRIPTION_LENGTH,
+      price_max: MAX_PRICE,
+      quantity_min: 1,
+      quantity_max: MAX_QUANTITY,
+      max_photos: MAX_IMAGES,
+      photo_required_to_publish: true,
+      video_max_seconds: HasVideo::MAX_VIDEO_DURATION_S,
+      video_max_bytes: HasVideo::MAX_VIDEO_SIZE
+    }
+  end
   validates :description, length: { maximum: MAX_DESCRIPTION_LENGTH }
+
+  # VID (1.1.9, docs/LISTING_VIDEO.md): one optional video per listing, beside
+  # the photos — never the cover. Uploaded through PUT /my/listings/:id/video,
+  # never with the listing save, so a slow upload can't block publishing. The
+  # attachments, validation and attach/purge live in HasVideo (shared with Shop).
+  include HasVideo
+  include FieldEdits
+  # OFFLINE §7.2: what an edit conflict can name (the fields a seller edits).
+  tracks_field_edits :title, :description, :price, :currency, :category_id, :location, :address,
+                     :latitude, :longitude, :condition, :negotiable, :quantity, :price_unit
 
   # A listing must carry at least one photo before it goes live. This is a
   # photo-first marketplace: a photoless card renders as the grey "no photo" box,
@@ -154,7 +207,17 @@ class Listing < ApplicationRecord
 
   EARTH_RADIUS_KM = 6371
   # How long a published listing stays in the buyer feed before it expires.
-  LISTING_LIFESPAN = 30.days
+  # Owner, 2026-10-12 (docs/OWNER_ITEMS_2026-10-12.md, item 1): 90 days, was 30.
+  LISTING_LIFESPAN = 90.days
+  # An edit + relaunch may move a listing back to the top of the feed, at most
+  # once per this interval. A plain Renew never does.
+  BUMP_INTERVAL = 7.days
+  # The two expiry reminders (ListingExpiryReminderJob): name => how long before
+  # `expires_at` it goes out, and the column recording the expiry it was sent for.
+  EXPIRY_REMINDERS = {
+    week: { before: 7.days, column: :expiry_reminder_week_for },
+    day: { before: 1.day, column: :expiry_reminder_day_for }
+  }.freeze
 
   # Valid sort keys accepted by the API. "nearest" additionally requires
   # latitude/longitude — the controller applies `nearest_first` for it and
@@ -172,13 +235,16 @@ class Listing < ApplicationRecord
   # `sold`, `draft` and admin-removed listings are the genuinely-unavailable set
   # and stay out.
   scope :live,        -> { where(status: [ :active, :reserved ]) }
-  scope :ordered,     -> { order(created_at: :desc) }
+  # Newest first by `bumped_at` (= `created_at` until an edit + relaunch moves it).
+  scope :ordered,     -> { order(bumped_at: :desc) }
   # Filtering by a category includes everything filed under its subcategories:
   # the create-listing picker lets a seller file an item under
   # "Electronics > Phones", and that item is still an Electronics listing.
-  # Expressed as a subquery so it stays one round-trip and composes with the
-  # rest of the browse scope chain.
-  scope :by_category, ->(id) { where(category_id: Category.self_and_children(id).select(:id)) }
+  # The ids are read first (one tiny query on ~80 categories) and inlined: with
+  # a literal list Postgres can estimate the category's share of the feed and
+  # pick a good plan; with a subquery it guessed blind and sorted ~70k
+  # price-matching rows for a category page (docs/PERFORMANCE_100K.md).
+  scope :by_category, ->(id) { where(category_id: Category.self_and_children(id).pluck(:id)) }
   scope :by_seller,   ->(id) { where(user_id: id) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :not_removed, -> { where(removed_at: nil) }
@@ -188,8 +254,21 @@ class Listing < ApplicationRecord
   # tab that offers Renew, or it would drop out of `browsable` (`not_expired`)
   # and appear in NO seller tab at all. Name kept for its callers.
   scope :expired_active, -> { live.where("expires_at IS NOT NULL AND expires_at <= ?", Time.current) }
+  # VID — listings whose video is due for deletion: deleted, sold or expired
+  # VIDEO_KEPT_FOR ago or more. Read from the CURRENT state at run time, so an
+  # undo of sold (sold_at cleared), a renew (new expires_at) or a restore
+  # (removed_at cleared) inside the window simply drops out — nothing to cancel.
+  # The SQL twin of #off_market_since.
+  scope :video_purgeable, lambda {
+    joins(:video_attachment).where(
+      "listings.removed_at <= :cutoff " \
+      "OR (listings.status = :sold AND listings.sold_at <= :cutoff) " \
+      "OR (listings.status IN (:live) AND listings.expires_at <= :cutoff)",
+      cutoff: VIDEO_KEPT_FOR.ago, sold: statuses[:sold], live: statuses.values_at(:active, :reserved)
+    )
+  }
 
-  # Sort the result set by the supplied key. Falls back to newest (created_at
+  # Sort the result set by the supplied key. Falls back to newest (bumped_at
   # desc) for any absent or unrecognised value — the SORT_KEYS whitelist prevents
   # injection and keeps sort semantics clearly defined in one place.
   scope :sorted, lambda { |key|
@@ -198,7 +277,7 @@ class Listing < ApplicationRecord
     when "price_desc"  then reorder(price: :desc)
     when "oldest"      then reorder(created_at: :asc)
     when "most_viewed" then reorder(views_count: :desc)
-    else                    reorder(created_at: :desc)
+    else                    reorder(bumped_at: :desc)
     end
   }
 
@@ -223,7 +302,19 @@ class Listing < ApplicationRecord
   # by an admin. THE load-bearing line of SF-B1 — the feed, search, category
   # counts, the similar-listings rail and recently-viewed all compose on top of
   # this one scope, so widening it here widens all of them at once.
-  scope :browsable,   -> { live.not_expired.not_removed.ordered }
+  # SHOP-1: a suspended (or still pending) shop disappears from search with all
+  # its products. A subquery, not a join, so every caller's count/select/distinct
+  # stays exactly as it was.
+  scope :from_visible_shops, -> { where("listings.shop_id IS NULL OR listings.shop_id IN (?)", Shop.visible.select(:id)) }
+  scope :from_shops,  -> { where.not(shop_id: nil) }
+  # Posted as the PERSON ("Me"), not as one of their shops.
+  scope :personal,    -> { where(shop_id: nil) }
+  scope :by_shop,     ->(id) { where(shop_id: id) }
+  # A banned or suspended seller's listings are out of every public surface
+  # (d0 hunt 2026-10-09): a ban only set users.status, and buyers kept
+  # finding and messaging an account that can never answer.
+  scope :from_active_sellers, -> { where.not(user_id: User.where.not(status: :active).select(:id)) }
+  scope :browsable,   -> { live.not_expired.not_removed.from_visible_shops.from_active_sellers.ordered }
 
   # Explicit per-user "Not interested" dismissal — excludes listings the given
   # user has hidden from their own feed. Guests (nil user) see everything.
@@ -255,6 +346,9 @@ class Listing < ApplicationRecord
   scope :price_at_most,  ->(max) { where("price <= ?", max) }
   scope :in_location,    ->(text) { where("LOWER(location) LIKE ?", "%#{text.to_s.downcase.strip}%") }
   scope :by_condition,   ->(c) { where(condition: c) }
+  scope :for_guests,     ->(n) { where("(listings.details->>'guests')::int >= ?", n) }
+  scope :with_amenities, ->(list) { where("listings.details->'amenities' @> ?::jsonb", list.to_json) }
+  scope :priced_per,     ->(unit) { where(price_unit: unit) }
   # Filter to listings whose seller has signed in within the last +days+ days.
   # Uses a JOIN on users — no extra SELECT per listing since the join is inlined
   # into the existing query chain; user/avatar eager-loading is unaffected.
@@ -283,7 +377,7 @@ class Listing < ApplicationRecord
   def self.within_radius(lat, lng, km)
     return all if lat.blank? || lng.blank? || km.blank?
 
-    where.not(latitude: nil, longitude: nil)
+    where.not(listings: { latitude: nil, longitude: nil })
          .where("#{haversine_distance_sql} <= ?", *haversine_binds(lat, lng), km.to_f)
   end
 
@@ -306,7 +400,7 @@ class Listing < ApplicationRecord
     reorder(Arel.sql(
       "(listings.latitude IS NULL OR listings.longitude IS NULL) ASC, " \
       "#{sanitize_sql_array([ haversine_distance_sql, *haversine_binds(lat, lng) ])} ASC NULLS LAST, " \
-      "#{province_term}listings.created_at DESC, listings.id DESC"
+      "#{province_term}listings.bumped_at DESC, listings.id DESC"
     ))
   end
 
@@ -320,7 +414,12 @@ class Listing < ApplicationRecord
   # the box is further than the radius, so it could not rank above any row in
   # that circle, and the first `needed` rows — the page — come out exactly as the
   # unboxed sort would order them. When no radius is enough, no box (as before).
-  NEAREST_RADII_KM = [ 50, 150, 400, 1000 ].freeze
+  #
+  # The small radii (2, 5, 15 km) are for dense cities: at 100k users Kabul
+  # alone holds ~85k live listings within 50 km, and sorting all of them by
+  # Haversine cost ~300 ms per page; a 2 km box holds a few thousand
+  # (docs/PERFORMANCE_100K.md). The page is identical whatever the radius.
+  NEAREST_RADII_KM = [ 2, 5, 15, 50, 150, 400, 1000 ].freeze
   KM_PER_DEGREE = 111.32
 
   # Rows whose point is inside the square that encloses the circle of `km`.
@@ -330,13 +429,16 @@ class Listing < ApplicationRecord
     lng = lng.to_f
     dlat = km / KM_PER_DEGREE
     dlng = km / (KM_PER_DEGREE * [ Math.cos(lat * Math::PI / 180), 0.01 ].max)
-    where(latitude: (lat - dlat)..(lat + dlat), longitude: (lng - dlng)..(lng + dlng))
+    where(listings: { latitude: (lat - dlat)..(lat + dlat), longitude: (lng - dlng)..(lng + dlng) })
   end
 
   # The radius to box a nearest-first page with, or nil for "no box".
+  # `limit(needed).count` counts at most `needed` rows (a COUNT over a LIMITed
+  # subquery): the question is only "are there enough?", and counting every
+  # row of a city's circle to answer it cost ~220 ms in Kabul.
   def self.nearest_window_km(scope, lat, lng, needed)
     NEAREST_RADII_KM.find do |km|
-      scope.within_box(lat, lng, km).within_radius(lat, lng, km).count >= needed
+      scope.within_box(lat, lng, km).within_radius(lat, lng, km).limit(needed).count >= needed
     end
   end
 
@@ -345,8 +447,8 @@ class Listing < ApplicationRecord
   # and `nearest_first` (ORDER BY ... ASC) so the math lives in one place.
   def self.haversine_distance_sql
     "#{EARTH_RADIUS_KM} * acos(LEAST(1, GREATEST(-1, " \
-    "cos(radians(?)) * cos(radians(latitude)) * cos(radians(longitude) - radians(?)) + " \
-    "sin(radians(?)) * sin(radians(latitude)))))"
+    "cos(radians(?)) * cos(radians(listings.latitude)) * cos(radians(listings.longitude) - radians(?)) + " \
+    "sin(radians(?)) * sin(radians(listings.latitude)))))"
   end
   private_class_method :haversine_distance_sql
 
@@ -356,6 +458,9 @@ class Listing < ApplicationRecord
   private_class_method :haversine_binds
 
   before_save :set_published_at, if: -> { active? && published_at.nil? }
+  # Feed position starts at creation (an explicit `created_at`, e.g. an import,
+  # wins), so the default order is exactly the old `created_at` order.
+  before_create { self.bumped_at ||= created_at || Time.current }
   # SF-B10 — this callback is NO LONGER what dates a hold. It is the fallback for
   # the ONE hold that has no Transaction row to date it: the legacy bare
   # `PUT /my/listings/:id/reserve` with no `buyer_id`, where
@@ -416,13 +521,42 @@ class Listing < ApplicationRecord
   # never expire, so it sat live forever. Now that reserved listings are
   # browsable that would be a listing in the feed with an expiry the feed itself
   # ignores.
+  # `<=` like `expired_active` / `not_expired` (edge-case pass 2026-10-08): at
+  # the exact expiry instant the feed had already dropped it but `past?` still
+  # said live, so the listing was in no tab at all for that moment.
   def expired?
-    live? && expires_at.present? && expires_at.past?
+    live? && expires_at.present? && expires_at <= Time.current
   end
 
-  # (Re)start the expiry clock — used on publish and on seller renew.
+  # (Re)start the expiry clock — used on seller renew. Never moves the listing
+  # in the feed (`bumped_at` is untouched): photos, chats and its place stay.
   def renew!
     update!(expires_at: LISTING_LIFESPAN.from_now)
+  end
+
+  # Edit + relaunch: renew, and move back to the top of the feed if the last
+  # bump was at least BUMP_INTERVAL ago. Returns whether it bumped.
+  def relaunch!
+    bump = bumpable?
+    update!({ expires_at: LISTING_LIFESPAN.from_now }.merge(bump ? { bumped_at: Time.current } : {}))
+    bump
+  end
+
+  def bumpable? = bumped_at.nil? || bumped_at <= BUMP_INTERVAL.ago
+
+  # When the next relaunch may bump again (nil = now).
+  def next_bump_at
+    bumpable? ? nil : bumped_at + BUMP_INTERVAL
+  end
+
+  # Live listings whose `reminder` (see EXPIRY_REMINDERS) is due: expiring within
+  # its window, not yet past, and not already reminded for THIS expiry.
+  def self.expiry_reminder_due(reminder)
+    cfg = EXPIRY_REMINDERS.fetch(reminder)
+    now = Time.current
+    live.not_removed
+        .where(expires_at: now..(now + cfg[:before]))
+        .where("#{cfg[:column]} IS NULL OR #{cfg[:column]} <> expires_at")
   end
 
   # draft -> active. Flips the status and starts the expiry clock in ONE write so
@@ -640,6 +774,40 @@ class Listing < ApplicationRecord
   # clamp mirrors `sold_with_buyer!` field-for-field: a single-item listing
   # ignores the param entirely (there is exactly one unit to hold), and a stale
   # client cannot hold more units than exist.
+  # SHOP-3 — who is doing this (the member tapping Sold or holding a unit),
+  # set by the controller; recorded on the sale as `recorded_by`.
+  attr_accessor :acting_user
+
+  # A shop sale's seller is the shop's OWNER (reviews and the shop page's
+  # rating are the owner's), whoever posted the product.
+  def sale_seller_id = shop&.owner_id || user_id
+
+  # The poster, or (SHOP-3) any member of the product's shop.
+  # Taking a shop product OUT of its shop — to Me or to ANY other shop, by
+  # moving or duplicating it — is for its poster while still on the team, or
+  # the shop's owner or a manager. Staff do not carry the shop's goods away,
+  # not even into a second shop they are also on (review 2026-10-08;
+  # docs/SHOPS.md "Move and Duplicate").
+  def may_leave_shop_by?(user)
+    return true if shop_id.nil?
+    return false unless user
+
+    member = shop&.shop_members&.find_by(user_id: user.id)
+    return false unless member
+
+    member.owner? || member.manager? || user_id == user.id
+  end
+
+  # A shop product is managed by the shop's CURRENT members — its poster only
+  # while still on the team (review 2026-10-08: a removed member kept control
+  # through user_id). A personal listing, by its poster.
+  def manageable_by?(user)
+    return false unless user
+    return shop&.member?(user) || false if shop_id.present?
+
+    user_id == user.id
+  end
+
   def reserve_with_buyer!(buyer_id:, final_price: nil, quantity: nil)
     return nil if buyer_id.blank?
 
@@ -652,7 +820,8 @@ class Listing < ApplicationRecord
         existing
       else
         sale_transactions.create!(
-          seller_id: user_id,
+          seller_id: sale_seller_id,
+      recorded_by_id: acting_user&.id,
           buyer_id: buyer_id,
           final_price: final_price.presence || price,
           currency: currency,
@@ -883,6 +1052,34 @@ class Listing < ApplicationRecord
     removed_at.present?
   end
 
+  # ── Prohibited items (ProhibitedScannable) ───────────────────────────────────
+  # Scanned when it goes live (created live, or published from draft / sold)
+  # and when its title or description changes while live. Drafts are not
+  # public, so they wait for their publish.
+  def prohibited_scan_due?
+    return false unless live?
+
+    went_live = previously_new_record? || (saved_change_to_status? && !%w[active reserved].include?(status_before_last_save))
+    went_live || saved_change_to_title? || saved_change_to_description?
+  end
+
+  def prohibited_scan_texts
+    [ title, description ]
+  end
+
+  # An admin's prohibited-item take-down (ProhibitedItems::Moderation): back to
+  # the seller's drafts, any open hold cancelled first (same as #unpublish).
+  # Already offline: nothing to change.
+  def move_to_draft_for_moderation!
+    return false unless live?
+
+    self.class.transaction do
+      cancel_open_transaction!
+      draft!
+    end
+    true
+  end
+
   def take_down!(reason: nil)
     update!(removed_at: Time.current, removed_reason: reason.presence)
   end
@@ -1040,16 +1237,17 @@ class Listing < ApplicationRecord
   def thumbnail_url
     return nil unless images.attached?
 
-    image = images.first
+    image = ordered_images.first
     # Non-image blobs (e.g. a stray PDF) aren't variable — fall back to the original.
-    return image.url unless image.blob.variable?
+    return PublicImageUrl.for(image) unless image.blob.variable?
 
     # Return a LAZY representation URL rather than calling `.processed.url`: the
     # variant is generated on the client's first request to this URL (then
     # cached), NOT synchronously during the list query. This keeps the index a
     # constant number of queries (no N+1 from per-listing variant processing)
     # while still delivering the small resized image to the app.
-    variant = image.variant(resize_to_limit: THUMBNAIL_RESIZE_LIMIT)
+    # strip: no EXIF/GPS in what buyers download (d0 hunt round 2, 2026-10-11).
+    variant = image.variant(resize_to_limit: THUMBNAIL_RESIZE_LIMIT, saver: { strip: true })
     Rails.application.routes.url_helpers.rails_representation_url(
       variant, **(ActiveStorage::Current.url_options || {})
     )
@@ -1057,12 +1255,70 @@ class Listing < ApplicationRecord
     nil
   end
 
+  # A STABLE URL per image (owner, 2026-10-09: My listings re-downloaded every
+  # photo on each visit) — see PublicImageUrl.
   def image_urls
     return [] unless images.attached?
 
-    images.map(&:url)
-  rescue StandardError
-    []
+    ordered_images.map { |a| PublicImageUrl.for(a) }.compact
+  end
+
+  # Light variants, one per photo in image_urls' order (PublicImageUrl::SIZES).
+  def image_thumb_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :thumb) }.compact : []
+  def image_medium_urls = images.attached? ? ordered_images.map { |a| PublicImageUrl.variant(a, :medium) }.compact : []
+
+  # ── Photo order (OFFLINE phase 0, docs/OFFLINE_MODE.md §2.5) ─────────────────
+  # The photos in the seller's order: each blob's metadata "position" (the
+  # listing's blobs are its own — a duplicate copies them), then upload order.
+  # The shop gallery keeps its order the same way (Shop#ordered_gallery_photos).
+  # Every reader of the photos goes through this, so the cover, the gallery and
+  # the edit form always agree. Sorted in Ruby: the attachments and blobs are
+  # already eager-loaded by every list query, so this adds no query.
+  def ordered_images
+    return [] unless images.attached?
+
+    images.attachments.sort_by { |a| [ a.blob.metadata["position"] || Float::INFINITY, a.id ] }
+  end
+
+  # A photo uploaded in the same request is named "new:<n>", <n> its index in
+  # that request's `images[]` (it has no signed id yet), so a seller can put a
+  # new photo before an old one in a single save.
+  IMAGE_ORDER_NEW_TOKEN = /\Anew:(\d+)\z/
+
+  # `image_order` from the edit form: the photos' signed ids (image_attachments'
+  # `id`) and "new:<n>" tokens, in the order the seller wants. A token that is
+  # not one of this listing's photos is ignored; a photo the list leaves out
+  # keeps its place AFTER the listed ones (it is never deleted here — deleting
+  # is removed_image_ids). `nil` (a client that does not send it, e.g. 1.1.8)
+  # changes nothing.
+  def apply_image_order!(tokens, uploaded: [])
+    return if tokens.nil? || !images.attached?
+
+    own = images.attachments.index_by(&:blob_id)
+    # A gallery holds at most MAX_IMAGES photos, so no real order is longer; each
+    # signed id costs a blob lookup, and an uncapped list was one query per token
+    # (security review 2026-10-28).
+    listed = Array(tokens).first(MAX_IMAGES).filter_map do |token|
+      new_index = token.to_s[IMAGE_ORDER_NEW_TOKEN, 1]
+      new_index ? uploaded[new_index.to_i] : own[ActiveStorage::Blob.find_signed(token.to_s)&.id]
+    end.uniq
+    rest = ordered_images - listed
+    (listed + rest).each_with_index do |attachment, i|
+      blob = attachment.blob
+      next if blob.metadata["position"] == i
+
+      blob.update!(metadata: blob.metadata.merge("position" => i))
+    end
+  end
+
+  # When the listing left the market for good, or nil while it is still on it
+  # (or a draft): deleted (removed_at), sold (sold_at), or expired (expires_at).
+  def off_market_since
+    return removed_at if removed?
+    return sold_at if sold?
+    return expires_at if expired?
+
+    nil
   end
 
   # Images as {id, url} pairs. `id` is the blob's stable signed_id, which the
@@ -1071,7 +1327,7 @@ class Listing < ApplicationRecord
   def image_attachments
     return [] unless images.attached?
 
-    images.map { |a| { id: a.blob.signed_id, url: a.url } }
+    ordered_images.map { |a| { id: a.blob.signed_id, url: PublicImageUrl.for(a) } }
   rescue StandardError
     []
   end
@@ -1103,6 +1359,13 @@ class Listing < ApplicationRecord
   end
 
   private
+
+  # SHOP-1: a listing can only sit in a shop its seller belongs to.
+  def shop_must_be_sellers
+    return if shop.nil? || shop.member?(user)
+
+    errors.add(:shop, :not_a_member)
+  end
 
   # Rounds to the nearest GRID_DEGREES. `nil` in, `nil` out: a listing without
   # coordinates must not gain a phantom point at 0,0 off the coast of Africa.
@@ -1352,7 +1615,8 @@ class Listing < ApplicationRecord
   # a sale with no counterparty account).
   def create_sold_sale!(buyer_id:, final_price:, units:)
     sale_transactions.create!(
-      seller_id: user_id,
+      seller_id: sale_seller_id,
+      recorded_by_id: acting_user&.id,
       buyer_id: buyer_id,
       final_price: final_price.presence || price,
       currency: currency,
@@ -1425,5 +1689,50 @@ class Listing < ApplicationRecord
 
   def set_sold_at
     self.sold_at = Time.current
+  end
+
+  public
+
+  def stay?
+    category&.stay? || false
+  end
+
+  # The price units this listing's category allows (empty = a total price only).
+  def allowed_price_units
+    return PRICE_UNITS if stay?
+    return [ PRICE_UNIT_MONTH ] if MONTHLY_RENT_SLUGS.include?(category&.slug)
+
+    []
+  end
+
+  private
+
+  def prepare_stay_fields
+    self.details = {} if details.nil?
+    # Moved to another category: drop a unit / details that no longer apply,
+    # rather than failing a save the seller did not see coming.
+    if persisted? && will_save_change_to_category_id?
+      self.price_unit = nil if price_unit.present? && !allowed_price_units.include?(price_unit)
+      self.details = {} unless stay?
+    end
+    return unless stay?
+
+    self.price_unit ||= PRICE_UNIT_NIGHT
+    self.condition = nil
+    self.details = StayDetails.normalize(details)
+  end
+
+  def price_unit_fits_category
+    return if price_unit.nil?
+
+    errors.add(:price_unit, :inclusion, message: "is not available for this category") unless allowed_price_units.include?(price_unit)
+  end
+
+  def details_fit_category
+    if stay?
+      StayDetails.errors_for(details).each { |message| errors.add(:details, message) }
+    elsif details.present?
+      errors.add(:details, "are only for stays")
+    end
   end
 end

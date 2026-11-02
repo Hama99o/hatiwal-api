@@ -2,18 +2,24 @@
     each one served is written to the audit log (shown at the bottom). %>
 <%
   r = @verification
-  user = @user
+  # SHOP-1: for a shop request, `user` is the APPLICANT — the owner or a
+  # manager, with their own e-Tazkira (owner decision, 2026-10-08) — and the
+  # shop's own facts come from the _shop_facts partial.
+  shop = r.shop_subject? ? r.subject : nil
+  user = shop ? r.requested_by : @user
+  applicant_role = shop && (shop.shop_members.find_by(user_id: user.id)&.role || "no longer on the team")
   names_match = r.name_on_document.to_s.squish.casecmp?(user.full_name.squish)
   reports_count = user.reports_against.size
   warnings_count = user.active_warnings_count
-  labels = { front: "Front", back: "Back", selfie: "Selfie with document" }
+  labels = { front: "Front", back: "Back", selfie: "Selfie with document", proof: "Proof of business" }
+  subject_name = r.subject.full_name
 %>
-<% content_for(:title) { "Verification — #{user.full_name}" } %>
+<% content_for(:title) { "Verification — #{subject_name}" } %>
 
 <header class="hw-page-header">
   <div>
     <h1 class="hw-page-header__title main-content__page-title">
-      Verification — <%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto" %>
+      Verification — <% if shop %><span dir="auto">🏪 <%= shop.name %></span> · applied by <% end %><%= link_to user.full_name.presence || "User ##{user.id}", admin_user_path(user), dir: "auto", id: "verify-applicant" %><% if shop %> <span class="hw-badge hw-badge--plain" id="verify-applicant-role">(<%= applicant_role.to_s.humanize %>)</span><% end %>
       <%= render "status_badge", request: r %>
     </h1>
     <p class="hw-page-header__subtitle">
@@ -22,11 +28,14 @@
     </p>
   </div>
   <div class="hw-actions">
-    <%= link_to "← Queue", admin_verification_requests_path, class: "button button--alt" %>
+    <%= link_to "← Queue", admin_verification_requests_path(kind: kind_of(r)), class: "button button--alt", id: "verify-back" %>
   </div>
 </header>
 
 <section class="hw-panel hw-panel--wide" id="verification-card">
+  <% if shop %>
+    <%= render "shop_facts", shop: shop, request: r %>
+  <% else %>
   <div class="hw-verify-head">
     <% if user.avatar.attached? %>
       <%= image_tag url_for(user.avatar), class: "hw-verify-avatar", alt: "" %>
@@ -60,17 +69,26 @@
       </p>
     </div>
   </div>
+  <% end %>
 
   <%# Same ID number on another account (owner decision 2026-10-05). The
       applicant is never told; the admin decides. %>
-  <% if @same_number.any? %>
-    <div class="hw-callout hw-callout--danger" id="verify-same-number">
-      <% @same_number.map(&:subject).compact.uniq.each do |other| %>
+  <% { "verify-same-number" => [ @same_number, "This ID is already used by" ],
+       "verify-same-proof" => [ @same_proof, "This proof of business is already on" ] }.each do |dom_id, (matches, lead)| %>
+    <% next if matches.blank? %>
+    <div class="hw-callout hw-callout--danger" id="<%= dom_id %>">
+      <% matches.map(&:subject).compact.uniq.each do |other| %>
+        <% person = other.is_a?(Shop) ? other.owner : other %>
         <p class="hw-verify-line">
-          ⚠ This ID is already used by account
-          <%= link_to "##{other.id}", admin_user_path(other) %>
-          <% if other.respond_to?(:account_blocked?) && other.account_blocked? %><span class="hw-badge hw-badge--danger">blocked</span><% end %>
-          <% if other.respond_to?(:deleted_at) && other.deleted_at %><span class="hw-badge hw-badge--plain">deleted</span><% end %>
+          ⚠ <%= lead %>
+          <% if other.is_a?(Shop) %>
+            shop <%= link_to "##{other.id} #{other.name}", admin_shop_path(other), dir: "auto" %> (owner <%= link_to "##{person.id}", admin_user_path(person) %>)
+            <% if other.closed? || other.suspended? %><span class="hw-badge hw-badge--danger"><%= other.status %></span><% end %>
+          <% else %>
+            account <%= link_to "##{other.id}", admin_user_path(other) %>
+          <% end %>
+          <% if person.account_blocked? %><span class="hw-badge hw-badge--danger">blocked</span><% end %>
+          <% if person.deleted_at %><span class="hw-badge hw-badge--plain">deleted</span><% end %>
         </p>
       <% end %>
     </div>
@@ -94,27 +112,88 @@
   <% end %>
 
   <% if r.requested? %>
-    <%= form_with url: approve_admin_verification_request_path(r), method: :patch, data: { turbo: false }, id: "verification-decision" do |f| %>
-      <fieldset class="hw-checks hw-verify-checks">
-        <legend>Checklist (saved with the decision)</legend>
-        <% { "photo_clear" => "Photos clear, nothing cropped", "name_matches" => "Name matches the document",
-             "selfie_matches" => "Selfie = document face", "no_bad_history" => "No bad history" }.each do |key, label| %>
-          <label class="hw-check"><%= check_box_tag "checklist[#{key}]", "1", false, id: "checklist-#{key}" %> <%= label %></label>
+    <%# Owner, 2026-10-12 (item 8): Approve and Reject are two separate, clear
+        actions. Reject reveals a REQUIRED reason, the "Other" text only when
+        picked, and a preview of what the person gets; a missing reason comes
+        back as an inline error at the field, with everything kept. The
+        checklist never blocks Approve: it only counts. %>
+    <% reject_error = @decision_error if @decision_error&.dig(:action) == :reject %>
+    <% ticked = params[:checklist].respond_to?(:keys) ? params[:checklist].keys.map(&:to_s) : [] %>
+    <%# Session token, not the per-form one: Reject posts this same form to another
+        action (formaction), and a per-form token only fits the Approve URL. %>
+    <%= form_with url: approve_admin_verification_request_path(r), method: :patch, data: { turbo: false }, id: "verification-decision",
+                  authenticity_token: form_authenticity_token do |f| %>
+      <% checks = if shop
+                    { "photo_clear" => "Photos clear, nothing cropped", "name_matches" => "Name matches the owner's e-Tazkira",
+                      "selfie_matches" => "Selfie = document face", "proof_valid" => "Proof shows the business is theirs",
+                      "address_right" => "Pin is at the shop", "listings_clean" => "Listings are clean",
+                      "no_bad_history" => "No bad history" }
+                  else
+                    { "photo_clear" => "Photos clear, nothing cropped", "name_matches" => "Name matches the document",
+                      "selfie_matches" => "Selfie = document face", "no_bad_history" => "No bad history" }
+                  end %>
+      <fieldset class="hw-checks hw-verify-checks" id="verify-checklist">
+        <legend>
+          Checklist (saved with the decision) ·
+          <span class="hw-check-count<%= ' hw-check-count--incomplete' if ticked.size < checks.size %>" id="verify-check-count"
+                data-total="<%= checks.size %>"><%= ticked.size %> of <%= checks.size %> checked</span>
+        </legend>
+        <% checks.each do |key, label| %>
+          <label class="hw-check"><%= check_box_tag "checklist[#{key}]", "1", ticked.include?(key), id: "checklist-#{key}" %> <%= label %></label>
         <% end %>
       </fieldset>
-      <div class="hw-verify-actions">
-        <div class="hw-form-row">
-          <%= select_tag :reason_code,
-                options_for_select(VerificationRequest::REJECT_REASONS.excluding("shop_sign_not_visible").map { |c| [ I18n.t("verification.reasons.#{c}", locale: :en), c ] }),
-                prompt: "Reject because…", class: "hw-select", id: "verify-reason" %>
-          <%= text_field_tag :reason_text, nil, placeholder: "Only for “Other”: sent as typed", class: "hw-input", dir: "auto" %>
-          <%= button_tag "Reject", type: "submit", formaction: reject_admin_verification_request_path(r), id: "verify-reject",
-                class: "button button--danger", data: { confirm: "Reject this request? #{user.full_name} gets the reason in their language." } %>
+
+      <%# Approve and Reject both write to the owner/person through Support — say
+          up front whether that message can actually be delivered. %>
+      <% refusal = shop ? Conversation.admin_shop_message_refusal(shop) : Conversation.admin_message_refusal(user) %>
+      <p class="hw-panel__text <%= refusal ? 'hw-text-danger' : 'hw-panel__text--muted' %>" id="verify-message-note">
+        <% if refusal %>
+          No Support message can reach <%= shop ? "#{shop.name}'s team" : user.full_name %>: <%= refusal %>. Decide anyway; tell them another way.
+        <% else %>
+          Both decisions send a Support message to <%= shop ? "#{shop.name}'s own thread" : user.full_name %>, in
+          <%= user.full_name %>'s language (<%= user.preferred_language.presence || "en" %>).
+        <% end %>
+      </p>
+
+      <div class="hw-decision">
+        <div class="hw-decision__box" id="verify-approve-box">
+          <h3 class="hw-decision__title">Approve</h3>
+          <p class="hw-decision__hint">
+            Gives <%= subject_name %> the Verified badge and sends a congratulations message.
+            Unticked boxes don't block it.
+          </p>
+          <%= button_tag "Approve ✓", type: "submit", id: "verify-approve", class: "button",
+                data: { confirm: "Give #{subject_name} the Verified badge?" } %>
         </div>
-        <%= button_tag "Approve ✓", type: "submit", id: "verify-approve", class: "button",
-              data: { confirm: "Give #{user.full_name} the Verified badge?" } %>
+
+        <details class="hw-decision__box hw-decision__box--reject" id="verify-reject-box" <%= "open" if reject_error %>>
+          <summary id="verify-reject-open">
+            <h3 class="hw-decision__title">Reject…</h3>
+            <p class="hw-decision__hint">Choose why: <%= user.full_name %> gets the reason in their language and can try again at once.</p>
+          </summary>
+          <%= render "reason_picker",
+                reasons: shop ? VerificationRequest::REJECT_REASONS : VerificationRequest::REJECT_REASONS.excluding("proof_not_accepted"),
+                recipient: user, prefix: "verify-reject", error: reject_error,
+                selected: (params[:reason_code] if reject_error), text: (params[:reason_text] if reject_error) %>
+          <%= button_tag "Reject and send the reason", type: "submit", formaction: reject_admin_verification_request_path(r),
+                id: "verify-reject", class: "button button--danger",
+                data: { confirm: "Reject this request? #{shop ? "The owner of #{subject_name}" : user.full_name} gets the reason in their language." } %>
+        </details>
       </div>
     <% end %>
+    <script>
+      (function () {
+        var box = document.getElementById("verify-checklist");
+        var count = document.getElementById("verify-check-count");
+        if (!box || !count) return;
+        box.addEventListener("change", function () {
+          var total = Number(count.dataset.total);
+          var ticked = box.querySelectorAll("input[type=checkbox]:checked").length;
+          count.textContent = ticked + " of " + total + " checked";
+          count.classList.toggle("hw-check-count--incomplete", ticked < total);
+        });
+      })();
+    </script>
   <% else %>
     <p class="hw-verify-line" id="verify-decision">
       <%= r.status.humanize %><% if r.decided_at %> on <%= l(r.decided_at, format: :short) %><% end %>
@@ -123,10 +202,14 @@
     <% if r.checklist.present? %>
       <p class="hw-kv"><% r.checklist.each do |key, ticked| %><span><%= ticked ? "☑" : "☐" %> <%= key.humanize %></span><% end %></p>
     <% end %>
-    <% if r.approved? && user.verified? %>
+    <% if r.approved? && r.subject.verified? %>
       <h3 class="hw-panel__title hw-gap-top">Revoke the badge</h3>
       <%= render "reason_form", url: revoke_admin_verification_request_path(r), reasons: VerificationRequest::REVOKE_REASONS,
-                 submit: "Revoke", confirm: "Remove the Verified badge from #{user.full_name}?" %>
+                 submit: "Revoke the badge", confirm: "Remove the Verified badge from #{subject_name}?",
+                 recipient: user, prefix: "verify-revoke", form_id: "verify-revoke-form",
+                 error: (@decision_error if @decision_error&.dig(:action) == :revoke),
+                 selected: (params[:reason_code] if @decision_error&.dig(:action) == :revoke),
+                 text: (params[:reason_text] if @decision_error&.dig(:action) == :revoke) %>
     <% end %>
   <% end %>
 </section>

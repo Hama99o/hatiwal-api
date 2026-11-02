@@ -9,6 +9,10 @@ gem "kamal", require: false
 gem "thruster", require: false
 gem "image_processing", "~> 1.2"
 
+# Search by image (docs/IMAGE_SEARCH.md): runs the CLIP image model on the CPU.
+# The model files are baked into the Docker image (bin/fetch-image-model).
+gem "onnxruntime", "~> 0.11"
+
 # Auth
 gem "devise_token_auth"
 gem "devise"
@@ -33,6 +37,9 @@ gem "rack-cors"
 
 # HTTP client (used for Google ID token verification)
 gem "faraday"
+# Sign in with Apple: verifies Apple identity tokens (JWKS) and signs the ES256
+# client secret (app/services/apple). Already in the bundle (via signet / googleauth).
+gem "jwt"
 
 # Google OAuth2 server-side code flow (admin login)
 gem "signet"

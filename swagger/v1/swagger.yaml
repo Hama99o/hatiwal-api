@@ -6,6 +6,440 @@ info:
   description: Local marketplace API for Afghanistan — no online payment, meetup-based
     transactions
 paths:
+  "/api/v1/app_config":
+    get:
+      summary: which app version must run (force update / reminder)
+      tags:
+      - App
+      description: 'Public. Platform from X-App-Platform (or ?platform=), version
+        from X-App-Version (or ?version=). status: ok | soft (below latest: banner)
+        | blocked (below minimum: full-screen block). A missing or malformed version
+        is always ok. Cache-Control: public, max-age=60; Vary on both headers.'
+      parameters:
+      - name: X-App-Platform
+        in: header
+        required: false
+        enum:
+        - ios
+        - android
+        schema:
+          type: string
+        description: ":\n * `ios` \n * `android` \n "
+      - name: X-App-Version
+        in: header
+        required: false
+        example: 1.1.6
+        schema:
+          type: string
+      responses:
+        '200':
+          description: blocked below the minimum
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  platform:
+                    type: string
+                    nullable: true
+                  min_version:
+                    type: string
+                    nullable: true
+                  latest_version:
+                    type: string
+                    nullable: true
+                  store_url:
+                    type: string
+                    nullable: true
+                  status:
+                    type: string
+                    enum:
+                    - ok
+                    - soft
+                    - blocked
+                  listing_rules:
+                    type: object
+                    description: OFFLINE §8.6 / §10.4 — the server's listing limits,
+                      so a listing made offline is checked on the phone with the server's
+                      own numbers (Listing.client_rules)
+                    properties:
+                      title_max:
+                        type: integer
+                      description_max:
+                        type: integer
+                      price_max:
+                        type: number
+                      quantity_min:
+                        type: integer
+                      quantity_max:
+                        type: integer
+                      max_photos:
+                        type: integer
+                      photo_required_to_publish:
+                        type: boolean
+                      video_max_seconds:
+                        type: integer
+                      video_max_bytes:
+                        type: integer
+                  features:
+                    type: object
+                    description: Server features an app may only offer when this server
+                      has them
+                    properties:
+                      image_search:
+                        type: boolean
+                        description: 'search by image (docs/IMAGE_SEARCH.md): show
+                          the camera button'
+                required:
+                - platform
+                - status
+  "/api/v1/auth/apple":
+    post:
+      summary: Sign in (or up) with Apple
+      tags:
+      - Auth
+      description: Verifies Apple's identity token (JWKS, iss, aud = bundle id, exp,
+        SHA-256 nonce), finds the person by Apple id, links a verified email, or creates
+        the account; returns the same tokens as email sign-in (headers + body). iOS
+        only for now.
+      parameters: []
+      responses:
+        '200':
+          description: signed in (tokens in headers and body)
+        '401':
+          description: apple_token_invalid
+        '422':
+          description: apple_token_missing
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - identity_token
+              - nonce
+              properties:
+                identity_token:
+                  type: string
+                  description: Apple's JWT
+                nonce:
+                  type: string
+                  description: the RAW nonce (its SHA-256 was sent to Apple)
+                authorization_code:
+                  type: string
+                  description: optional; kept only to revoke on account deletion
+                given_name:
+                  type: string
+                  description: first sign-in only
+                family_name:
+                  type: string
+                  description: first sign-in only
+                preferred_language:
+                  type: string
+                  enum:
+                  - en
+                  - ps
+                  - fa
+                  - ur
+                  description: the app's language; used only when the account is created
+  "/api/v1/cable_ticket":
+    post:
+      summary: a single-use ticket for the cable's connect URL
+      tags:
+      - Chat
+      description: 'Signed in. Returns a random ticket worth ONE cable connect (`wss://…/hatiwal-cable?ticket=…`)
+        within `expires_in` seconds; only its digest is stored. Cache-Control: no-store.'
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '201':
+          description: issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket:
+                    type: string
+                  expires_in:
+                    type: integer
+                required:
+                - ticket
+                - expires_in
+        '401':
+          description: not signed in
+  "/api/v1/shops":
+    post:
+      summary: open your shop
+      tags:
+      - Shops
+      description: Only name, category and location (pin + address line) are required.
+        One shop per user (phase 1). The location must be in Afghanistan, Pakistan
+        or Iran. Live at once unless SHOP_APPROVAL_REQUIRED is on, when it starts
+        `pending`. Multipart for logo/cover; `hours` may be JSON.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '403':
+          description: email not confirmed
+        '201':
+          description: shop opened
+        '422':
+          description: outside the service area, or a second shop
+        '401':
+          description: requires authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      minLength: 2
+                      maxLength: 50
+                    description:
+                      type: string
+                      maxLength: 160
+                    category_id:
+                      type: integer
+                    latitude:
+                      type: number
+                    longitude:
+                      type: number
+                    province:
+                      type: string
+                    city:
+                      type: string
+                    address_line:
+                      type: string
+                    phone:
+                      type: string
+                    phone_public:
+                      type: boolean
+                    hours:
+                      type: object
+                      example:
+                        sat:
+                        - - '08:00'
+                          - '18:00'
+                        fri: []
+                  required:
+                  - name
+                  - category_id
+                  - latitude
+                  - longitude
+                  - address_line
+              required:
+              - shop
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                shop:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      minLength: 2
+                      maxLength: 50
+                    description:
+                      type: string
+                      maxLength: 160
+                    category_id:
+                      type: integer
+                    latitude:
+                      type: number
+                    longitude:
+                      type: number
+                    province:
+                      type: string
+                    city:
+                      type: string
+                    address_line:
+                      type: string
+                    phone:
+                      type: string
+                    phone_public:
+                      type: boolean
+                    hours:
+                      type: object
+                      example:
+                        sat:
+                        - - '08:00'
+                          - '18:00'
+                        fri: []
+                  required:
+                  - name
+                  - category_id
+                  - latitude
+                  - longitude
+                  - address_line
+              required:
+              - shop
+  "/api/v1/verification_requests":
+    post:
+      summary: apply for the Verified badge (multipart)
+      tags:
+      - Verification
+      description: 3 requests sent per day. Answers the status card; never a document.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '403':
+          description: email not confirmed
+        '201':
+          description: sent; the card says under review, with no document
+        '422':
+          description: a two-sided document needs its back
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                document_type:
+                  type: string
+                  enum:
+                  - e_tazkira
+                name_on_document:
+                  type: string
+                document_number:
+                  type: string
+                  pattern: "^\\d{6,20}$"
+                  description: the FULL number; kept encrypted, never returned
+                front:
+                  type: string
+                  format: binary
+                back:
+                  type: string
+                  format: binary
+                  description: the back of the e-Tazkira
+                selfie:
+                  type: string
+                  format: binary
+                  description: holding the document
+              required:
+              - document_type
+              - name_on_document
+              - document_number
+              - front
+              - back
+              - selfie
+  "/api/v1/auth/confirmation":
+    post:
+      summary: send the confirmation link again
+      tags:
+      - Auth
+      description: Resends the confirmation email. 5 per hour per IP (then 429).
+      parameters: []
+      responses:
+        '200':
+          description: sent
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+              required:
+              - email
+  "/api/v1/listings/image_search":
+    post:
+      summary: search listings by photo
+      tags:
+      - Listings
+      description: 'Search by image (docs/IMAGE_SEARCH.md). ONE photo (jpeg/png/webp/gif/heic/heif/avif,
+        checked by its bytes, 10 MB max); it is embedded in memory and never stored.
+        Returns browsable listings whose photos look similar, best first, as the feed''s
+        :list cards, paginated like the feed. Public (a signed-in viewer''s hidden
+        listings and blocked sellers are left out). Limits: 30 per 10 min per user
+        (a guest: per IP) and 120 per 10 min per IP, then 429. 503 code image_search_unavailable
+        when the server has no model (GET /app_config features.image_search is then
+        false).'
+      parameters: []
+      responses:
+        '200':
+          description: similar listings, best match first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  listings:
+                    type: array
+                    items:
+                      type: object
+                  meta:
+                    type: object
+                    properties:
+                      pagination:
+                        type: object
+                required:
+                - listings
+                - meta
+        '422':
+          description: not a photo (code invalid_image)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: string
+              format: binary
+        required: true
   "/api/v1/listings":
     get:
       summary: browse active listings
@@ -87,6 +521,69 @@ paths:
         '200':
           description: price_dropped=true composes with sort=nearest without a Postgres
             error
+          content:
+            application/json:
+              example:
+                listings:
+                - address:
+                  available_units: 1
+                  bumped_at: '2026-10-28T12:52:37.613Z'
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 487
+                    kind: item
+                    name_en: Category 837
+                    name_fa: دسته 837
+                    name_ps: کټاګورۍ 837
+                    name_ur: Category 837
+                    parent_id:
+                    position: 1
+                    slug: category-839
+                  category_id: 487
+                  condition:
+                  created_at: '2026-10-28T12:52:37.613Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 484
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: 800.0
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent: 20
+                  price_dropped: false
+                  price_dropped_at: '2026-10-28T12:52:37Z'
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 641
+                    name: Tobias Lynch
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: active
+                  thumbnail_url:
+                  title: Awesome Marble Coat
+                  views_count: 0
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 1
+                    total_pages: 1
   "/api/v1/listings/{id}":
     parameters:
     - name: id
@@ -122,6 +619,85 @@ paths:
           description: not found
         '200':
           description: saves_count is an integer, never a nested list of savers
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 514
+                    kind: item
+                    name_en: Category 864
+                    name_fa: دسته 864
+                    name_ps: کټاګورۍ 864
+                    name_ur: Category 864
+                    parent_id:
+                    position: 1
+                    slug: category-866
+                  category_id: 514
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-28T12:52:40.138Z'
+                  currency: AFN
+                  description: Quis nemo corrupti. Voluptas non possimus. Nisi et
+                    tempora.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 512
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: approximate
+                  location_radius_m: 500
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  price: 22444.86
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:52:40.138Z'
+                  quantity: 1
+                  reserved_at:
+                  sales_count: 0
+                  saves_count: 4
+                  seller:
+                    id: 684
+                    name: Leila Orn
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label:
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Aerodynamic Linen Shirt
+                  updated_at: '2026-10-28T12:52:40.138Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 1
   "/api/v1/listings/{id}/save":
     parameters:
     - name: id
@@ -131,11 +707,18 @@ paths:
         type: integer
     post:
       summary: save a listing (bookmark)
-      tags:
-      - Listings
-      security:
-      - bearer: []
       parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
       - name: access-token
         in: header
         required: true
@@ -151,10 +734,19 @@ paths:
         required: true
         schema:
           type: string
+      tags:
+      - Listings
+      security:
+      - bearer: []
       responses:
         '200':
           description: save is idempotent — saving twice still returns 200 and persists
             one record
+          content:
+            application/json:
+              example:
+                saved: true
+                id: 76
         '401':
           description: unauthenticated user cannot save
   "/api/v1/listings/{id}/unsave":
@@ -166,11 +758,18 @@ paths:
         type: integer
     delete:
       summary: unsave a listing (remove bookmark)
-      tags:
-      - Listings
-      security:
-      - bearer: []
       parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
       - name: access-token
         in: header
         required: true
@@ -186,10 +785,18 @@ paths:
         required: true
         schema:
           type: string
+      tags:
+      - Listings
+      security:
+      - bearer: []
       responses:
         '200':
           description: unsave is idempotent — calling when not saved still returns
             200
+          content:
+            application/json:
+              example:
+                saved: false
         '401':
           description: unauthenticated user cannot unsave
   "/api/v1/listings/{id}/similar":
@@ -209,6 +816,166 @@ paths:
       responses:
         '200':
           description: another user's dismissal does not shrink my rail
+          content:
+            application/json:
+              example:
+                listings:
+                - address:
+                  available_units: 1
+                  bumped_at: '2026-10-28T12:52:40.992Z'
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 523
+                    kind: item
+                    name_en: Category 873
+                    name_fa: دسته 873
+                    name_ps: کټاګورۍ 873
+                    name_ur: Category 873
+                    parent_id:
+                    position: 1
+                    slug: category-875
+                  category_id: 523
+                  condition:
+                  created_at: '2026-10-28T12:52:40.992Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 523
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: 20202.1
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent:
+                  price_dropped: false
+                  price_dropped_at:
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 706
+                    name: Barry Waelchi
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: active
+                  thumbnail_url:
+                  title: Rustic Wool Bench
+                  views_count: 0
+                - address:
+                  available_units: 1
+                  bumped_at: '2026-10-28T12:52:40.968Z'
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 523
+                    kind: item
+                    name_en: Category 873
+                    name_fa: دسته 873
+                    name_ps: کټاګورۍ 873
+                    name_ur: Category 873
+                    parent_id:
+                    position: 1
+                    slug: category-875
+                  category_id: 523
+                  condition:
+                  created_at: '2026-10-28T12:52:40.968Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 522
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: 30799.28
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent:
+                  price_dropped: false
+                  price_dropped_at:
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 705
+                    name: Clara Kuvalis
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: active
+                  thumbnail_url:
+                  title: Enormous Leather Gloves
+                  views_count: 0
+                - address:
+                  available_units: 1
+                  bumped_at: '2026-10-28T12:52:40.942Z'
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 523
+                    kind: item
+                    name_en: Category 873
+                    name_fa: دسته 873
+                    name_ps: کټاګورۍ 873
+                    name_ur: Category 873
+                    parent_id:
+                    position: 1
+                    slug: category-875
+                  category_id: 523
+                  condition:
+                  created_at: '2026-10-28T12:52:40.942Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 521
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: 98859.02
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent:
+                  price_dropped: false
+                  price_dropped_at:
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 704
+                    name: Graciela Franecki
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: active
+                  thumbnail_url:
+                  title: Durable Copper Shirt
+                  views_count: 0
         '404':
           description: not found for non-existent listing
       security:
@@ -283,13 +1050,52 @@ paths:
         required: false
         schema:
           type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (one write); the same key with another
+          body → 422.
+        schema:
+          type: string
       responses:
         '401':
           description: unauthorized
         '201':
           description: offer for 3 of the 15 units
+          content:
+            application/json:
+              example:
+                message:
+                  action:
+                  attachment_url:
+                  body: 12000|AFN|14000
+                  client_uuid:
+                  created_at: '2026-10-28T12:52:44.682Z'
+                  deleted: false
+                  deleted_at:
+                  id: 59
+                  kind: offer
+                  notice:
+                  offer_amount: 12000.0
+                  offer_currency: AFN
+                  offer_quantity: 3
+                  read_at:
+                  responds_to_id:
+                  sender:
+                    id: 781
+                    name: Charlene Wolf
+                    avatar_url:
+                    avatar_thumb_url:
         '422':
           description: offer for more units than the listing has left
+          content:
+            application/json:
+              example:
+                errors:
+                - Offer quantity cannot be more than the 15 units still available.
+                  Set it to 15 or fewer.
+                code: offer_quantity_above_available_units
       requestBody:
         content:
           application/json:
@@ -320,9 +1126,402 @@ paths:
                   type: integer
                   nullable: true
                   description: SF-B11 — units this offer is for; null means unspecified
+                client_uuid:
+                  type: string
+                  nullable: true
+                  description: OFFLINE §10.1 — the app's own id for the message (8-64
+                    of A-Z a-z 0-9 - _). Sent again (a retry after a lost answer),
+                    the stored message is returned, never a second one. Echoed on
+                    the message.
+                context:
+                  type: object
+                  nullable: true
+                  description: 'Support thread only (1.1.6): where the message is
+                    written from. mode buyer|seller; shop_id only with seller, and
+                    only a shop the sender is in. Ignored in any other thread; an
+                    invalid one → 422 code invalid_message_context. Older apps send
+                    none (shown to the admin as unknown).'
+                  properties:
+                    mode:
+                      type: string
+                      enum:
+                      - buyer
+                      - seller
+                    shop_id:
+                      type: integer
+                      nullable: true
               required:
               - body
         required: true
+  "/api/v1/my/analytics":
+    get:
+      summary: a seller's numbers, for Me or one shop they are on
+      tags:
+      - Listings
+      description: |
+        `shop_id`: a shop the caller is on (any role), or none for Me. Counts:
+        total (not removed), active (live, not expired), expired, sold, draft,
+        sales + units_sold (recorded sales), views (sum), chats (begun with this
+        identity). Never site-wide. 403 `not_a_member` for another shop.
+        A shop also gets `team` (owner 2026-10-08): one row per member
+        {user {id, name, avatar_url}, role, posted, active, expired, sold}, sold
+        = sales the member recorded; and `team_unattributed` {posted, active,
+        expired, sold}: products of former members and sales recorded before
+        recorded_by existed. Every member sees the whole team. Me: both null.
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: shop_id
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '401':
+          description: unauthorized
+        '403':
+          description: not on that shop's team
+        '200':
+          description: Me
+          content:
+            application/json:
+              example:
+                analytics:
+                  shop:
+                  total: 5
+                  active: 2
+                  expired: 1
+                  sold: 1
+                  draft: 1
+                  sales: 0
+                  units_sold: 0
+                  views: 16
+                  chats: 0
+                  team:
+                  team_unattributed:
+  "/api/v1/my/listings/{id}/duplicate":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    post:
+      summary: duplicate one of the caller's listings as a draft, photos copied
+      tags:
+      - Listings
+      description: |
+        A new DRAFT with the listing's text, price, category, place and COPIES of
+        its photos (new files: deleting either listing never affects the other's).
+        `shop_id`: where it goes — a shop the caller is on, or null for Me (out of
+        a shop only for the poster or the shop's owner). Clients open the draft in
+        the edit form. Error codes: move_not_member (403), duplicate_forbidden
+        (403), shop_unavailable (422).
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '401':
+          description: unauthorized
+        '403':
+          description: not on the target shop's team
+        '201':
+          description: the draft, with its photos
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 778
+                    kind: item
+                    name_en: Category 1128
+                    name_fa: دسته 1128
+                    name_ps: کټاګورۍ 1128
+                    name_ur: Category 1128
+                    parent_id:
+                    position: 1
+                    slug: category-1130
+                  category_id: 778
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-28T12:53:04.552Z'
+                  currency: AFN
+                  description: Harum est est. Dolorem fugiat repellendus. Ut voluptatem
+                    in.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 844
+                  image_attachments:
+                  - id: eyJfcmFpbHMiOnsiZGF0YSI6MjY0LCJwdXIiOiJibG9iX2lkIn19--e9ae776483d8ff40fe43f330ceb72f89d54f99a6
+                    url: http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MjY0LCJwdXIiOiJibG9iX2lkIn19--e9ae776483d8ff40fe43f330ceb72f89d54f99a6/test_image.jpg
+                  image_medium_urls:
+                  - http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MjY0LCJwdXIiOiJibG9iX2lkIn19--e9ae776483d8ff40fe43f330ceb72f89d54f99a6/test_image.jpg
+                  image_thumb_urls:
+                  - http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MjY0LCJwdXIiOiJibG9iX2lkIn19--e9ae776483d8ff40fe43f330ceb72f89d54f99a6/test_image.jpg
+                  images:
+                  - http://www.example.com/rails/active_storage/blobs/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MjY0LCJwdXIiOiJibG9iX2lkIn19--e9ae776483d8ff40fe43f330ceb72f89d54f99a6/test_image.jpg
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:53:04.552Z'
+                  posted_by:
+                    id: 1183
+                    name: Salvador Barton
+                  price: 84619.62
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at:
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 1183
+                    shop_id: 36
+                    name: Safi Mobile
+                    city: Herat
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    as_shop: true
+                    phone:
+                    whatsapp_number:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label:
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                    city:
+                    id: 36
+                    logo_thumb_url:
+                    logo_url:
+                    name: Safi Mobile
+                    province: Herat
+                    verified: false
+                  sold_at:
+                  status: draft
+                  thumbnail_url: http://www.example.com/rails/active_storage/representations/redirect/eyJfcmFpbHMiOnsiZGF0YSI6MjY0LCJwdXIiOiJibG9iX2lkIn19--e9ae776483d8ff40fe43f330ceb72f89d54f99a6/eyJfcmFpbHMiOnsiZGF0YSI6eyJmb3JtYXQiOiJqcGciLCJyZXNpemVfdG9fbGltaXQiOls2MDAsNjAwXSwic2F2ZXIiOnsic3RyaXAiOnRydWV9fSwicHVyIjoidmFyaWF0aW9uIn19--1d4a3b3f40a60d047cb8ec7aeb0da2eaf7cae92d/test_image.jpg
+                  title: Fantastic Linen Computer
+                  updated_at: '2026-10-28T12:53:04.572Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop_id:
+                  type: integer
+                  nullable: true
+  "/api/v1/my/listings":
+    get:
+      summary: list the caller's own listings, for one selling identity
+      tags:
+      - Listings
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: selling_as
+        in: query
+        required: false
+        description: 'OFFLINE §10.6 — `me` or a shop id: the identity the app caches
+          this list under, whatever the server''s current "selling as" (a switch may
+          still be queued on the phone). A shop the caller may not sell as → 422 `code:
+          "shop_unavailable"`. Absent (1.1.x apps): the server''s current identity,
+          as before.'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the identity asked for (here the shop, while the server sells
+            as Me)
+        '422':
+          description: a shop the caller may not sell as
+    post:
+      summary: create a listing (Me, or a shop the seller is in)
+      tags:
+      - Listings
+      description: '`shop_id` (OFFLINE §10.6): the identity the listing is made under,
+        as the app queued it (absent: the server''s current "selling as"). `listing.image_order`
+        (phase 0): the photos'' order as tokens. Limited to 30 a day per seller: 429
+        with `Retry-After` (seconds).'
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      responses:
+        '201':
+          description: 'a retry with the same key: the FIRST answer replayed (Idempotent-Replayed:
+            true), no second listing'
+          headers:
+            Idempotent-Replayed:
+              schema:
+                type: string
+              description: '"true" on a replayed answer'
+        '409':
+          description: 'the first request with this key is still running: retry later'
+        '422':
+          description: the same key with a DIFFERENT request
+        '429':
+          description: 'over the daily limit: Retry-After says when (never a 429 replayed
+            under a key)'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: seconds — the limit window's length
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop_id:
+                  type: string
+                  nullable: true
+                  description: OFFLINE §10.6 — `me` or a shop id
+                listing:
+                  type: object
+                  properties:
+                    title:
+                      type: string
+                    price:
+                      type: number
+                    currency:
+                      type: string
+                    category_id:
+                      type: integer
+                    status:
+                      type: string
+                      enum:
+                      - draft
+                      - active
+                    image_order:
+                      type: array
+                      items:
+                        type: string
+                      description: 'Phase 0 — the photos'' order: `new:<n>` for the
+                        n-th uploaded file'
+  "/api/v1/my/listings/status_counts":
+    get:
+      summary: the caller's tab counts, for one selling identity
+      tags:
+      - Listings
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: selling_as
+        in: query
+        required: false
+        description: 'OFFLINE §10.6 — `me` or a shop id: the identity the app caches
+          this list under, whatever the server''s current "selling as" (a switch may
+          still be queued on the phone). A shop the caller may not sell as → 422 `code:
+          "shop_unavailable"`. Absent (1.1.x apps): the server''s current identity,
+          as before.'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: counts for the identity asked for
+        '422':
+          description: a shop the caller may not sell as
   "/api/v1/my/listings/{id}/renew":
     parameters:
     - name: id
@@ -332,13 +1531,18 @@ paths:
         type: integer
     put:
       summary: renew one of the caller's own listings
-      tags:
-      - Listings
-      description: |
-        Seller lifecycle command. SF-B7 — a listing that fails validation
-        (typically a legacy row that predates one of Listing's bounds) is
-        answered with 422 and the field errors, never a 500 with an empty body.
       parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
       - name: access-token
         in: header
         required: false
@@ -354,13 +1558,107 @@ paths:
         required: false
         schema:
           type: string
+      tags:
+      - Listings
+      description: |
+        Seller lifecycle command. SF-B7 — a listing that fails validation
+        (typically a legacy row that predates one of Listing's bounds) is
+        answered with 422 and the field errors, never a 500 with an empty body.
       responses:
         '401':
           description: unauthorized
         '200':
           description: successful
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 929
+                    kind: item
+                    name_en: Category 1279
+                    name_fa: دسته 1279
+                    name_ps: کټاګورۍ 1279
+                    name_ur: Category 1279
+                    parent_id:
+                    position: 1
+                    slug: category-1281
+                  category_id: 929
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-28T12:53:24.738Z'
+                  currency: AFN
+                  description: Vel expedita laudantium. Ut iste aut. Reprehenderit
+                    molestiae est.
+                  details: {}
+                  expired: false
+                  expires_at: '2027-01-26T12:53:24.781Z'
+                  has_video: false
+                  held_units: 0
+                  id: 963
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:53:24.738Z'
+                  posted_by:
+                  price: 15701.15
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:53:24.737Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 1447
+                    name: Harold Schoen
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Awesome Aluminum Knife
+                  updated_at: '2026-10-28T12:53:24.790Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
         '422':
           description: the listing fails validation
+          content:
+            application/json:
+              example:
+                errors:
+                - Latitude must be less than or equal to 90
   "/api/v1/my/listings/{id}/unpublish":
     parameters:
     - name: id
@@ -370,13 +1668,18 @@ paths:
         type: integer
     put:
       summary: unpublish one of the caller's own listings
-      tags:
-      - Listings
-      description: |
-        Seller lifecycle command. SF-B7 — a listing that fails validation
-        (typically a legacy row that predates one of Listing's bounds) is
-        answered with 422 and the field errors, never a 500 with an empty body.
       parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
       - name: access-token
         in: header
         required: false
@@ -392,13 +1695,106 @@ paths:
         required: false
         schema:
           type: string
+      tags:
+      - Listings
+      description: |
+        Seller lifecycle command. SF-B7 — a listing that fails validation
+        (typically a legacy row that predates one of Listing's bounds) is
+        answered with 422 and the field errors, never a 500 with an empty body.
       responses:
         '401':
           description: unauthorized
         '200':
           description: successful
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 932
+                    kind: item
+                    name_en: Category 1282
+                    name_fa: دسته 1282
+                    name_ps: کټاګورۍ 1282
+                    name_ur: Category 1282
+                    parent_id:
+                    position: 1
+                    slug: category-1284
+                  category_id: 932
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-28T12:53:24.953Z'
+                  currency: AFN
+                  description: Veniam est soluta. In non nulla. Ipsum in incidunt.
+                  details: {}
+                  expired: false
+                  expires_at: '2026-10-26T12:53:24.945Z'
+                  has_video: false
+                  held_units: 0
+                  id: 966
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:53:24.953Z'
+                  posted_by:
+                  price: 75719.23
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:53:24.953Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 1450
+                    name: Maximo Cartwright
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: draft
+                  thumbnail_url:
+                  title: Synergistic Cotton Knife
+                  updated_at: '2026-10-28T12:53:25.013Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
         '422':
           description: the listing fails validation
+          content:
+            application/json:
+              example:
+                errors:
+                - Latitude must be less than or equal to 90
   "/api/v1/my/listings/{id}/activate":
     parameters:
     - name: id
@@ -408,12 +1804,155 @@ paths:
         type: integer
     put:
       summary: activate one of the caller's own listings
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
       tags:
       - Listings
       description: |
         Seller lifecycle command. SF-B7 — a listing that fails validation
         (typically a legacy row that predates one of Listing's bounds) is
         answered with 422 and the field errors, never a 500 with an empty body.
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: successful
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 935
+                    kind: item
+                    name_en: Category 1285
+                    name_fa: دسته 1285
+                    name_ps: کټاګورۍ 1285
+                    name_ur: Category 1285
+                    parent_id:
+                    position: 1
+                    slug: category-1287
+                  category_id: 935
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-28T12:53:25.224Z'
+                  currency: AFN
+                  description: Et sint esse. Accusantium impedit eos. Eaque molestias
+                    facere.
+                  details: {}
+                  expired: true
+                  expires_at: '2026-10-26T12:53:25.213Z'
+                  has_video: false
+                  held_units: 0
+                  id: 969
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:53:25.224Z'
+                  posted_by:
+                  price: 51270.61
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:53:25.282Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 1453
+                    name: Clement Gulgowski
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Enormous Wool Wallet
+                  updated_at: '2026-10-28T12:53:25.282Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
+        '422':
+          description: the listing fails validation
+          content:
+            application/json:
+              example:
+                errors:
+                - Latitude must be less than or equal to 90
+  "/api/v1/my/listings/{id}/move":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    put:
+      summary: move one of the caller's listings to Me or to another shop they are
+        on
+      tags:
+      - Listings
+      description: |
+        `shop_id`: the target shop, or null for Me. Any member may move a shop's
+        products; into a shop needs membership of it; out to Me only the poster
+        or the shop's owner. The listing keeps its photos, expiry and feed
+        position. Its chats do NOT move: each open one gets a system message
+        (`notice: {notice: "listing_moved", shop_id, name}`) and is closed; the
+        buyer starts a new chat with the new seller. Error codes:
+        move_not_member (403), move_forbidden (403), shop_unavailable,
+        move_same_place, move_has_hold, move_not_movable (422).
       parameters:
       - name: access-token
         in: header
@@ -433,10 +1972,115 @@ paths:
       responses:
         '401':
           description: unauthorized
-        '200':
-          description: successful
+        '403':
+          description: not on the target shop's team
         '422':
-          description: the listing fails validation
+          description: cannot move (held, sold, removed, already there)
+        '200':
+          description: moved
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 950
+                    kind: item
+                    name_en: Category 1300
+                    name_fa: دسته 1300
+                    name_ps: کټاګورۍ 1300
+                    name_ur: Category 1300
+                    parent_id:
+                    position: 1
+                    slug: category-1302
+                  category_id: 950
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-28T12:53:26.382Z'
+                  currency: AFN
+                  description: Quis placeat sit. Aperiam aliquam ut. Animi consectetur
+                    optio.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 981
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:53:26.382Z'
+                  posted_by:
+                    id: 1466
+                    name: Lourdes Raynor
+                  price: 24370.82
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:53:26.382Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 1466
+                    shop_id: 65
+                    name: Safi Mobile
+                    city: Herat
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    as_shop: true
+                    phone:
+                    whatsapp_number:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label:
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                    city:
+                    id: 65
+                    logo_thumb_url:
+                    logo_url:
+                    name: Safi Mobile
+                    province: Herat
+                    verified: false
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Heavy Duty Iron Keyboard
+                  updated_at: '2026-10-28T12:53:26.472Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop_id:
+                  type: integer
+                  nullable: true
   "/api/v1/my/listings/{id}":
     parameters:
     - name: id
@@ -451,6 +2095,12 @@ paths:
       description: |
         Edits a listing the caller owns. Photos are appended (never replaced) and
         removed by signed id via `removed_image_ids`.
+
+        OFFLINE phase 0 — `image_order[]` sets the photos' order: the signed ids
+        of `image_attachments`, plus `new:<n>` for the n-th photo of this
+        request's `images[]`. Unknown tokens are ignored; a photo left out of
+        the list keeps its place after the listed ones (never deleted). Without
+        the field, the order is unchanged.
 
         SF-B6 — changing `quantity` reconciles the listing's own status:
 
@@ -473,6 +2123,14 @@ paths:
         The two floors report EXCLUSIVELY — whichever is higher raises the error,
         so `code` is one value and the minimum named in the message is always the
         minimum that actually works.
+
+        OFFLINE §10.2 — `base` (optional): for each field sent, the value the
+        client SAW when the edit was made (an edit queued offline). A field
+        whose server value changed meanwhile is not overwritten: the other
+        fields are applied, and the answer is 409 `code: "edit_conflict"` with
+        `fields: {field: {yours, theirs, changed_at, changed_by_name}}` (the
+        listing as it is now, too). The same value already there (`theirs ==
+        yours`) is a success. Without `base` (1.1.x apps): last write wins.
       parameters:
       - name: access-token
         in: header
@@ -489,13 +2147,114 @@ paths:
         required: false
         schema:
           type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (one write); the same key with another
+          body → 422.
+        schema:
+          type: string
       responses:
         '401':
           description: unauthorized
+        '409':
+          description: 'OFFLINE §10.2 — a field changed elsewhere since the client
+            saw it: the rest is applied'
         '200':
           description: quantity raised — the sold-out listing re-opens with its stock
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 5
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1015
+                    kind: item
+                    name_en: Category 1365
+                    name_fa: دسته 1365
+                    name_ps: کټاګورۍ 1365
+                    name_ur: Category 1365
+                    parent_id:
+                    position: 1
+                    slug: category-1367
+                  category_id: 1015
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-10-28T12:53:34.554Z'
+                  currency: AFN
+                  description: Error quaerat eius. Non ducimus numquam. Quibusdam
+                    et ducimus.
+                  details: {}
+                  expired: false
+                  expires_at: '2027-01-26T12:53:34.604Z'
+                  has_video: false
+                  held_units: 0
+                  id: 1041
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: true
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:53:34.554Z'
+                  posted_by:
+                  price: 49016.36
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:53:34.607Z'
+                  quantity: 20
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 1533
+                    name: Leslie Harber
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Incredible Leather Hat
+                  updated_at: '2026-10-28T12:53:34.607Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
         '422':
           description: quantity below the units already sold
+          content:
+            application/json:
+              example:
+                errors:
+                - Quantity cannot be less than the 15 units already sold. Set it to
+                  15 or more, or undo a sale first.
+                code: quantity_below_sold_units
       requestBody:
         content:
           application/json:
@@ -512,7 +2271,275 @@ paths:
                     quantity:
                       type: integer
                       description: Total units; may not be below sold_units
+                    image_order:
+                      type: array
+                      items:
+                        type: string
+                      description: Photo signed ids and new:<n> tokens, in display
+                        order
+                    base:
+                      type: object
+                      additionalProperties: true
+                      description: OFFLINE §10.2 — per field sent, the value the client
+                        saw (snake_case keys)
         required: true
+    delete:
+      summary: delete (soft-remove) a listing
+      tags:
+      - Listings
+      description: 'Already removed (another device, a lost answer''s retry) → 204
+        as well. A listing of a shop the caller has left or was removed from → 403
+        `code: "listing_not_managed"` (OFFLINE, QA audit A5): never a 404 a queue
+        would take as done.'
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: removed
+        '403':
+          description: the caller no longer manages it
+  "/api/v1/my/listings/{id}/relaunch":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    put:
+      summary: relaunch one of the caller's own listings (renew + weekly bump)
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      tags:
+      - Listings
+      description: |
+        Restarts the 90-day run (like renew), and moves the listing back to the
+        top of the newest-first feed if it was last moved at least 7 days ago.
+        `bumped` says whether this call moved it; `next_bump_at` when it next can
+        (null = now). Photos, chats and the listing itself are kept.
+      responses:
+        '401':
+          description: unauthorized
+        '403':
+          description: not the caller's listing, or not live
+        '422':
+          description: the listing fails validation
+        '200':
+          description: successful
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 1
+                  bumped: true
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1040
+                    kind: item
+                    name_en: Category 1390
+                    name_fa: دسته 1390
+                    name_ps: کټاګورۍ 1390
+                    name_ur: Category 1390
+                    parent_id:
+                    position: 1
+                    slug: category-1392
+                  category_id: 1040
+                  condition:
+                  conversations_count: 0
+                  created_at: '2026-07-20T12:53:38.640Z'
+                  currency: AFN
+                  description: Dolores aliquam labore. Aspernatur facilis voluptatum.
+                    Voluptates alias voluptatum.
+                  details: {}
+                  expired: false
+                  expires_at: '2027-01-26T12:53:38.707Z'
+                  has_video: false
+                  held_units: 0
+                  id: 1066
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: false
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:53:38.707Z'
+                  posted_by:
+                  price: 31050.84
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:53:38.652Z'
+                  quantity: 1
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 1584
+                    name: Marcus Hegmann
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Rustic Rubber Chair
+                  updated_at: '2026-10-28T12:53:38.720Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
+  "/api/v1/my/listings/{listing_id}/video":
+    parameters:
+    - name: listing_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    - name: access-token
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: client
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: uid
+      in: header
+      required: true
+      schema:
+        type: string
+    put:
+      summary: set (or replace) the listing's video
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      tags:
+      - Listings
+      description: 'Multipart. `video`: MP4 or QuickTime, at most 25 MB and 60 s (the
+        apps compress to ~720p and trim before upload). `poster`: an image frame from
+        the client, optional. `duration_s`: the client''s measurement. Replaces any
+        previous video. Only whoever manages the listing (the poster or a shop member);
+        not on a sold or deleted listing.'
+      security:
+      - bearer: []
+      responses:
+        '200':
+          description: attached; the listing comes back with its video
+        '422':
+          description: not a video
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: string
+        required: true
+    delete:
+      summary: remove the listing's video
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      tags:
+      - Listings
+      security:
+      - bearer: []
+      responses:
+        '200':
+          description: removed; the photos stay
   "/api/v1/my/reviews/pending":
     get:
       summary: sold sales the caller still owes a review on
@@ -543,6 +2570,44 @@ paths:
           description: requires authentication
         '200':
           description: lists unreviewed sold sales
+          content:
+            application/json:
+              example:
+                transactions:
+                - buyer:
+                    id: 1813
+                    name: Tina Wilkinson
+                    avatar_url:
+                    avatar_thumb_url:
+                  completed_at: '2026-10-28T12:54:00.448Z'
+                  created_at: '2026-10-28T12:54:00.454Z'
+                  currency: AFN
+                  final_price: 86539.59
+                  id: 193
+                  listing:
+                    id: 1302
+                    title: Awesome Linen Bag
+                    thumbnail_url:
+                    price: 86539.59
+                    currency: AFN
+                    status: active
+                    multi_unit: false
+                    available_units: 1
+                  quantity: 1
+                  role: seller
+                  seller:
+                    id: 1812
+                    name: Sheron Schowalter
+                    avatar_url:
+                    avatar_thumb_url:
+                  status: sold
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 1
+                    total_pages: 1
   "/api/v1/my/transactions":
     get:
       summary: list the caller's transactions (as buyer and/or seller)
@@ -591,6 +2656,71 @@ paths:
           description: unauthorized
         '200':
           description: "?listing_id= narrows to one listing's ledger"
+          content:
+            application/json:
+              example:
+                transactions:
+                - buyer:
+                    id: 2039
+                    name: Serena Halvorson
+                    avatar_url:
+                    avatar_thumb_url:
+                  completed_at:
+                  created_at: '2026-10-28T12:54:12.537Z'
+                  currency: AFN
+                  final_price: 5112.68
+                  id: 226
+                  listing:
+                    id: 1451
+                    title: Rustic Leather Shoes
+                    thumbnail_url:
+                    price: 5112.68
+                    currency: AFN
+                    status: active
+                    multi_unit: false
+                    available_units: 1
+                  quantity: 1
+                  role: buyer
+                  seller:
+                    id: 2041
+                    name: Charlie Kohler
+                    avatar_url:
+                    avatar_thumb_url:
+                  status: reserved
+                - buyer:
+                    id: 2040
+                    name: Kandice Kris
+                    avatar_url:
+                    avatar_thumb_url:
+                  completed_at:
+                  created_at: '2026-10-28T12:54:12.496Z'
+                  currency: AFN
+                  final_price: 34909.34
+                  id: 225
+                  listing:
+                    id: 1450
+                    title: Awesome Paper Gloves
+                    thumbnail_url:
+                    price: 34909.34
+                    currency: AFN
+                    status: active
+                    multi_unit: false
+                    available_units: 1
+                  quantity: 1
+                  role: seller
+                  seller:
+                    id: 2039
+                    name: Serena Halvorson
+                    avatar_url:
+                    avatar_thumb_url:
+                  status: reserved
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 2
+                    total_pages: 1
   "/api/v1/my/transactions/{id}":
     parameters:
     - name: id
@@ -600,18 +2730,18 @@ paths:
         type: integer
     patch:
       summary: correct a recorded sale
-      tags:
-      - Transactions
-      description: |
-        SF-B4 — edit a sale the seller already recorded: its quantity, its price,
-        and/or who it was to. `quantity: 0` means "this sale did not happen" and
-        is handled exactly like DELETE.
-
-        Restores stock, moves the trust counters, and reconciles the listing's own
-        status (a `sold` listing re-opens as `active` when the correction leaves
-        units unsold). Refused with 422 + `code: "sale_has_review"` when the sale
-        already has a review AND the change would void it or move its buyer.
       parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
       - name: access-token
         in: header
         required: false
@@ -627,11 +2757,157 @@ paths:
         required: false
         schema:
           type: string
+      tags:
+      - Transactions
+      description: |
+        SF-B4 — edit a sale the seller already recorded: its quantity, its price,
+        and/or who it was to. `quantity: 0` means "this sale did not happen" and
+        is handled exactly like DELETE.
+
+        Restores stock, moves the trust counters, and reconciles the listing's own
+        status (a `sold` listing re-opens as `active` when the correction leaves
+        units unsold). Refused with 422 + `code: "sale_has_review"` when the sale
+        already has a review AND the change would void it or move its buyer.
+
+        OFFLINE §10.2 — `base` (optional): for quantity / buyer_id / final_price,
+        the value the client saw. One changed elsewhere meanwhile is not
+        overwritten (the rest applies) → 409 `code: "edit_conflict"` + `fields`.
+        A sale the caller recorded for a shop they no longer manage → 403
+        `code: "sale_not_managed"` (a queued correction is told, not lost).
       responses:
         '401':
           description: unauthorized
         '200':
           description: sale corrected; listing status and stock reconciled
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 4
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1293
+                    kind: item
+                    name_en: Category 1643
+                    name_fa: دسته 1643
+                    name_ps: کټاګورۍ 1643
+                    name_ur: Category 1643
+                    parent_id:
+                    position: 1
+                    slug: category-1645
+                  category_id: 1293
+                  condition:
+                  conversations_count: 1
+                  created_at: '2026-10-28T12:54:13.127Z'
+                  currency: AFN
+                  description: Nam nihil ducimus. Nesciunt est explicabo. Quisquam
+                    ut placeat.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 1458
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: true
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:54:13.127Z'
+                  posted_by:
+                  price: 1000.0
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:54:13.127Z'
+                  quantity: 5
+                  reserved_at:
+                  sale:
+                    id: 233
+                    status: sold
+                    final_price: 1000.0
+                    currency: AFN
+                    quantity: 1
+                    completed_at: '2026-10-28T12:54:13.151Z'
+                    buyer:
+                      id: 2052
+                      name: Blondell Anderson
+                      avatar_url:
+                      avatar_thumb_url:
+                      verified: false
+                    conversation_id: 365
+                  sales_count: 1
+                  saves_count: 0
+                  seller:
+                    id: 2051
+                    name: Stephane Reilly
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Incredible Copper Table
+                  updated_at: '2026-10-28T12:54:13.252Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
+                transaction:
+                  buyer:
+                    id: 2052
+                    name: Blondell Anderson
+                    avatar_url:
+                    avatar_thumb_url:
+                  completed_at: '2026-10-28T12:54:13.151Z'
+                  created_at: '2026-10-28T12:54:13.156Z'
+                  currency: AFN
+                  final_price: 1000.0
+                  id: 233
+                  listing:
+                    id: 1458
+                    title: Incredible Copper Table
+                    thumbnail_url:
+                    price: 1000.0
+                    currency: AFN
+                    status: active
+                    multi_unit: true
+                    available_units: 4
+                  quantity: 1
+                  role: seller
+                  seller:
+                    id: 2051
+                    name: Stephane Reilly
+                    avatar_url:
+                    avatar_thumb_url:
+                  status: sold
+        '409':
+          description: 'a field changed elsewhere meanwhile: kept, named; the rest
+            applied'
+        '403':
+          description: a sale the caller recorded for a shop they were removed from
         '422':
           description: the corrected quantity exceeds the listing's stock
       requestBody:
@@ -652,8 +2928,40 @@ paths:
                 final_price:
                   type: number
                   description: Per-unit price actually agreed
+                base:
+                  type: object
+                  additionalProperties: true
+                  description: OFFLINE §10.2 — per field sent, the value the client
+                    saw
     delete:
       summary: void a recorded sale
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
       tags:
       - Transactions
       description: |
@@ -663,6 +2971,140 @@ paths:
 
         Refused with 422 + `code: "sale_has_review"` when the sale already has a
         review attached.
+      responses:
+        '401':
+          description: unauthorized
+        '200':
+          description: sale removed, stock restored, listing re-opened
+          content:
+            application/json:
+              example:
+                listing:
+                  address:
+                  available_units: 5
+                  bumped:
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 1299
+                    kind: item
+                    name_en: Category 1649
+                    name_fa: دسته 1649
+                    name_ps: کټاګورۍ 1649
+                    name_ur: Category 1649
+                    parent_id:
+                    position: 1
+                    slug: category-1651
+                  category_id: 1299
+                  condition:
+                  conversations_count: 1
+                  created_at: '2026-10-28T12:54:14.014Z'
+                  currency: AFN
+                  description: Hic ipsum enim. Debitis vel autem. Sed nemo minima.
+                  details: {}
+                  expired: false
+                  expires_at:
+                  has_video: false
+                  held_units: 0
+                  id: 1463
+                  image_attachments: []
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  images: []
+                  is_saved: false
+                  is_viewed: false
+                  latitude:
+                  location: Kabul, Afghanistan
+                  location_precision: exact
+                  location_radius_m:
+                  longitude:
+                  multi_unit: true
+                  negotiable: true
+                  next_bump_at: '2026-11-04T12:54:14.014Z'
+                  posted_by:
+                  price: 1000.0
+                  price_drop_percent:
+                  price_dropped_at:
+                  price_unit:
+                  published_at: '2026-10-28T12:54:14.014Z'
+                  quantity: 5
+                  reserved_at:
+                  sale:
+                  sales_count: 0
+                  saves_count: 0
+                  seller:
+                    id: 2062
+                    name: George Christiansen
+                    city: Kabul
+                    phone:
+                    whatsapp_number:
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                    avg_rating:
+                    review_count: 0
+                    response_rate_percent:
+                    response_time_label:
+                    last_active_label: today
+                    seller_is_away: false
+                    seller_away_until:
+                  share_url:
+                  shop:
+                  sold_at:
+                  status: active
+                  thumbnail_url:
+                  title: Durable Wooden Coat
+                  updated_at: '2026-10-28T12:54:14.151Z'
+                  video_duration_s:
+                  video_poster_url:
+                  video_url:
+                  views_count: 0
+        '422':
+          description: the sale already has a review
+  "/api/v1/my/shop_invites":
+    get:
+      summary: my pending invitations
+      tags:
+      - Shops — team
+      description: Pending, unexpired EMAIL invitations addressed to the caller's
+        CONFIRMED email, for open shops they are not in yet. An unconfirmed email
+        sees none; link invites never show (no addressee). Answer with POST /shop_invites/{token}/accept
+        or /decline. me.pending_shop_invites_count is the badge.
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: the invitations
+        '401':
+          description: signed out
+  "/api/v1/my/listings/{id}/publish":
+    put:
+      summary: publish a draft (it goes live)
+      tags:
+      - Listings
+      description: 'OFFLINE §10.3 — a target state: a listing ALREADY active (the
+        web, a teammate, this request''s lost first answer) → 200 with `already: true`,
+        nothing changed. A removed listing is refused.'
       parameters:
       - name: access-token
         in: header
@@ -679,13 +3121,622 @@ paths:
         required: false
         schema:
           type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
       responses:
-        '401':
-          description: unauthorized
         '200':
-          description: sale removed, stock restored, listing re-opened
-        '422':
-          description: the sale already has a review
+          description: 'already in that state: `already: true`'
+  "/api/v1/my/listings/{id}/sold":
+    put:
+      summary: mark sold (one tap, no hold needed)
+      tags:
+      - Listings
+      description: 'OFFLINE §10.3 — a target state: a listing ALREADY sold (the web,
+        a teammate, this request''s lost first answer) → 200 with `already: true`,
+        nothing changed. A removed listing is refused.'
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: 'already in that state: `already: true`'
+  "/api/v1/my/listings/relaunch_expired":
+    post:
+      summary: relaunch every expired listing (Me, or a shop)
+      tags:
+      - Listings
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      responses:
+        '200':
+          description: how many went live again
+  "/api/v1/listings/{id}/hide":
+    post:
+      summary: hide a listing from the caller's feed
+      tags:
+      - Listings
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: hidden
+  "/api/v1/listings/{id}/unhide":
+    delete:
+      summary: show a hidden listing again
+      tags:
+      - Listings
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: shown again
+  "/api/v1/listings/{listing_id}/conversations":
+    post:
+      summary: 'message the seller: starts (or finds) the conversation with a first
+        message'
+      tags:
+      - Conversations
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: listing_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '201':
+          description: the conversation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+  "/api/v1/conversations/{id}":
+    delete:
+      summary: delete a conversation for the caller
+      tags:
+      - Conversations
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: deleted for the caller
+  "/api/v1/conversations/{conversation_id}/messages/{id}":
+    delete:
+      summary: delete the caller's own message
+      tags:
+      - Messages
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: conversation_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: the message, now deleted
+  "/api/v1/users/{user_id}/block":
+    post:
+      summary: block a person
+      tags:
+      - Blocks
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: blocked
+    delete:
+      summary: unblock a person
+      tags:
+      - Blocks
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: unblocked (a 204 is replayed as a 204 under its key)
+  "/api/v1/shops/{shop_id}/block":
+    post:
+      summary: block a shop (its owner underneath)
+      tags:
+      - Blocks
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: blocked
+    delete:
+      summary: unblock a shop
+      tags:
+      - Blocks
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: unblocked
+  "/api/v1/users/saved_searches/{id}":
+    delete:
+      summary: delete a saved search
+      tags:
+      - Saved searches
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '204':
+          description: deleted
+  "/api/v1/users/saved_searches/{id}/mark_seen":
+    put:
+      summary: mark a saved search's new results as seen
+      tags:
+      - Saved searches
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: seen
+  "/api/v1/reviews/{id}":
+    patch:
+      summary: edit the caller's hidden review
+      tags:
+      - Reviews
+      description: 'OFFLINE §10.2 — `review.base`: per field sent, the value the client
+        saw. A field changed on the author''s other device meanwhile is not overwritten
+        (the rest applies) → 409 `code: "edit_conflict"` + `fields` (yours / theirs
+        / changed_at).'
+      parameters:
+      - name: access-token
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: false
+        schema:
+          type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: edited
+        '409':
+          description: 'a field changed elsewhere meanwhile: kept, named; the rest
+            applied'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                review:
+                  type: object
+                  properties:
+                    rating:
+                      type: integer
+                      minimum: 1
+                      maximum: 5
+                    comment:
+                      type: string
+                      nullable: true
+                    base:
+                      type: object
+                      additionalProperties: true
+                      description: the values the client saw
   "/api/v1/reports":
     get:
       summary: list the current user's reports
@@ -716,14 +3767,47 @@ paths:
           description: requires authentication
         '200':
           description: pagination meta is present
+          content:
+            application/json:
+              example:
+                reports:
+                - created_at: '2026-10-28T12:54:48.632Z'
+                  description: Detailed description
+                  id: 22
+                  reason: fraud
+                  reportable_id: 1757
+                  reportable_label: Synergistic Rubber Plate
+                  reportable_type: Listing
+                  status: resolved
+                - created_at: '2026-10-28T12:54:48.602Z'
+                  description: This listing looks suspicious.
+                  id: 21
+                  reason: spam
+                  reportable_id: 1756
+                  reportable_label: Ergonomic Steel Shirt
+                  reportable_type: Listing
+                  status: pending
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 2
+                    total_pages: 1
     post:
       summary: submit a report
-      tags:
-      - Reports
-      description: Submits a polymorphic report against a Listing or User.
-      security:
-      - bearer: []
       parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
       - name: access-token
         in: header
         required: true
@@ -739,11 +3823,20 @@ paths:
         required: true
         schema:
           type: string
+      tags:
+      - Reports
+      description: Submits a polymorphic report against a Listing or User.
+      security:
+      - bearer: []
       responses:
         '401':
           description: requires authentication
         '201':
           description: creates a report
+          content:
+            application/json:
+              example:
+                message: Report submitted
         '422':
           description: rejects reporting own listing
       requestBody:
@@ -773,15 +3866,18 @@ paths:
   "/api/v1/transactions/{transaction_id}/reviews":
     post:
       summary: leave a review on a sold sale
-      tags:
-      - Reviews
-      description: |
-        The caller (a party to a SOLD transaction) rates the other party. The
-        review is created hidden (double-blind) and revealed only once the
-        counterparty also submits, or after the reveal window elapses.
-      security:
-      - bearer: []
       parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
       - name: transaction_id
         in: path
         required: true
@@ -802,11 +3898,37 @@ paths:
         required: true
         schema:
           type: string
+      tags:
+      - Reviews
+      description: |
+        The caller (a party to a SOLD transaction) rates the other party. The
+        review is created hidden (double-blind) and revealed only once the
+        counterparty also submits, or after the reveal window elapses.
+      security:
+      - bearer: []
       responses:
         '401':
           description: requires authentication
         '201':
           description: creates a hidden review
+          content:
+            application/json:
+              example:
+                review:
+                  comment: Smooth deal
+                  created_at: '2026-10-28T12:54:51.343Z'
+                  id: 10
+                  rating: 5
+                  revealed_at:
+                  reviewee_id: 2500
+                  reviewer:
+                    id: 2499
+                    name: Dewitt O'Kon
+                    avatar_url:
+                    avatar_thumb_url:
+                  role: of_buyer
+                  transaction_id: 260
+                  visible: false
         '403':
           description: rejects a non-party
       requestBody:
@@ -864,6 +3986,720 @@ paths:
       responses:
         '200':
           description: returns only visible reviews
+          content:
+            application/json:
+              example:
+                reviews:
+                - comment: Great to deal with.
+                  created_at: '2026-10-28T12:54:51.544Z'
+                  id: 11
+                  rating: 4
+                  revealed_at: '2026-10-28T12:54:51.541Z'
+                  reviewee_id: 2504
+                  reviewer:
+                    id: 2505
+                    name: Ramiro O'Reilly
+                    avatar_url:
+                    avatar_thumb_url:
+                  role: of_seller
+                  transaction_id: 262
+                  visible: true
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 1
+                    total_pages: 1
+  "/api/v1/shop_invites/{token}":
+    get:
+      summary: the invite, for anyone holding the link (public)
+      tags:
+      - Shops — team
+      description: No login needed (the web join page). Only the shop's card, the
+        inviter's name, the role, the status (pending / accepted / declined / cancelled
+        / expired) and the expiry.
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the invite card
+        '404':
+          description: an unknown token
+  "/api/v1/shop_invites/{token}/accept":
+    post:
+      summary: join the shop as Staff
+      tags:
+      - Shops — team
+      description: "→ { shop_member, me }. Refused: invite_used / invite_cancelled
+        / invite_expired (410), invite_wrong_account (403), already_member, shop_unavailable,
+        team_full (422)."
+      security:
+      - bearer: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: joined
+        '410':
+          description: already used
+  "/api/v1/shop_invites/{token}/decline":
+    post:
+      summary: say no to the invite
+      tags:
+      - Shops — team
+      description: Logged (declined). The invite can't be used after. Same refusal
+        codes as accept.
+      security:
+      - bearer: []
+      parameters:
+      - name: token
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: declined
+  "/api/v1/shops/{shop_id}/invites":
+    parameters:
+    - name: shop_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    - name: access-token
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: client
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: uid
+      in: header
+      required: true
+      schema:
+        type: string
+    post:
+      summary: invite someone as Staff (owner)
+      tags:
+      - Shops — team
+      description: 'No email = a plain link (the main path, shared on WhatsApp). An
+        email invite binds to that CONFIRMED email. No phone (phones are not verified).
+        Refused: cannot_invite_self, already_member, team_full, shop_unavailable (422);
+        forbidden / not_a_member (403); too_many_invites (429, 20 a day per shop).'
+      security:
+      - bearer: []
+      parameters: []
+      responses:
+        '201':
+          description: a link invite
+        '403':
+          description: staff can't invite
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+    get:
+      summary: the owner's invites, pending first
+      tags:
+      - Shops — team
+      security:
+      - bearer: []
+      responses:
+        '200':
+          description: invites
+  "/api/v1/shops/{shop_id}/invites/{id}":
+    delete:
+      summary: cancel an invite (owner)
+      tags:
+      - Shops — team
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: cancelled (logged)
+  "/api/v1/shops/{shop_id}/invites/{id}/resend":
+    post:
+      summary: push an email invite again (owner)
+      tags:
+      - Shops — team
+      description: Email invites only (a link is shared again by the app). Pushes
+        the invited account if it exists and its email is confirmed. 410 when the
+        invite is no longer pending.
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: sent again
+  "/api/v1/shops/{shop_id}/video":
+    parameters:
+    - name: shop_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    - name: access-token
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: client
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: uid
+      in: header
+      required: true
+      schema:
+        type: string
+    put:
+      summary: set (or replace) the shop's video
+      tags:
+      - Shops
+      description: 'The listing video''s rules (PUT /my/listings/:id/video): multipart
+        `video` (MP4/QuickTime, ≤ 25 MB, ≤ 60 s), optional `poster` image and `duration_s`.
+        The shop''s owner or a manager; never a closed shop. Answers the shop (owner
+        view).'
+      security:
+      - bearer: []
+      parameters: []
+      responses:
+        '200':
+          description: attached
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: string
+        required: true
+    delete:
+      summary: remove the shop's video
+      tags:
+      - Shops
+      security:
+      - bearer: []
+      responses:
+        '200':
+          description: removed
+  "/api/v1/shops/{shop_id}/gallery":
+    parameters:
+    - name: shop_id
+      in: path
+      required: true
+      schema:
+        type: integer
+    - name: access-token
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: client
+      in: header
+      required: true
+      schema:
+        type: string
+    - name: uid
+      in: header
+      required: true
+      schema:
+        type: string
+    put:
+      summary: add, remove and reorder the shop's photos (up to 5)
+      tags:
+      - Shops
+      description: 'Multipart. `gallery[keep_ids][]`: the shop''s own photo ids (`gallery_photos[].id`)
+        in the order to show; `gallery[photos][]`: new image files, appended. A photo
+        left out of keep_ids is deleted. More than 5 → 422.'
+      security:
+      - bearer: []
+      parameters: []
+      responses:
+        '200':
+          description: the gallery, in order
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                keep_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: the shop's own photo ids, in order
+                photos:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: new photos, appended
+  "/api/v1/shops/{shop_id}/reviews":
+    get:
+      summary: the shop's reviews (public)
+      tags:
+      - Shops
+      description: Buyers' reviews of sales of this shop's products, newest first,
+        paginated. A review of the owner as a buyer or of the owner's personal sales
+        never appears. The shop page's avg_rating / review_count come from the same
+        set. 404 for a closed shop.
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: the shop's reviews
+        '404':
+          description: a closed shop
+  "/api/v1/shops/{shop_id}/members":
+    get:
+      summary: the team (every member)
+      tags:
+      - Shops — team
+      description: 'Owner first, then by join date. Each member: user {id, name, avatar_url},
+        role, joined_at. Never an email or a phone.'
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the list, read-only for staff
+        '403':
+          description: not a member
+  "/api/v1/shops/{shop_id}/members/{user_id}":
+    delete:
+      summary: remove a Staff member (owner)
+      tags:
+      - Shops — team
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: removed, told and logged
+    patch:
+      summary: change a member's role (owner)
+      tags:
+      - Shops — team
+      description: 'role: manager | staff. Owner only (403 forbidden). The owner''s
+        own role only changes by a transfer (422 cannot_change_owner); 422 invalid_role;
+        404 not_a_member. Audit role_changed; push shop_membership_changed {reason:
+        role_changed} to the person.'
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: the member with the new role
+        '403':
+          description: not the owner
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum:
+                  - manager
+                  - staff
+              required:
+              - role
+  "/api/v1/shops/{shop_id}/membership":
+    delete:
+      summary: leave the shop (staff)
+      tags:
+      - Shops — team
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: left
+        '422':
+          description: the owner can't leave
+  "/api/v1/shops/{shop_id}/transfer":
+    post:
+      summary: hand the shop to a member (owner)
+      tags:
+      - Shops — team
+      description: 'The member becomes the owner; the old owner stays as a manager;
+        shop chats move to the new owner (their seller is the owner); a Verified badge
+        is dropped (it vouched for the old owner''s e-Tazkira). → { shop (owner view,
+        the caller''s new role), me }. 422: cannot_transfer_to_self, not_a_member,
+        shop_unavailable, verification_pending. 403 forbidden for anyone but the owner.'
+      security:
+      - bearer: []
+      parameters:
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: transferred
+        '422':
+          description: to yourself
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+              required:
+              - user_id
+  "/api/v1/shops/{shop_id}/conversations":
+    post:
+      summary: Message shop (a chat without a product)
+      parameters:
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: 'OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (same status and body, header `Idempotent-Replayed:
+          true`; one write). The same key with another body → 422 `idempotency_key_reused`;
+          while the first request still runs → 409 `idempotency_in_progress` (retry
+          later); a malformed key → 422 `idempotency_key_invalid`. Without the header
+          (1.1.x apps) nothing changes.'
+        schema:
+          type: string
+      - name: shop_id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      tags:
+      - Shops
+      description: 'Find-or-create the caller''s one chat with the shop that has no
+        product. 201 when created, 200 with the same chat after. `message` is optional.
+        Refused: own shop / a shop you''re a member of (422 code own_shop), a shop
+        that isn''t open (404), a blocked pair (422).'
+      security:
+      - bearer: []
+      responses:
+        '201':
+          description: created; listing null, shop set
+        '422':
+          description: your own shop
+        '404':
+          description: a shop that isn't open
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message:
+                  type: string
+  "/api/v1/shops/{id}":
+    parameters:
+    - name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    get:
+      summary: a shop page (public)
+      tags:
+      - Shops
+      responses:
+        '200':
+          description: the shop; phone only when phone_public
+        '403':
+          description: a suspended shop is not public
+  "/api/v1/users/me/selling_as":
+    patch:
+      summary: choose who you sell as (null = Me)
+      tags:
+      - Shops
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: saved; me.selling_as_shop shows it
+        '422':
+          description: not a shop you are in
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shop_id:
+                  type: integer
+                  nullable: true
+  "/api/v1/my/shops":
+    get:
+      summary: the shops you sell for
+      tags:
+      - Shops
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: paginated, with role and live product count
   "/api/v1/support_conversation":
     post:
       summary: open (or return) the caller's thread with Hatiwal Support
@@ -871,7 +4707,55 @@ paths:
       - Conversations
       description: 'Idempotent. Creates the caller''s support conversation on first
         call, returns it after. Rendered like GET /conversations/:id (kind: "support",
-        listing: null, viewer_role: null).'
+        listing: null, viewer_role: null). Owner, 2026-10-12: Support is per identity.
+        Without shop_id, the caller''s own thread (Buyer mode and Seller as Me); with
+        shop_id, that SHOP''s thread (members only, 403 otherwise), shared by its
+        team and shown only while that shop is selected. GET /conversations lists
+        each identity''s thread by its last message like any chat, not pinned (owner,
+        2026-10-08; role=buying, role=selling&shop_id=none, role=selling&shop_id=<id>).
+        It can be archived, never deleted. me.unread_counts.support is the person''s
+        thread''s unread (also inside buying).'
+      security:
+      - bearer: []
+      parameters:
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: shop_id
+        in: query
+        required: false
+        description: 'A shop the caller is a member of: that shop''s own Support thread'
+        schema:
+          type: integer
+      responses:
+        '403':
+          description: shop_id names a shop the caller is not a member of
+        '401':
+          description: requires authentication
+        '200':
+          description: the caller's support thread
+  "/api/v1/users/me/location_guess":
+    patch:
+      summary: record a clue about where the signed-in user is
+      tags:
+      - Users
+      description: The area the user searched in (`search_area`) or a GPS fix the
+        app already had permission for (`gps`, at most once a day). The newest clue
+        replaces the last. Ignored (still 204) when the user has an own address or
+        the point is outside Afghanistan, Pakistan and Iran. Read the result from
+        `location` on GET /users/me. Never public.
       security:
       - bearer: []
       parameters:
@@ -891,20 +4775,47 @@ paths:
         schema:
           type: string
       responses:
+        '204':
+          description: recorded (or ignored)
+        '422':
+          description: unknown source or missing coordinates
         '401':
           description: requires authentication
-        '200':
-          description: the caller's support thread
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                  example: 34.3529
+                longitude:
+                  type: number
+                  example: 62.204
+                province:
+                  type: string
+                  example: Herat
+                  nullable: true
+                source:
+                  type: string
+                  enum:
+                  - listing
+                  - search_area
+                  - gps
+              required:
+              - latitude
+              - longitude
+              - source
   "/api/v1/users/me":
     put:
       summary: report push registration (token, or why there is none)
       tags:
       - Users
-      description: 'Send `push_token` once the app has one. When getting a token fails,
-        send `push_registration_error` as "<stage>: <message>" (e.g. "token: Default
-        FirebaseApp is not initialized"). The server keeps the last error only, strips
-        control characters, caps it at 300 characters, and clears it when a token
-        is saved. A blank string clears it too.'
+      description: |-
+        Send `push_token` once the app has one. When getting a token fails, send `push_registration_error` as "<stage>: <message>" (e.g. "token: Default FirebaseApp is not initialized"). The server keeps the last error only, strips control characters, caps it at 300 characters, and clears it when a token is saved. A blank string clears it too.
+
+        OFFLINE §10.2 — `user.base` (optional): for the fields a person edits by hand (firstname, lastname, phone, bio, city, province, whatsapp_number), the value the client saw. One changed elsewhere meanwhile is not overwritten: the rest applies and the answer is 409 `code: "edit_conflict"` + `fields`. Prefs and the push fields never conflict.
       security:
       - bearer: []
       parameters:
@@ -923,9 +4834,20 @@ paths:
         required: true
         schema:
           type: string
+      - name: Idempotency-Key
+        in: header
+        required: false
+        description: OFFLINE §10.1 — 8 to 64 letters, digits, - or _. A retry with
+          the same key replays the first answer (one write); the same key with another
+          body → 422.
+        schema:
+          type: string
       responses:
         '200':
           description: stored; a reported error is kept until a token arrives
+        '409':
+          description: OFFLINE §10.2 — a hand-edited field changed elsewhere since
+            the client saw it
         '401':
           description: requires authentication
       requestBody:
@@ -945,6 +4867,11 @@ paths:
                       type: string
                       maxLength: 300
                       example: 'token: Default FirebaseApp is not initialized'
+                    base:
+                      type: object
+                      additionalProperties: true
+                      description: OFFLINE §10.2 — per hand-edited field sent, the
+                        value the client saw
               required:
               - user
   "/api/v1/users/{user_id}/sold_listings":
@@ -987,8 +4914,138 @@ paths:
       responses:
         '200':
           description: returns only that seller's sold listings (authenticated)
+          content:
+            application/json:
+              example:
+                listings:
+                - address:
+                  available_units: 1
+                  bumped_at: '2026-10-28T12:55:56.360Z'
+                  category:
+                    icon: "\U0001F4E6"
+                    id: 2030
+                    kind: item
+                    name_en: Category 2391
+                    name_fa: دسته 2391
+                    name_ps: کټاګورۍ 2391
+                    name_ur: Category 2391
+                    parent_id:
+                    position: 1
+                    slug: category-2363
+                  category_id: 2030
+                  condition:
+                  created_at: '2026-10-28T12:55:56.360Z'
+                  currency: AFN
+                  details: {}
+                  expired: false
+                  has_video: false
+                  held_units: 0
+                  id: 2080
+                  image_medium_urls: []
+                  image_thumb_urls: []
+                  image_urls: []
+                  is_saved: false
+                  is_viewed: false
+                  location: Kabul, Afghanistan
+                  multi_unit: false
+                  negotiable: true
+                  price: 14391.1
+                  price_at_save:
+                  price_drop_amount:
+                  price_drop_percent:
+                  price_dropped: false
+                  price_dropped_at:
+                  price_unit:
+                  quantity: 1
+                  sales_count: 0
+                  seller:
+                    id: 3301
+                    name: Ahmad Shah
+                    city: Kabul
+                    verified: false
+                    avatar_url:
+                    avatar_thumb_url:
+                  shop:
+                  status: sold
+                  thumbnail_url:
+                  title: Ergonomic Bronze Clock
+                  views_count: 0
+                meta:
+                  pagination:
+                    current_page: 1
+                    next_page:
+                    prev_page:
+                    total_count: 1
+                    total_pages: 1
         '404':
           description: seller not found
+  "/api/v1/verification_requests/current":
+    get:
+      summary: the verification status card for the caller
+      tags:
+      - Verification
+      security:
+      - bearer: []
+      parameters:
+      - name: subject
+        in: query
+        required: false
+        description: me (default). shop:<id> comes with SHOP-1.
+        schema:
+          type: string
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '401':
+          description: requires authentication
+        '200':
+          description: rejected, its photos deleted after the keep period (request.files_purged)
+  "/api/v1/verification_requests/{id}":
+    delete:
+      summary: cancel a waiting request (its photos are deleted at once)
+      tags:
+      - Verification
+      security:
+      - bearer: []
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+      - name: access-token
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: client
+        in: header
+        required: true
+        schema:
+          type: string
+      - name: uid
+        in: header
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: cancelled; the card is back to none
+        '404':
+          description: someone else's request
 servers:
 - url: https://{defaultHost}
   variables:

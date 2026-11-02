@@ -1,0 +1,90 @@
+# Local load test of the PRODUCTION image (docs/LOAD_TEST.md). Run it through
+# loadtest/run.sh, never by hand: the script builds the image, passes the master
+# key without printing it, and prints which database it talks to.
+#
+# Sized like the production VPS (OVH VPS-2: 4 vCore, 8 GB, shared by the API,
+# Postgres, Redis, the web app and the map). Kamal sets no per-container limits
+# there, so these caps model the share the API and its database actually get:
+#   api  3 CPU / 3 GB  (one Puma process, 3 threads, Solid Queue inside — as prod)
+#   db   1 CPU / 1 GB  (postgres:16, as the prod accessory)
+#   redis 0.25 CPU / 128 MB
+# k6 runs uncapped in its own container, so the load generator never steals the
+# API's CPU budget (but it does use the host's: keep the box otherwise quiet).
+#
+# NO INTERNET: everything is on an `internal` network. Production config sends
+# real mail (Gmail SMTP) and real pushes (Expo); with no route out, nothing from
+# a load test can reach a real person, whatever a request triggers.
+name: hatiwal-loadtest
+
+networks:
+  loadtest:
+    internal: true
+
+volumes:
+  loadtest_pg:
+  loadtest_storage:
+
+services:
+  loadtest-db:
+    image: postgres:16
+    networks: [loadtest]
+    environment:
+      POSTGRES_USER: hatiwal
+      POSTGRES_PASSWORD: loadtest
+      POSTGRES_DB: hatiwal_production
+    volumes:
+      - loadtest_pg:/var/lib/postgresql/data
+    cpus: 1.0
+    mem_limit: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hatiwal"]
+      interval: 3s
+      retries: 20
+
+  loadtest-redis:
+    image: redis:7-alpine
+    networks: [loadtest]
+    cpus: 0.25
+    mem_limit: 128m
+
+  loadtest-api:
+    image: hatiwal-api:loadtest
+    networks: [loadtest]
+    depends_on:
+      loadtest-db:
+        condition: service_healthy
+    environment:
+      RAILS_ENV: production
+      RAILS_MASTER_KEY: ${RAILS_MASTER_KEY:?run through loadtest/run.sh}
+      DATABASE_HOST: loadtest-db
+      DATABASE_PORT: "5432"
+      DATABASE_USERNAME: hatiwal
+      DATABASE_PASSWORD: loadtest
+      REDIS_URL: redis://loadtest-redis:6379/0
+      SOLID_QUEUE_IN_PUMA: "true"
+      RAILS_LOG_TO_STDOUT: "true"
+      RAILS_LOG_LEVEL: warn
+      APP_DOMAIN: loadtest.invalid
+      CABLE_ALLOWED_ORIGINS: http://loadtest.invalid
+      ALLOWED_ORIGINS: http://loadtest.invalid
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?run through loadtest/run.sh}
+      LOADTEST: "1"
+    volumes:
+      - loadtest_storage:/rails/storage
+      - ./:/rails/loadtest:ro
+      - ./tokens:/loadtest-tokens
+    cpus: 3.0
+    mem_limit: 3g
+
+  k6:
+    image: grafana/k6:0.54.0
+    networks: [loadtest]
+    profiles: [k6]
+    working_dir: /scripts
+    environment:
+      BASE_URL: http://loadtest-api
+      TOKENS: /tokens/tokens.json
+    volumes:
+      - ./k6:/scripts:ro
+      - ./tokens:/tokens:ro
+      - ./results:/results

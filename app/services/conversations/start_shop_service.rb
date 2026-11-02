@@ -1,0 +1,59 @@
+# SHOP-2 — "Message shop" from the shop page: a chat with the shop that has no
+# product. Find-or-create, one per buyer and shop (a unique partial index backs
+# it up). The seller side is the shop's owner; phase 3 adds the team.
+class Conversations::StartShopService
+  # `code` (e.g. :blocked / :blocked_by) is the stable token the apps translate;
+  # the message stays English prose for older clients.
+  class Error < StandardError
+    attr_reader :code
+
+    def initialize(message = nil, code: nil)
+      super(message)
+      @code = code
+    end
+  end
+  OwnShop = Class.new(Error)
+
+  attr_reader :created
+
+  def initialize(buyer:, shop:, message_body: nil)
+    @buyer = buyer
+    @shop = shop
+    @message_body = message_body.to_s.strip
+  end
+
+  def call
+    raise OwnShop.new("you cannot message your own shop", code: :own_shop) if @shop.owner_id == @buyer.id || @shop.member?(@buyer)
+
+    owner = @shop.owner
+    # A banned / suspended owner can never answer (d0 hunt 2026-10-09).
+    raise Error, "shop is not active" if owner.account_blocked?
+    raise Error.new("you have blocked this user", code: :blocked) if @buyer.blocked?(owner)
+    raise Error.new("you have been blocked by this user", code: :blocked_by) if owner.blocked?(@buyer)
+
+    existing = find_existing
+    return existing.tap { add_message(existing) } if existing
+
+    ActiveRecord::Base.transaction do
+      conversation = Conversation.create!(shop: @shop, buyer: @buyer, seller: owner)
+      add_message(conversation)
+      @created = true
+      conversation
+    end
+  rescue ActiveRecord::RecordNotUnique
+    # A double tap: the other request created it.
+    find_existing.tap { |c| add_message(c) }
+  end
+
+  private
+
+  def find_existing = Conversation.find_by(shop: @shop, buyer: @buyer, listing_id: nil)
+
+  def add_message(conversation)
+    return if @message_body.blank?
+
+    message = conversation.messages.create!(user: @buyer, body: @message_body, kind: :text)
+    BroadcastMessageJob.perform_later(message.id)
+    SendMessagePushJob.perform_later(message.id)
+  end
+end

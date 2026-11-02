@@ -34,6 +34,17 @@ module Api
 
         private
 
+        # SHOP-3 — signing up from an invite link (`invite_token`) keeps the
+        # invite: the response carries its public card, so the app opens the
+        # Join screen next. Nobody joins here; the app still calls accept, and an
+        # email invite needs that email CONFIRMED first (ShopInvite#for_account?).
+        def render_create_success
+          invite = ShopInvite.includes(:shop, :invited_by).find_by(token: params[:invite_token].to_s) if params[:invite_token].present?
+          body = { status: "success", data: resource_data }
+          body[:shop_invite] = ShopInviteSerializer.render_as_hash(invite, view: :public) if invite
+          render json: body
+        end
+
         def sign_up_params
           params.permit(:email, :password, :password_confirmation,
                         :firstname, :lastname, :phone, :preferred_language)

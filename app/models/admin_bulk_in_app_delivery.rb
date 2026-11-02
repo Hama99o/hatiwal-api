@@ -28,7 +28,7 @@ class AdminBulkInAppDelivery < ApplicationRecord
     end
 
     muted = thread.muted_by_buyer?
-    message = thread.messages.build(user: thread.seller, admin_user: admin_bulk_email.admin_user, kind: :text, body: body)
+    message = thread.messages.build(user: thread.support_user, admin_user: admin_bulk_email.admin_user, kind: :text, body: body)
     message.broadcast = true # don't resurface an archived thread (see Message)
     message.save!
     BroadcastMessageJob.perform_later(message.id)

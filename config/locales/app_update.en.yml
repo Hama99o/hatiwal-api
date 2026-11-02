@@ -1,0 +1,11 @@
+# UPD-1 messages (hatiwal-mobile/docs/FORCE_UPDATE.md). Own file so it never
+# collides with edits to en.yml.
+en:
+  support:
+    notices:
+      app_update_available: "📲 A new version of Hatiwal is ready. Please update it from the App Store / Google Play to keep everything working."
+  activerecord:
+    errors:
+      models:
+        app_release_setting:
+          not_released: "No %{version} is released for %{platform}"

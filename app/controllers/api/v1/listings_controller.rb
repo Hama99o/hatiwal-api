@@ -1,9 +1,29 @@
 class Api::V1::ListingsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :save, :unsave, :hide, :unhide
+
+  SELLER_ACTIVE_DAYS_RANGE = (1..3650)
+
+  # Search by image: the stable `code` of each refusal (the apps translate it)
+  # and its English text.
+  IMAGE_SEARCH_ERRORS = {
+    image_missing:   "Add one photo to search with.",
+    image_too_large: "This photo is too large (10 MB max).",
+    invalid_image:   "This file is not a photo we can read."
+  }.freeze
+  IMAGE_SEARCH_UNAVAILABLE = "Search by image is not available right now.".freeze
+
   # Guests can browse the feed and view a listing without logging in. Auth is
   # optional here (resolves current_user if a token is present); save/unsave
   # still require authentication via BaseController.
-  skip_before_action :authenticate_user!, only: [ :index, :show, :similar ]
-  before_action :authenticate_optional!, only: [ :index, :show, :similar ]
+  skip_before_action :authenticate_user!, only: [ :index, :show, :similar, :image_search ]
+  before_action :authenticate_optional!, only: [ :index, :show, :similar, :image_search ]
+  # Search by image costs ~0.3-0.5 s of CPU per photo, so it is limited more
+  # tightly than the feed. Declared AFTER authenticate_optional! so the :user
+  # limit sees the signed-in user (a guest counts against their IP); the :ip
+  # limit is generous on purpose (carrier-grade NAT, see RateLimitable).
+  throttle to: 30, within: 10.minutes, by: :user, only: :image_search
+  throttle to: 120, within: 10.minutes, by: :ip, only: :image_search
   before_action :set_listing, only: [ :show, :save, :unsave, :similar, :hide, :unhide ]
 
   def index
@@ -20,22 +40,50 @@ class Api::V1::ListingsController < Api::V1::BaseController
     # GET /users/:id/sold_listings.
     listings = policy_scope(Listing.browsable)
     listings = listings.not_hidden_for(current_user)
-    listings = listings.by_seller(params[:user_id]) if params[:user_id].present?
+    # A person's profile grid is personal: their shops' products are on the
+    # shops' pages (matches users.listings_count). With shop_id, that shop's.
+    #
+    # Numeric filters go through number_param (hunt-2, 1.1.7): one the client
+    # sent in a shape we cannot read is IGNORED, like an unknown `sort`. It
+    # used to reach SQL as-is, and price_min=abc answered 500.
+    user_id = number_param(:user_id, integer: true)
+    shop_id = number_param(:shop_id, integer: true)
+    category_id = number_param(:category_id, integer: true)
+    price_min = number_param(:price_min)
+    price_max = number_param(:price_max)
+    # A day count outside 1..3650 means nothing: 0 or less put the cutoff in
+    # the future (an empty feed), a huge one overflowed Postgres' timestamp
+    # (500). Ignored like any unreadable filter; the apps send 7.
+    seller_active_days = number_param(:seller_active_days, integer: true)
+    seller_active_days = nil unless SELLER_ACTIVE_DAYS_RANGE.cover?(seller_active_days)
+
+    listings = listings.by_seller(user_id) if user_id
+    listings = listings.personal if user_id && shop_id.nil?
+    # SHOP-1 — the Bazaar "Shops" filter, and a shop page's Products tab.
+    listings = listings.from_shops if params[:seller_type] == Listing::SELLER_TYPE_SHOP
+    listings = listings.by_shop(shop_id) if shop_id
     listings = listings.search(params[:search]) if params[:search].present?
-    listings = listings.by_category(params[:category_id]) if params[:category_id].present?
+    listings = listings.by_category(category_id) if category_id
     listings = listings.by_condition(params[:condition]) if params[:condition].present?
-    listings = listings.price_at_least(params[:price_min]) if params[:price_min].present?
-    listings = listings.price_at_most(params[:price_max]) if params[:price_max].present?
+    listings = listings.price_at_least(price_min) if price_min
+    listings = listings.price_at_most(price_max) if price_max
+    # Stays (docs/STAYS_DESIGN.md §2.6): rooms for N guests, with these
+    # amenities, priced per night/month. Unreadable values are ignored.
+    guests = number_param(:guests, integer: true)
+    listings = listings.for_guests(guests) if guests&.positive?
+    amenities = Array(params[:amenities]).map(&:to_s) & Listing::StayDetails::AMENITIES
+    listings = listings.with_amenities(amenities) if amenities.any?
+    listings = listings.priced_per(params[:price_unit].to_s) if Listing::PRICE_UNITS.include?(params[:price_unit].to_s)
 
     if geo_filter?
-      listings = listings.within_radius(params[:latitude], params[:longitude], params[:radius])
+      listings = listings.within_radius(*buyer_point, number_param(:radius))
     elsif params[:location].present?
       # Free-text location only when no coordinates are supplied (the mobile app
       # sends a "lat, lng" string as `location` alongside coordinates).
       listings = listings.in_location(params[:location])
     end
 
-    listings = listings.seller_active_within(params[:seller_active_days]) if params[:seller_active_days].present?
+    listings = listings.seller_active_within(seller_active_days) if seller_active_days
     listings = listings.with_recent_price_drop if params[:price_dropped].present?
 
     # Apply sort last so it overrides the :browsable default order.
@@ -46,7 +94,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
     total = nil
     listings = if nearest_sort?
                  total, boxed = nearest_page_scope(listings)
-                 boxed.nearest_first(params[:latitude], params[:longitude])
+                 boxed.nearest_first(*buyer_point)
     else
                  listings.sorted(params[:sort])
     end
@@ -84,13 +132,18 @@ class Api::V1::ListingsController < Api::V1::BaseController
       :price_histories,
       :sale_transactions,
       { user: { avatar_attachment: :blob },
-        images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+        shop: { logo_attachment: :blob },
+        images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob }
     )
 
     paginate_blue(
       ListingSerializer,
       listings,
-      extra: { view: :list, viewed_ids: viewed_listing_ids(listings), saved_ids: saved_listing_ids(listings) },
+      # Procs: run on the loaded page (paginate_blue), so each is one lookup on
+      # at most a page of ids, not a subquery over the whole feed.
+      extra: { view: :list,
+               viewed_ids: ->(page) { viewed_listing_ids(page) },
+               saved_ids: ->(page) { saved_listing_ids(page) } },
       count: total
     )
   end
@@ -98,6 +151,8 @@ class Api::V1::ListingsController < Api::V1::BaseController
   def show
     return render_not_found if blocked_pair_show?
     return render_not_found if removed_for_viewer?
+    return render_not_found if closed_shop_for_viewer?
+    return render_not_found if blocked_seller_for_viewer?
 
     @listing.register_view!(current_user)
     viewed = current_user ? ListingView.exists?(user_id: current_user.id, listing_id: @listing.id) : false
@@ -151,7 +206,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
                    # SF-B2 — preloaded for the base `held_units` field; see
                    # Listing#open_sale's loaded-array guard.
                    :sale_transactions,
-                   { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+                   { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob }
                  )
     render_blue_collection(
       ListingSerializer,
@@ -161,16 +216,96 @@ class Api::V1::ListingsController < Api::V1::BaseController
     )
   end
 
+  # POST /listings/image_search — multipart: `image` (one photo), plus the
+  # feed's cheap filters `category_id` and `location`. Returns the feed's :list
+  # cards, best match first, paginated like the feed (docs/IMAGE_SEARCH.md).
+  #
+  # The photo is read into memory, embedded and dropped: it is never attached,
+  # saved, logged or sent anywhere, and its tempfile is deleted at once.
+  def image_search
+    authorize Listing, :image_search?
+    return render_image_search_unavailable unless ImageSearch.enabled?
+
+    bytes, error = read_search_photo
+    return render_image_search_error(error) if error
+
+    ids = image_search_ids(bytes)
+    listings = Listing.where(id: ids).in_order_of(:id, ids).includes(
+      :category, :price_histories, :sale_transactions,
+      { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob },
+        images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob }
+    )
+    paginate_blue(
+      ListingSerializer, listings,
+      extra: { view: :list,
+               viewed_ids: ->(page) { viewed_listing_ids(page) },
+               saved_ids: ->(page) { saved_listing_ids(page) } }
+    )
+  rescue ImageSearch::Embedder::InvalidImage
+    render_image_search_error(:invalid_image)
+  rescue ImageSearch::Embedder::Unavailable
+    render_image_search_unavailable
+  end
+
   private
 
-  # IDs of listings the current user has already opened, scoped to the current
-  # result set — one indexed query, used by the serializer to flag each card as
-  # "seen". Empty when not signed in.
-  def viewed_listing_ids(scope)
+  # Same size cap and type list as a listing photo; the type comes from the
+  # file's own leading bytes (Marcel), never from its name or declared type.
+  # Returns [bytes, nil] or [nil, error code].
+  def read_search_photo
+    upload = params[:image]
+    return [ nil, :image_missing ] unless upload.respond_to?(:tempfile)
+    return [ nil, :image_too_large ] if upload.size > Listing::MAX_IMAGE_SIZE
+
+    type = Marcel::MimeType.for(upload.tempfile)
+    return [ nil, :invalid_image ] unless AttachedFileValidator::IMAGE_TYPES.include?(type)
+
+    upload.tempfile.rewind
+    [ upload.tempfile.read, nil ]
+  ensure
+    upload.tempfile.close! if upload.respond_to?(:tempfile)
+  end
+
+  # The ids of the matching listings, best first. A blank photo (a covered
+  # lens) matches nothing rather than "everything on a white background".
+  def image_search_ids(bytes)
+    vector = ImageSearch::Embedder.embed(bytes)
+    ImageSearch::Search.call(vector, image_search_scope).map(&:listing_id)
+  rescue ImageSearch::Embedder::PlainImage
+    []
+  end
+
+  def render_image_search_error(code)
+    render_unprocessable_entity(IMAGE_SEARCH_ERRORS.fetch(code), code: code)
+  end
+
+  def render_image_search_unavailable
+    render_coded_error(IMAGE_SEARCH_UNAVAILABLE, code: :image_search_unavailable, status: :service_unavailable)
+  end
+
+  # Browsable listings only (never a draft, sold, removed, expired or blocked
+  # seller's listing), the viewer's "Not interested" ones left out, then the
+  # feed's category and free-text location filters.
+  def image_search_scope
+    listings = policy_scope(Listing.browsable).not_hidden_for(current_user)
+    category_id = number_param(:category_id, integer: true)
+    listings = listings.by_category(category_id) if category_id
+    listings = listings.in_location(params[:location]) if params[:location].present?
+    listings
+  end
+
+  # IDs of listings the current user has already opened, among `records` (the
+  # rendered page) — one indexed query, used by the serializer to flag each card
+  # as "seen". Empty when not signed in.
+  #
+  # The page's ids, never the unpaginated scope as a subquery: on the feed that
+  # subquery re-ran the whole browsable filter (216k rows at 100k users) twice
+  # per request, ~370 ms (docs/PERFORMANCE_100K.md).
+  def viewed_listing_ids(records)
     return Set.new if current_user.nil?
 
     current_user.listing_views
-                .where(listing_id: scope.reorder(nil).select(:id))
+                .where(listing_id: records.map(&:id))
                 .pluck(:listing_id)
                 .to_set
   end
@@ -180,17 +315,37 @@ class Api::V1::ListingsController < Api::V1::BaseController
   # per-record `saved_listings.exists?` like the :detailed field uses (that
   # would be an N+1 across a full page). Empty when not signed in — a guest
   # always gets `false` for every row via the serializer's fallback.
-  def saved_listing_ids(scope)
+  def saved_listing_ids(records)
     return Set.new if current_user.nil?
 
     current_user.saved_listings
-                .where(listing_id: scope.reorder(nil).select(:id))
+                .where(listing_id: records.map(&:id))
                 .pluck(:listing_id)
                 .to_set
   end
 
   def geo_filter?
-    params[:latitude].present? && params[:longitude].present? && params[:radius].present?
+    buyer_point.present? && number_param(:radius)&.positive?
+  end
+
+  # [lat, lng] when both are readable and on the globe, else nil (no radius
+  # filter, no nearest sort).
+  def buyer_point
+    return @buyer_point if defined?(@buyer_point)
+
+    lat = number_param(:latitude)
+    lng = number_param(:longitude)
+    @buyer_point = (lat && lng && lat.abs <= 90 && lng.abs <= 180) ? [ lat, lng ] : nil
+  end
+
+  # A finite number from a query param, or nil when it is missing or unreadable
+  # ("abc", "12abc", NaN, Infinity, "1e999", an array or a hash).
+  def number_param(key, integer: false)
+    raw = params[key]
+    return nil unless raw.is_a?(String) || raw.is_a?(Numeric)
+
+    value = integer ? Integer(raw.to_s.strip, 10, exception: false) : Float(raw.to_s.strip, exception: false)
+    value if value&.finite?
   end
 
   # sort=nearest only makes sense with coordinates — radius is optional (the
@@ -204,8 +359,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
   # sort. Otherwise (a deep page reaching the listings without a point) the
   # whole scope, as before.
   def nearest_page_scope(listings)
-    lat = params[:latitude]
-    lng = params[:longitude]
+    lat, lng = buyer_point
     options = pagy_page_options
     needed = options[:page] * (options[:items] || Pagy::DEFAULT[:items] || 20)
     with_point = listings.where.not(latitude: nil, longitude: nil)
@@ -214,7 +368,7 @@ class Api::V1::ListingsController < Api::V1::BaseController
   end
 
   def nearest_sort?
-    params[:sort].to_s == "nearest" && params[:latitude].present? && params[:longitude].present?
+    params[:sort].to_s == "nearest" && buyer_point.present?
   end
 
   # Returns true when a logged-in, non-owner viewer is in a mutual block
@@ -233,12 +387,38 @@ class Api::V1::ListingsController < Api::V1::BaseController
     @listing.removed? && @listing.user_id != current_user&.id
   end
 
+  # SHOP-1: a suspended / pending / closed shop's products are unavailable to
+  # everyone but their seller — the same rule as `browsable`.
+  # A banned / suspended seller's listing is gone for everyone but the seller.
+  def blocked_seller_for_viewer?
+    @listing.user&.account_blocked? && @listing.user_id != current_user&.id
+  end
+
+  def closed_shop_for_viewer?
+    @listing.shop_id.present? && !@listing.shop&.active? && @listing.user_id != current_user&.id
+  end
+
   def set_listing
-    scope = policy_scope(Listing)
+    # Unsave only deletes the caller's OWN saved row, so it must work whatever
+    # the listing became: a blocked pair's listing is outside the scope, and the
+    # card could never be removed from Saved (d0 hunt 2026-10-09).
+    scope = action_name == "unsave" ? Listing.all : policy_scope(Listing)
     # Eager-load saved_listings only for #show so the serializer's saves_count
     # (l.saved_listings.size) uses the in-memory association instead of firing
     # a separate COUNT(*) query — avoids an N+1 on the detail endpoint.
     scope = scope.includes(:saved_listings) if action_name == "show"
     @listing = scope.find(params[:id])
+    raise ActiveRecord::RecordNotFound if draft_for_viewer?
+  end
+
+  # A draft (never published, or unpublished: "hidden from buyers") is only for
+  # whoever manages it — the poster, or the members of its shop. Anyone else
+  # gets the same 404 as a missing id (IDOR sweep 2026-10-13: a guest opened any
+  # draft by id). Unsave and unhide only remove the caller's own row, so they
+  # still work on a listing that went back to draft.
+  DRAFT_TOLERANT_ACTIONS = %w[unsave unhide].freeze
+
+  def draft_for_viewer?
+    @listing.draft? && !DRAFT_TOLERANT_ACTIONS.include?(action_name) && !@listing.manageable_by?(current_user)
   end
 end

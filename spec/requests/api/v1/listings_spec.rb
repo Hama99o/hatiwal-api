@@ -759,6 +759,7 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
     parameter name: :id, in: :path, type: :integer
 
     post "save a listing (bookmark)" do
+      idempotency_key_header
       tags "Listings"
       produces "application/json"
       security [ { bearer: [] } ]
@@ -820,6 +821,7 @@ RSpec.describe "Api::V1::ListingsController", type: :request do
     parameter name: :id, in: :path, type: :integer
 
     delete "unsave a listing (remove bookmark)" do
+      idempotency_key_header
       tags "Listings"
       produces "application/json"
       security [ { bearer: [] } ]

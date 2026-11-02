@@ -38,8 +38,20 @@ class Message < ApplicationRecord
               max_size: MAX_ATTACHMENT_SIZE
             }
   validate :kind_must_not_be_system_when_user_authored
-  validate :kind_allowed_in_support_thread, if: -> { conversation&.kind_support? }
+
+  # OFFLINE §10.1: the phone's own id for a message it queued. Unique per sender
+  # (partial index); the same charset as an Idempotency-Key.
+  validates :client_uuid, format: { with: IdempotencyKey::FORMAT }, allow_nil: true
+  validates :client_uuid, uniqueness: { scope: :user_id }, allow_nil: true, on: :create
+  CLIENT_UUID_TAKEN_CODE = "client_uuid_taken".freeze
+  # SHOP-2: a shop chat has no product, so no offers or deal kinds either.
+  validate :kind_allowed_in_support_thread, if: -> { conversation&.kind_support? || conversation&.shop_chat? }
   validate :responds_to_must_be_in_same_conversation, if: -> { responds_to_id.present? }
+  validate :reply_answers_the_other_side, on: :create, if: -> { responds_to_id.present? && REPLY_TARGETS.key?(kind) }
+  # A reply kind always names the message it answers: without it the check
+  # above never ran, and a buyer could post a bare "offer accepted" or a
+  # "counter-offer" to nothing (IDOR sweep 2026-10-13). Every client sends it.
+  validates :responds_to_id, presence: true, on: :create, if: -> { REPLY_TARGETS.key?(kind) }
 
   # ── SF-B11: an offer carries how many units it is for ───────────────────────
   #
@@ -84,6 +96,22 @@ class Message < ApplicationRecord
   # single-item listing byte-identical end to end: a stale or over-eager client
   # cannot invent a new 422 on a flow that works today.
   before_validation :discard_meaningless_offer_quantity
+  # Support context: where a user message in a Support thread was written from,
+  # for the admin. Owner, 2026-10-12: Support is separated per identity, so
+  # - a person's own thread takes {"mode" => "buyer"|"seller"} from the app (a
+  #   shop never writes there: it has its own thread);
+  # - a shop's thread stamps it itself: {"mode" => "seller", "shop_id", "role"},
+  #   the role the member had when they wrote.
+  # Anywhere else it is dropped.
+  #
+  # Hatiwal Support's own messages carry only {"action" => {...}}: what a
+  # notice's button opens (owner, 2026-10-12: Support notices are tappable;
+  # SupportNoticeJob sets it). Shown to the apps as `messages[].action`.
+  CONTEXT_MODES = %w[buyer seller].freeze
+  NOTICE_ACTION_TYPES = %w[open_invite open_shop open_team open_verification open_listing].freeze
+  INVALID_CONTEXT_CODE = "invalid_message_context".freeze
+  before_validation :normalize_support_context, on: :create
+  validate :support_context_fits_sender, on: :create, if: -> { context.present? }
 
   # A positive integer when present. The `less_than_or_equal_to` ceiling is the
   # listing's own `available_units`, enforced below where the listing is in hand.
@@ -91,6 +119,7 @@ class Message < ApplicationRecord
             numericality: { only_integer: true, greater_than: 0 },
             allow_nil: true
   validate :offer_quantity_within_available_units, if: -> { offer_quantity.present? }
+  validate :offer_body_readable, on: :create, if: :offer_kind?
 
   scope :ordered,      -> { order(:created_at) }            # chronological (oldest→newest)
   scope :newest_first, -> { order(created_at: :desc) }      # paginated chat: most recent page first
@@ -122,6 +151,23 @@ class Message < ApplicationRecord
   # `offer? || offer_counter?` pair that MessageSerializer had written out twice
   # already (once per parsed offer field) — one predicate, one constant, so
   # "which kinds are offers" can never answer differently in two places.
+  # An offer's body is "amount|currency|listedPrice", and every client formats
+  # the currency with Intl.NumberFormat, which THROWS on a code that is not one
+  # of a few letters: a crafted "5|!!|5" crashed the seller's offer bubble and
+  # Chats tab in every shipped app (night QA 2026-10-12). Every client sends a
+  # positive amount and the listing's own currency; nothing else is an offer.
+  # The listed price is not checked: clients read it with Number(), and a bad
+  # one shows as text instead of throwing. Only on create: old rows still load.
+  OFFER_AMOUNT_FORMAT = /\A\d+(\.\d+)?([eE][+-]?\d+)?\z/
+
+  def self.readable_offer_body?(body)
+    amount, currency = body.to_s.split("|", 3)
+    return false unless amount&.match?(OFFER_AMOUNT_FORMAT) && Listing::CURRENCIES.include?(currency)
+
+    value = Float(amount, exception: false)
+    value.present? && value.finite? && value.positive?
+  end
+
   def offer_kind?
     OFFER_KINDS.include?(kind&.to_sym)
   end
@@ -139,17 +185,87 @@ class Message < ApplicationRecord
   # is what it returned before this ticket.
   def error_code
     return OFFER_QUANTITY_ABOVE_AVAILABLE_CODE if errors.where(:offer_quantity, OFFER_QUANTITY_ABOVE_AVAILABLE).any?
+    return INVALID_CONTEXT_CODE if errors.include?(:context)
+    return CLIENT_UUID_TAKEN_CODE if errors.where(:client_uuid, :taken).any?
 
     nil
   end
 
   private
 
+  def offer_body_readable
+    return if body.blank? || self.class.readable_offer_body?(body)
+
+    errors.add(:body, :invalid, message: "is not a valid offer (amount|currency|listed price)")
+  end
+
+  def normalize_support_context
+    return self.context = nil unless conversation&.kind_support? && user_id.present?
+    return self.context = support_notice_context if from_support?
+    return self.context = shop_support_context if conversation.shop_support?
+    return self.context = nil if user_id != conversation.buyer_id || context.blank?
+
+    raw = context.respond_to?(:to_h) ? context.to_h.stringify_keys : {}
+    self.context = { "mode" => raw["mode"].to_s, "shop_id" => raw["shop_id"].presence&.to_i }.compact
+  end
+
+  def from_support?
+    user_id == conversation.support_user&.id
+  end
+
+  # Support's message: its notice action when it has a known one, else nothing.
+  def support_notice_context
+    raw = context.respond_to?(:to_h) ? context.to_h.deep_stringify_keys : {}
+    action = raw["action"]
+    return nil unless action.is_a?(Hash) && NOTICE_ACTION_TYPES.include?(action["type"].to_s)
+
+    { "action" => action.slice("type", "label_key", "params") }
+  end
+
+  # A member writing in their shop's thread (nil for the Support account).
+  def shop_support_context
+    member = ShopMember.find_by(shop_id: conversation.shop_id, user_id: user_id)
+    member && { "mode" => "seller", "shop_id" => conversation.shop_id, "role" => member.role }
+  end
+
+  # A person's own thread: a known mode, and never a shop (a shop has its own
+  # thread). A shop's thread stamps its context itself, so it is always valid.
+  def support_context_fits_sender
+    return if conversation.shop_support? || from_support?
+
+    errors.add(:context, "has an unknown mode") unless CONTEXT_MODES.include?(context["mode"])
+    errors.add(:context, "names a shop: a shop writes in its own Support thread") if context["shop_id"]
+  end
+
   # Prevents any user-authored message from being stored with kind :system.
   # Server-generated system messages bypass this by setting user to a system
   # actor or by writing directly to the DB — not via the public API.
   def kind_must_not_be_system_when_user_authored
     errors.add(:kind, :invalid) if system?
+  end
+
+  # Which message kinds each reply may answer.
+  REPLY_TARGETS = {
+    "offer_accepted" => %w[offer offer_counter],
+    "offer_declined" => %w[offer offer_counter],
+    "offer_counter" => %w[offer offer_counter],
+    "meetup_accepted" => %w[meetup_proposal],
+    "meetup_declined" => %w[meetup_proposal]
+  }.freeze
+
+  # An offer / meetup reply answers the OTHER side's message of the right kind
+  # (d0 hunt 2026-10-09). The server only checked "same conversation": the buyer
+  # could accept their own low offer (the seller then saw "accepted your offer"
+  # at the buyer's price) or a proposer accept their own meetup. Sides, not
+  # users: a shop's team is one side (Conversation#side_for).
+  def reply_answers_the_other_side
+    target = Message.find_by(id: responds_to_id)
+    return if target.nil? || conversation.nil? # responds_to_must_be_in_same_conversation reports it
+
+    errors.add(:responds_to_id, "must be an offer or a meetup proposal of the right kind") unless REPLY_TARGETS[kind].include?(target.kind)
+    mine = conversation.side_for(user)
+    theirs = conversation.side_for(target.user)
+    errors.add(:responds_to_id, "must be the other side's message") if mine.nil? || mine == theirs
   end
 
   # Ensures that the message being responded to belongs to the same conversation.
@@ -228,6 +344,6 @@ class Message < ApplicationRecord
   def kind_allowed_in_support_thread
     return if Conversation::SUPPORT_MESSAGE_KINDS.include?(kind.to_s)
 
-    errors.add(:kind, "is not allowed in a support conversation")
+    errors.add(:kind, conversation.shop_chat? ? "is not allowed in a chat without a product" : "is not allowed in a support conversation")
   end
 end

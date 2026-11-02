@@ -136,6 +136,20 @@ Moving to a new server changes **one value**: `KAMAL_HOST` in each repo's
 `.env.production` (hatiwal-api, hatiwal-web), and `HOST` for the map's
 `deploy.sh`.
 
+### Mail outside production: `MAIL_DELIVERY` (development only)
+
+`config/environments/development.rb` reads `MAIL_DELIVERY` (since 2026-10-06, 1.1.6):
+
+| Value | Effect |
+|---|---|
+| `smtp` (default) | Real mail through the Gmail SMTP settings in `config/application.rb` (credentials). The owner's own dev testing, unchanged. |
+| `test` | Nothing leaves the machine. **Use it on every QA/dev server** (e.g. the QA API on :3037): seeds and flows send team invites, sign-up confirmations and the email gate's Resend to `*.test` addresses. |
+| `letter_opener` | Opens each mail locally. Only accepted if the gem is installed (it isn't today). |
+
+Any other value stops the boot, so a typo never silently sends real mail. The
+test env always uses `:test`. Production does not read this variable
+(`production.rb` sets its own delivery).
+
 ---
 
 ## 5. Deploying

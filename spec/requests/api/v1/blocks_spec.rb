@@ -56,10 +56,18 @@ RSpec.describe "Api::V1::Blocks", type: :request do
     it "includes sold_count/bought_count without adding a query per blocked user (no N+1)" do
       blocked_one = create(:user)
       create(:block, blocker: user, blocked: blocked_one)
+      # Same shape of data as the 3 added below, so both counts run the same
+      # batch queries (a preload with nothing to load is skipped) and the only
+      # difference left is the number of users.
+      create(:transaction, :sold, seller: blocked_one, listing: create(:listing, :sold, user: blocked_one))
 
+      # Sign in BEFORE measuring: `headers` is a lazy let, and its sign-in queries
+      # used to land inside this first count and hide the per-user cost
+      # (order-dependent: it passed in some full runs and failed alone).
+      h = headers
       queries_with_1 = 0
       ActiveSupport::Notifications.subscribed(->(*) { queries_with_1 += 1 }, "sql.active_record") do
-        get "/api/v1/blocks", headers: headers, as: :json
+        get "/api/v1/blocks", headers: h, as: :json
       end
       body_1 = JSON.parse(response.body)["users"]
       expect(body_1.first).to have_key("sold_count")
@@ -73,7 +81,7 @@ RSpec.describe "Api::V1::Blocks", type: :request do
 
       queries_with_4 = 0
       ActiveSupport::Notifications.subscribed(->(*) { queries_with_4 += 1 }, "sql.active_record") do
-        get "/api/v1/blocks", headers: headers, as: :json
+        get "/api/v1/blocks", headers: h, as: :json
       end
 
       expect(queries_with_4).to be <= queries_with_1 + 2,

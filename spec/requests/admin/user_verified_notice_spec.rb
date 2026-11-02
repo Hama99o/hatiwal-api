@@ -28,10 +28,12 @@ RSpec.describe "Admin verifies a user", type: :request do
     expect { update_user(user, verified: "1") }.not_to have_enqueued_job(SupportNoticeJob)
   end
 
-  it "queues nothing when the badge is switched off" do
+  # Switching the badge OFF in Edit is refused: "Remove badge" records the
+  # reason and tells the person (d0 hunt 2026-10-09; admin_safety_spec).
+  it "refuses switching the badge off in Edit, and queues nothing" do
     user = create(:user, verified: true)
 
     expect { update_user(user, verified: "0") }.not_to have_enqueued_job(SupportNoticeJob)
-    expect(user.reload).not_to be_verified
+    expect(user.reload).to be_verified
   end
 end

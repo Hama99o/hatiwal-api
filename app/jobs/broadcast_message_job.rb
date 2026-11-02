@@ -11,7 +11,16 @@ class BroadcastMessageJob < ApplicationJob
 
     payload = MessageSerializer.render_as_hash(message, view: :default)
     ActionCable.server.broadcast("conversation_#{message.conversation_id}", { message: payload })
+
+    # SHOP-3: a shop chat's team listens on its own stream, which also says which
+    # teammate wrote it (`sent_by`); the buyer's stream never does.
+    return unless message.conversation&.shop_face
+
+    team_payload = MessageSerializer.render_as_hash(message, view: :default, team: true)
+    ActionCable.server.broadcast(self.class.team_stream(message.conversation_id), { message: team_payload })
   end
+
+  def self.team_stream(conversation_id) = "conversation_#{conversation_id}_team"
 
   private
 

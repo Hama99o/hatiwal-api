@@ -32,9 +32,20 @@ module Admin
       v == "yes" ? rel.where(expires_at: ...Time.current) : rel.not_expired
     }
     filter :created, :date_range, column: :created_at, label: "Posted"
+    # SHOP-1
+    filter :from_shop, :scope, label: "From a shop", options: -> { %w[yes no] }, scope: lambda { |rel, v|
+      v == "yes" ? rel.from_shops : rel.where(shop_id: nil)
+    }
 
     # Take down (soft-remove) a listing — hides it from the public feed/detail
     # page. Restore reverses it.
+    # SHOP-1: a shop page links here with ?shop_id= for "its products".
+    def scoped_resource
+      rel = super
+      params[:shop_id].present? ? rel.where(shop_id: params[:shop_id]) : rel
+    end
+    private :scoped_resource
+
     def take_down
       listing = find_resource(params[:id])
       listing.take_down!(reason: params[:removed_reason])
@@ -47,6 +58,16 @@ module Admin
       listing.restore!
       log_admin_action("restore_listing", target: listing)
       redirect_to [ namespace, listing ], notice: "Listing restored."
+    end
+
+    # VID: delete just the video (and its poster); the listing and its photos
+    # stay. A take-down treats the video like the photos — it stays until
+    # PurgeListingVideosJob — so this is for a bad video on a good listing.
+    def remove_video
+      listing = find_resource(params[:id])
+      listing.purge_video!
+      log_admin_action("remove_listing_video", target: listing)
+      redirect_to [ namespace, listing ], notice: "Video removed."
     end
 
     # Override this method to specify custom lookup behavior.

@@ -7,6 +7,9 @@ class CategorySerializer < ApplicationSerializer
   # Nested `subcategories` covers the drilldown today; this makes the flat
   # relationship readable without walking the tree.
   fields :id, :slug, :icon, :position, :parent_id
+  # "item" | "stay" (docs/STAYS_DESIGN.md §2.1): clients switch form, detail and
+  # filters on it. A subcategory carries its parent's kind.
+  fields :kind
 
   field(:name_en) { |c| c.name_en }
   field(:name_ps) { |c| c.name_ps }

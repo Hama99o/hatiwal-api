@@ -19,6 +19,7 @@ class CategoryDashboard < Administrate::BaseDashboard
     parent: Field::BelongsTo,
     position: Field::Number,
     slug: Field::String,
+    kind: Field::Select.with_options(collection: Category::KINDS, include_blank: false),
     subcategories: Field::HasMany,
     created_at: Field::DateTime,
     updated_at: Field::DateTime
@@ -51,6 +52,7 @@ class CategoryDashboard < Administrate::BaseDashboard
     parent
     position
     slug
+    kind
     subcategories
     created_at
     updated_at
@@ -67,6 +69,7 @@ class CategoryDashboard < Administrate::BaseDashboard
     name_fa
     name_ur
     slug
+    kind
     icon
     position
     parent

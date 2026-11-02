@@ -1,6 +1,24 @@
 require "rails_helper"
 
 RSpec.describe UserSerializer, type: :serializer do
+  describe ":me view — latest_warning (owner, 2026-10-16)" do
+    subject(:me) { described_class.render_as_hash(user, view: :me, current_user: user) }
+
+    let(:user) { create(:user) }
+
+    it "is null with no warnings and carries the threshold" do
+      expect(me[:latest_warning]).to be_nil
+      expect(me[:warning_threshold]).to eq(User::WARNING_BLOCK_THRESHOLD)
+    end
+
+    it "is the most recent warning's shape" do
+      listing = create(:listing, :active, user: user, title: "Pistol")
+      user.issue_warning!(reason: "Prohibited item", category: :prohibited_item).update!(listing: listing)
+      expect(me[:latest_warning]).to include(category: "prohibited_item", listing_title: "Pistol")
+      expect(me[:latest_warning].keys).to include(:category, :reason, :created_at, :listing_title)
+    end
+  end
+
   describe ":public view — last_active_label" do
     subject(:label) do
       result = described_class.render_as_hash(user, view: :public, current_user: viewer)

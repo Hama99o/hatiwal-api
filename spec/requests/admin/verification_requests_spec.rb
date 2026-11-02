@@ -20,11 +20,13 @@ RSpec.describe "Admin verification queue", type: :request do
   end
 
   it "lists waiting requests with counts per status" do
-    request_record
+    # A name with an apostrophe, every run: the page HTML-escapes it (O&#39;Conner). It used to come from Faker and
+    # failed whenever Faker drew one ("Damien O'Conner", 2026-10-29 full run).
+    user.update!(firstname: "Damien", lastname: "O'Conner")
     create(:verification_request).reject!(admin: admin, reason_code: "photo_not_clear")
     get admin_verification_requests_path
     expect(response).to have_http_status(:ok)
-    expect(response.body).to include("Waiting (1)", "Rejected (1)", user.full_name)
+    expect(response.body).to include("Waiting (1)", "Rejected (1)", ERB::Util.html_escape(user.full_name))
   end
 
   it "shows the card with the three photos through expiring document links" do
@@ -83,6 +85,40 @@ RSpec.describe "Admin verification queue", type: :request do
     end.to have_enqueued_job(SupportNoticeJob).with(user.id, "user_verification_rejected")
     expect(request_record.reload).to have_attributes(status: "rejected", reason_code: "selfie_mismatch")
     expect(AdminAuditLog.where(action: "verification_reject", target: request_record).sole.details).to eq("selfie_mismatch")
+  end
+
+  # Reject is a formaction button on the Approve form. With CSRF on, the form's
+  # token must be the session one, or posting it to Reject raised
+  # InvalidAuthenticityToken (owner, 2026-10-07).
+  describe "deciding through the real form, with CSRF protection on" do
+    around do |example|
+      ActionController::Base.allow_forgery_protection = true
+      example.run
+    ensure
+      ActionController::Base.allow_forgery_protection = false
+    end
+
+    def form_token
+      get admin_verification_request_path(request_record)
+      form = response.body[%r{<form[^>]*id="verification-decision".*?</form>}m]
+      expect(form).to include(%(formaction="#{reject_admin_verification_request_path(request_record)}"))
+      form[/name="authenticity_token" value="([^"]+)"/, 1]
+    end
+
+    it "Reject works with the token the form carries, and queues the Support notice" do
+      token = form_token
+      expect do
+        patch reject_admin_verification_request_path(request_record),
+              params: { authenticity_token: token, reason_code: "selfie_mismatch", checklist: { photo_clear: "1" } }
+      end.to have_enqueued_job(SupportNoticeJob).with(user.id, "user_verification_rejected")
+      expect(request_record.reload).to have_attributes(status: "rejected", reason_code: "selfie_mismatch")
+    end
+
+    it "Approve still works with the same token" do
+      token = form_token
+      patch approve_admin_verification_request_path(request_record), params: { authenticity_token: token }
+      expect(request_record.reload.status).to eq("approved")
+    end
   end
 
   it "does not reject without a reason" do

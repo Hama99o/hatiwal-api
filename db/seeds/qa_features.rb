@@ -317,11 +317,13 @@ if defined?(Shop) && Shop.table_exists?
   shop_cat = ->(slug) { Category.find_by(slug: slug) || fallback_category }
   sat_to_thu = %w[sat sun mon tue wed thu].index_with { [ %w[08:00 18:00] ] }.merge("fri" => [])
 
-  qa_shop = lambda do |owner, name:, place:, slug:, hours: {}, status: "active", verified: false, phone: nil|
+  # Found by owner AND name: since SHOP-2 an owner may run several shops. Two
+  # shops of one owner need different addresses (the duplicate rule), hence `unit`.
+  qa_shop = lambda do |owner, name:, place:, slug:, hours: {}, status: "active", verified: false, phone: nil, unit: 7|
     p = QA_PLACES.fetch(place)
-    shop = Shop.find_or_initialize_by(owner: owner)
-    shop.assign_attributes(name: name, category: shop_cat.call(slug), latitude: p[:latitude], longitude: p[:longitude],
-                           province: p[:province], city: p[:city], address_line: "#{p[:city]} QA bazaar, shop 7",
+    shop = Shop.find_or_initialize_by(owner: owner, name: name)
+    shop.assign_attributes(category: shop_cat.call(slug), latitude: p[:latitude], longitude: p[:longitude],
+                           province: p[:province], city: p[:city], address_line: "#{p[:city]} QA bazaar, shop #{unit}",
                            description: "QA seed shop.", hours: hours, phone: phone, phone_public: phone.present?)
     shop.save!
     shop.update_columns(status: Shop.statuses[status], verified_at: (verified ? 3.days.ago : nil), updated_at: Time.current)
@@ -358,6 +360,42 @@ if defined?(Shop) && Shop.table_exists?
   [ [ "Umair personal QA — Old phone", 3_000, "electronics" ], [ "Umair personal QA — Chair", 1_200, "home" ] ]
     .each { |t, pr, sl| qa_shop_listing.call(owner, nil, t, pr, sl, :kabul) }
   owner.update_column(:active_shop_id, cosmetics.id)
+  # The seed makes no drafts for shop.owner. Drafts left by earlier sessions
+  # (four "Umair personal QA — Chair" copies saved while selling as Cosmetics)
+  # sat on top of My shop and pushed the 3 products off screen
+  # (selling_as_switch_and_sticks, regression 2026-10-08).
+  owner.listings.where(status: Listing.statuses[:draft]).destroy_all
+
+  # SHOP-2: shop.owner runs THREE shops (owned, oldest first in /me shops[]):
+  # Cosmetics (above, unverified), a verified one and a pending one. Different
+  # names and addresses, so the duplicate rule never fires on them; re-opening
+  # "Kabul QA Cosmetics" at its pin is the duplicate flow's case.
+  phones_corner = qa_shop.call(owner, name: "Kabul QA Phone Corner", place: :kabul, slug: "electronics", hours: sat_to_thu,
+                                      verified: true, unit: 12)
+  qa_shop_listing.call(owner, phones_corner, "Kabul QA Phone Corner — Earbuds", 1200, "electronics", :kabul)
+  shoes = qa_shop.call(owner, name: "Kabul QA Shoes", place: :kabul, slug: "clothes", status: "pending", unit: 21)
+  # created_at decides the /me order: Cosmetics, then Phone Corner, then Shoes.
+  cosmetics.update_column(:created_at, 3.days.ago) if cosmetics.created_at > 3.days.ago
+  phones_corner.update_column(:created_at, 2.days.ago) if phones_corner.created_at > 2.days.ago
+  shoes.update_column(:created_at, 1.day.ago) if shoes.created_at > 1.day.ago
+
+  # SHOP-2 "Message shop": shop.buyer already has a listing-less chat with
+  # Cosmetics (one text message), so the buyer side (shop in the header and the
+  # inbox) and the owner side (under Cosmetics' Chat tab) have data.
+  sbuyer = qa_user(email: "shop.buyer@hatiwal.test", firstname: "Farid", lastname: "Shopbuyer", place: :kabul, avatar: true)
+  Block.where(blocker: [ sbuyer, owner ], blocked: [ sbuyer, owner ]).delete_all
+  shop_chat = nil
+  if qa_column?(Conversation, :shop_id)
+    shop_chat = Conversation.find_or_create_by!(shop: cosmetics, buyer: sbuyer, listing_id: nil) { |c| c.seller = owner }
+    # Seed rows only: Message#create! queues no push (the services do that).
+    shop_chat.messages.create!(user: sbuyer, body: "Salaam, do you have rose water?", kind: :text) if shop_chat.messages.none?
+  end
+
+  # SHOP-2 blocked case: shop.owner has blocked shop.blocked, so "Message shop"
+  # on Cosmetics is refused (422, the listing chat's message). No chat exists.
+  sblocked = qa_user(email: "shop.blocked@hatiwal.test", firstname: "Karim", lastname: "Blockedbuyer", place: :kabul, avatar: true)
+  Conversation.where(buyer: sblocked).destroy_all
+  Block.find_or_create_by!(blocker: owner, blocked: sblocked)
 
   # Verified shop in Herat; selling as ME (active_shop_id unset).
   vowner = qa_user(email: "shop.verified@hatiwal.test", firstname: "Zahra", lastname: "Verifiedshop", place: :herat, avatar: true)
@@ -414,15 +452,274 @@ if defined?(Shop) && Shop.table_exists?
   end
   puts "  shops: #{[ cosmetics, carpets, phones, bakery ].map { |s| "#{s.name} (#{s.status}#{', verified' if s.verified_at})" }.join(' · ')}"
   puts "  shop.owner sells as the shop; shop.verified as Me; shop.suspended has a stale active shop; shop.none has none"
+  puts "  SHOP-2: shop.owner runs #{[ cosmetics, phones_corner, shoes ].map { |s| "#{s.name} (#{s.status}#{', verified' if s.verified_at})" }.join(', ')}"
+  puts "  SHOP-2: shop.buyer has #{shop_chat ? "chat ##{shop_chat.id} with #{cosmetics.name}" : 'no shop chat (conversations.shop_id not migrated)'}; shop.owner blocked shop.blocked"
+
+  # SHOP-3 — the team (hatiwal-mobile/docs/SHOPS.md, "Phase 3 — the team"):
+  # shop.team.owner runs "Kabul QA Team Shop" with ONE Staff (shop.team.staff),
+  # and five invites with FIXED tokens, so flows can open hatiwal://join/<token>:
+  #   qa-team-link       a live link        (join as a new or logged-in account)
+  #   qa-team-email      an email invite for shop.team.newbie@hatiwal.test (no account yet: sign up → confirm → join)
+  #   qa-team-expired    expired            (T6 invite_expired)
+  #   qa-team-used       already used       (T6 invite_used)
+  #   qa-team-cancelled  cancelled          (T6 invite_cancelled)
+  # shop.team.buyer has blocked shop.team.staff personally. No conversations.
+  if defined?(ShopInvite) && ShopInvite.table_exists?
+    towner = qa_user(email: "shop.team.owner@hatiwal.test", firstname: "Tamana", lastname: "Teamowner", place: :kabul, avatar: true)
+    tstaff = qa_user(email: "shop.team.staff@hatiwal.test", firstname: "Ali", lastname: "Teamstaff", place: :kabul, avatar: true)
+    tbuyer = qa_user(email: "shop.team.buyer@hatiwal.test", firstname: "Bashir", lastname: "Teambuyer", place: :kabul, avatar: true)
+    # 1.1.6 "Later" items: a MANAGER (team_roles, team_manager_view, team_transfer).
+    tmanager = qa_user(email: "shop.team.manager@hatiwal.test", firstname: "Mina", lastname: "Teammanager", place: :kabul, avatar: true)
+    User.where(email: "shop.team.newbie@hatiwal.test").find_each(&:destroy!) # the sign-up flow creates it fresh
+    team = [ towner, tstaff, tmanager ]
+    Conversation.where(buyer: [ tstaff, tbuyer ]).or(Conversation.where(seller: team))
+                .or(Conversation.where(buyer: shop_none, shop: Shop.where(name: "Kabul QA Team Shop"))).destroy_all
+    team.each { |u| u.update_columns(active_shop_id: nil) }
+
+    # team_transfer is destructive: it hands the shop to another member. Give it
+    # back to shop.team.owner first, so qa_shop finds it instead of opening a
+    # second "Kabul QA Team Shop".
+    if (handed_over = Shop.where(name: "Kabul QA Team Shop").where.not(status: :closed).where.not(owner_id: towner.id).first)
+      handed_over.update_columns(owner_id: towner.id, updated_at: Time.current)
+    end
+    team_shop = qa_shop.call(towner, name: "Kabul QA Team Shop", place: :kabul, slug: "clothes", hours: sat_to_thu, unit: 31)
+    team_shop.shop_members.where.not(user_id: team.map(&:id)).destroy_all
+    { towner => :owner, tstaff => :staff, tmanager => :manager }.each do |user, role|
+      member = team_shop.shop_members.find_or_initialize_by(user: user)
+      member.invited_by ||= towner unless role == :owner
+      member.update!(role: role)
+    end
+    qa_shop_listing.call(towner, team_shop, "Kabul QA Team Shop — Scarf", 650, "clothes", :kabul)
+    qa_shop_listing.call(tstaff, team_shop, "Kabul QA Team Shop — Shawl (posted by staff)", 900, "clothes", :kabul)
+
+    # Invites that FLOWS created (team_invite, invitations_*) would pile up on
+    # the owner's Team screen run after run; only the fixed-token ones stay.
+    fixed_tokens = %w[qa-team-link qa-team-email qa-team-expired qa-team-used qa-team-cancelled qa-team-mine]
+    stray = ShopInvite.where(shop: team_shop).where.not(token: fixed_tokens).delete_all
+    puts "  SHOP-3: removed #{stray} invite(s) left by flows" if stray.positive?
+    { "qa-team-link" => [ nil, :pending, 7.days.from_now ],
+      "qa-team-email" => [ "shop.team.newbie@hatiwal.test", :pending, 7.days.from_now ],
+      "qa-team-expired" => [ nil, :pending, 1.hour.ago ],
+      "qa-team-used" => [ nil, :accepted, 5.days.from_now ],
+      "qa-team-cancelled" => [ nil, :cancelled, 5.days.from_now ] }.each do |token, (email, status, expires_at)|
+      invite = ShopInvite.find_or_initialize_by(token: token)
+      invite.assign_attributes(shop: team_shop, invited_by: towner, email: email, role: :staff, status: status,
+                               expires_at: expires_at, accepted_by: (status == :accepted ? tstaff : nil),
+                               decided_at: (status == :pending ? nil : 1.day.ago))
+      invite.save!(validate: false) # an already-expired row is a fixture, not an invite being made
+    end
+
+    # "My invitations" (1.1.6): shop.team.invitee has a CONFIRMED email and one
+    # pending email invite (qa-team-mine), so the list and the me badge show 1.
+    # A dedicated account: a badge on shop.none would change its no-shop flows.
+    # Reset every run (the membership above is already removed if they joined).
+    invitee = qa_user(email: "shop.team.invitee@hatiwal.test", firstname: "Parwana", lastname: "Invitee", place: :kabul, avatar: true)
+    ShopInvite.where(email: invitee.email).where.not(token: "qa-team-mine").delete_all
+    mine = ShopInvite.find_or_initialize_by(token: "qa-team-mine")
+    mine.assign_attributes(shop: team_shop, invited_by: towner, email: invitee.email, role: :staff, status: :pending,
+                           expires_at: 7.days.from_now, accepted_by: nil, decided_at: nil)
+    mine.save!
+    puts "  My invitations: shop.team.invitee has #{ShopInvite.addressed_to(invitee).count} pending (qa-team-mine)"
+
+    Block.where(blocker: tbuyer).delete_all
+    Block.find_or_create_by!(blocker: tbuyer, blocked: tstaff)
+
+    # chat_replied_by: shop.none (Basir) messaged the shop; Ali (staff) and
+    # Tamana (owner) replied. Not shop.team.buyer: they blocked Ali.
+    replied_chat = Conversation.create!(shop: team_shop, buyer: shop_none, seller: towner)
+    [ [ shop_none, "Do you deliver to Karte Seh?" ], [ tstaff, "Salaam, yes, every afternoon." ],
+      [ towner, "Thanks!" ] ].each_with_index do |(author, body), i|
+      replied_chat.messages.create!(user: author, body: body, kind: :text, created_at: (30 - (i * 10)).minutes.ago)
+    end
+    puts "  SHOP-3: #{team_shop.name} — owner shop.team.owner, manager shop.team.manager, staff shop.team.staff; Basir chat ##{replied_chat.id}; invites qa-team-link / -email / -expired / -used / -cancelled; shop.team.buyer blocked shop.team.staff"
+  else
+    puts "  SKIP SHOP-3: shop_invites not migrated yet"
+  end
 else
   puts "  SKIP shops: shops table not migrated yet (SHOP-1)"
 end
 
 # =============================================================================
+puts "=== QA Seed: email gate (1.1.6) ==="
+# =============================================================================
+# Opening a shop or applying for Verified needs a confirmed email (403
+# email_unconfirmed). shop.gate has a photo and a full name, so the email is
+# the ONLY thing missing: the gate is what the app shows, never another rule.
+# Reset to UNCONFIRMED every run (a flow may tap the link or confirm it).
+gate = qa_user(email: "shop.gate@hatiwal.test", firstname: "Gulalai", lastname: "Gatekhan", place: :kabul, avatar: true)
+gate.update_columns(confirmed_at: nil, confirmation_token: nil, confirmation_sent_at: nil)
+gate_shops = defined?(Shop) && Shop.table_exists? ? Shop.where(owner_id: gate.id).count : 0
+puts "  shop.gate@hatiwal.test UNCONFIRMED (no shop expected; owns #{gate_shops})"
+
+# =============================================================================
+puts "=== QA Seed: edge-case device fixtures (1.1.6, maestro/edge_116/) ==="
+# =============================================================================
+# Four device checks the release run could not cover (d0's list, 2026-10-09).
+# Dedicated edge.* accounts, so a throttled reporter or a double-tap run never
+# disturbs another flow. Reset every run:
+#   * edge.seller  — owns "QA Edge Chat Lamp" (the Send thread) and "QA Edge
+#                    Report Rug" (the thing to report).
+#   * edge.tapper  — #3 (a push for a conversation that is gone) and #4 (double
+#                    taps): one open thread with edge.seller; their own
+#                    "QA Edge Double …" listings, messages and reports wiped.
+#   * edge.reporter — #8 (the 21st report in a day). The 20-a-day limit is the
+#                    API's in-memory throttle (RateLimitable), which a seed cannot
+#                    pre-fill: the FLOW sends the first 20 through the API.
+#   * edge.closer  — #7 (close the shop offline): "QA Edge Offline Shop", put
+#                    back to ACTIVE (recreated if a run did close it), with
+#                    edge.closer.staff (Nadia Staffer) as its STAFF member.
+edge_seller   = qa_user(email: "edge.seller@hatiwal.test", firstname: "Sadiq", lastname: "Edgeseller", place: :kabul, avatar: true)
+edge_tapper   = qa_user(email: "edge.tapper@hatiwal.test", firstname: "Tariq", lastname: "Doubletap", place: :kabul, avatar: true)
+edge_reporter = qa_user(email: "edge.reporter@hatiwal.test", firstname: "Rahim", lastname: "Ratelimit", place: :kabul, avatar: true)
+edge_closer   = qa_user(email: "edge.closer@hatiwal.test", firstname: "Karim", lastname: "Closer", place: :kabul, avatar: true)
+[ edge_seller, edge_tapper, edge_reporter, edge_closer ].each { |u| u.update_columns(seller_mode: true) if qa_column?(User, :seller_mode) }
+
+edge_place = QA_PLACES.fetch(:kabul)
+edge_listing = lambda do |owner, title, price|
+  l = Listing.find_or_initialize_by(user: owner, title: title)
+  l.assign_attributes(category: fallback_category, description: "QA edge-case fixture.", price: price, currency: "AFN",
+                      location: "#{edge_place[:city]}, #{edge_place[:province]}",
+                      latitude: edge_place[:latitude], longitude: edge_place[:longitude], quantity: 1)
+  l.save! if l.new_record? || l.changed?
+  l.update_columns(status: Listing.statuses[:active], published_at: l.published_at || 1.day.ago,
+                   reserved_at: nil, sold_at: nil, sold_units: 0, expires_at: nil, removed_at: nil)
+  l.images.attach(qa_blob(QA_PHOTO, "qa-edge-#{l.id}.jpg", "image/jpeg")) if !l.images.attached? && File.exist?(QA_PHOTO)
+  l
+end
+lamp = edge_listing.call(edge_seller, "QA Edge Chat Lamp", 1500)
+rug  = edge_listing.call(edge_seller, "QA Edge Report Rug", 4000)
+
+# What earlier double-tap / report runs left behind.
+edge_tapper.listings.where("title LIKE 'QA Edge Double%'").destroy_all
+Report.where(reporter: [ edge_tapper, edge_reporter ]).delete_all
+edge_chat = Conversation.find_or_create_by!(listing: lamp, buyer: edge_tapper, seller: edge_seller)
+edge_chat.messages.where(user: edge_tapper).where("body LIKE 'QA double send%'").delete_all
+edge_chat.update_columns(status: Conversation.statuses[:open]) if qa_column?(Conversation, :status)
+edge_chat.messages.create!(user: edge_seller, body: "Salaam, the lamp is still here.", kind: :text) if edge_chat.messages.none?
+
+if defined?(Shop) && Shop.table_exists?
+  offline_shop = Shop.where(owner: edge_closer, name: "QA Edge Offline Shop").where.not(status: Shop.statuses[:closed]).first
+  offline_shop ||= Shop.create!(owner: edge_closer, name: "QA Edge Offline Shop", category: fallback_category,
+                                latitude: edge_place[:latitude], longitude: edge_place[:longitude],
+                                province: edge_place[:province], city: edge_place[:city],
+                                address_line: "#{edge_place[:city]} QA bazaar, edge shop #{Shop.where(owner: edge_closer).count + 1}",
+                                description: "QA edge-case fixture: closed offline, must stay open.")
+  offline_shop.update_columns(status: Shop.statuses[:active], updated_at: Time.current)
+  # closed-shop-face (d8f011f2, _diag/h00/closed_shop_face_{en,ps}): a STAFF
+  # member writes the pre-close reply as the shop; after the close the buyer must
+  # not see her personal name. The membership follows the newest open shop, so a
+  # run that closed (and this seed recreated) it still finds her on the team.
+  edge_staff = qa_user(email: "edge.closer.staff@hatiwal.test", firstname: "Nadia", lastname: "Staffer", place: :kabul, avatar: true)
+  staff_member = offline_shop.shop_members.find_or_initialize_by(user: edge_staff)
+  staff_member.invited_by ||= edge_closer
+  staff_member.update!(role: :staff)
+  # closed-shop face, option A is about the shop's PRODUCT chats: one live
+  # product posted AS this shop (e5's setup: buyer@ starts a chat on it, Nadia
+  # replies, the owner closes the shop). It follows the newest open shop like
+  # Nadia's membership: a closed shop's products pass to the owner personally,
+  # so the same listing is put back under the recreated shop and live again.
+  lamp_photo = QA_SAMPLES.join("shop_front.png")
+  shop_lamp = Listing.find_or_initialize_by(user: edge_closer, title: "QA Edge Offline Shop — Desk Lamp")
+  shop_lamp.assign_attributes(category: Category.find_by(slug: "home") || fallback_category,
+                              description: "QA edge-case fixture: a product of the shop that gets closed.",
+                              price: 2200, currency: "AFN", location: "#{edge_place[:city]}, #{edge_place[:province]}",
+                              latitude: edge_place[:latitude], longitude: edge_place[:longitude], quantity: 1)
+  shop_lamp.save! if shop_lamp.new_record? || shop_lamp.changed?
+  shop_lamp.update_columns(shop_id: offline_shop.id, status: Listing.statuses[:active],
+                           published_at: shop_lamp.published_at || 1.day.ago, reserved_at: nil, sold_at: nil,
+                           sold_units: 0, expires_at: nil, removed_at: nil)
+  shop_lamp.images.attach(qa_blob(lamp_photo, "qa-edge-lamp-#{shop_lamp.id}.png", "image/png")) unless shop_lamp.images.attached?
+  puts "  #7 edge.closer owns \"QA Edge Offline Shop\" ##{offline_shop.id} (active); edge.closer.staff (Nadia Staffer) is its staff; " \
+       "its product \"#{shop_lamp.title}\" ##{shop_lamp.id}"
+else
+  puts "  SKIP #7: shops table not migrated yet"
+end
+puts "  #3/#4 edge.tapper: thread ##{edge_chat.id} with edge.seller on \"#{lamp.title}\"; to report: \"#{rug.title}\" ##{rug.id}"
+puts "  #8 edge.reporter: no reports (the flow sends 20 through the API, then the 21st from the app)"
+
+# =============================================================================
+puts "=== QA Seed: photo-edge fixtures (1.1.6 photo variants) ==="
+# =============================================================================
+# The light photos must look right and never break (owner, 2026-10-09): one
+# active listing per edge-case photo (tiny 200x150, portrait 1080x1920,
+# panorama 4000x1000, a PNG with transparency) plus one with all four, owned
+# by seller@ (no shop: no Sell-as sheet). Generated test images (a grid, a
+# circle, "TOP ↑", L/R corners — blur, stretch, rotation and crop all show),
+# attached AS-IS so the API's variant / downscale path processes them.
+# Idempotent by title; seller@ comes from e2e.rb (reset_e2e), so this section
+# must run after it, like every qa_features run does.
+photo_edge_seller = User.find_by(email: "seller@hatiwal.test")
+if photo_edge_seller
+  edge_photos = {
+    tiny: [ "qa_edge_tiny_200x150.jpg", "image/jpeg" ],
+    portrait: [ "qa_edge_portrait_1080x1920.jpg", "image/jpeg" ],
+    panorama: [ "qa_edge_panorama_4000x1000.jpg", "image/jpeg" ],
+    png: [ "qa_edge_png_alpha_800.png", "image/png" ]
+  }
+  photo_edge_place = QA_PLACES.fetch(:kabul)
+  [ [ "QA Photo Edge — Tiny", %i[tiny], 1100 ], [ "QA Photo Edge — Portrait", %i[portrait], 1200 ],
+    [ "QA Photo Edge — Panorama", %i[panorama], 1300 ], [ "QA Photo Edge — PNG", %i[png], 1400 ],
+    [ "QA Photo Edge — All four", %i[tiny portrait panorama png], 1500 ] ].each do |title, keys, price|
+    l = Listing.find_or_initialize_by(user: photo_edge_seller, title: title)
+    l.assign_attributes(category: fallback_category, description: "QA photo-edge fixture (1.1.6 photo variants).",
+                        price: price, currency: "AFN", location: "#{photo_edge_place[:city]}, #{photo_edge_place[:province]}",
+                        latitude: photo_edge_place[:latitude], longitude: photo_edge_place[:longitude], quantity: 1)
+    l.save! if l.new_record? || l.changed?
+    l.update_columns(shop_id: nil, status: Listing.statuses[:active], published_at: l.published_at || 1.hour.ago,
+                     reserved_at: nil, sold_at: nil, sold_units: 0, expires_at: nil, removed_at: nil)
+    # Exactly these photos, in this order: reattach when the set differs.
+    want = keys.map { |k| edge_photos.fetch(k).first }
+    unless l.images.attached? && l.images.map { |i| i.filename.to_s } == want
+      l.images.purge if l.images.attached?
+      keys.each do |k|
+        file, type = edge_photos.fetch(k)
+        l.images.attach(qa_blob(QA_SAMPLES.join(file), file, type))
+      end
+    end
+  end
+  puts "  5 photo-edge listings for seller@ (QA Photo Edge — Tiny / Portrait / Panorama / PNG / All four)"
+else
+  puts "  SKIP photo-edge: seller@hatiwal.test missing (run reset_e2e first)"
+end
+
+# =============================================================================
+# ── RTL long-text fixture (e5's exploratory RTL check, 2026-10-09) ─────────
+# Maestro's inputText cannot type Pashto reliably on Android, so a seed: ONE
+# active personal listing of seller@ whose title is the MAX length (150 chars)
+# of real Pashto with a Latin brand and numbers in the MIDDLE (bidi), a ~800-char
+# 3-paragraph Pashto description with a URL-like and a phone-like token, and a
+# long Pashto meeting address. Found by searching "QA RTL Long".
+rtl_seller = User.find_by(email: "seller@hatiwal.test")
+if rtl_seller
+  rtl_title = 'QA RTL Long د کور لپاره ډېر ښه او پاک موبایل Samsung Galaxy A54 د 128GB حافظې سره، نوې بیټرۍ، اصلي چارجر او ساتونکی پوښ، په کابل کې د لاسي سپارلو چمتو'
+  rtl = Listing.find_or_initialize_by(user: rtl_seller, title: rtl_title)
+  rtl.assign_attributes(
+    category: Category.find_by(slug: "electronics") || fallback_category,
+    description: "دا موبایل مې شاوخوا یو کال مخکې د کابل له یوه باوري هټۍ څخه نوی اخیستی و او تر اوسه یې ډېر په احتیاط ساتلی دی. پرده یې هیڅ ماتیدنه نه لري، شاته پوښ یې پاک دی او ټول تڼۍ یې سم کار کوي. بیټرۍ یې ټوله ورځ کار ورکوي او چټک چارجر ورسره دی.\n\nد اصلي بکس، چارجر، کیبل او یو اضافي ساتونکي پوښ سره به یې درکړم. که غواړئ چې لومړی یې وګورئ، زه کولی شم چې د ورځې په اوږدو کې د کابل په ښار کې په یوه خوندي او عامه ځای کې سره ووینو. د نورو انځورونو لپاره دا پاڼه وګورئ: hatiwal.com/l/12345 یا ماته پیغام راولېږئ.\n\nبیه یې د خبرو وړ ده خو لږ. یوازې جدي پېرودونکي دې اړیکه ونیسي. د تلیفون شمېره مې 0700 123 456 ده خو مهرباني وکړئ لومړی په هټیوال کې پیغام راکړئ چې ستاسو په اړه پوه شم. د پیسو مخکې لېږلو ته اړتیا نشته، یوازې د لیدو پر مهال تادیه کېږي. له تاسو مننه او د خدای په امان.",
+    address: 'د کابل ښار، شهر نو، د حاجي یعقوب څلورلارې ته نږدې، د مرکزي جومات ترڅنګ، د ښوونځي مخې ته، د درملتون څنګ ته، دویم پوړ، د زرغون دروازې سره',
+    price: 18_500, currency: "AFN", condition: :good, quantity: 1,
+    location: "#{QA_PLACES.fetch(:kabul)[:city]}, #{QA_PLACES.fetch(:kabul)[:province]}",
+    latitude: QA_PLACES.fetch(:kabul)[:latitude], longitude: QA_PLACES.fetch(:kabul)[:longitude]
+  )
+  rtl.save! if rtl.new_record? || rtl.changed?
+  rtl.update_columns(shop_id: nil, status: Listing.statuses[:active], published_at: rtl.published_at || 1.day.ago,
+                     reserved_at: nil, sold_at: nil, sold_units: 0, expires_at: nil, removed_at: nil)
+  unless rtl.images.attached?
+    phone = Rails.root.join("db/seeds/images/electronics/phone-1.jpg")
+    rtl.images.attach(qa_blob(phone, "qa-rtl-long-#{rtl.id}.jpg", "image/jpeg"))
+  end
+  puts "  RTL long-text listing ##{rtl.id} (title #{rtl.title.length} chars, description #{rtl.description.length})"
+else
+  puts "  SKIP RTL long-text listing: seller@hatiwal.test missing"
+end
+
 puts "=== QA Seed: check — no Support threads ==="
 # =============================================================================
 
 qa_ids = User.where("email LIKE 'loc.%@hatiwal.test' OR email LIKE 'ver.%@hatiwal.test' OR email LIKE 'shop.%@hatiwal.test' OR email LIKE 'lang.%@hatiwal.test'").pluck(:id)
-threads = Conversation.where(buyer_id: qa_ids).or(Conversation.where(seller_id: qa_ids)).count
-abort "  FAIL: #{threads} conversation(s) involve QA feature users — seeds must create none" if threads.positive?
-puts "  ok — #{qa_ids.size} QA feature users, 0 conversations"
+threads = Conversation.where(buyer_id: qa_ids).or(Conversation.where(seller_id: qa_ids))
+# SHOP-2: the ONE deliberate exception is shop.buyer's "Message shop" chat (a
+# listing-less shop chat, never a Support thread).
+threads = threads.where(shop_id: nil) if qa_column?(Conversation, :shop_id)
+abort "  FAIL: #{threads.count} conversation(s) involve QA feature users — seeds must create none" if threads.exists?
+puts "  ok — #{qa_ids.size} QA feature users, 0 conversations besides the SHOP-2 shop chat"

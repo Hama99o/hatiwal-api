@@ -1,0 +1,13 @@
+# Listing expiry reminders (docs/OWNER_ITEMS_2026-10-12.md, item 1): the push
+# and the Support notice, 7 days and 1 day before a listing expires. Own file
+# so it never collides with edits to en.yml.
+en:
+  support:
+    notices:
+      listing_expires_week: "⏰ %{name}, your listing \"%{title}\" expires in 7 days. Renew it in one tap from My Listings: it keeps its photos and chats, and nothing is re-posted."
+      listing_expires_day: "⏰ %{name}, your listing \"%{title}\" expires tomorrow. Renew it in one tap from My Listings: it keeps its photos and chats, and nothing is re-posted."
+  push:
+    listing_expiry:
+      week_title: "Your listing expires in 7 days"
+      day_title: "Your listing expires tomorrow"
+      body: "\"%{title}\": tap to renew it for 90 more days."

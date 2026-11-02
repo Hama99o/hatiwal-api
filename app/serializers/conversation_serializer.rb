@@ -15,6 +15,38 @@ class ConversationSerializer < ApplicationSerializer
   # That is a type change from "always a string", and it is only safe because
   # no client older than support messaging is ever served a support thread —
   # docs/SUPPORT_MESSAGING.md, "Why this cannot break v1.0.4".
+  # SHOP-1/2 — who the chat is with, with `status`. A product's shop until it is
+  # CLOSED (a closed shop's products went back to the owner) — the same rule as
+  # Conversation#shop_face, so a suspended shop never falls back to the owner's
+  # personal name. A "Message shop" chat is always with its shop. When the shop
+  # is not open the composer is shut by the API (Conversation#shut_by_shop?).
+  def self.shop_block(conversation)
+    shop = conversation.chat_shop
+    return nil unless shop
+    return nil if !conversation.shop_chat? && shop.closed?
+
+    ShopSerializer.render_as_hash(shop, view: :card).merge(status: shop.status)
+  end
+
+  # A participant as the viewer may see them. The seller side of a chat with a
+  # shop is the SHOP (name, logo, city, verified) under the owner's id — the
+  # id the public shop page already exposes, which blocking and reporting
+  # need. Same keys, so an app older than shops still draws a sensible header.
+  def self.person_block(conversation, person)
+    shop = conversation.shop_face if person.id == conversation.seller_id
+    if shop
+      # city: the shop's city, else its province (always filled from the pin), so
+      # it is a string like a person's: apps older than shops render it as such.
+      # privacy-b: the owner's id only for the shop's team and pre-1.1.6
+      # clients (ShopFace); everyone else gets null and the shop's own id.
+      return { id: ShopFace.owner_id_for(shop), shop_id: shop.id, name: shop.name, city: shop.city.presence || shop.province,
+               verified: shop.verified?, avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
+    end
+
+    { id: person.id, name: person.full_name, city: person.city, verified: person.verified,
+      avatar_url: person.avatar_url, avatar_thumb_url: person.avatar_thumb_url }
+  end
+
   def self.viewer_role_for(conversation, opts)
     current_user = opts[:current_user]
     return nil unless current_user
@@ -52,8 +84,11 @@ class ConversationSerializer < ApplicationSerializer
     # `listing.title` on a null. A wrong banner beats a crash. New clients read
     # `kind` before this field.
     field(:listing_deleted) { |c| c.listing_deleted? }
+    # SHOP-2: a "Message shop" chat (no product). Branch on it BEFORE
+    # listing_deleted, which stays true there for older clients.
+    field(:shop_chat) { |c| c.shop_chat? }
     field(:listing) do |c|
-      next nil if c.listing_deleted?
+      next nil if c.listing_deleted? || c.listing.nil?
       # TASK-J471: price/currency so the inbox row's PriceTag has something to
       # render — plain columns on an already-preloaded association (index
       # `.includes(listing: ...)`), so this adds no N+1.
@@ -62,18 +97,31 @@ class ConversationSerializer < ApplicationSerializer
       # the whole batch (docs/SPIKE_LISTING_QUANTITY.md §0c). Plain columns on
       # the same preloaded association — still no N+1.
       { id: c.listing_id, title: c.listing.title, thumbnail_url: c.listing.thumbnail_url, status: c.listing.status,
-        price: c.listing.price, currency: c.listing.currency,
+        price: money(c.listing.price), currency: c.listing.currency, price_unit: c.listing.price_unit,
         multi_unit: c.listing.multi_unit?, available_units: c.listing.available_units }
     end
     field(:other_participant) do |c, opts|
       current_user = opts[:current_user]
       other = current_user ? c.other_participant(current_user) : c.buyer
-      { id: other.id, name: other.full_name, city: other.city, verified: other.verified, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
+      person_block(c, other)
     end
     # TASK-M913: a retracted last message must not leak its content into the
     # inbox preview — suppress body, keep kind/deleted flag so the client can
     # render its own localized "Message deleted" preview text.
+    # SHOP-1 — see :detailed. The inbox row shows the shop for the buyer, and
+    # lets the seller's Chat tab tell shop chats from personal ones.
+    field(:shop) { |c| shop_block(c) }
+    # closed-shop-face: this product chat's shop has closed; the apps say so at
+    # the composer (new messages are the owner's own). nil otherwise.
+    field(:closed_shop) { |c| (s = c.closed_shop_face) && { name: s.name, closed_at: s.closed_at.iso8601 } }
     field(:last_message_body) { |c| lm = c.last_message; lm && !lm.deleted? ? lm.body : nil }
+    # A server notice as the last message ({notice, shop_id, name}, as on the
+    # message): each app renders the preview in the reader's language. The
+    # body is that sentence frozen in the buyer's language at the time.
+    field(:last_message_notice) do |c|
+      lm = c.last_message
+      lm.context.slice("notice", "shop_id", "name") if lm&.system? && !lm.deleted? && lm.context.is_a?(Hash) && lm.context["notice"].present?
+    end
     field(:last_message_kind) { |c| c.last_message&.kind }
     field(:last_message_deleted) { |c| c.last_message&.deleted? || false }
     field(:unread_count) { |c, opts| unread_count_for(c, opts) }
@@ -124,8 +172,11 @@ class ConversationSerializer < ApplicationSerializer
     # `listing.title` on a null. A wrong banner beats a crash. New clients read
     # `kind` before this field.
     field(:listing_deleted) { |c| c.listing_deleted? }
+    # SHOP-2: a "Message shop" chat (no product). Branch on it BEFORE
+    # listing_deleted, which stays true there for older clients.
+    field(:shop_chat) { |c| c.shop_chat? }
     field(:listing) do |c, opts|
-      next nil if c.listing_deleted?
+      next nil if c.listing_deleted? || c.listing.nil?
       # TASK-K729: category is included so the mobile thread's reserved/sold
       # recovery notice can offer a "Browse similar in {category}" CTA
       # (pre-filters Browse by category_id) instead of leaving a dead end.
@@ -134,7 +185,9 @@ class ConversationSerializer < ApplicationSerializer
       current_user = opts[:current_user]
       txn = c.listing.current_sale
       viewer_is_sale_buyer = txn.present? && current_user.present? && txn.buyer_id == current_user.id
-      { id: c.listing_id, title: c.listing.title, price: c.listing.price, currency: c.listing.currency,
+      { id: c.listing_id, title: c.listing.title, price: money(c.listing.price), currency: c.listing.currency,
+        # Stays: "/ night" next to the price in the thread header (STAYS_DESIGN).
+        price_unit: c.listing.price_unit,
         thumbnail_url: c.listing.thumbnail_url, status: c.listing.status, location: c.listing.location,
         negotiable: c.listing.negotiable,
         # Same reason as :list above, and it matters more here: the thread header
@@ -172,15 +225,21 @@ class ConversationSerializer < ApplicationSerializer
         # re-offering a review the server would 422 on as a duplicate.
         viewer_has_reviewed_sale: viewer_is_sale_buyer ? Review.exists?(transaction_id: txn.id, reviewer_id: current_user.id) : nil }
     end
-    field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar.attached? ? b.avatar.url : nil } }
-    field(:seller) { |c| s = c.seller; { id: c.seller_id, name: s.full_name, city: s.city, verified: s.verified, avatar_url: s.avatar.attached? ? s.avatar.url : nil } }
+    field(:buyer)  { |c| b = c.buyer;  { id: c.buyer_id,  name: b.full_name,  city: b.city,  verified: b.verified, avatar_url: b.avatar_url, avatar_thumb_url: b.avatar_thumb_url } }
+    field(:seller) { |c| person_block(c, c.seller) }
+    # SHOP-1 — the chat is with a shop when its listing is: the buyer sees the
+    # shop's name and logo, and replies go out as the shop.
+    field(:shop) { |c| shop_block(c) }
+    # closed-shop-face: this product chat's shop has closed; the apps say so at
+    # the composer (new messages are the owner's own). nil otherwise.
+    field(:closed_shop) { |c| (s = c.closed_shop_face) && { name: s.name, closed_at: s.closed_at.iso8601 } }
     # The thread screen shows the *other* person (name, avatar, tap-to-profile,
     # block toggle). Mirror the :list view so the detailed payload exposes it too
     # — without this the mobile Conversation screen silently hides those controls.
     field(:other_participant) do |c, opts|
       current_user = opts[:current_user]
       other = current_user ? c.other_participant(current_user) : c.buyer
-      { id: other.id, name: other.full_name, city: other.city, verified: other.verified, avatar_url: other.avatar.attached? ? other.avatar.url : nil }
+      person_block(c, other)
     end
     field(:blocked_with_participant) do |c, opts|
       current_user = opts[:current_user]

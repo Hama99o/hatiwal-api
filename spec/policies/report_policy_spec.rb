@@ -27,6 +27,12 @@ RSpec.describe ReportPolicy do
       expect(described_class.new(reporter, report).create?).to be false
     end
 
+    it "refuses a draft listing (nobody but its seller sees it)" do
+      reporter = create(:user)
+      report = Report.new(reporter: reporter, reportable: create(:listing, status: :draft), reason: :spam)
+      expect(described_class.new(reporter, report).create?).to be false
+    end
+
     it "still allows reporting an ordinary user" do
       reporter = create(:user)
       report = Report.new(reporter: reporter, reportable: create(:user), reason: :spam)

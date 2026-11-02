@@ -1,0 +1,28 @@
+<%# SHOP-1 — what the admin compares a shop's photos with (docs/SHOPS.md,
+    "What the admin checks"): the shop page as buyers see it, and the owner. %>
+<% owner = shop.owner %>
+<div class="hw-verify-head" id="verify-shop-facts">
+  <% if shop.logo.attached? %>
+    <%= image_tag url_for(shop.logo), class: "hw-verify-avatar", alt: "" %>
+  <% end %>
+  <div>
+    <p class="hw-verify-line">
+      <strong><%= request.document_type ? request.document_type.humanize : "Badge switched on by hand" %></strong>
+      · sent <%= time_ago_in_words(request.created_at) %> ago
+      <% if request.phone.present? %> · call-back phone <strong dir="ltr"><%= request.phone %></strong><% end %>
+    </p>
+    <p class="hw-verify-line" dir="auto">
+      Shop name: <strong><%= shop.name %></strong> · <%= shop.category&.name_en %> ·
+      <%= [ shop.address_line, shop.city, shop.province ].compact_blank.join(", ") %>
+      (<%= shop.latitude %>, <%= shop.longitude %>)
+    </p>
+    <p class="hw-kv">
+      <span>Live products <%= shop.live_listings_count %></span>
+      <span>Shop phone <%= shop.phone.presence || "—" %></span>
+      <span>Status <%= shop.status.humanize %></span>
+      <span>Owner <%= link_to owner.full_name, admin_user_path(owner), dir: "auto" %></span>
+      <span class="<%= 'hw-text-danger' if owner.reports_against.size.positive? %>">Owner reports <%= owner.reports_against.size %></span>
+      <span class="<%= 'hw-text-danger' if owner.active_warnings_count.positive? %>">Owner warnings <%= owner.active_warnings_count %></span>
+    </p>
+  </div>
+</div>

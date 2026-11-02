@@ -3,7 +3,7 @@ class TransactionPolicy < ApplicationPolicy
   # controller/scope already restricts the collection to rows where the
   # caller is the buyer or the seller.
   def index? = true
-  def show?  = user.present? && (record.buyer_id == user.id || record.seller_id == user.id)
+  def show?  = user.present? && (record.buyer_id == user.id || record.seller_id == user.id || shop_member?)
 
   # SF-B4 — correcting or voiding a recorded sale.
   #
@@ -14,14 +14,28 @@ class TransactionPolicy < ApplicationPolicy
   #   - `sold?` because a still-RESERVED row is not a sale yet; releasing a hold
   #     is `PUT /my/listings/:id/activate`, which already exists and already
   #     cancels the open transaction. Two doors to the same room would drift.
-  def update?  = user.present? && record.seller_id == user.id && record.sold?
+  # SHOP-3: a shop sale is fixed by any member of the product's shop, not only its seller (the owner).
+  def update?  = user.present? && (record.seller_id == user.id || shop_member?) && record.sold?
   def destroy? = update?
 
   class Scope < ApplicationPolicy::Scope
     def resolve
       return scope.none if user.nil?
 
-      scope.for_user(user)
+      # SHOP-3: plus the sales a member recorded for a shop — while they are
+      # still on its team (IDOR sweep 2026-10-13: a removed member kept reading
+      # the shop's ledger rows they had recorded).
+      scope.for_user(user).or(scope.where(recorded_by_id: user.id, shop_id: user.shop_members.select(:shop_id)))
     end
+  end
+
+  private
+
+  # The shop the sale was MADE in (transactions.shop_id, pinned at creation),
+  # not the listing's current shop: a product moved to another shop must not
+  # hand its past sales to that shop's team (review 2026-10-08).
+  def shop_member?
+    shop = record.shop
+    shop.present? && shop.member?(user)
   end
 end

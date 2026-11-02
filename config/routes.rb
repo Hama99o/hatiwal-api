@@ -24,7 +24,7 @@ Rails.application.routes.draw do
   # the exact names. Declared BEFORE the resources so `/admin/users/new` is not
   # swallowed by the `/admin/users/:id` show route.
   scope path: "admin", module: "admin" do
-    %i[categories listings reports users admin_users].each do |res|
+    %i[categories listings reports users admin_users prohibited_terms].each do |res|
       singular = res.to_s.singularize
       get "#{res}/new",      to: "#{res}#new",  as: "new_admin_#{singular}"
       get "#{res}/:id/edit", to: "#{res}#edit", as: "edit_admin_#{singular}"
@@ -37,6 +37,7 @@ Rails.application.routes.draw do
       member do
         patch :take_down
         patch :restore
+        patch :remove_video
       end
     end
     resources :reports do
@@ -52,11 +53,40 @@ Rails.application.routes.draw do
         patch :block
         patch :unblock
         post :warn
+        patch :confirm_email
       end
     end
-    resources :user_warnings, only: [ :index, :show ]
+    resources :user_warnings, only: [ :index, :show ] do
+      member { patch :revoke }
+    end
+    # Prohibited items (owner, 2026-10-13, option B: ALL MANUAL): the flag
+    # queue ("Flagged listings") and the term list that feeds it.
+    resources :flags, only: %i[index show] do
+      member do
+        patch :dismiss
+        patch :take_down
+        patch :take_down_warn
+      end
+    end
+    resources :prohibited_terms
     # VER-1: the verification queue. `document` streams one ID photo for a
     # token that expires in 5 minutes; every view is audit-logged.
+    # SHOP-1 — shops: moderate, not edit.
+    resources :shops, only: %i[index show] do
+      member do
+        patch :suspend
+        patch :reactivate
+        post :remove_badge
+        delete "members/:member_id", action: :remove_member, as: :remove_member
+        # SHOP-MEDIA: remove the shop's video, or one of its photos (audit-logged).
+        patch :remove_video
+        patch :remove_gallery_photo
+      end
+    end
+    # UPD-1 — "App versions": force update / reminder settings + old-version message
+    resource :app_versions, only: %i[show update] do
+      post :message_old_versions
+    end
     resources :verification_requests, only: %i[index show] do
       member do
         patch :approve
@@ -136,11 +166,15 @@ Rails.application.routes.draw do
   # Google OAuth for mobile — POST /api/v1/auth/google
   # Mobile sends a Google ID token; we verify it and return devise_token_auth tokens.
   post "api/v1/auth/google", to: "api/v1/auth/google_auth#create"
+  # Sign in with Apple (1.1.7, iOS first) — POST /api/v1/auth/apple; docs/APPLE_SIGN_IN.md.
+  post "api/v1/auth/apple", to: "api/v1/auth/apple_auth#create"
 
   namespace :api do
     namespace :v1 do
       # Public listing browser (buyer mode)
       resources :listings, only: [ :index, :show ] do
+        # Search by image (docs/IMAGE_SEARCH.md): multipart, one `image`.
+        collection { post :image_search }
         member do
           post   :save
           delete :unsave
@@ -173,8 +207,42 @@ Rails.application.routes.draw do
       # Categories
       resources :categories, only: [ :index ]
 
+      # UPD-1 — force update / update reminder (public)
+      get "app_config", to: "app_configs#show", as: :app_config
+      # Privacy review 2026-10-28: a single-use pass for the cable's connect URL (hatiwal-web).
+      post "cable_ticket", to: "cable_tickets#create", as: :cable_ticket
+
       # Reports
       resources :reports, only: [ :create, :index ]
+
+      # SHOP-1 — shops (hatiwal-mobile/docs/SHOPS.md)
+      resources :shops, only: %i[index show create update destroy] do
+        member { post :move_listings }
+        # SHOP-MEDIA (docs/SHOP_MEDIA.md): the shop's video (the VID endpoints'
+        # twin) and its gallery — one PUT adds, removes and reorders the photos.
+        resource :video, only: %i[update destroy], controller: "shop_videos"
+        resource :gallery, only: %i[update], controller: "shop_galleries"
+        # The SHOP's reviews: buyers' reviews of sales of its products (public).
+        resources :reviews, only: %i[index], controller: "shop_reviews"
+        # SHOP-2 — "Message shop" from the shop page (no product): find-or-create.
+        resources :conversations, only: %i[create], controller: "shop_conversations"
+        # privacy-b — block / unblock a shop by its id (blocks its owner underneath).
+        resource :block, only: %i[create destroy], controller: "shop_blocks"
+        # SHOP-3 — the team.
+        resources :members, only: %i[index update destroy], controller: "shop_members", param: :user_id
+        delete :membership, to: "shop_members#leave"
+        post :transfer, to: "shop_members#transfer"
+        resources :invites, only: %i[index create destroy], controller: "shop_invites" do
+          member { post :resend }
+        end
+      end
+      # SHOP-3 — opening an invitation (the token is the only key; public GET).
+      resources :shop_invites, only: %i[show], param: :token, controller: "shop_invite_tokens" do
+        member do
+          post :accept
+          post :decline
+        end
+      end
 
       # Reviews (double-blind, on a sold Transaction)
       resources :transactions, only: [] do
@@ -200,6 +268,8 @@ Rails.application.routes.draw do
         post  "/me/restore",  to: "profiles#restore",   as: :restore_me
         # LOC-1 — a clue about where the user is (never their own address).
         patch "/me/location_guess", to: "location_guesses#update", as: :me_location_guess
+        # SHOP-1 — who the user sells as (null = Me).
+        patch "/me/selling_as", to: "selling_as#update", as: :me_selling_as
 
         # Saved searches — MUST be declared before the "/:id" wildcard below,
         # otherwise GET /users/saved_searches is captured as profiles#show
@@ -226,6 +296,9 @@ Rails.application.routes.draw do
 
       # Seller / owner mode
       namespace :my do
+        get "shops", to: "shops#index", as: :shops
+        # Invitations addressed to my confirmed email (answer by token).
+        get "shop_invites", to: "shop_invites#index", as: :shop_invites
         resources :listings do
           member do
             put :publish
@@ -234,16 +307,26 @@ Rails.application.routes.draw do
             put :activate
             put :sold
             put :renew
+            put :relaunch
+            put :move
+            post :duplicate
           end
           # GET /my/listings/:listing_id/analytics
           resource :analytics, only: [ :show ], controller: "listing_analytics"
+          # VID: PUT/DELETE /my/listings/:listing_id/video — multipart, apart
+          # from the listing save so a slow upload never blocks publishing.
+          resource :video, only: [ :update, :destroy ], controller: "listing_videos"
           # GET /my/listings/status_counts — per-status counts for the seller.
           # Must be a COLLECTION route so it is matched BEFORE /my/listings/:id.
           collection do
             get :status_counts, to: "listing_status_counts#show"
+            # "Relaunch all" (item 2): every expired listing of Me / a shop.
+            post :relaunch_expired, to: "analytics#relaunch_expired"
           end
         end
 
+        # GET /my/analytics?shop_id= — a seller's numbers, Me or one shop (item 2).
+        resource :analytics, only: [ :show ], controller: "analytics"
         resources :saved_listings, only: [ :index ]
         resources :viewed_listings, only: [ :index ]
         resources :hidden_listings, only: [ :index ]

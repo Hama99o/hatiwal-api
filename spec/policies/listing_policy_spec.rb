@@ -13,11 +13,18 @@ RSpec.describe ListingPolicy do
     it { expect(policy.index?).to be true }
     it { expect(policy.show?).to be true }
     it { expect(policy.similar?).to be true }
+    it { expect(policy.image_search?).to be true }
     it { expect(policy.sold_by?).to be true }
     it { expect(policy.create?).to be true }
     it { expect(policy.save?).to be true }
     it { expect(policy.hide?).to be true }
     it { expect(policy.unhide?).to be true }
+  end
+
+  describe "#image_search?" do
+    it "is open to guests, like the feed it searches" do
+      expect(described_class.new(nil, Listing).image_search?).to be true
+    end
   end
 
   describe "#hide? / #unhide?" do
@@ -39,6 +46,29 @@ RSpec.describe ListingPolicy do
       let(:user) { other }
       it { expect(policy.update?).to be false }
       it { expect(policy.destroy?).to be false }
+    end
+  end
+
+  describe "#update_video? / #destroy_video? (VID)" do
+    it "lets the owner set a video on a draft or live listing, not a sold or deleted one" do
+      expect(described_class.new(owner, create(:listing, :draft, user: owner)).update_video?).to be true
+      expect(described_class.new(owner, listing).update_video?).to be true
+      expect(described_class.new(owner, create(:listing, :sold, user: owner)).update_video?).to be false
+      expect(described_class.new(owner, create(:listing, :active, user: owner, removed_at: Time.current)).update_video?).to be false
+    end
+
+    it "lets the owner remove it always, and nobody else touch it" do
+      expect(described_class.new(owner, create(:listing, :sold, user: owner)).destroy_video?).to be true
+      expect(described_class.new(other, listing).update_video?).to be false
+      expect(described_class.new(other, listing).destroy_video?).to be false
+    end
+
+    it "treats a shop member like the owner" do
+      shop = create(:shop, owner: owner)
+      member = create(:shop_member, shop: shop, role: :staff).user
+      shop_listing = create(:listing, :active, user: owner, shop: shop)
+      expect(described_class.new(member, shop_listing).update_video?).to be true
+      expect(described_class.new(member, shop_listing).destroy_video?).to be true
     end
   end
 

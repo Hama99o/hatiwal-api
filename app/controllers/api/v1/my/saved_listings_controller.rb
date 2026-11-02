@@ -11,7 +11,20 @@ class Api::V1::My::SavedListingsController < Api::V1::BaseController
     #   - price_histories        → price_drop_percent / price_dropped_at
     # Without :price_histories the Listing#recent_price_drop helper falls back
     # to a SQL query per listing row (N+1).
+    # Only what the user can still OPEN (the same rules as ListingsController#
+    # show): not a removed listing, not a blocked pair (either way), not a
+    # product of a shop that isn't active, not a draft (IDOR sweep 2026-10-13)
+    # — each of those 404'd on tap (d0 hunt 2026-10-09). The viewer's own
+    # listings always show. Sold ones stay: they
+    # still open. Filtered in SQL, so the page count stays right.
+    uid = current_user.id
+    openable = Listing.excluding_blocked_pairs(current_user)
+                      .where("listings.removed_at IS NULL OR listings.user_id = ?", uid)
+                      .where("listings.status <> ? OR listings.user_id = ?", Listing.statuses[:draft], uid)
+                      .where("listings.shop_id IS NULL OR listings.user_id = ? OR listings.shop_id IN (?)",
+                             uid, Shop.active.select(:id))
     saved_relation = current_user.saved_listings
+                                 .joins(:listing).merge(openable)
                                  .ordered
                                  .includes(listing: [
                                    :category,
@@ -19,7 +32,7 @@ class Api::V1::My::SavedListingsController < Api::V1::BaseController
                                    # SF-B2 — preloaded for the base `held_units` field; see
                                    # Listing#open_sale's loaded-array guard.
                                    :sale_transactions,
-                                   { user: { avatar_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } } }
+                                   { user: { avatar_attachment: :blob }, shop: { logo_attachment: :blob }, images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob }
                                  ])
 
     # Filled in by the transform block below (which runs BEFORE the response is

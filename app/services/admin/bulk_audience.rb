@@ -38,7 +38,7 @@ class Admin::BulkAudience
   def in_app_allowed
     return in_app_base if Conversation.admin_initiate_enabled?
 
-    in_app_base.where(id: Conversation.kind_support.select(:buyer_id))
+    in_app_base.where(id: Conversation.person_support.select(:buyer_id))
   end
 
   def in_app_blocked_count = in_app_base.count - in_app_allowed.count
@@ -55,13 +55,13 @@ class Admin::BulkAudience
 
   # Archived/deleted Support: delivered quietly, never pushed.
   def in_app_muted_count
-    in_app_recipients.where(id: Conversation.kind_support.where("buyer_archived_at IS NOT NULL OR buyer_deleted_at IS NOT NULL")
+    in_app_recipients.where(id: Conversation.person_support.where("buyer_archived_at IS NOT NULL OR buyer_deleted_at IS NOT NULL")
                                                        .select(:buyer_id)).count
   end
 
   # Could get a push at all (holds a token and hasn't muted Support).
   def in_app_push_reachable_count
-    muted = Conversation.kind_support.where("buyer_archived_at IS NOT NULL OR buyer_deleted_at IS NOT NULL").select(:buyer_id)
+    muted = Conversation.person_support.where("buyer_archived_at IS NOT NULL OR buyer_deleted_at IS NOT NULL").select(:buyer_id)
     in_app_recipients.where.not(push_token: [ nil, "" ]).where.not(id: muted).count
   end
 

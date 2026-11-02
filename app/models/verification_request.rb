@@ -18,24 +18,46 @@
 #     (HMAC-SHA256, indexed) to spot the same ID on another account. Never in
 #     an API response or a log; apps show ••••document_last4.
 class VerificationRequest < ApplicationRecord
-  SUBJECT_TYPES = [ User.name ].freeze
+  # SHOP-1: a Shop applies through the same model (docs/SHOPS.md "Verified shops").
+  SUBJECT_TYPES = [ User.name, Shop.name ].freeze
   FILES_KEPT_FOR = 90.days
   DOCUMENT_URL_TTL = 5.minutes
   DOCUMENT_TOKEN_PURPOSE = :admin_verification_document
   MAX_FILE_SIZE = 10.megabytes
   # Spec: 3 requests a day. Counts requests actually sent, not failed uploads.
   DAILY_LIMIT = 3
-  # A document number: digits only, a sensible length. No invented official
-  # formats (owner: "if unsure, accept 6–20 digits").
-  DOCUMENT_NUMBER_FORMAT = /\A\d{6,20}\z/
-  FILES = %i[front back selfie].freeze
+  # A document number: ASCII digits + upper-case letters after normalize_number,
+  # 5–20 long, at least one digit (owner, 2026-10-05: IDs can carry letters).
+  # No invented official formats.
+  DOCUMENT_NUMBER_FORMAT = /\A(?=.*\d)[0-9A-Z]{5,20}\z/
+  FILES = %i[front back selfie proof].freeze
 
   # Preset rejection reasons, each translated for the person under
   # `verification.reasons.<code>` (all four locales; spec'd). `other` sends the
   # admin's free text as typed.
-  REJECT_REASONS = %w[photo_not_clear name_mismatch selfie_mismatch document_not_accepted shop_sign_not_visible other].freeze
+  REJECT_REASONS = %w[photo_not_clear name_mismatch selfie_mismatch document_not_accepted proof_not_accepted other].freeze
+  # No longer offered (shops stopped sending a shop-front photo, owner
+  # 2026-10-05) but still valid on rows already decided with it.
+  LEGACY_REASONS = %w[shop_sign_not_visible].freeze
   # Revoke takes the same codes minus the photo-quality ones, plus its own.
   REVOKE_REASONS = %w[name_mismatch document_not_accepted policy_violation other].freeze
+
+  # Why a Reject / Revoke reason can't be used, as the admin page shows it
+  # (owner, 2026-10-12, item 8: a clear message at the field, never a crash or
+  # a blank 422), or nil. `person`: who is told, for a friendlier message.
+  def self.reason_problem(code, text, allowed, person: nil)
+    who = person.presence || "the person"
+    return { field: :reason_code, message: "Choose a reason: #{who} is told why, in their language." } if code.blank?
+    return { field: :reason_code, message: "That reason isn't available here. Choose one from the list." } unless allowed.include?(code.to_s)
+    if code.to_s == "other" && text.to_s.strip.blank?
+      return { field: :reason_text, message: "Write the reason for “Other”: it is sent to #{who} as you type it." }
+    end
+
+    nil
+  end
+
+  # The reasons offered to reject THIS request (proof_not_accepted is for shops).
+  def reject_reasons = shop_subject? ? REJECT_REASONS : REJECT_REASONS.excluding("proof_not_accepted")
   # What the admin ticks on the card; saved with the decision.
   CHECKLIST = %w[photo_clear name_matches selfie_matches no_bad_history].freeze
 
@@ -49,55 +71,84 @@ class VerificationRequest < ApplicationRecord
 
   # Document types with a back side to photograph.
   TWO_SIDED = %w[e_tazkira cnic kart_melli].freeze
-  # What a person may apply with (licence is for shops).
-  USER_DOCUMENT_TYPES = %w[tazkira e_tazkira cnic kart_melli passport].freeze
+  # Owner, 2026-10-05: ONLY the e-Tazkira is accepted, for people and for a
+  # shop's owner. Paper Tazkira, CNIC, Kart-e Melli, passport and licence stay
+  # in the enum for old rows but can no longer be sent.
+  USER_DOCUMENT_TYPES = %w[e_tazkira].freeze
+  # ── SHOP-1 ──────────────────────────────────────────────────────────────────
+  # A shop's application is EXACTLY the person's form, filled for the OWNER (their
+  # e-Tazkira front + back, a selfie holding it, the name and number on it), plus
+  # ONE required proof that the business is theirs (`proof`: licence, rental
+  # contract, tax paper… any document). No phone, no shop-front photo (owner,
+  # 2026-10-05).
+  SHOP_DOCUMENT_TYPES = USER_DOCUMENT_TYPES
+  # What each file IS, per subject — the admin card labels them with this.
+  FILE_LABELS = {
+    User.name => { front: "document_front", back: "document_back", selfie: "selfie" },
+    Shop.name => { front: "document_front", back: "document_back", selfie: "selfie", proof: "business_proof" }
+  }.freeze
+  # The shop checklist (docs/SHOPS.md, "What the admin checks").
+  SHOP_CHECKLIST = %w[photo_clear name_matches selfie_matches proof_valid address_right listings_clean no_bad_history].freeze
+  # ── end SHOP-1 ──
 
   has_one_attached :front
   has_one_attached :back
   has_one_attached :selfie
+  has_one_attached :proof # SHOP-1: proof of business (shops only)
 
   encrypts :document_number
   before_validation :normalize_document_number
 
   validates :subject_type, inclusion: { in: SUBJECT_TYPES }
-  validates :reason_code, inclusion: { in: REJECT_REASONS + REVOKE_REASONS }, allow_nil: true
+  validates :reason_code, inclusion: { in: REJECT_REASONS + REVOKE_REASONS + LEGACY_REASONS }, allow_nil: true
   FILES.each do |name|
     validates name, attached_file: { types: AttachedFileValidator::IMAGE_TYPES, max_size: MAX_FILE_SIZE }
   end
 
-  # What a fresh application must carry. Only on create: a decided request keeps
-  # its row after its files are purged.
+  # What a fresh application must carry — for a person AND for a shop's owner.
+  # Only on create: a decided request keeps its row after its files are purged.
   with_options on: :create, if: :requested? do
     validates :document_type, inclusion: { in: USER_DOCUMENT_TYPES }
     validates :name_on_document, presence: true, length: { maximum: 120 }
     validates :document_number, format: { with: DOCUMENT_NUMBER_FORMAT }
     validates :front, :selfie, presence: true
     validates :back, presence: true, if: :two_sided?
-    validate :subject_must_be_eligible
   end
+  # SHOP-1 — plus the proof of business.
+  validates :proof, presence: true, on: :create, if: -> { requested? && shop_subject? }
+  validate :subject_must_be_eligible, on: :create, if: :requested?
 
   scope :recent, -> { order(created_at: :desc) }
   scope :for_users, -> { where(subject_type: User.name) }
+  scope :for_shops, -> { where(subject_type: Shop.name) }
   scope :purgeable, -> { where(files_purged_at: nil).where(decided_at: ...FILES_KEPT_FOR.ago) }
 
   # HMAC of the normalized number with its own secret: equal numbers give equal
   # digests on every account, and the digest alone reveals nothing.
   def self.digest_for(number)
-    digits = normalize_number(number)
-    return nil if digits.blank?
-
-    OpenSSL::HMAC.hexdigest("SHA256", number_digest_key, digits)
+    hmac(normalize_number(number))
   end
 
-  # Persian/Arabic-Indic digits → ASCII; spaces, dashes and the like dropped.
+  # The HMAC of an already-normalized value.
+  def self.hmac(normalized)
+    return nil if normalized.blank?
+
+    OpenSSL::HMAC.hexdigest("SHA256", number_digest_key, normalized)
+  end
+
+  # Persian/Arabic-Indic digits → ASCII, letters upper-cased; spaces, dashes and
+  # the like dropped. Same rule as the clients' normalizeDocumentNumber.
   def self.normalize_number(raw)
-    raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").gsub(/\D/, "")
+    raw.to_s.tr("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789").upcase.gsub(/[^0-9A-Z]/, "")
   end
 
   # credentials.verification.number_hmac_key or ENV in production; derived from
   # secret_key_base elsewhere (never committed).
+  # Like EncryptionKeys: the production key is never used outside production,
+  # even when a dev machine can read the shared credentials file.
   def self.number_digest_key
-    key = Rails.application.credentials.dig(:verification, :number_hmac_key) || ENV["VERIFICATION_NUMBER_HMAC_KEY"]
+    key = ENV["VERIFICATION_NUMBER_HMAC_KEY"].presence
+    key ||= Rails.application.credentials.dig(:verification, :number_hmac_key) if Rails.env.production?
     return key if key.present?
     raise "VERIFICATION_NUMBER_HMAC_KEY is not set" if Rails.env.production?
 
@@ -114,11 +165,38 @@ class VerificationRequest < ApplicationRecord
         .includes(:subject).order(created_at: :desc)
   end
 
+  # The person behind the request: the user, or the shop's owner.
+  def person = shop_subject? ? subject&.owner : subject
+
+  # SHOP-2 — the admin's duplicate warnings, without the applicant's OWN other
+  # requests (a shop owner's e-Tazkira is, rightly, also on their person
+  # request and their other shops): same ID number, or the same proof file
+  # (blob checksum) on another person's request. Shown to the admin only.
+  def duplicates_elsewhere(limit: 10)
+    mine = person&.id
+    numbers = same_number_elsewhere.limit(50).to_a
+    proofs = proof.attached? ? same_proof_elsewhere.limit(50).to_a : []
+    { number: numbers.reject { |r| r.person&.id == mine }.first(limit),
+      proof: proofs.reject { |r| r.person&.id == mine }.first(limit) }
+  end
+
+  def same_proof_elsewhere
+    self.class.joins(proof_attachment: :blob).where(active_storage_blobs: { checksum: proof.blob.checksum })
+        .where.not(id: id).includes(:subject).order(created_at: :desc)
+  end
+
   def self.daily_limit_reached?(user)
     where(requested_by: user).where(created_at: 1.day.ago..).count >= DAILY_LIMIT
   end
 
   def two_sided? = TWO_SIDED.include?(document_type.to_s)
+
+  def shop_subject? = subject_type == Shop.name
+
+  def checklist_keys = shop_subject? ? SHOP_CHECKLIST : CHECKLIST
+
+  # The admin's label for one of this request's files (SHOP-1: per subject).
+  def file_label(name) = FILE_LABELS.fetch(subject_type, FILE_LABELS[User.name]).fetch(name.to_sym, name.to_s)
 
   def files_count = FILES.count { |name| public_send(name).attached? }
 
@@ -135,16 +213,16 @@ class VerificationRequest < ApplicationRecord
     transaction do
       update!(status: :approved, decided_by: admin, decided_at: Time.current,
               checklist: clean_checklist(checklist), reason_code: nil, reason_text: nil)
-      subject.update!(verified: true)
+      subject.verification_granted!(admin)
     end
-    SupportNoticeJob.enqueue(subject, :user_verified)
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:verified), shop: (subject if shop_subject?))
   end
 
   def reject!(admin:, reason_code:, reason_text: nil, checklist: {})
     raise ArgumentError, "only a waiting request can be rejected" unless requested?
 
-    decide!(:rejected, admin, reason_code, reason_text, REJECT_REASONS, checklist: checklist)
-    SupportNoticeJob.enqueue(subject, :user_verification_rejected)
+    decide!(:rejected, admin, reason_code, reason_text, reject_reasons, checklist: checklist)
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:rejected), shop: (subject if shop_subject?))
   end
 
   def revoke!(admin:, reason_code:, reason_text: nil)
@@ -152,17 +230,19 @@ class VerificationRequest < ApplicationRecord
 
     transaction do
       decide!(:revoked, admin, reason_code, reason_text, REVOKE_REASONS)
-      subject.update!(verified: false)
+      subject.verification_withdrawn!
     end
-    SupportNoticeJob.enqueue(subject, :user_badge_revoked)
+    SupportNoticeJob.enqueue(subject.verification_notice_recipient, subject.verification_notice_key(:revoked), shop: (subject if shop_subject?))
   end
 
   # Revoke a badge that was switched on by hand (no approved request to revoke):
   # a decided row is written so the reason shows on the person's status card.
-  def self.revoke_badge!(user, admin:, reason_code:, reason_text: nil)
+  # SHOP-1: `subject` may be a Shop; the row is then written in its owner's name.
+  def self.revoke_badge!(subject, admin:, reason_code:, reason_text: nil)
     transaction do
-      request = user.verification_requests.approved.recent.first ||
-                user.verification_requests.create!(requested_by: user, status: :approved, decided_at: Time.current)
+      requester = subject.is_a?(Shop) ? subject.owner : subject
+      request = subject.verification_requests.approved.recent.first ||
+                subject.verification_requests.create!(requested_by: requester, status: :approved, decided_at: Time.current)
       request.revoke!(admin: admin, reason_code: reason_code, reason_text: reason_text)
       request
     end
@@ -207,16 +287,18 @@ class VerificationRequest < ApplicationRecord
   def normalize_document_number
     return unless will_save_change_to_document_number? && document_number.present?
 
-    digits = self.class.normalize_number(document_number)
-    self.document_number = digits
-    self.document_last4 = digits.last(4)
-    self.document_number_digest = self.class.digest_for(digits)
+    # One rule for people and shops, so the same e-Tazkira matches across both
+    # (same_number_elsewhere).
+    normalized = self.class.normalize_number(document_number)
+    self.document_number = normalized
+    self.document_last4 = normalized.last(4)
+    self.document_number_digest = self.class.hmac(normalized)
   end
 
   def decide!(status, admin, reason_code, reason_text, allowed, checklist: nil)
     code = reason_code.to_s
-    raise ArgumentError, "unknown reason: #{code}" unless allowed.include?(code)
-    raise ArgumentError, "write the reason for \"other\"" if code == "other" && reason_text.blank?
+    problem = self.class.reason_problem(code, reason_text, allowed)
+    raise ArgumentError, problem[:message] if problem
 
     attrs = { status: status, decided_by: admin, decided_at: Time.current,
               reason_code: code, reason_text: (reason_text.to_s.strip.presence if code == "other") }
@@ -226,11 +308,12 @@ class VerificationRequest < ApplicationRecord
 
   def clean_checklist(raw)
     hash = raw.respond_to?(:to_unsafe_h) ? raw.to_unsafe_h : raw.to_h
-    CHECKLIST.index_with { |key| ActiveModel::Type::Boolean.new.cast(hash[key] || hash[key.to_sym]) || false }
+    checklist_keys.index_with { |key| ActiveModel::Type::Boolean.new.cast(hash[key] || hash[key.to_sym]) || false }
   end
 
+  # Users and (SHOP-1) shops both answer verified? and verification_missing.
   def subject_must_be_eligible
-    return unless subject.is_a?(User)
+    return unless subject.respond_to?(:verification_missing)
 
     errors.add(:subject, :already_verified) if subject.verified?
     missing = subject.verification_missing

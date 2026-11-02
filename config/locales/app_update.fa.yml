@@ -1,0 +1,11 @@
+# UPD-1 messages (hatiwal-mobile/docs/FORCE_UPDATE.md). Own file so it never
+# collides with edits to fa.yml.
+fa:
+  support:
+    notices:
+      app_update_available: "📲 نسخهٔ تازهٔ هتیوال آماده است. لطفاً آن را از App Store / Google Play به‌روز کنید تا همه چیز درست کار کند."
+  activerecord:
+    errors:
+      models:
+        app_release_setting:
+          not_released: "نسخهٔ %{version} برای %{platform} هنوز منتشر نشده است"

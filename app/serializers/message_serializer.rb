@@ -1,7 +1,23 @@
 class MessageSerializer < ApplicationSerializer
   fields :id, :kind, :read_at, :created_at, :responds_to_id
+  # OFFLINE §10.1: the sender's own id for the message (null from 1.1.x apps); the
+  # optimistic bubble and the sender's other devices match on it.
+  field :client_uuid
 
   field(:deleted) { |m| m.deleted? }
+  # A server notice ({notice, shop_id, name}), so each viewer reads it in their
+  # own language; `body` is the fallback older apps show. Only "listing_moved"
+  # (Listings::MoveService) today. Nil on every other message.
+  field(:notice) { |m| m.system? && m.context.is_a?(Hash) ? m.context.slice("notice", "shop_id", "name") : nil }
+  # A Support notice's button ({type, label_key, params}): what it opens, e.g.
+  # {type: "open_invite", label_key: "chat.noticeAction.openInvite", params:
+  # {token}} (SupportNoticeJob::ACTIONS). Nil on every other message; older apps
+  # ignore it and read `body`, which always says it all.
+  field(:action) do |m|
+    next nil unless !m.deleted? && m.context.is_a?(Hash) && m.context["action"].is_a?(Hash)
+
+    MessageSerializer.with_live_state(m, m.context["action"])
+  end
   field(:deleted_at) { |m| m.deleted_at }
 
   # Body: suppressed when deleted (tombstone — no content leak)
@@ -9,7 +25,50 @@ class MessageSerializer < ApplicationSerializer
 
   # Sender is always exposed (tombstones still show who sent — both sides
   # see "Message deleted" but the sender row stays so threading is intact)
-  field(:sender) { |m| u = m.user; { id: m.user_id, name: u.full_name, avatar_url: u.avatar.attached? ? u.avatar.url : nil } }
+  # SHOP-1/2: the seller side of a chat with a shop writes AS the shop — its
+  # name and logo, never the owner's (ConversationSerializer.person_block).
+  field(:sender) do |m, opts|
+    u = m.user
+    # SHOP-3: any member of the chat's shop writes as the shop, not only the seller.
+    shop = m.conversation&.shop_face if m.conversation&.written_as_shop?(m.user_id)
+    if shop
+      # The member's user id only for the shop's team (their alignment, "replied
+      # by"); null for the buyer: an id opens the guest-readable public profile,
+      # i.e. the member's name and photo (privacy text: "never the member who
+      # posted"; docs audit 2026-10-08, P0). Same audience rule as sent_by.
+      id = MessageSerializer.team_viewer?(m, opts) ? m.user_id : nil
+      next { id: id, name: shop.name, avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
+    end
+    # closed-shop-face: written as the shop before it closed — still the shop's
+    # (its logo is gone with the closure), marked closed.
+    if (closed = m.conversation&.written_as_closed_shop?(m) && m.conversation.closed_shop_face)
+      id = MessageSerializer.team_viewer?(m, opts) ? m.user_id : nil
+      next { id: id, name: closed.name, avatar_url: nil, as_shop: true, shop_closed: true }
+    end
+
+    { id: m.user_id, name: u.full_name, avatar_url: u.avatar_url, avatar_thumb_url: u.avatar_thumb_url }
+  end
+
+  # SHOP-3 "replied by": WHICH teammate wrote a shop message, for the shop's
+  # team only (their own messages included, apps-6a). The key is ABSENT for the
+  # buyer and for anyone outside the shop. A viewer qualifies when it is on the
+  # chat's seller side (REST: `current_user`), or the payload goes to the
+  # members-only live stream (`team: true`, BroadcastMessageJob).
+  field(:sent_by, if: ->(_name, m, opts) { sent_by_visible?(m, opts) }) do |m|
+    { id: m.user_id, name: m.user.full_name }
+  end
+
+  def self.sent_by_visible?(message, opts)
+    conversation = message.conversation
+    return false unless conversation&.written_as_shop?(message.user_id) || conversation&.written_as_closed_shop?(message)
+
+    team_viewer?(message, opts)
+  end
+
+  # On the chat's seller side: REST `current_user`, or the members-only stream.
+  def self.team_viewer?(message, opts)
+    opts[:team] == true || (opts[:current_user].present? && message.conversation&.seller_side?(opts[:current_user]))
+  end
 
   # Attachment URL: suppressed when deleted
   field(:attachment_url) { |m| m.deleted? ? nil : (m.attachment.attached? ? m.attachment.url : nil) }
@@ -64,5 +123,21 @@ class MessageSerializer < ApplicationSerializer
     next nil unless m.offer_kind?
 
     m.offer_quantity
+  end
+
+  # A verification button is only right for the state the subject is in NOW,
+  # not when the notice was sent (owner bug, 2026-10-08: an old "rejected →
+  # Try again" kept offering a new application while one was under review).
+  # So `params.state` = the subject's current state (none / requested /
+  # verified / rejected / revoked); the apps relabel or retarget the button.
+  # Older apps ignore the extra key.
+  def self.with_live_state(message, action)
+    return action unless action["type"] == "open_verification"
+
+    params = action["params"].is_a?(Hash) ? action["params"] : {}
+    subject = params["subject"] == "shop" ? Shop.find_by(id: params["shop_id"]) : message.conversation&.buyer
+    return action unless subject
+
+    action.merge("params" => params.merge("state" => VerificationStatus.new(subject).state))
   end
 end

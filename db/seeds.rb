@@ -157,7 +157,7 @@ SUBCATEGORIES = [
   { parent_slug: "property", name_en: "Apartments for Rent", name_ps: "د کرایې اپارتمانونه",  name_fa: "آپارتمان اجاره‌ای", name_ur: "جائیداد", slug: "apartments-rent", icon: "🏢", position: 2 },
   { parent_slug: "property", name_en: "Land & Plots",        name_ps: "ځمکه او نمرې",         name_fa: "زمین و قطعه", name_ur: "جائیداد",      slug: "land-plots",     icon: "🗺️", position: 3 },
   { parent_slug: "property", name_en: "Shops & Offices",     name_ps: "دوکانونه او دفترونه",  name_fa: "دکان و دفتر", name_ur: "جائیداد",      slug: "shops-offices",  icon: "🏪", position: 4 },
-  { parent_slug: "property", name_en: "Guest Houses",        name_ps: "مېلمه ځایونه",         name_fa: "مهمان‌خانه", name_ur: "جائیداد",       slug: "guest-houses",   icon: "🛏️", position: 5 },
+  # "guest-houses" moved to the Stays tree (Categories::StaysTree, docs/STAYS_DESIGN.md).
 
   { parent_slug: "jobs", name_en: "Full-time Jobs",         name_ps: "بشپړ وخت دندې",        name_fa: "کار تمام‌وقت", name_ur: "ملازمتیں",     slug: "jobs-fulltime",  icon: "💼", position: 1 },
   { parent_slug: "jobs", name_en: "Part-time & Daily Work", name_ps: "نیم وخت او ورځنۍ",     name_fa: "پاره‌وقت و روزمزد", name_ur: "ملازمتیں", slug: "jobs-parttime", icon: "⏰", position: 2 },
@@ -183,6 +183,11 @@ SUBCATEGORIES.each do |attrs|
   cat.active = true unless cat.persisted?
   cat.save!
 end
+
+# Stays (hotel rooms, guest houses, B&B, short-stay apartments) — the same tree
+# the 20261016100100 data migration puts on every database.
+Categories::StaysTree.apply!
+Categories::StaysTree.move_guest_houses! # option A (see 20261016100200)
 
 # Handle old top-level "animals" category — deactivate it (listings stay on it, new ones use "livestock")
 if animals_top_level
@@ -264,37 +269,12 @@ puts "  users: #{User.count}"
 puts "=== Seeding Listings (50+) ==="
 # =============================================================================
 
-require "open-uri"
-
-# Attaches real, item-appropriate photos to a listing via Active Storage.
-#
-# Photos come from loremflickr.com — a free, keyword-matched photo service that
-# needs no API key (so it works locally and on the demo server). The `lock`
-# query param makes each fetch deterministic: the same (listing, index) always
-# returns the same photo, so re-running the seed never churns images.
-#
-# Idempotent: skips listings that already have photos. Network failures are
-# non-fatal — a listing simply keeps whatever it had (or stays photo-less) and
-# the seed continues, so a flaky connection never aborts the whole run.
-def attach_seed_photos!(listing, query, count: 3)
-  return if listing.images.attached?
-
-  keyword = query.to_s.strip.downcase.gsub(/[^a-z0-9]+/, ",").gsub(/,+/, ",").gsub(/^,|,$/, "")
-  keyword = "marketplace" if keyword.blank?
-
-  attached = 0
-  count.times do |i|
-    lock = (listing.id * 10) + i # deterministic + unique per photo
-    url  = "https://loremflickr.com/800/600/#{keyword}?lock=#{lock}"
-    begin
-      io = URI.parse(url).open(open_timeout: 10, read_timeout: 20)
-      listing.images.attach(io: io, filename: "listing-#{listing.id}-#{i}.jpg", content_type: "image/jpeg")
-      attached += 1
-    rescue StandardError => e
-      warn "  ! photo fetch failed for ##{listing.id} '#{keyword}': #{e.class} #{e.message}"
-    end
-  end
-  print attached.positive? ? "📷" : "·"
+# Photos come from committed CC0 files (db/seeds/images, SeedPhotos), never the
+# network. Idempotent: a listing whose photos are all present keeps them; a
+# missing or empty one is re-attached. A bad fixture raises (no 0-byte images).
+def attach_seed_photos!(listing, hint)
+  result = SeedPhotos.attach!(listing, hint: hint)
+  print({ kept: "·", attached: "📷", no_fixtures: "∅" }.fetch(result))
 end
 
 cat = Category.all.index_by(&:slug)

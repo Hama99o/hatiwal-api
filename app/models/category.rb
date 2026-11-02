@@ -12,6 +12,18 @@ class Category < ApplicationRecord
   validates :name_fa, presence: true
   validates :slug, presence: true, uniqueness: true
 
+  # What a listing in this category IS (docs/STAYS_DESIGN.md §2.1). Clients switch
+  # their form, detail and filters on it instead of hard-coding slugs. Stored on
+  # every node: a subcategory always carries its parent's kind (set below), so
+  # rendering a listing's category never has to load the parent.
+  KIND_ITEM = "item".freeze
+  KIND_STAY = "stay".freeze
+  KINDS = [ KIND_ITEM, KIND_STAY ].freeze
+
+  validates :kind, inclusion: { in: KINDS }
+  before_validation :inherit_parent_kind
+  after_update :cascade_kind_to_subcategories, if: :saved_change_to_kind?
+
   scope :active,      -> { where(active: true) }
   scope :ordered,     -> { order(:position) }
   scope :top_level,   -> { where(parent_id: nil) }
@@ -25,6 +37,10 @@ class Category < ApplicationRecord
   # Active children in position order, filtered in Ruby rather than through
   # `subcategories.active.ordered` so an eager-loaded `includes(:subcategories)`
   # is reused instead of firing one extra query per parent.
+  def stay?
+    kind == KIND_STAY
+  end
+
   def visible_subcategories
     subcategories.select(&:active?).sort_by { |c| [ c.position.to_i, c.id ] }
   end
@@ -41,5 +57,15 @@ class Category < ApplicationRecord
     when "ur" then name_ur.presence || name_en
     else name_en
     end
+  end
+
+  private
+
+  def inherit_parent_kind
+    self.kind = parent.kind if parent
+  end
+
+  def cascade_kind_to_subcategories
+    subcategories.where.not(kind: kind).update_all(kind: kind, updated_at: Time.current)
   end
 end

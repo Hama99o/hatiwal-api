@@ -1,4 +1,7 @@
 class Api::V1::MessagesController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create, :destroy
+
   before_action :set_conversation
   before_action :set_message, only: [ :destroy ]
 
@@ -15,13 +18,35 @@ class Api::V1::MessagesController < Api::V1::BaseController
     # older pages on scroll-up.
     messages = @conversation.messages
                            .includes(user: { avatar_attachment: :blob },
-                                     attachment_attachment: :blob)
+                                     attachment_attachment: :blob,
+                                     # sender as the shop (MessageSerializer): one load, not one per message
+                                     conversation: [ { shop: { logo_attachment: :blob } }, { listing: { shop: { logo_attachment: :blob } } } ])
                            .newest_first
-    paginate_blue(MessageSerializer, messages, extra: { view: :default })
+    paginate_blue(MessageSerializer, messages, extra: { view: :default, current_user: current_user })
   end
 
   def create
+    # SHOP-3: a team member blocked by (or blocking) the buyer, or a shop whose
+    # owner and buyer block each other: refused with the same codes as starting a chat.
+    if (code = @conversation.team_block_code(current_user))
+      message = code == :blocked ? "you have blocked this user" : "you have been blocked by this user"
+      return render_unprocessable_entity(message, code: code)
+    end
+
+    # SHOP-2: a chat with a suspended/closed shop stays readable, but is shut
+    # (Conversation#shut_by_shop?).
+    if @conversation.shut_by_shop?
+      return render_unprocessable_entity(I18n.t("shops.errors.not_open"), code: :shop_unavailable)
+    end
+
     authorize @conversation, :send_message?
+
+    # OFFLINE §10.1: a message the phone already got through (its answer was
+    # lost) comes back as it is, never as a second message, even without an
+    # Idempotency-Key.
+    if (sent = already_sent_message)
+      return render_blue(MessageSerializer, sent, view: :default, options: { current_user: current_user })
+    end
 
     @message = @conversation.messages.new(safe_message_params)
     @message.user = current_user
@@ -30,7 +55,7 @@ class Api::V1::MessagesController < Api::V1::BaseController
     if @message.save
       BroadcastMessageJob.perform_later(@message.id)   # in-app real-time (open app)
       SendMessagePushJob.perform_later(@message.id)     # push notification (closed app)
-      render_blue(MessageSerializer, @message, view: :default, status: :created)
+      render_blue(MessageSerializer, @message, view: :default, status: :created, options: { current_user: current_user })
     else
       # SF-B11: `code:` carries the ONE message failure the sender has to act on
       # — `offer_quantity_above_available_units`, when they offered for more units
@@ -50,14 +75,13 @@ class Api::V1::MessagesController < Api::V1::BaseController
     authorize @message
     @message.soft_delete!
     BroadcastMessageJob.perform_later(@message.id) # real-time tombstone flip for the other participant
-    render_blue(MessageSerializer, @message, view: :default)
+    render_blue(MessageSerializer, @message, view: :default, options: { current_user: current_user })
   end
 
   def mark_read
     authorize @conversation, :read_messages?
-    @conversation.messages
+    @conversation.inbound_messages_for(current_user)
                  .where(read_at: nil)
-                 .where.not(user: current_user)
                  .update_all(read_at: Time.current)
     head :no_content
   end
@@ -66,6 +90,12 @@ class Api::V1::MessagesController < Api::V1::BaseController
 
   def set_conversation
     @conversation = policy_scope(Conversation).find(params[:conversation_id])
+  end
+
+  def already_sent_message
+    return if params[:client_uuid].blank?
+
+    @conversation.messages.find_by(user: current_user, client_uuid: params[:client_uuid].to_s)
   end
 
   def set_message
@@ -88,8 +118,10 @@ class Api::V1::MessagesController < Api::V1::BaseController
   # `Message#discard_meaningless_offer_quantity`, which follows the rule
   # `Listing#units_for_sale` already set.
   def safe_message_params
-    permitted = params.permit(:body, :responds_to_id, :offer_quantity)
+    permitted = params.permit(:body, :responds_to_id, :offer_quantity, :client_uuid)
     raw_kind  = params[:kind].presence
+    # Support: where the message was written from (Message#normalize_support_context).
+    permitted[:context] = params[:context].permit(:mode, :shop_id).to_h if params[:context].respond_to?(:permit)
 
     permitted[:kind] = resolved_kind(raw_kind)
     permitted

@@ -15,6 +15,33 @@ class ListingSerializer < ApplicationSerializer
   #
   # PRIVACY: do NOT add this field to :list or :detailed — those views ship to
   # guests and to any buyer, and the buyer's identity must stay owner-scoped.
+  # Owner, 2026-10-08: on a SHOP's product, which team member posted it — for the
+  # TEAM only. Same privacy rule as SALE_FIELD: member-scoped views
+  # (:seller_list, :owner_detailed — my/listings only), never :list / :detailed,
+  # which buyers see. nil on a personal listing. "You" is the client's call
+  # (it compares id with the signed-in user).
+  POSTED_BY_FIELD = proc do |l|
+    next nil if l.shop_id.nil? || l.user.nil?
+
+    { id: l.user_id, name: l.user.full_name }
+  end
+
+  # Review 2026-10-08 (HIGH, privacy): on a SHOP product the seller buyers see
+  # is the SHOP, never the team member who posted it — the same face
+  # ConversationSerializer.person_block gives a shop chat: the owner's id, the
+  # shop's name / logo / city, as_shop: true. Same keys as a person, so apps
+  # older than shops still render it. nil = a personal listing (or a shop no
+  # longer active): the person, as before.
+  def self.shop_seller(listing)
+    shop = listing.shop
+    return nil unless shop&.active?
+
+    # privacy-b: the owner's id only for the shop's team and pre-1.1.6 clients
+    # (ShopFace); everyone else gets null and the shop's own id.
+    { id: ShopFace.owner_id_for(shop), shop_id: shop.id, name: shop.name, city: shop.city.presence || shop.province,
+      verified: shop.verified?, avatar_url: shop.logo_url, avatar_thumb_url: shop.logo_thumb_url, as_shop: true }
+  end
+
   SALE_FIELD = proc do |l|
     txn = l.current_sale
     next nil unless txn
@@ -23,7 +50,7 @@ class ListingSerializer < ApplicationSerializer
     {
       id: txn.id,
       status: txn.status,
-      final_price: txn.final_price,
+      final_price: ApplicationSerializer.money(txn.final_price),
       currency: txn.currency,
       # How many units this buyer took. 1 on a single-item listing (the column
       # default), so nothing changes for the majority case — but on a batch it is
@@ -40,7 +67,7 @@ class ListingSerializer < ApplicationSerializer
                {
                  id: buyer.id,
                  name: buyer.full_name,
-                 avatar_url: buyer.avatar.attached? ? buyer.avatar.url : nil,
+                 avatar_url: buyer.avatar_url, avatar_thumb_url: buyer.avatar_thumb_url,
                  verified: buyer.verified
                }
              end,
@@ -53,14 +80,23 @@ class ListingSerializer < ApplicationSerializer
       conversation_id: if txn.buyer_id.nil?
                           nil
                        elsif l.conversations.loaded?
-                          l.conversations.to_a.find { |c| c.buyer_id == txn.buyer_id }&.id
+                          # A moved listing can have one chat per identity: the current one.
+                          l.conversations.to_a.select { |c| c.buyer_id == txn.buyer_id }
+                           .max_by { |c| c.shop_id == l.shop_id ? 1 : 0 }&.id
                        else
-                          l.conversations.find_by(buyer_id: txn.buyer_id)&.id
+                          (l.conversations.find_by(buyer_id: txn.buyer_id, shop_id: l.shop_id) ||
+                           l.conversations.find_by(buyer_id: txn.buyer_id))&.id
                        end
     }
   end
 
-  fields :id, :title, :price, :currency, :status, :location, :address, :condition, :created_at
+  fields :id, :title, :currency, :status, :location, :address, :condition, :created_at
+  field(:price) { |l| money(l.price) }
+
+  # Stays (docs/STAYS_DESIGN.md): "AFN 1,500 / night" and a room's facts. On the
+  # base fields so every view carries them; older apps ignore unknown keys.
+  field(:price_unit) { |l| l.price_unit }
+  field(:details) { |l| l.details.presence || {} }
 
   # Multi-quantity (docs/SPIKE_LISTING_QUANTITY.md, Tier 1). On the BASE fields,
   # so every view — feed, seller list, detail, owner detail — agrees. That
@@ -94,9 +130,20 @@ class ListingSerializer < ApplicationSerializer
 
   view :list do
     fields :category_id, :views_count, :negotiable
+    # OFFLINE §4.8: the feed's "newest" order is bumped_at (Listing.sorted), so
+    # the phone needs it to sort the listings it already has the same way offline.
+    fields :bumped_at
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
+    field(:image_thumb_urls) { |l| l.image_thumb_urls }
+    field(:image_medium_urls) { |l| l.image_medium_urls }
+    # VID: the small ▶ on the card. A key old clients simply ignore.
+    field(:has_video) { |l| l.has_video? }
     field(:is_viewed) { |l, opts| opts[:viewed_ids]&.include?(l.id) || false }
+    # e5 run-312: a saved listing past its 90-day clock stays on Saved (it
+    # still opens) but is off the market; the app labels it "Expired". The
+    # public flag only, as in :detailed: buyers never get the expiry date.
+    field(:expired) { |l| l.expired? }
     # TASK-BE-SAVEDLIST (FlowApp #255) — the feed heart. Before this, :list
     # never rendered is_saved at all (it only existed on :detailed), so no
     # feed card — web Bazaar or mobile Browse — could paint a filled heart
@@ -122,9 +169,14 @@ class ListingSerializer < ApplicationSerializer
       opts[:saved_ids]&.include?(l.id) || false
     end
     field(:seller) do |l|
+      next ListingSerializer.shop_seller(l) if l.shop&.active?
+
       u = l.user
-      { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar.attached? ? u.avatar.url : nil }
+      { id: l.user_id, name: u.full_name, city: u.city, verified: u.verified, avatar_url: u.avatar_url, avatar_thumb_url: u.avatar_thumb_url }
     end
+    # SHOP-1 — present when the listing was posted as a shop: the card shows the
+    # shop name + "Shop" chip and the button reads "Message shop". nil = personal.
+    field(:shop) { |l| l.shop&.active? ? ShopSerializer.render_as_hash(l.shop, view: :card) : nil }
     # Reuses CategorySerializer (TASK-K729 dedup fix) instead of hand-rolling
     # the same {id, name_en, name_ps, name_fa, slug} shape a 3rd time — see
     # the identical field in :seller_list and :detailed below.
@@ -136,13 +188,13 @@ class ListingSerializer < ApplicationSerializer
     # controller passes a `saved_by_listing_id` map (Saved screen, TASK-Y316).
     # nil/false on every other :list surface (browse, my listings, viewed, hidden).
     field(:price_at_save) do |l, opts|
-      opts[:saved_by_listing_id]&.[](l.id)&.price_at_save
+      money(opts[:saved_by_listing_id]&.[](l.id)&.price_at_save)
     end
     field(:price_dropped) do |l, opts|
       opts[:saved_by_listing_id]&.[](l.id)&.price_dropped? || false
     end
     field(:price_drop_amount) do |l, opts|
-      opts[:saved_by_listing_id]&.[](l.id)&.price_drop_amount
+      money(opts[:saved_by_listing_id]&.[](l.id)&.price_drop_amount)
     end
   end
 
@@ -152,20 +204,32 @@ class ListingSerializer < ApplicationSerializer
   # to answer, so this view is left alone rather than fed a `saved_ids:` Set
   # it has no use for.
   view :seller_list do
-    fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at, :negotiable
+    fields :category_id, :views_count, :published_at, :reserved_at, :sold_at, :expires_at, :negotiable, :shop_id
+    # OFFLINE §4.8: My listings is searched on the phone when offline, and
+    # Listing.search matches the description too — without it the offline
+    # results would miss listings found only by their description. Same order
+    # field as the feed (bumped_at).
+    fields :description, :bumped_at
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:image_urls) { |l| l.image_urls }
+    field(:image_thumb_urls) { |l| l.image_thumb_urls }
+    field(:image_medium_urls) { |l| l.image_medium_urls }
+    # VID: the small ▶ on the card. A key old clients simply ignore.
+    field(:has_video) { |l| l.has_video? }
     # Use .size (not .count) so that when conversations are eager-loaded via
     # includes(:conversations) in the controller the in-memory target is used
     # instead of issuing a separate COUNT(*) query per listing row.
     field(:conversations_count) { |l| l.conversations.size }
     field(:expired) { |l| l.expired? }
+    # Edit + relaunch: when the listing may next move to the top (nil = now).
+    field(:next_bump_at) { |l| l.next_bump_at }
     field(:category) { |l| CategorySerializer.render_as_hash(l.category) }
     # Price-drop badge data for seller listing cards. Both nil when no recent drop.
     field(:price_drop_percent) { |l| l.price_drop_percent }
     field(:price_dropped_at)   { |l| l.price_dropped_at }
     # TASK-R418 — owner-only buyer/final-price block for reserved/sold rows.
     field(:sale, &SALE_FIELD)
+    field(:posted_by, &POSTED_BY_FIELD)
   end
 
   view :detailed do
@@ -175,8 +239,16 @@ class ListingSerializer < ApplicationSerializer
     # grid-snapped values; see `Listing::GRID_DEGREES` for why snapping and not
     # an offset. `:owner_detailed` overrides them back to exact.
     fields :description, :category_id, :location,
-           :views_count, :published_at, :reserved_at, :sold_at, :updated_at, :expires_at,
+           :views_count, :published_at, :reserved_at, :sold_at, :updated_at,
            :negotiable
+    # Owner, 2026-10-12 (docs/OWNER_ITEMS_2026-10-12.md, item 1): buyers never
+    # see an expiry DATE — only the seller (or their shop team) does. The
+    # `expired` flag below stays public: it says "no longer on the market",
+    # not when. Guests and buyers get nil.
+    field(:expires_at) do |l, opts|
+      viewer = opts[:current_user]
+      viewer && l.manageable_by?(viewer) ? l.expires_at : nil
+    end
     field(:latitude)  { |l| l.approximate_latitude }
     field(:longitude) { |l| l.approximate_longitude }
     # So a client can SAY it is approximate and draw an area instead of a pin,
@@ -184,6 +256,14 @@ class ListingSerializer < ApplicationSerializer
     field(:location_precision) { "approximate" }
     field(:location_radius_m)  { Listing::APPROXIMATE_LOCATION_RADIUS_M }
     field(:images) { |l| l.image_urls }
+    field(:image_thumb_urls) { |l| l.image_thumb_urls }
+    field(:image_medium_urls) { |l| l.image_medium_urls }
+    # VID: one optional video, shown as the gallery's last slide (poster + ▶,
+    # loads on tap). All nil without a video; old clients ignore the keys.
+    field(:has_video) { |l| l.has_video? }
+    field(:video_url) { |l| l.video_url }
+    field(:video_poster_url) { |l| l.video_poster_url }
+    field(:video_duration_s) { |l| l.video_duration_s }
     field(:image_attachments) { |l| l.image_attachments }
     field(:thumbnail_url) { |l| l.thumbnail_url }
     field(:expired) { |l| l.expired? }
@@ -198,9 +278,24 @@ class ListingSerializer < ApplicationSerializer
 
       opts[:current_user]&.listing_views&.exists?(listing_id: l.id) || false
     end
+    field(:shop) { |l| l.shop&.active? ? ShopSerializer.render_as_hash(l.shop, view: :card) : nil }
     field(:seller) do |l, opts|
-      u = l.user
       viewer = opts[:current_user]
+      if (shop_face = ListingSerializer.shop_seller(l))
+        # The shop's own contact: its phone only when public and only to a
+        # signed-in non-member; never a member's personal phone or WhatsApp.
+        shop = l.shop
+        avg, count = shop.review_stats
+        may_call = viewer.present? && shop.phone_public && !shop.member?(viewer)
+        next shop_face.merge(
+          phone: may_call ? shop.phone : nil, whatsapp_number: nil,
+          avg_rating: avg, review_count: count,
+          response_rate_percent: nil, response_time_label: nil, last_active_label: nil,
+          seller_is_away: false, seller_away_until: nil
+        )
+      end
+
+      u = l.user
       # Expose contact details only to an authenticated user who is not the
       # listing owner. Guests (viewer nil) and the owner viewing their own
       # listing both receive nil.
@@ -225,7 +320,7 @@ class ListingSerializer < ApplicationSerializer
         phone: phone,
         whatsapp_number: whatsapp,
         verified: u.verified,
-        avatar_url: u.avatar.attached? ? u.avatar.url : nil,
+        avatar_url: u.avatar_url, avatar_thumb_url: u.avatar_thumb_url,
         # Rating summary so the buyer sees the seller's trust score on the
         # highest-intent screen (listing detail), matching the seller profile.
         # avg_rating is nil until the seller has at least one revealed review.
@@ -265,5 +360,11 @@ class ListingSerializer < ApplicationSerializer
     field(:location_precision) { "exact" }
     field(:location_radius_m)  { nil }
     field(:sale, &SALE_FIELD)
+    field(:posted_by, &POSTED_BY_FIELD)
+    # Always the owner's own listing here (see `:detailed`'s gate).
+    field(:expires_at) { |l| l.expires_at }
+    field(:next_bump_at) { |l| l.next_bump_at }
+    # Only on a relaunch response: whether that relaunch moved it to the top.
+    field(:bumped) { |_l, opts| opts[:bumped] }
   end
 end

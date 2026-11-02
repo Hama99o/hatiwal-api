@@ -1,0 +1,162 @@
+{
+  "_comment": "OFFLINE §4.8 — ONE fixture, two copies that must stay byte-identical: hatiwal-api spec/fixtures/files/search_parity.json (run by spec/models/listing/search_parity_spec.rb against Listing.search) and hatiwal-mobile src/lib/offline/__fixtures__/search_parity.json (run by localSearch.test.ts). Change both or neither.",
+  "listings": [
+    {
+      "id": 1,
+      "title": "Samsung Galaxy S22 Ultra",
+      "description": "Like new, 256GB, with box"
+    },
+    {
+      "id": 2,
+      "title": "Toyota Corolla 2016",
+      "description": "Automatic, low mileage"
+    },
+    {
+      "id": 3,
+      "title": "موبایل سامسونگ",
+      "description": "نو دی، بکس سره"
+    },
+    {
+      "id": 4,
+      "title": "یخچال",
+      "description": "بسیار خوب"
+    },
+    {
+      "id": 5,
+      "title": "يخچال قدیمی",
+      "description": "with Arabic yeh in the title"
+    },
+    {
+      "id": 6,
+      "title": "50% off charger",
+      "description": "model_x cable"
+    },
+    {
+      "id": 7,
+      "title": "Kandahari carpet",
+      "description": "Handmade WOOL, 3x4"
+    },
+    {
+      "id": 8,
+      "title": "Laptop",
+      "description": null
+    }
+  ],
+  "cases": [
+    {
+      "query": "samsung",
+      "expect": [
+        1
+      ]
+    },
+    {
+      "query": "SAMSUNG galaxy",
+      "expect": [
+        1
+      ]
+    },
+    {
+      "query": "galaxy toyota",
+      "expect": []
+    },
+    {
+      "query": "  corolla   2016  ",
+      "expect": [
+        2
+      ]
+    },
+    {
+      "query": "box",
+      "expect": [
+        1
+      ]
+    },
+    {
+      "query": "سامسونگ",
+      "expect": [
+        3
+      ]
+    },
+    {
+      "query": "بکس",
+      "expect": [
+        3
+      ]
+    },
+    {
+      "query": "یخچال",
+      "expect": [
+        4
+      ]
+    },
+    {
+      "query": "يخچال",
+      "expect": [
+        5
+      ]
+    },
+    {
+      "query": "50%",
+      "expect": [
+        6
+      ]
+    },
+    {
+      "query": "%",
+      "expect": [
+        6
+      ]
+    },
+    {
+      "query": "model_x",
+      "expect": [
+        6
+      ]
+    },
+    {
+      "query": "_",
+      "expect": [
+        6
+      ]
+    },
+    {
+      "query": "wool",
+      "expect": [
+        7
+      ]
+    },
+    {
+      "query": "laptop",
+      "expect": [
+        8
+      ]
+    },
+    {
+      "query": "laptop nothing",
+      "expect": []
+    },
+    {
+      "query": "a b c d e f g h i j zzz",
+      "expect": []
+    },
+    {
+      "query": "a e i o u l n t r s zzz",
+      "expect": [
+        1
+      ]
+    },
+    {
+      "query": "",
+      "expect": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  ]
+}

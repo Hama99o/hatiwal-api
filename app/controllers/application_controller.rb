@@ -4,6 +4,7 @@ class ApplicationController < ActionController::API
   include Pagy::Backend
   include RateLimitable
   include SessionKeepAlive
+  include UploadParamsGuard
 
   rescue_from Pundit::NotAuthorizedError, with: :render_forbidden
   rescue_from ActiveRecord::RecordNotFound, with: :render_not_found
@@ -12,6 +13,10 @@ class ApplicationController < ActionController::API
   # the base ParseError to :bad_request by exact class name, so its ParamBuilder
   # subclasses (ParameterTypeError/InvalidParameterError) would otherwise 500.
   rescue_from ActionDispatch::ParamError, with: :render_bad_request
+  # `params.require(:listing).permit(...)` on a String / Array / number sent in
+  # place of the object raised NoMethodError, a 500 (night QA 2026-10-12). Only
+  # that exact case is a 400; any other NoMethodError is re-raised.
+  rescue_from NoMethodError, with: :render_bad_request_for_wrong_param_shape
 
   before_action :set_active_storage_url_options
 
@@ -71,8 +76,14 @@ class ApplicationController < ActionController::API
 
   # `count:` — the total to report when `collection` is a narrowed slice of the
   # real result set (the boxed nearest-first feed); Pagy then skips its COUNT.
+  #
+  # An `extra` value may be a Proc: it is called with the page's records once
+  # they are loaded, so per-viewer lookups (seen / saved ids, unread counts)
+  # cost one query on the PAGE's ids instead of a subquery over the whole result
+  # set (PERFORMANCE_100K.md: ~170-200 ms each on the 216k-row feed).
   def paginate_blue(serializer, collection, extra: {}, count: nil)
     pagy, records = pagy(collection, **pagy_page_options, **(count ? { count: count } : {}))
+    extra = extra.transform_values { |value| value.is_a?(Proc) ? value.call(records) : value }
     render json: {
       serializer.model_name.plural => serializer.render_as_hash(records, view: extra[:view] || :default, **extra.except(:view)),
       meta: {
@@ -120,22 +131,42 @@ class ApplicationController < ActionController::API
   # showing an English sentence from the API. Mirrors the `account_suspended`
   # convention #reject_blocked_user! below already uses. Purely additive — every
   # existing caller omits it and gets exactly the payload it always did.
-  def render_unprocessable_entity(record_or_message, code: nil)
+  def render_unprocessable_entity(record_or_message, code: nil, extra: {})
     body = if record_or_message.respond_to?(:errors)
              { errors: record_or_message.errors.full_messages }
     else
              { error: record_or_message.to_s }
     end
     body[:code] = code if code.present?
+    body.merge!(extra)
     render json: body, status: :unprocessable_entity
+  end
+
+  # An error with a stable `code` the apps translate, at any status (SHOP-3:
+  # 403 / 410 / 429 carry codes too, not only 422s).
+  def render_coded_error(message, code:, status:)
+    render json: { error: message.to_s, code: code }, status: status
+  end
+
+  # 403 { code: "email_unconfirmed" }: the app shows "confirm your email first"
+  # with a resend button (POST /api/v1/auth/confirmation).
+  def require_confirmed_email!
+    return if current_user.nil? || current_user.email_confirmed?
+
+    # In the caller's own language (the API does not switch locale per request).
+    locale = current_user.preferred_language.presence
+    locale = I18n.default_locale unless locale && I18n.locale_available?(locale)
+    render_coded_error(I18n.t("accounts.email_unconfirmed", locale: locale), code: :email_unconfirmed, status: :forbidden)
   end
 
   def render_not_found
     render json: { error: "Not found" }, status: :not_found
   end
 
-  def render_forbidden
-    render json: { error: "Forbidden" }, status: :forbidden
+  def render_forbidden(message = "Forbidden", code: nil)
+    body = { error: message }
+    body[:code] = code if code.present?
+    render json: body, status: :forbidden
   end
 
   # Rejects a suspended/banned user on authenticated requests with a clear,
@@ -149,12 +180,18 @@ class ApplicationController < ActionController::API
       error:   "account_#{current_user.status}",
       status:  current_user.status,
       message: current_user.account_block_message,
-      reason:  current_user.block_reason
+      reason:  current_user.display_block_reason
     }, status: :forbidden
   end
 
   def render_bad_request
     render json: { error: "Bad request" }, status: :bad_request
+  end
+
+  def render_bad_request_for_wrong_param_shape(error)
+    raise error unless error.name == :permit && !error.receiver.is_a?(ActionController::Parameters)
+
+    render_bad_request
   end
 
   # General-purpose success helper for actions that return a small bespoke

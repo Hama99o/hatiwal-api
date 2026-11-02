@@ -22,7 +22,7 @@ class UserSerializer < ApplicationSerializer
     # this exact class of bug (TASK-B903, expired listings inflating the count);
     # SF-B1's widening of `browsable` to include reserved listings reopened it,
     # so this now tracks `live` too.
-    field(:listings_count) { |u| u.listings.live.not_expired.count }
+    field(:listings_count) { |u| u.live_listings_count }
     # TASK-TX02 — denormalized counters (users.sold_count / users.bought_count),
     # bumped by Transaction#bump_trust_counters! on every completed sale. Plain
     # column reads: zero extra queries here, so a public-profile load AND a list
@@ -31,13 +31,20 @@ class UserSerializer < ApplicationSerializer
     field(:bought_count) { |u| u.bought_count }
     field(:avg_rating) { |u| u.avg_rating&.to_f }
     field(:review_count) { |u| u.review_count }
+    # English month names for every reader (the API does not switch locale);
+    # kept for older apps. `member_since_at` is the month as a date, for the
+    # apps to format in the reader's language — month precision only, never the
+    # exact sign-up time (edge pass 1.1.6, 2026-10-08).
     field(:member_since) { |u| u.created_at.strftime("%B %Y") }
-    field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
+    field(:member_since_at) { |u| u.created_at.to_date.beginning_of_month.iso8601 }
+    field(:avatar_url) { |u| u.avatar_url }
+    field(:avatar_thumb_url) { |u| u.avatar_thumb_url }
     # Whether the current viewer has blocked this user. Keeps the block/unblock
     # toggle in sync on first open without a separate API call. Defaults to false
     # when no viewer context is available (e.g. unauthenticated — should not
     # happen in practice since the endpoint requires auth).
-    field(:blocked) { |u, opts| opts[:current_user]&.blocked?(u) || false }
+    # A list that already knows the answer passes `blocked_ids` (GET /blocks: all of them).
+    field(:blocked) { |u, opts| opts[:blocked_ids] ? opts[:blocked_ids].include?(u.id) : (opts[:current_user]&.blocked?(u) || false) }
 
     # Response rate trust signal — nil when threshold (5 conversations) not met.
     field(:response_rate_percent) { |u| u.response_rate_percent }
@@ -70,7 +77,8 @@ class UserSerializer < ApplicationSerializer
            # clients can render the inputs. Only ever in :me — never :public.
            :whatsapp_number, :show_phone_publicly, :show_address_publicly
     field(:full_name) { |u| u.full_name }
-    field(:avatar_url) { |u| u.avatar.attached? ? u.avatar.url : nil }
+    field(:avatar_url) { |u| u.avatar_url }
+    field(:avatar_thumb_url) { |u| u.avatar_thumb_url }
     # Whether this account's email address has been confirmed.
     #
     # A BOOLEAN, not `confirmed_at`: the clients only need to decide whether to show
@@ -81,13 +89,17 @@ class UserSerializer < ApplicationSerializer
     # unconfirmed one, which is why nothing was ever gated on it
     # (docs/EMAIL_CONFIRMATION.md).
     field(:email_confirmed) { |u| u.confirmed_at.present? }
+    # The badge on "My invitations" (GET /my/shop_invites, same scope).
+    field(:pending_shop_invites_count) { |u| ShopInvite.addressed_to(u).count }
     # Dashboard stats for the user's own profile.
     # SF-B1 — `live`, matching `listings_count` above and the widened
     # `browsable`/"Active" tab. A held listing is still one of the seller's items
     # on sale; counting it as neither active nor anything else made the dashboard
     # tile disagree with the tab right next to it.
-    field(:items_active_count) { |u| u.listings.live.count }
-    field(:items_sold_count) { |u| u.listings.sold.count }
+    # Personal only, whatever "Sell as" is (owner, 2026-10-07): a shop's
+    # products are counted on the shop, never on the person's Profile.
+    field(:items_active_count) { |u| u.listings.personal.live.count }
+    field(:items_sold_count) { |u| u.listings.personal.sold.count }
     # No money total: listings span currencies (AFN/USD/EUR) with no FX rate, so
     # summing them would be meaningless. We surface counts only.
     field(:saved_items_count) { |u| u.saved_listings.count }
@@ -101,13 +113,17 @@ class UserSerializer < ApplicationSerializer
     field(:review_count) { |u| u.review_count }
     field(:unread_message_count) do |u|
       # Exclude conversations the user has archived — archiving should silence the badge.
-      conversation_ids = Conversation.for_user(u.id).not_archived_for(u).select(:id)
-      Message.where(conversation_id: conversation_ids, read_at: nil).where.not(user_id: u.id).count
+      conversation_ids = Conversation.for_user(u).not_archived_for(u).select(:id)
+      Message.joins(:conversation).where(conversation_id: conversation_ids, read_at: nil)
+             .where(Conversation.inbound_message_sql_for(u), u: u.id).count
     end
     # Strike status so the app can show a "X of N warnings" banner from the
     # /users/me payload without an extra request.
     field(:active_warnings_count) { |u| u.active_warnings_count }
     field(:warning_threshold) { |_u| User::WARNING_BLOCK_THRESHOLD }
+    # The most recent strike, for the banner (owner, 2026-10-16): { category,
+    # reason, created_at, listing_title } or null. Same shape as the shop view.
+    field(:latest_warning) { |u| WarningJson.latest(u) }
     # Away mode — expose the computed away? flag and the datetime (as ISO-8601)
     # when the seller is CURRENTLY away. Returns nil when not away so the edit
     # toggle knows to show "off" state. Owner can set a new future date via PUT /users/me.
@@ -118,6 +134,22 @@ class UserSerializer < ApplicationSerializer
     # this block and never re-implement the rule. Only in :me — the guessed
     # location must never reach :public, :minimal or a listing.
     field(:location) { |u| u.effective_location }
+    # SHOP-1 — who the user sells as in Seller mode (null = Me), already checked
+    # against membership and the shop's status (User#selling_shop), and the
+    # shops they can sell as, for the "Sell as" sheet. Two small queries.
+    # Users with no shop (almost everyone) cost ZERO extra queries here:
+    # shop_memberships_count is a column (ShopMember counter_cache).
+    field(:selling_as_shop) { |u| (shop = u.selling_shop) && ShopSerializer.render_as_hash(shop, view: :card) }
+    field(:unread_counts) { |u| u.shop_memberships_count.positive? ? u.unread_counts : nil }
+    field(:shops) do |u|
+      next [] unless u.shop_memberships_count.positive?
+
+      # SHOP-2: owned first, then oldest first — a stable "Sell as" order.
+      u.shop_members.includes(shop: { logo_attachment: :blob }).joins(:shop)
+       .order(Arel.sql("CASE WHEN shops.owner_id = #{u.id.to_i} THEN 0 ELSE 1 END"), "shops.created_at", "shops.id").map do |m|
+        ShopSerializer.render_as_hash(m.shop, view: :card).merge(role: m.role, status: m.shop.status)
+      end
+    end
   end
 
   view :minimal do

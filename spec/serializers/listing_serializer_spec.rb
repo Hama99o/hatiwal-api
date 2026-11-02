@@ -588,3 +588,25 @@ RSpec.describe ListingSerializer, type: :serializer do
     end
   end
 end
+
+# OFFLINE §4.8: what the phone needs to search and sort the listings it already
+# has the way the server does (Listing.search matches the description;
+# Listing.sorted's default "newest" is bumped_at).
+RSpec.describe ListingSerializer, "offline search parity fields" do
+  let(:listing) { create(:listing, :active, description: "Handmade wool") }
+
+  it ":list carries bumped_at (the feed's newest order)" do
+    result = described_class.render_as_hash(listing, view: :list)
+    expect(result[:bumped_at]).to be_present
+  end
+
+  it ":seller_list carries description and bumped_at (My listings is searched offline)" do
+    result = described_class.render_as_hash(listing, view: :seller_list)
+    expect(result[:description]).to eq("Handmade wool")
+    expect(result[:bumped_at]).to be_present
+  end
+
+  it ":list still leaves the description out (the bazaar payload stays small)" do
+    expect(described_class.render_as_hash(listing, view: :list)).not_to have_key(:description)
+  end
+end

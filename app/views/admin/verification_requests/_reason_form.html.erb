@@ -1,8 +1,11 @@
-<%# Preset reasons (translated for the person by the API) + free text for "other".
-    locals: url, reasons, submit, confirm; optional form_id, method (default :patch) %>
-<%= form_with url: url, method: local_assigns.fetch(:method, :patch), data: { turbo: false }, id: local_assigns[:form_id], class: "hw-form-row" do |f| %>
-  <%= f.select :reason_code, reasons.map { |code| [ I18n.t("verification.reasons.#{code}", locale: :en), code ] },
-        { prompt: "Choose a reason…" }, class: "hw-select", required: true %>
-  <%= f.text_field :reason_text, placeholder: "Only for “Other”: written to the person as typed", class: "hw-input", dir: "auto" %>
+<%# Revoke / Remove badge with a REQUIRED reason (owner, 2026-10-12, item 8):
+    the shared picker (plain labels, "Other" text only when picked, a preview
+    of what the person gets, an inline error).
+    locals: url, reasons, submit, confirm, recipient (User told), prefix; optional
+    form_id, method (default :patch), error, selected, text %>
+<%= form_with url: url, method: local_assigns.fetch(:method, :patch), data: { turbo: false }, id: local_assigns[:form_id],
+              class: "hw-decision__box hw-decision__box--reject" do |f| %>
+  <%= render "admin/verification_requests/reason_picker", reasons: reasons, recipient: recipient, prefix: prefix,
+             error: local_assigns[:error], selected: local_assigns[:selected], text: local_assigns[:text] %>
   <%= f.submit submit, class: "button button--danger", data: { confirm: confirm } %>
 <% end %>

@@ -23,7 +23,7 @@ class Api::V1::My::ListingAnalyticsController < Api::V1::BaseController
   private
 
   def set_listing
-    @listing = current_user.listings.find(params[:listing_id])
+    @listing = current_user.manageable_listings.find(params[:listing_id]) # SHOP-3: every member
   rescue ActiveRecord::RecordNotFound
     render_not_found
   end

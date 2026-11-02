@@ -136,4 +136,77 @@ RSpec.describe SendMessagePushJob, type: :job do
 
     expect(seller.reload.push_token).to be_nil
   end
+
+  # SHOP-1 — the app switches "Selling as" on a tap (role + shopId).
+  describe "identity in the push data" do
+    before { allow(Notifications::ExpoPushService).to receive(:deliver).and_return(result) }
+
+    it "tells the seller it is a selling chat, with the shop" do
+      shop = create(:shop, owner: seller)
+      shop_conversation = create(:conversation, buyer: buyer, listing: create(:listing, :active, user: seller, shop: shop))
+      msg = create(:message, conversation: shop_conversation, user: buyer)
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver)
+        .with(hash_including(data: hash_including(role: "selling", shopId: shop.id)))
+    end
+
+    it "tells the buyer it is a buying chat, and a personal listing has no shop" do
+      msg = create(:message, conversation: conversation, user: seller)
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver)
+        .with(hash_including(data: hash_including(role: "buying", shopId: nil)))
+    end
+  end
+
+  # d0 hunt 2026-10-09: only offer / meetup / photo / document had labels. A
+  # counter-offer, an accept/decline and a meetup reply fell through to the raw
+  # body: "9000|AFN|10000" or "Cafe | 3pm | 34.51,69.17" on the lock screen.
+  describe "replies to an offer or a meetup push a label, never the raw body" do
+    let(:offer) { create(:message, conversation: conversation, user: buyer, kind: :offer, body: "12000|AFN|14000") }
+    let(:proposal) { create(:message, conversation: conversation, user: buyer, kind: :meetup_proposal, body: "Cafe | 3pm | 34.51,69.17") }
+
+    {
+      offer_counter: [ :offer, "9000|AFN|14000", "push.message.offer_counter" ],
+      offer_accepted: [ :offer, "12000|AFN|14000", "push.message.offer_accepted" ],
+      offer_declined: [ :offer, "12000|AFN|14000", "push.message.offer_declined" ],
+      meetup_accepted: [ :proposal, "Cafe | 3pm | 34.51,69.17", "push.message.meetup_accepted" ],
+      meetup_declined: [ :proposal, "Cafe | 3pm | 34.51,69.17", "push.message.meetup_declined" ]
+    }.each do |kind, (target, body, key)|
+      it "#{kind}: the buyer gets the #{key} label in their language (ps)" do
+        buyer.update!(preferred_language: "ps")
+        responds_to = public_send(target)
+        msg = create(:message, conversation: conversation, user: seller, kind: kind, body: body, responds_to: responds_to)
+        label = I18n.t(key, locale: :ps)
+        expect(label).not_to start_with("Translation missing")
+        expect(Notifications::ExpoPushService).to receive(:deliver).with(hash_including(body: label)).and_return(result)
+        described_class.perform_now(msg.id)
+      end
+    end
+  end
+
+  # hatiwal-00's review (2026-10-30): only a live session's device gets the preview.
+  context "the recipient's push session" do
+    let(:msg) { create(:message, conversation: conversation, user: buyer, kind: :text, body: "Salaam") }
+    before { allow(Notifications::ExpoPushService).to receive(:deliver).and_return(result) }
+
+    it "revoked (the client is no longer a session): no push, the token cleared" do
+      seller.update_columns(push_token_client: "gone-client", tokens: {})
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).not_to have_received(:deliver)
+      expect(seller.reload.push_token).to be_nil
+    end
+
+    it "live: pushed" do
+      seller.update_columns(push_token_client: "live-client",
+                            tokens: { "live-client" => { "token" => "d", "expiry" => 1.week.from_now.to_i } })
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver)
+    end
+
+    it "legacy (no client recorded): pushed as today" do
+      seller.update_columns(push_token_client: nil)
+      described_class.perform_now(msg.id)
+      expect(Notifications::ExpoPushService).to have_received(:deliver)
+    end
+  end
 end

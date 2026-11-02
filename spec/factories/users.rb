@@ -13,6 +13,11 @@ FactoryBot.define do
       verified { true }
     end
 
+    # A confirmed email: needed to open a shop or apply for Verified (email gate, 1.1.6).
+    trait :confirmed do
+      confirmed_at { Time.current }
+    end
+
     # VER-1: may apply for the badge (confirmed email + profile photo + full name).
     trait :verification_eligible do
       confirmed_at { Time.current }

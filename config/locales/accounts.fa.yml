@@ -1,6 +1,13 @@
 # Account and upload messages that were en-only (found by spec/i18n/locale_coverage_spec.rb, 2026-10-05).
 fa:
   accounts:
+    report_warning:
+      spam: "به‌عنوان اسپم گزارش شده"
+      inappropriate: "به‌عنوان محتوای نامناسب گزارش شده"
+      fraud: "به‌عنوان تقلب یا کلاهبرداری گزارش شده"
+      wrong_category: "به دلیل ثبت در دسته‌بندی نادرست گزارش شده"
+      prohibited_item: "به‌عنوان کالای ممنوع گزارش شده"
+      other: "توسط کاربر دیگری گزارش شده"
     auto_suspended_reason: "پس از رسیدن به %{count} اخطار به‌طور خودکار تعلیق شد."
     blocked:
       default: "حساب شما مسدود شده است. لطفاً با پشتیبانی تماس بگیرید."
@@ -11,6 +18,7 @@ fa:
     messages:
       invalid_file_type: "نوع فایل پشتیبانی نمی‌شود (%{content_type})"
       file_too_large: "بزرگ‌تر از حد %{limit} است"
+      video_too_long: "طولانی‌تر از %{count} ثانیه است"
       too_many_files: "نمی‌تواند بیشتر از %{count} فایل داشته باشد"
   activerecord:
     errors:

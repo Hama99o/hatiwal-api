@@ -2,6 +2,8 @@ class ListingPolicy < ApplicationPolicy
   def index?         = true
   def show?          = true
   def similar?       = true
+  # Search by image (docs/IMAGE_SEARCH.md): public like the feed it searches.
+  def image_search?  = true
   def sold_by?       = true  # public read — any viewer (including guests) may see a seller's sold items
   def viewed?        = true  # authenticated read — any user may list their own view history
   def create?        = true
@@ -14,6 +16,9 @@ class ListingPolicy < ApplicationPolicy
   # Authenticated seller action — counts are scoped to current_user.listings
   # in the controller, so any signed-in user is authorised to call this.
   def status_counts? = true
+  # A seller's numbers (My::AnalyticsController): any signed-in user, for Me or
+  # a shop they are on — the controller resolves which, and refuses the rest.
+  def seller_analytics? = true
 
   def update?    = owner?
   def destroy?   = owner?
@@ -50,12 +55,28 @@ class ListingPolicy < ApplicationPolicy
   # SF-B1 — from `live?`. `Listing#expired?` widened to `live?` at the same time,
   # so a reserved listing can now expire and drop out of `browsable`; without
   # this it would expire with no way to renew it.
-  def renew?     = owner? && record.live?
+  # Never a deleted (soft-removed) one: it answered 200 "renewed" for a listing
+  # that stays gone (edge-case pass 2026-10-08).
+  def renew?     = owner? && record.live? && record.removed_at.nil?
+  # Edit + relaunch: same gate as renew (it IS a renew, plus a weekly bump).
+  def relaunch?  = renew?
+  # Move to Me / another shop: anyone who manages it; where it may go is
+  # Listings::MoveService's call (membership of the target, poster/owner for Me).
+  def move?      = owner?
+  # Duplicate (with its photos) to here, Me or another shop: anyone who manages
+  # it; where it may go is Listings::DuplicateService's call.
+  def duplicate? = owner?
   # Sellable while live (active or reserved); sold is terminal (never from
   # draft/sold). Already allowed selling without reserving first.
   def sold?      = owner? && record.live?
 
   def analytics? = owner?
+
+  # VID — whoever manages the listing (poster or shop member) sets or removes
+  # its video. No new video on a sold or deleted listing: it would only wait
+  # for PurgeListingVideosJob. Removing is always allowed.
+  def update_video?  = owner? && !record.sold? && !record.removed?
+  def destroy_video? = owner?
 
   # SF-B1 — a reserved listing that the feed now offers MUST be messageable, or
   # the buyer hits a dead end on a listing we just showed them. With no payment
@@ -75,5 +96,6 @@ class ListingPolicy < ApplicationPolicy
 
   private
 
-  def owner? = record.user_id == user.id
+  # The poster, or (SHOP-3) any member of the product's shop.
+  def owner? = record.manageable_by?(user)
 end

@@ -1,4 +1,7 @@
 class Api::V1::ConversationsController < Api::V1::BaseController
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create, :destroy
+
   # Allowed values for the `role` index param (TASK-R517) — "conversations
   # where I am buying" vs "conversations where I am selling". A frozen
   # constant so the branch below never compares against bare string literals.
@@ -10,7 +13,10 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   # spam vector: one account messaging every seller in the city. Only NEW
   # threads are limited — replies inside an existing thread go through
   # MessagesController, which has its own, much higher limit.
-  throttle to: 30, within: 1.day, by: :user, only: :create
+  # Writing again from the listing into a chat the buyer already has is a reply
+  # (owner, 2026-10-12), so it is limited like one, not as a new start.
+  throttle to: 30, within: 1.day, by: :user, only: :create, unless: :existing_listing_chat?
+  throttle to: 120, within: 1.hour, by: :user, only: :create, if: :existing_listing_chat?
   before_action :set_conversation, only: [ :show ]
   before_action :set_conversation_for_mutation, only: [ :destroy, :mark_read, :mark_unread, :archive, :unarchive ]
 
@@ -19,8 +25,8 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     show_archived = ActiveModel::Type::Boolean.new.cast(params[:archived])
 
     base_scope = show_archived \
-      ? Conversation.for_user(current_user.id).not_deleted_for(current_user).archived_for(current_user) \
-      : Conversation.for_user(current_user.id).not_deleted_for(current_user).not_archived_for(current_user)
+      ? Conversation.for_user(current_user).not_deleted_for(current_user).archived_for(current_user) \
+      : Conversation.for_user(current_user).not_deleted_for(current_user).not_archived_for(current_user)
 
     base_scope = apply_role_filter(base_scope)
 
@@ -35,23 +41,32 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     # matches — not "the matches that happened to be on page 1 anyway".
     base_scope = base_scope.matching(params[:search]) if params[:search].present?
 
-    # support_first BEFORE ordered: the user's support thread is pinned to the
-    # top, then everything else by recent activity. Only users on an app with
-    # support messaging can have a support thread (docs/SUPPORT_MESSAGING.md),
-    # so for everyone else this ORDER BY changes nothing.
+    # By recent activity, Support included: owner, 2026-10-08, Support is no
+    # longer pinned on top; it sorts by its last message like any other chat.
     conversations = policy_scope(
-      base_scope.support_first.ordered
+      base_scope.ordered
                 .includes(
                     # :latest_message loads only the newest message per conversation
                     # (has_one with ORDER BY DESC) instead of the entire messages
                     # collection — far lighter than the old includes(:messages) path.
                     :latest_message,
-                    { listing: { images_attachments: { blob: { variant_records: { image_attachment: :blob } } } },
+                    { listing: { images_attachments: { blob: { variant_records: { image_attachment: :blob } } },
+                                 shop: { logo_attachment: :blob } },
+                      shop: { logo_attachment: :blob }, # SHOP-2: listing-less shop chats
                       buyer: { avatar_attachment: :blob },
                       seller: { avatar_attachment: :blob } }
                   )
     )
     conversations = conversations.where(listing_id: params[:listing_id]) if params[:listing_id].present?
+    # SHOP-1 — `shop_id=<id>`: that shop's chats (members only); `shop_id=none`:
+    # personal chats. Absent: everything, exactly as before.
+    if params[:shop_id] == "none"
+      conversations = conversations.without_shop
+    elsif params[:shop_id].present?
+      shop = Shop.find(params[:shop_id])
+      authorize shop, :member?
+      conversations = conversations.for_shop(shop.id)
+    end
 
     # Preload the current user's block relationships once (as id sets) so the
     # serializer's blocked_with_participant flag resolves in memory instead of
@@ -59,15 +74,20 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     blocked_ids = current_user.blocked_users.ids.to_set
     blocker_ids = current_user.blocking_users.ids.to_set
 
-    # Compute unread counts for all visible conversations in a single GROUP BY
-    # query and pass the resulting hash to the serializer so every row reads
-    # from memory — no per-row COUNT queries (N+1).
-    conversation_ids = conversations.map(&:id)
-    unread_counts = Message
-      .where(conversation_id: conversation_ids, read_at: nil)
-      .where.not(user_id: current_user.id)
-      .group(:conversation_id)
-      .count
+    # Unread counts for the PAGE's conversations in a single GROUP BY query,
+    # passed to the serializer so every row reads from memory — no per-row
+    # COUNT queries (N+1). A proc, run by paginate_blue on the loaded page: this
+    # used to `conversations.map(&:id)` first, which loaded the WHOLE inbox with
+    # every include above (each chat's messages, listing photos, avatars) before
+    # paginating — 6.5 s for a seller with 3 500 chats (docs/PERFORMANCE_100K.md).
+    # SHOP-3: a teammate's message is not inbound (Conversation::INBOUND_MESSAGE_SQL).
+    unread_counts = lambda do |page|
+      Message.joins(:conversation)
+             .where(conversation_id: page.map(&:id), read_at: nil)
+             .where(Conversation.inbound_message_sql_for(current_user), u: current_user.id)
+             .group(:conversation_id)
+             .count
+    end
 
     paginate_blue(
       ConversationSerializer, conversations,
@@ -85,15 +105,22 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def destroy
     authorize @conversation
+    # Owner, 2026-10-08: Support can be ARCHIVED (it comes back on Support's
+    # next message) but never deleted. The apps hide Delete on it; this is
+    # the guard for any client that still offers it.
+    if @conversation.kind_support?
+      return render_unprocessable_entity("The Hatiwal Support conversation can be archived, not deleted",
+                                         code: :support_not_deletable)
+    end
+
     @conversation.delete_for!(current_user)
     head :no_content
   end
 
   def mark_read
     authorize @conversation
-    @conversation.messages
+    @conversation.inbound_messages_for(current_user)
                  .where(read_at: nil)
-                 .where.not(user_id: current_user.id)
                  .update_all(read_at: Time.current)
     head :no_content
   end
@@ -104,8 +131,7 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     # unread_count_for(current_user) > 0 again.  A single targeted UPDATE
     # avoids N+1 — we find the latest inbound message id via a subquery and
     # update only that one row.
-    latest_inbound = @conversation.messages
-                                  .where.not(user_id: current_user.id)
+    latest_inbound = @conversation.inbound_messages_for(current_user)
                                   .order(created_at: :desc)
                                   .limit(1)
     updated = Message.where(id: latest_inbound).update_all(read_at: nil)
@@ -146,7 +172,7 @@ class Api::V1::ConversationsController < Api::V1::BaseController
     render_blue(ConversationSerializer, conversation, view: :detailed, status: :created,
                                                       options: { current_user: current_user })
   rescue Conversations::StartService::Error => e
-    render_unprocessable_entity(e)
+    render_unprocessable_entity(e, code: e.code)
   end
 
   private
@@ -155,14 +181,20 @@ class Api::V1::ConversationsController < Api::V1::BaseController
   # the inbox to just the caller's buyer threads or just their seller threads.
   # Any absent or unrecognised value is a no-op — the full mixed inbox is the
   # existing (and default) behaviour, never a 500 or an accidentally-empty list.
+  # Owner, 2026-10-12: every identity shows ITS Support thread (sorted by its
+  # last message since 2026-10-08, no longer pinned first), and never another's:
+  # - buying: the buying chats + the person's own Support thread (buyer side);
+  # - selling: the selling chats + the person's own Support thread (Seller as
+  #   Me) and the shops' threads, which the shop_id filter then narrows:
+  #   shop_id=none keeps only the person's, shop_id=<id> only that shop's.
   def apply_role_filter(scope)
-    # The Buying/Selling tabs are about listings. A support thread has the user
-    # as `buyer`, so without kind_listing it would land in "Buying".
     case params[:role]
     when ROLES[:buying]
-      scope.as_buyer_for(current_user).kind_listing
+      scope.as_buyer_for(current_user)
     when ROLES[:selling]
-      scope.as_seller_for(current_user).kind_listing
+      scope.where("(conversations.kind = :support AND (conversations.buyer_id = :u OR #{Conversation.seller_side_sql_for(current_user)}))
+                   OR (conversations.kind = :listing AND #{Conversation.seller_side_sql_for(current_user)})",
+                  u: current_user.id, support: Conversation.kinds[:support], listing: Conversation.kinds[:listing])
     else
       scope
     end
@@ -170,6 +202,10 @@ class Api::V1::ConversationsController < Api::V1::BaseController
 
   def set_listing
     @listing = Listing.find(params[:listing_id])
+  end
+
+  def existing_listing_chat?
+    Conversations::StartService.new(buyer: current_user, listing: @listing, message_body: nil).existing?
   end
 
   def set_conversation

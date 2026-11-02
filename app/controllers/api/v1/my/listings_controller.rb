@@ -1,23 +1,43 @@
 class Api::V1::My::ListingsController < Api::V1::BaseController
-  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew ]
+  include SellingIdentityParam
+
+  # OFFLINE §10.1: a retried write with the same Idempotency-Key runs once.
+  idempotent :create, :update, :destroy, :publish, :unpublish, :sold, :renew, :relaunch, :activate
+
+  before_action :set_listing, only: [ :show, :update, :destroy, :publish, :unpublish, :reserve, :activate, :sold, :renew, :relaunch, :move, :duplicate ]
+  # A removed listing (deleted by the seller, taken down, or its account being
+  # deleted) changes no more: it was SOLD, edited and published again before
+  # this (B4, found by the offline work). renew/relaunch already refused it;
+  # move and duplicate already did too, with their own codes (move_not_movable,
+  # duplicate_removed) that the apps know, so they keep them.
+  before_action :refuse_removed_listing, only: [ :update, :publish, :unpublish, :reserve, :activate, :sold ]
 
   # Feed flooding. A real seller listing 30 items in one day is already an
   # outlier on a local marketplace; a script posting 10 000 is what buries
   # everyone else's listings.
-  throttle to: 30, within: 1.day, by: :user, only: :create
+  # Duplicate makes a listing too, so it shares the same daily budget (one
+  # counter: the limit's name is the same); it was unthrottled until the 1.1.6
+  # authorization sweep (2026-10-08).
+  throttle to: 30, within: 1.day, by: :user, only: %i[create duplicate]
 
   def index
+    # SHOP-1: "My listings" as Me, "My shop" as a shop (User#selling_shop) —
+    # or, OFFLINE §10.6, the identity the app asks for (`selling_as`: me | a shop
+    # id), so it caches each identity under its own key.
+    status, shop = requested_selling_identity
+    return render_shop_unavailable if status == :unavailable
+
     listings = policy_scope(
-      current_user.listings
+      current_user.listings_for_selling_identity(shop)
                   .not_removed
                   .includes(
-                    :category, :conversations, :price_histories,
+                    :category, :conversations, :price_histories, :user, # :user — posted_by
                     # TASK-R418: the :seller_list view's `sale` field reads
                     # listing.current_sale (=> sale_transactions) and its
                     # buyer's avatar — eager-load both so a feed full of
                     # reserved/sold rows stays a constant number of queries.
                     sale_transactions: { buyer: { avatar_attachment: :blob } },
-                    images_attachments: { blob: { variant_records: { image_attachment: :blob } } }
+                    images_attachments: { blob: { variant_records: { image_attachment: :blob } } }, video_attachment: :blob
                   )
     ).ordered
     listings = listings.for_status_filter(params[:status]) if params[:status].present?
@@ -37,9 +57,25 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   def create
     @listing = current_user.listings.new(listing_params)
+    # SHOP-1: "+ Sell" posts as whoever the user is selling as. Decided here,
+    # never trusted from the client: a `shop_id` (OFFLINE §10.6 — the identity
+    # the listing was made under, maybe offline) is checked exactly like
+    # "sell as", so nobody can post into a shop they have left.
+    if params.key?(:shop_id)
+      status, shop = current_user.identity_for(params[:shop_id])
+      return render_shop_unavailable if status == :unavailable
+
+      @listing.shop = shop
+    else
+      @listing.shop = current_user.selling_shop
+    end
     authorize @listing
 
     if @listing.save
+      # B12: the cover the seller chose. On create every photo is new, so
+      # image_order is all "new:<n>" tokens, <n> the index in this request's
+      # images[] (= attachment id order). Absent (a 1.1.x app): upload order.
+      @listing.apply_image_order!(params.dig(:listing, :image_order), uploaded: @listing.images.attachments.sort_by(&:id))
       @listing.record_owner_location_guess!
       # TASK-R418 (CR fix, CYCLE-4): every owner-scoped single-listing render
       # in this controller uses :owner_detailed, not just show/reserve/sold —
@@ -60,13 +96,21 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     # gallery: assigning `images` directly would replace ALL attachments
     # (Rails replace_on_assign_to_many), destroying photos the client didn't
     # re-upload. See attach_new_images / purge_removed_images.
-    if @listing.update(listing_params.except(:images)) && attach_new_images
+    #
+    # OFFLINE §10.2: with `base` (the values the seller saw), a field changed
+    # elsewhere meanwhile is NOT overwritten: the others apply, and the answer
+    # is a 409 edit_conflict naming it. Without `base` (1.1.x): as before.
+    edit = Edits::WithBase.split(@listing, listing_params.except(:images), edit_base)
+    if @listing.update(edit.attrs) && attach_new_images
       purge_removed_images
+      @listing.apply_image_order!(params.dig(:listing, :image_order), uploaded: @uploaded_images || [])
       @listing.record_owner_location_guess! if @listing.saved_change_to_latitude? || @listing.saved_change_to_longitude?
       # TASK-R418 (CR fix, CYCLE-4): :owner_detailed — a seller editing the
       # title/description/photos of a RESERVED or SOLD listing must keep
       # seeing the `sale` block in the response, not have it silently
       # disappear because this one action rendered a different view.
+      return render_edit_conflict(edit.conflicts) if edit.conflicts.any?
+
       render_blue(ListingSerializer, @listing, view: :owner_detailed)
     else
       # SF-B6: `code:` carries the ONE edit failure the seller has to act on —
@@ -84,6 +128,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   def destroy
     authorize @listing
+    # Already removed (another device, a retry after a lost answer — OFFLINE
+    # §10.3): done. And never overwrite why it was removed: a seller's delete
+    # used to replace an admin's take-down reason with "deleted_by_seller" (B7).
+    return head :no_content if @listing.removed?
 
     # Soft-remove instead of hard delete: hides the listing from the feed and
     # My Shop but keeps its conversations/messages, so the buyer's chat history
@@ -96,6 +144,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   end
 
   def publish
+    return render_already_in_state if already_in_state?(:live)
+
     authorize @listing, :publish?
 
     # Listing#publish flips the status AND starts the expiry clock in a single
@@ -136,9 +186,51 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # Deliberately the SAME shape as #reserve/#sold rather than a new one: an
   # ordinary 422 carrying `errors`, which every client already renders.
   def renew
+    return render_listing_removed if @listing.removed?
+
     authorize @listing, :renew?
     @listing.renew!
     render_blue(ListingSerializer, @listing, view: :owner_detailed)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
+  end
+
+  # Edit + relaunch (owner, 2026-10-12): renew for LISTING_LIFESPAN, AND move
+  # back to the top of the feed if the last bump was at least a week ago. The
+  # client calls it after saving the edit; the response's `bumped` says whether
+  # it moved and `next_bump_at` when it next can. Same 422 shape as #renew.
+  def relaunch
+    return render_listing_removed if @listing.removed?
+
+    authorize @listing, :relaunch?
+    bumped = @listing.relaunch!
+    render_blue(ListingSerializer, @listing, view: :owner_detailed, options: { bumped: bumped })
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
+  end
+
+  # Move to Me (`shop_id` null/blank) or to another shop the caller is on
+  # (owner, 2026-10-12; Listings::MoveService has the rules). Its chats stay
+  # with the identity they started with: each open one is told and closed.
+  # Duplicate as a new DRAFT, photos copied (owner, 2026-10-12): to the same
+  # place, Me or another shop the caller is on (`shop_id`, null = Me).
+  # Listings::DuplicateService has the rules. The clients open it in the form.
+  def duplicate
+    authorize @listing, :duplicate?
+    copy = Listings::DuplicateService.new(listing: @listing, actor: current_user, shop_id: params[:shop_id]).call
+    render_blue(ListingSerializer, copy, view: :owner_detailed, status: :created)
+  rescue Listings::MoveService::Error => e
+    render_coded_error(e.message, code: e.code, status: e.status)
+  rescue ActiveRecord::RecordInvalid => e
+    render_unprocessable_entity(e.record)
+  end
+
+  def move
+    authorize @listing, :move?
+    Listings::MoveService.new(listing: @listing, actor: current_user, shop_id: params[:shop_id]).call
+    render_blue(ListingSerializer, @listing, view: :owner_detailed)
+  rescue Listings::MoveService::Error => e
+    render_coded_error(e.message, code: e.code, status: e.status)
   rescue ActiveRecord::RecordInvalid => e
     render_unprocessable_entity(e.record)
   end
@@ -158,6 +250,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # status flip and the seller is answered with the field error instead of an
   # empty 500.
   def unpublish
+    return render_already_in_state if already_in_state?(:draft)
+
     authorize @listing, :unpublish?
     ActiveRecord::Base.transaction do
       @listing.cancel_open_transaction!
@@ -220,6 +314,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # releasing a hold is the seller's documented way OUT of SF-B8's refusal, so it
   # must never be the action that dead-ends in an unexplained 500.
   def activate
+    return render_already_in_state if already_in_state?(:live_without_hold)
+
     authorize @listing, :activate?
     ActiveRecord::Base.transaction do
       @listing.cancel_open_transaction!
@@ -240,6 +336,8 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
   # Listing that never actually reached `sold` — counters bumped for a sale
   # that, from the Listing's own status, never happened.
   def sold
+    return render_already_in_state if already_in_state?(:sold)
+
     authorize @listing, :sold?
     txn = nil
     ActiveRecord::Base.transaction do
@@ -289,8 +387,75 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
 
   private
 
+  # A deleted (or taken-down) listing is not renewed: 403 with a code, so the
+  # apps say it in the reader's language (a bare "Forbidden" read as English).
+  # The fields the client saw, for the ones it edits (OFFLINE §10.2).
+  def edit_base
+    base = params.dig(:listing, :base) || params[:base]
+    base.respond_to?(:permit) ? base.permit(*Listing::TRACKED_EDIT_FIELDS).to_h : {}
+  end
+
+  def render_edit_conflict(conflicts)
+    render_ok({ ListingSerializer.model_name.singular => ListingSerializer.render_as_hash(@listing, view: :owner_detailed),
+                code: "edit_conflict", fields: conflicts }, status: :conflict)
+  end
+
+  def refuse_removed_listing
+    render_listing_removed if @listing.removed?
+  end
+
+  def render_listing_removed
+    render_coded_error("this listing was deleted", code: :listing_removed, status: :forbidden)
+  end
+
+  # OFFLINE §10.3 — a status change is a TARGET state. A queued "publish" or
+  # "mark sold" that reaches a listing already in that state (made so on the
+  # web, by a teammate, or by this same request's lost first answer) is a
+  # success with `already: true`, not a 403/422 the seller has to deal with.
+  # Permission still comes first: only who may edit the listing learns anything.
+  ALREADY_STATES = {
+    live: ->(l) { l.live? },
+    draft: ->(l) { l.draft? },
+    sold: ->(l) { l.sold? },
+    live_without_hold: ->(l) { l.active? && l.held_units.zero? }
+  }.freeze
+
+  def already_in_state?(target)
+    return false if @listing.removed?
+
+    authorize @listing, :update?
+    ALREADY_STATES.fetch(target).call(@listing)
+  end
+
+  def render_already_in_state
+    render_ok({ ListingSerializer.model_name.singular => ListingSerializer.render_as_hash(@listing, view: :owner_detailed),
+                already: true })
+  end
+
   def set_listing
-    @listing = current_user.listings.find(params[:id])
+    # SHOP-3: a shop's products are every member's to manage.
+    @listing = current_user.manageable_listings.find(params[:id])
+    @listing.acting_user = current_user
+  rescue ActiveRecord::RecordNotFound
+    # Not theirs ANY MORE — they left or were removed from its shop, with a
+    # write queued on the phone: 403 with a code. A 404 there reads as "gone
+    # already: done" and the seller was never told (QA audit 2026-10-27 A5).
+    # Anyone else still learns nothing: a plain 404, as before.
+    listing = Listing.find_by(id: params[:id])
+    raise unless listing && former_manager_of?(listing)
+
+    render_forbidden("You no longer manage this listing", code: "listing_not_managed")
+  end
+
+  def former_manager_of?(listing)
+    return true if listing.user_id == current_user.id
+    return false if listing.shop_id.nil?
+
+    # Only a listing that existed while they were in the shop: one made after they
+    # left (a draft they never saw) is a plain 404, or its id would tell a former
+    # member what their old shop has posted since (security review 2026-10-28).
+    ShopAuditEvent.where(shop_id: listing.shop_id, target_user_id: current_user.id, action: %w[removed left])
+                  .exists?([ "created_at >= ?", listing.created_at ])
   end
 
   # `buyer_id`/`final_price`/`clear_buyer`/`quantity` are accepted flat (not
@@ -318,8 +483,10 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     params.require(:listing).permit(
       :title, :description, :price, :currency,
       :category_id, :location, :address, :latitude, :longitude, :condition,
-      :negotiable, :quantity,
-      images: []
+      :negotiable, :quantity, :price_unit,
+      images: [],
+      # A stay's facts (Listing::StayDetails validates them).
+      details: [ :guests, :beds, :bathroom, :check_in, :check_out, { amenities: [] } ]
     )
   end
 
@@ -336,8 +503,12 @@ class Api::V1::My::ListingsController < Api::V1::BaseController
     new_images = params.dig(:listing, :images)
     return true if new_images.blank?
 
+    before = @listing.images.attachments.map(&:id)
     @listing.images.attach(new_images)
-    @listing.save
+    saved = @listing.save
+    # This request's photos in upload order — what image_order's "new:<n>" names.
+    @uploaded_images = @listing.images.attachments.reject { |a| before.include?(a.id) }.sort_by(&:id) if saved
+    saved
   end
 
   # Remove only the photos the client explicitly dropped, identified by the
